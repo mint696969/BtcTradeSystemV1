@@ -1,0 +1,43 @@
+diff --git a/backup/git_rp/rp-20251014_004911/rp-20251014_005057/changed_files.txt b/backup/git_rp/rp-20251014_004911/rp-20251014_005057/changed_files.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backup/git_rp/rp-20251014_004911/rp-20251014_005057/diff.patch b/backup/git_rp/rp-20251014_004911/rp-20251014_005057/diff.patch
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backup/git_rp/rp-20251014_004911/rp-20251014_005057/metadata.json b/backup/git_rp/rp-20251014_004911/rp-20251014_005057/metadata.json
+new file mode 100644
+index 0000000..9c3fb69
+--- /dev/null
++++ b/backup/git_rp/rp-20251014_004911/rp-20251014_005057/metadata.json
+@@ -0,0 +1,8 @@
++{
++  "created_at": "2025-10-14T00:51:04+09:00",
++  "base_tag": "rp-20251014_004911",
++  "head_ref": "HEAD",
++  "head_sha": "b660fe21440397a20b456853578ffc10b13e439a",
++  "branch": "main",
++  "memo": "test2"
++}
+diff --git a/scripts/git/git_rp_make.ps1 b/scripts/git/git_rp_make.ps1
+index 712b8a2..a37b366 100644
+--- a/scripts/git/git_rp_make.ps1
++++ b/scripts/git/git_rp_make.ps1
+@@ -60,14 +60,15 @@ function New-DiffBackup([string]$repoRoot, [string]$baseTag, [string]$headRef, [
+   New-Item -ItemType Directory -Force -Path $filesDir | Out-Null
+ 
+   # 変更ファイル一覧（状態付き）
+-  $nameStatus = & git -C $repoRoot diff --name-status $baseTag..$headRef
+-  $nameOnly   = & git -C $repoRoot diff --name-only  $baseTag..$headRef
++  $range = "$baseTag..$headRef"
++  $nameStatus = & git -C $repoRoot diff --name-status $range
++  $nameOnly   = & git -C $repoRoot diff --name-only  $range
+ 
+   # 一覧保存
+   $nameStatus | Out-File -FilePath $diffList -Encoding UTF8
+ 
+   # パッチ保存
+-  & git -C $repoRoot diff $baseTag..$headRef | Out-File -FilePath $patchPath -Encoding UTF8
++  & git -C $repoRoot diff $range | Out-File -FilePath $patchPath -Encoding UTF8
+ 
+   # 変更ファイルをワークツリーから採取（削除されたファイルは一覧のみ記録）
+   foreach ($rel in $nameOnly) {
