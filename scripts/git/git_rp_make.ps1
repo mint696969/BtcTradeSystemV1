@@ -60,14 +60,15 @@ function New-DiffBackup([string]$repoRoot, [string]$baseTag, [string]$headRef, [
   New-Item -ItemType Directory -Force -Path $filesDir | Out-Null
 
   # 変更ファイル一覧（状態付き）
-  $nameStatus = & git -C $repoRoot diff --name-status $baseTag..$headRef
-  $nameOnly   = & git -C $repoRoot diff --name-only  $baseTag..$headRef
+  $range = "$baseTag..$headRef"
+  $nameStatus = & git -C $repoRoot diff --name-status $range
+  $nameOnly   = & git -C $repoRoot diff --name-only  $range
 
   # 一覧保存
   $nameStatus | Out-File -FilePath $diffList -Encoding UTF8
 
   # パッチ保存
-  & git -C $repoRoot diff $baseTag..$headRef | Out-File -FilePath $patchPath -Encoding UTF8
+  & git -C $repoRoot diff $range | Out-File -FilePath $patchPath -Encoding UTF8
 
   # 変更ファイルをワークツリーから採取（削除されたファイルは一覧のみ記録）
   foreach ($rel in $nameOnly) {
