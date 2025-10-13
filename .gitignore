@@ -1,0 +1,36 @@
+# 実データは追跡しない（見本のみ）
+/data/*
+/logs/*
+!data/README.txt
+!logs/README.txt
+# Python/venvなど
+/.venv/
+__pycache__/
+*.pyc
+# IDE / VS Code
+.vscode/
+.vscode-*/
+.vscode/**
+
+# VS Code CLI cache / lock
+*.lock
+.vscode/cli/
+.vscode/cli/**
+
+# Python cache
+**/__pycache__/
+*.py[cod]
+*.pyo
+
+# VSCode / tunnel / logs
+.vscode/
+.vscode/**
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS/others
+.DS_Store
+Thumbs.db
