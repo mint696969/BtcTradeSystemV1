@@ -1,5 +1,5 @@
 # path: scripts/git/git_rp_make.ps1
-# desc: Git 復元ポイント（rp-YYYYMMDD_HHmmss）を作成。必要に応じて差分バックアップ（ZIP）を外部保存先へ出力
+# desc: Git 復元ポイント（rp-YYYYMMDD_HHmmss）を作成。必要に応じて差分バックアップ（ZIP）を外部保存先へ出力（※サブプロセス停止なし／一切ポーズしない）
 
 param(
   [switch]$Commit,                                      # ← スイッチ型（-Commit のみで True）
@@ -14,15 +14,8 @@ param(
 [Console]::InputEncoding  = [System.Text.UTF8Encoding]::new()
 $ErrorActionPreference    = 'Stop'
 
-function Wait-AnyKey {
-  Write-Host ""
-  Write-Host "Press any key to exit..." -ForegroundColor DarkGray
-  $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown') | Out-Null
-}
-
 function Halt($msg) {
   if ($msg) { Write-Host $msg -ForegroundColor Yellow }
-  Wait-AnyKey
   exit 1
 }
 
@@ -182,6 +175,6 @@ if ($Diff -and $memo) { $msg += " : $memo" }
 
   Write-Host ""; Write-Host ("OK: Restore Point -> {0}" -f $tag) -ForegroundColor Green
   if ($memo) { Write-Host ("MEMO: {0}" -f $memo) -ForegroundColor DarkGray }
-  Wait-AnyKey; exit 0
+  exit 0
 }
 catch { Halt ("Unhandled error: {0}" -f $_.Exception.Message) }
