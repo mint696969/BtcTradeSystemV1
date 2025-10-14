@@ -1,0 +1,4 @@
+# Restore from bundle (例)
+#   新規クローン:  git clone --bundle ""C:\Users\mint777\BtcTradeSystemV1\backup\git_full\BtcTradeSystemV1-full-main-20251014_120725.bundle"" <dir>
+#   既存リポへ:    git fetch ""C:\Users\mint777\BtcTradeSystemV1\backup\git_full\BtcTradeSystemV1-full-main-20251014_120725.bundle"" ""refs/*:refs/*""
+#   ブランチ切替:  git checkout %branch%

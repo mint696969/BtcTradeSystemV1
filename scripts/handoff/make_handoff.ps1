@@ -7,16 +7,17 @@ param(
   [int]$GitCommits = 20,                 # 追加: 直近コミット件数
   [switch]$AutoRpTag,                    # 追加: 自動で rp-* タグを切る
   [string]$RpMemo = "handoff auto",      # 追加: 自動タグに付けるメモ
-  [switch]$IncludeGitScripts             # 追加: 希望時のみ scripts/git を同梱
+  [switch]$IncludeGitScripts,             # 追加: 希望時のみ scripts/git を同梱
+  [switch]$TestOutput               # 追加: テスト時は .\tmp 配下に出力
 )
 
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 $ErrorActionPreference = "Stop"
 
 # --- ルートと出力先 ---
-$V1   = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # .../BtcTradeSystemV1
-$OUT  = Join-Path $V1 "docs\handoff"
-$TMP  = Join-Path $OUT ("_tmp_" + [guid]::NewGuid().ToString("N"))
+$V1  = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # ...\BtcTradeSystemV1
+$OUT = if ($TestOutput) { Join-Path $V1 "tmp" } else { Join-Path $V1 "docs\handoff" }
+$TMP = Join-Path $OUT ("CTX-" + (Get-Date -Format 'yyyyMMdd-HHmm'))
 New-Item -ItemType Directory -Force $OUT,$TMP | Out-Null
 
 # --- パス定義 ---
@@ -29,10 +30,8 @@ if (-not $LOGS) { $LOGS = "D:\BtcTS_V1\logs" }
 # --- 1) 有効設定・しきい値 ---
 $cfgOut = Join-Path $TMP "config"
 New-Item -ItemType Directory -Force $cfgOut | Out-Null
-Copy-Item (Join-Path $PKG "config\ui\health.yaml")      -Destination (Join-Path $cfgOut "health.yaml")       -ErrorAction SilentlyContinue
-Copy-Item (Join-Path $PKG "config\ui\monitoring.yaml")  -Destination (Join-Path $cfgOut "monitoring.yaml")   -ErrorAction SilentlyContinue
-Copy-Item (Join-Path $PKG "config\ui_defaults\health.yaml")     (Join-Path $cfgOut "health.defaults.yaml")     -ErrorAction SilentlyContinue
-Copy-Item (Join-Path $PKG "config\ui_defaults\monitoring.yaml") (Join-Path $cfgOut "monitoring.defaults.yaml") -ErrorAction SilentlyContinue
+Copy-Item (Join-Path $PKG "config\ui_defaults\health.yaml")     -Destination (Join-Path $cfgOut "health.defaults.yaml")     -ErrorAction SilentlyContinue
+Copy-Item (Join-Path $PKG "config\ui_defaults\monitoring.yaml") -Destination (Join-Path $cfgOut "monitoring.defaults.yaml") -ErrorAction SilentlyContinue
 
 # --- 2) ステータス・監査抜粋 ---
 $diagOut = Join-Path $TMP "diagnostics"
@@ -40,9 +39,12 @@ New-Item -ItemType Directory -Force $diagOut | Out-Null
 
 $st = Join-Path $DATA "collector\status.json"
 if (Test-Path $st) {
-  # 最近の items だけ抜粋
   $json = Get-Content $st -Raw | ConvertFrom-Json
-  $items = @($json.items) | Select-Object -First $StatusItems
+  # 変更前:
+  # $items = @($json.items) | Select-Object -First $StatusItems
+  # 変更後（last_ok 降順 → 上位 N 件）
+  $items = @($json.items) | Sort-Object { $_.last_ok } -Descending | Select-Object -First $StatusItems
+
   $o = [pscustomobject]@{
     extracted_at = (Get-Date).ToUniversalTime().ToString("s") + "Z"
     items        = $items
@@ -76,37 +78,97 @@ repo_root: "$V1"
 python:
   path: "$py"
   version: "$pyVer"
-streamlit: "$stVer"
+streamlit:
+  version: "$stVer"
 env:
-  DATA_DIR: "$DATA"
-  LOGS_DIR: "$LOGS"
-generated_utc: "$((Get-Date).ToUniversalTime().ToString("s"))Z"
+  BTC_TS_DATA_DIR: "$DATA"
+  BTC_TS_LOGS_DIR: "$LOGS"
+generated_at_utc: "$((Get-Date).ToUniversalTime().ToString("s"))Z"
 "@ | Set-Content -Encoding UTF8 (Join-Path $envOut "env_manifest.yaml")
 
-# --- 4) リポジトリ構造（YAML; 各ファイル先頭2行コメントも） ---
+# === 4) REPO_MAP（YAML/MD）を Python サブプロセスで生成 ===
+# 既存の $items 収集・手書きYAML化ロジックは不要（置換）
+$py = Join-Path $V1 ".venv\Scripts\python.exe"
+if (-not (Test-Path $py)) {
+  # .venv が無い場合はシステムの python / py を利用
+  $py = (Get-Command python -ErrorAction SilentlyContinue)?.Source
+  if (-not $py) { $py = (Get-Command py -ErrorAction SilentlyContinue)?.Source }
+}
+$pyTool = Join-Path $V1 "tools\make_repo_map_extract.py"
+$repoMapMd = Join-Path $TMP "REPO_MAP.extract.md"
 $structOut = Join-Path $TMP "repo_structure.yaml"
-$items = @()
 
-Get-ChildItem $V1 -Recurse -File | ForEach-Object {
-  $rel = $_.FullName.Substring($V1.Length + 1)
-  # 先頭2行だけ安全に読む（バイナリはスキップ）
-  $h1 = ""; $h2 = ""
-  try {
-    $lines = Get-Content -Path $_.FullName -TotalCount 2 -Encoding UTF8 -ErrorAction Stop
-    if ($lines.Count -ge 1) { $h1 = $lines[0] }
-    if ($lines.Count -ge 2) { $h2 = $lines[1] }
-  } catch { }
-  $items += [pscustomobject]@{ path=$rel; head1=$h1; head2=$h2 }
+if ((Test-Path $pyTool) -and $py) {
+  Write-Host "[STEP] repo_map via python: $pyTool" -ForegroundColor DarkCyan
+  & "$py" "$pyTool" --root "$V1" `
+    --out-md "$repoMapMd" `
+    --out-yaml "$structOut"
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "[WARN] python生成に失敗。PowerShellフォールバックに切替。" -ForegroundColor Yellow
+    $py = $null
+  }
 }
 
-# 簡易YAML整形
-"files:" | Set-Content -Encoding UTF8 $structOut
-$items | Sort-Object path | ForEach-Object {
-  @"
-  - path: "$($_.path)"
-    head1: "$(($_.head1 -replace '"',''''))"
-    head2: "$(($_.head2 -replace '"',''''))"
-"@ | Add-Content -Encoding UTF8 $structOut
+if (-not $py) {
+  # ---- フォールバック（軽量・既存ロジック）----
+  $excludeDirs = @(".git",".venv","venv","node_modules","data","logs","artifacts","backup","cache","tmp")
+  $textExt = @(".py",".ps1",".psm1",".psd1",".bat",".cmd",".sh",".yaml",".yml",".json",".md",".toml",".ini")
+  $items = @()
+  Get-ChildItem $V1 -Recurse -File -ErrorAction SilentlyContinue |
+    Where-Object {
+      $rel = $_.FullName.Substring($V1.Length + 1)
+      $first = ($rel -split '[\\/]')[0].ToLower()
+      ($excludeDirs -notcontains $first) -and ($textExt -contains $_.Extension.ToLower())
+    } |
+    ForEach-Object {
+      $rel = $_.FullName.Substring($V1.Length + 1)
+      $h1=""; $h2=""
+      try {
+        $lines = Get-Content -Path $_.FullName -TotalCount 2 -Encoding UTF8 -ErrorAction Stop
+        if ($lines.Count -ge 1) { $h1 = $lines[0] }
+        if ($lines.Count -ge 2) { $h2 = $lines[1] }
+      } catch { }
+      $items += [pscustomobject]@{ path=$rel; head1=$h1; head2=$h2 }
+    }
+
+  # YAML（repo_structure.yaml）
+  $yaml = "repo_structure:`n" + ($items | Sort-Object path | ForEach-Object {
+    "  - path: `"$($_.path)`"`n" +
+    ($(if ($_.head1) { "    head1: `"$($_.head1.Replace('"','\"'))`"`n" } else { "" })) +
+    ($(if ($_.head2) { "    head2: `"$($_.head2.Replace('"','\"'))`"`n" } else { "" }))
+  }) -join ""
+
+$yaml | Set-Content -Encoding UTF8 $structOut
+
+  # Markdown（REPO_MAP.extract.md）
+  "# REPO_MAP extract (header2 only)`n" | Set-Content -Encoding UTF8 $repoMapMd
+  $items | Sort-Object path | ForEach-Object {
+    $p = if ($_.head1 -match "^\s*#\s*path:\s*(.+)$") { $Matches[1].Trim() } else { $_.path }
+    $d = if ($_.head2 -match "^\s*#\s*desc:\s*(.+)$") { $Matches[1].Trim() } else { "" }
+    "- **$p** — $d" | Add-Content -Encoding UTF8 $repoMapMd
+  }
+}
+
+if (-not $py) {
+  # 直下の簡易 REPO_MAP Markdown も作る
+  $repoMapMd = Join-Path $TMP "REPO_MAP.extract.md"
+  "# REPO_MAP extract (header2 only)`n" | Set-Content -Encoding UTF8 $repoMapMd
+  $items | Sort-Object path | ForEach-Object {
+    # head1/head2 から # path / # desc を拾って表示を最適化
+    $p = if ($_.head1 -match "^\s*#\s*path:\s*(.+)$") { $Matches[1].Trim() } else { $_.path }
+    $d = if ($_.head2 -match "^\s*#\s*desc:\s*(.+)$") { $Matches[1].Trim() } else { "" }
+    "- **$p** — $d" | Add-Content -Encoding UTF8 $repoMapMd
+  }
+}
+
+# === repo_structure.yaml の先頭キーを強制正規化（files: → repo_structure:） ===
+if (Test-Path $structOut) {
+  $first = (Get-Content $structOut -TotalCount 1)
+  if ($first -match '^\s*files\s*:\s*$') {
+    $all = Get-Content $structOut -Raw
+    $fixed = $all -replace '^\s*files\s*:\s*', "repo_structure:`r`n"
+    $fixed | Set-Content -Encoding UTF8 $structOut
+  }
 }
 
 # --- 5) 起動手順（人向け） ---
@@ -228,11 +290,14 @@ if ($AutoRpTag) {
 
 # --- 7) ZIP化 ---
 $stamp = Get-Date -Format "yyyyMMdd_HHmm"
-$zip = Join-Path $OUT ("Handoff_" + $stamp + ".zip")
+# 変更前:
+# $zip = Join-Path $OUT ("Handoff_" + $stamp + ".zip")
+# 変更後:
+$zip = Join-Path $OUT ("CTX-" + $stamp + ".zip")
+
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Add-Type -AssemblyName 'System.IO.Compression.FileSystem'
 [System.IO.Compression.ZipFile]::CreateFromDirectory($TMP, $zip)
 
 Write-Host "OK: $zip"
-# 後片付け
 Remove-Item $TMP -Recurse -Force

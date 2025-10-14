@@ -1,12 +1,12 @@
 # path: scripts/git/git_rp_make.ps1
-# desc: Make a Git "Restore Point" tag (rp_YYYYMMDD_HHmmss). Snapshot commit by default. (＋任意で差分バックアップ)
+# desc: Git 復元ポイント（rp-YYYYMMDD_HHmmss）を作成。必要に応じて差分バックアップ（ZIP）を外部保存先へ出力
 
 param(
-  [bool]  $Commit     = $true,              # 既定でコミットON（忘れても安全）
-  [switch]$Diff,                            # ← 差分バックアップを作成する
-  [string]$BaseTag,                         # ← 差分の起点タグ（未指定なら自動）
-  [string]$BackupRoot = "backup\\git_rp",   # ← 保存先ルート
-  [switch]$Zip = $true                      # ← 差分をZIP化（falseでディレクトリ展開）
+  [bool]  $Commit     = $true,                                      # 既定でコミットON（忘れても安全）
+  [switch]$Diff,                                                      # ← 差分バックアップを作成する
+  [string]$BaseTag,                                                   # ← 差分の起点タグ（未指定なら自動）
+  [string]$BackupRoot = "$env:USERPROFILE\BtcTradeSystemV1_git\git_rp",  # ← 保存先ルート（リポ外固定）
+  [bool]  $Zip       = $true                                         # ← 差分をZIP化（falseでディレクトリ展開）
 )
 
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
@@ -25,12 +25,6 @@ function Halt($msg) {
   exit 1
 }
 
-try {
-  if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Halt "git not found. Please check PATH."
-  }
-
-# 1) repo ルート検出（親を遡って .git を探す／worktree にも対応）
 function Find-RepoRoot([string]$start) {
   $cur = (Resolve-Path -LiteralPath $start).Path  # PathInfo -> string
   while ($true) {
@@ -43,34 +37,61 @@ function Find-RepoRoot([string]$start) {
   return $null
 }
 
-# --- 直近の復元ポイントタグ（rp-...）を取得。今作ったタグは除外可 ---
 function Get-LastRestorePointTag([string]$repoRoot, [string]$excludeTag) {
   $tags = & git -C $repoRoot tag --list "rp-*" | Sort-Object
   $cand = $tags | Where-Object { $_ -ne $excludeTag } | Select-Object -Last 1
   return $cand
 }
 
-# --- 差分バックアップの作成 ---
+function Parse-NameStatus($nameStatusLines) {
+  $add=$mod=$del=$ren=$cpy=0
+  foreach ($ln in $nameStatusLines) {
+    if (-not $ln) { continue }
+    $code = ($ln -split "\s+",2)[0]
+    switch -regex ($code) {
+      '^A' { $add++ }
+      '^M' { $mod++ }
+      '^D' { $del++ }
+      '^R' { $ren++ }
+      '^C' { $cpy++ }
+    }
+  }
+  return [pscustomobject]@{ added=$add; modified=$mod; deleted=$del; renamed=$ren; copied=$cpy }
+}
+
+function Parse-Numstat($numstatLines) {
+  $ins=0; $dels=0; $files=0
+  foreach ($ln in $numstatLines) {
+    if (-not $ln) { continue }
+    $parts = $ln -split "\t"
+    if ($parts.Count -ge 3) {
+      $i = $parts[0]; $d = $parts[1]
+      if ($i -match '^[0-9]+$') { $ins += [int]$i }
+      if ($d -match '^[0-9]+$') { $dels += [int]$d }
+      $files++
+    }
+  }
+  return [pscustomobject]@{ insertions=$ins; deletions=$dels; files=$files }
+}
+
 function New-DiffBackup([string]$repoRoot, [string]$baseTag, [string]$headRef, [string]$destDir, [string]$memo, [switch]$Zip) {
   New-Item -ItemType Directory -Force -Path $destDir | Out-Null
-  $metaPath = Join-Path $destDir "metadata.json"
-  $diffList = Join-Path $destDir "changed_files.txt"
+  $metaPath  = Join-Path $destDir "metadata.json"
+  $diffList  = Join-Path $destDir "changed_files.txt"
   $patchPath = Join-Path $destDir "diff.patch"
-  $filesDir = Join-Path $destDir "files"
+  $filesDir  = Join-Path $destDir "files"
   New-Item -ItemType Directory -Force -Path $filesDir | Out-Null
 
-  # 変更ファイル一覧（状態付き）
-  $range = "$baseTag..$headRef"
+  $range      = "$baseTag..$headRef"
   $nameStatus = & git -C $repoRoot diff --name-status $range
   $nameOnly   = & git -C $repoRoot diff --name-only  $range
+  $numstat    = & git -C $repoRoot diff --numstat    $range
 
-  # 一覧保存
+  # 一覧・パッチの保存
   $nameStatus | Out-File -FilePath $diffList -Encoding UTF8
-
-  # パッチ保存
   & git -C $repoRoot diff $range | Out-File -FilePath $patchPath -Encoding UTF8
 
-  # 変更ファイルをワークツリーから採取（削除されたファイルは一覧のみ記録）
+  # 変更ファイルの現物コピー（削除ファイルは一覧のみ）
   foreach ($rel in $nameOnly) {
     $src = Join-Path $repoRoot $rel
     if (Test-Path -LiteralPath $src) {
@@ -80,18 +101,35 @@ function New-DiffBackup([string]$repoRoot, [string]$baseTag, [string]$headRef, [
     }
   }
 
-  # メタデータ保存
+  # 変更統計の算出
+  $fileKinds = Parse-NameStatus $nameStatus
+  $numStats  = Parse-Numstat   $numstat
+
+  # メタデータ
   $headSha  = (& git -C $repoRoot rev-parse $headRef).Trim()
   $branch   = (& git -C $repoRoot rev-parse --abbrev-ref HEAD).Trim()
-  $meta = [ordered]@{
+  $metaObj = [ordered]@{
     created_at = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssK")
     base_tag   = $baseTag
     head_ref   = $headRef
     head_sha   = $headSha
     branch     = $branch
     memo       = $memo
-  } | ConvertTo-Json -Depth 3
-  $meta | Out-File -FilePath $metaPath -Encoding UTF8
+    stats      = [ordered]@{
+      files_changed = $numStats.files
+      insertions    = $numStats.insertions
+      deletions     = $numStats.deletions
+      kinds         = $fileKinds   # {added, modified, deleted, renamed, copied}
+    }
+  }
+  $metaObj | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 $metaPath
+
+  # 人間向けサマリ
+  $summary = @()
+  $summary += "range: $range"
+  $summary += "files_changed: $($numStats.files) (+$($numStats.insertions)/-$($numStats.deletions))"
+  $summary += "added:$($fileKinds.added) modified:$($fileKinds.modified) deleted:$($fileKinds.deleted) renamed:$($fileKinds.renamed) copied:$($fileKinds.copied)"
+  $summary -join "`r`n" | Set-Content -Encoding UTF8 (Join-Path $destDir 'SUMMARY.txt')
 
   if ($Zip) {
     $zipPath = "$destDir.zip"
@@ -103,55 +141,49 @@ function New-DiffBackup([string]$repoRoot, [string]$baseTag, [string]$headRef, [
   }
 }
 
-# ルートはスクリプトから 2 階層上を優先（BtcTradeSystemV1 固定構成）
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-if (-not (Test-Path (Join-Path $repoRoot '.git'))) {
-  # 念のためフォールバック探索
-  $repoRoot = Find-RepoRoot $repoRoot
-}
-if (-not $repoRoot) {
-  Halt "No git repository found. Put this script inside the project tree."
-}
+try {
+  if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Halt "git not found. Please check PATH." }
 
-  # 2) タグ名
+  # repo ルート検出
+  $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+  if (-not (Test-Path (Join-Path $repoRoot '.git'))) { $repoRoot = Find-RepoRoot $repoRoot }
+  if (-not $repoRoot) { Halt "No git repository found. Put this script inside the project tree." }
+
+  # 復元ポイントタグ名
   $tag  = "rp-{0:yyyyMMdd_HHmmss}" -f (Get-Date)
 
-  # 3) メモ入力（同じ行で入力／文字化け回避のため英語表示）
+  # メモ入力
   Write-Host "Memo (optional): " -NoNewline
   $memo = Read-Host
 
-# 4) 任意：コミット
-if ($Commit) {
-  & git -C $repoRoot add -A 1>$null 2>$null
-  & git -C $repoRoot commit -m "chore: snapshot for $tag" --no-verify 1>$null 2>$null
-}
-
-# 5) タグ付け
-$msg = "Restore Point $tag" + ($(if ($memo) { " : $memo" } else { "" }))
-& git -C $repoRoot tag -a $tag -m $msg 2>$null
-if ($LASTEXITCODE -ne 0) {
-  & git -C $repoRoot tag $tag 2>$null
-}
-
-# 5.5) 差分バックアップ（任意）
-if ($Diff) {
-  # 差分の起点を決定（明示指定 > 直近の rp-* タグ）
-  $base = if ($BaseTag) { $BaseTag } else { Get-LastRestorePointTag -repoRoot $repoRoot -excludeTag $tag }
-  if (-not $base) {
-    Write-Host "[WARN] 差分の起点となる rp-* タグが見つかりません。最初の実行はタグ作成のみになります。" -ForegroundColor Yellow
-  } else {
-    $dest = Join-Path $repoRoot (Join-Path $BackupRoot ("{0}\{1}" -f $base, $tag))
-    New-DiffBackup -repoRoot $repoRoot -baseTag $base -headRef "HEAD" -destDir $dest -memo $memo -Zip:$Zip
+  # 任意：コミット
+  if ($Commit) {
+    & git -C $repoRoot add -A 1>$null 2>$null
+    & git -C $repoRoot commit -m "chore: snapshot for $tag" --no-verify 1>$null 2>$null
   }
-}
 
-  # 6) 完了表示
-  Write-Host ""
-  Write-Host ("OK: Restore Point -> {0}" -f $tag) -ForegroundColor Green
+  # タグ付け
+  $msg = "Restore Point $tag" + ($(if ($memo) { " : $memo" } else { "" }))
+  & git -C $repoRoot tag -a $tag -m $msg 2>$null
+  if ($LASTEXITCODE -ne 0) { & git -C $repoRoot tag $tag 2>$null }
+
+  # 差分バックアップ（任意）
+  if ($Diff) {
+    # 保存先（リポ外固定ルート配下へ）
+    New-Item -ItemType Directory -Force -Path $BackupRoot | Out-Null
+
+    # 差分の起点（明示 > 直近の rp-*）
+    $base = if ($BaseTag) { $BaseTag } else { Get-LastRestorePointTag -repoRoot $repoRoot -excludeTag $tag }
+    if (-not $base) {
+      Write-Host "[WARN] 差分の起点となる rp-* タグが見つかりません。最初の実行はタグ作成のみになります。" -ForegroundColor Yellow
+    } else {
+      $dest = Join-Path $BackupRoot ("{0}\{1}" -f $base, $tag)
+      New-DiffBackup -repoRoot $repoRoot -baseTag $base -headRef "HEAD" -destDir $dest -memo $memo -Zip:$Zip
+    }
+  }
+
+  Write-Host ""; Write-Host ("OK: Restore Point -> {0}" -f $tag) -ForegroundColor Green
   if ($memo) { Write-Host ("MEMO: {0}" -f $memo) -ForegroundColor DarkGray }
-  Wait-AnyKey
-  exit 0
+  Wait-AnyKey; exit 0
 }
-catch {
-  Halt ("Unhandled error: {0}" -f $_.Exception.Message)
-}
+catch { Halt ("Unhandled error: {0}" -f $_.Exception.Message) }

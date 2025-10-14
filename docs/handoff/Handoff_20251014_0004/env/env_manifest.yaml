@@ -1,9 +1,0 @@
-﻿repo_root: "C:\Users\mint777\BtcTradeSystemV1"
-python:
-  path: "C:\Users\mint777\AppData\Local\Programs\Python\Python310\python.exe"
-  version: "3.10.6 (tags/v3.10.6:9c7b4bd, Aug  1 2022, 21:53:49) [MSC v.1932 64 bit (AMD64)]"
-streamlit: "Streamlit, version 1.50.0"
-env:
-  DATA_DIR: "D:\BtcTS_V1\data"
-  LOGS_DIR: "D:\BtcTS_V1\logs"
-generated_utc: "2025-10-13T15:04:20Z"

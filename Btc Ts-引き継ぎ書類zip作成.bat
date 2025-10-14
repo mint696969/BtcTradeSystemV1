@@ -17,6 +17,10 @@ REM ルート（このbatの場所）
 set "ROOT=%~dp0"
 set "PS1=%ROOT%scripts\handoff\make_handoff.ps1"
 
+REM 実行シェル: pwsh があれば優先、無ければ従来の powershell
+set "PS=powershell"
+where pwsh >nul 2>nul && set "PS=pwsh"
+
 REM 条件付きスイッチを分離して組み立て
 set "ARG_AUTORP="
 if "%AUTO_RP%"=="1" set "ARG_AUTORP=-AutoRpTag"
@@ -25,14 +29,15 @@ set "ARG_GITSCRIPTS="
 if "%INCLUDE_GIT_SCRIPTS%"=="1" set "ARG_GITSCRIPTS=-IncludeGitScripts"
 
 echo.
-echo [Handoff] %PS1% %ARG_AUTORP% -RpMemo "%RP_MEMO%" %ARG_GITSCRIPTS% -GitCommits %GIT_COMMITS%
+echo [Handoff] %PS% -NoProfile -ExecutionPolicy Bypass -File "%PS1%" ^
+ %ARG_AUTORP% -RpMemo "%RP_MEMO%" %ARG_GITSCRIPTS% -GitCommits %GIT_COMMITS%
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%PS1%" ^
+%PS% -NoProfile -ExecutionPolicy Bypass -File "%PS1%" ^
   %ARG_AUTORP% -RpMemo "%RP_MEMO%" %ARG_GITSCRIPTS% -GitCommits %GIT_COMMITS%
 
 echo.
-echo (完了していれば「OK: ...Handoff_YYYYMMDD_HHMM.zip」が表示されます)
+echo (完了していれば「OK: ...CTX-YYYYMMDD_HHMM.zip」が表示されます)
 echo.
 pause
 endlocal
