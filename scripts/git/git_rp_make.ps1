@@ -148,15 +148,24 @@ try {
 
   $tag  = "rp-{0:yyyyMMdd_HHmmss}" -f (Get-Date)
 
-  Write-Host "Memo (optional): " -NoNewline
-  $memo = Read-Host
+  # メモは「手動の差分付き」時だけ受け付ける（-Diff のとき）
+$memo = $null
+if ($Diff) {
+  if ($RpMemo) {
+    $memo = $RpMemo
+  } else {
+    Write-Host "Memo for DIFF (optional): " -NoNewline
+    $memo = Read-Host
+  }
+}
 
   if ($Commit) {
     & git -C $repoRoot add -A 1>$null 2>$null
     & git -C $repoRoot commit -m "chore: snapshot for $tag" --no-verify 1>$null 2>$null
   }
 
-  $msg = "Restore Point $tag" + ($(if ($memo) { " : $memo" } else { "" }))
+  $msg = "Restore Point $tag"
+if ($Diff -and $memo) { $msg += " : $memo" }
   & git -C $repoRoot tag -a $tag -m $msg 2>$null
   if ($LASTEXITCODE -ne 0) { & git -C $repoRoot tag $tag 2>$null }
 
