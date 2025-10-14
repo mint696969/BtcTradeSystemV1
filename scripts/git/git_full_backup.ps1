@@ -2,11 +2,10 @@
 # desc: リポジトリの**完全バックアップ**（git bundle）を作成し、検証＆メタ情報を出力
 
 param(
-  [string]$OutDir = "$env:USERPROFILE\BtcTradeSystemV1_git\git_full",  # リポジトリ外の専用フォルダに保存
-  [string]$Name,                               # ファイル名の明示（拡張子は自動付与）
-  [switch]$Verify = $true                      # 生成後に `git bundle verify` を実行
+  [string]$OutDir = "$env:USERPROFILE\BtcTradeSystemV1_git\git_full",
+  [string]$Name,
+  [bool]  $Verify = $true
 )
-
 # --- 安全設定 ---
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()

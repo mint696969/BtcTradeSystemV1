@@ -1,7 +1,0 @@
-A	backup/git_rp/rp-20251014_005057/rp-20251014_005828/changed_files.txt
-A	backup/git_rp/rp-20251014_005057/rp-20251014_005828/diff.patch
-A	backup/git_rp/rp-20251014_005057/rp-20251014_005828/files/backup/git_rp/rp-20251014_004911/rp-20251014_005057/changed_files.txt
-A	backup/git_rp/rp-20251014_005057/rp-20251014_005828/files/backup/git_rp/rp-20251014_004911/rp-20251014_005057/diff.patch
-A	backup/git_rp/rp-20251014_005057/rp-20251014_005828/files/backup/git_rp/rp-20251014_004911/rp-20251014_005057/metadata.json
-A	backup/git_rp/rp-20251014_005057/rp-20251014_005828/files/scripts/git/git_rp_make.ps1
-A	backup/git_rp/rp-20251014_005057/rp-20251014_005828/metadata.json

@@ -43,7 +43,8 @@ function Get-LastRestorePointTag([string]$repoRoot, [string]$excludeTag) {
   return $cand
 }
 
-function Parse-NameStatus($nameStatusLines) {
+function Convert-NameStatus {
+  param([string[]]$nameStatusLines)
   $add=$mod=$del=$ren=$cpy=0
   foreach ($ln in $nameStatusLines) {
     if (-not $ln) { continue }
@@ -59,7 +60,8 @@ function Parse-NameStatus($nameStatusLines) {
   return [pscustomobject]@{ added=$add; modified=$mod; deleted=$del; renamed=$ren; copied=$cpy }
 }
 
-function Parse-Numstat($numstatLines) {
+function Convert-Numstat {
+  param([string[]]$numstatLines)
   $ins=0; $dels=0; $files=0
   foreach ($ln in $numstatLines) {
     if (-not $ln) { continue }
@@ -102,8 +104,9 @@ function New-DiffBackup([string]$repoRoot, [string]$baseTag, [string]$headRef, [
   }
 
   # 変更統計の算出
-  $fileKinds = Parse-NameStatus $nameStatus
-  $numStats  = Parse-Numstat   $numstat
+  $fileKinds = Convert-NameStatus $nameStatus
+  $numStats  = Convert-Numstat   $numstat
+
 
   # メタデータ
   $headSha  = (& git -C $repoRoot rev-parse $headRef).Trim()
