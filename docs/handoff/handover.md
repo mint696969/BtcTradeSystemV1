@@ -34,69 +34,6 @@
 
 ---
 
-## 2025-10-13 作業報告・進捗サマリ
-
-### ✅ 今日終わらせた作業
-
-1. **`git_rp_make.ps1` の完全動作化**
-
-   - リポジトリルート誤検出（`C:\Users\mint777` 誤判定）を修正。
-   - `.git` 探索ロジックを「スクリプトから 2 階層上優先」へ改修。
-   - `git add/commit` の標準エラーを無視し、タグ作成を確実化。
-   - 出力警告（CRLF 置換, Permission denied）を完全解消。
-   - `git_rp_list.ps1` と連携して **Restore Point の正常登録と一覧表示**を確認。
-
-2. **動作検証ログ**
-
-   - PowerShell 7.5.3 環境で `rp_YYYYMMDD_HHMMSS` 形式のタグ生成を確認。
-   - 不要なワーニングなしで終了。UTF-8 入出力・改行問題も解消。
-   - `git_rp_list.ps1` の一覧に 4 件の正常タグが出力され、最新タグを確認。
-
-3. **スクリプト安定化**
-
-   - 子 PowerShell 起動時の `-Commit:$true` パラメータ変換問題を把握。
-   - 同セッション実行 (`& .\scripts\git\git_rp_make.ps1`) により確実に動作。
-   - コミット ON/OFF 両動作の再確認を完了。
-
-### 💡 気づいたこと
-
-- `Find-RepoRoot` のフォールバックが上位フォルダまで登ると **ユーザープロファイル誤認識**を招くため、明示的ルート固定が最も安定。
-- `.vscode/` 配下を `.gitignore` に追加すると CRLF 警告を根本的に防げる。
-- PowerShell の `-File` 引数では boolean パラメータが string 扱いされるため、直接実行 (`& script.ps1`) の方がトラブルが少ない。
-- タグ作成後の出力にメモを短く記録できるため、日単位でのバックアップ運用に最適。
-
-### 🧩 明日（次回）やること
-
-1. **`git_rp_make.ps1` と連携する自動復元スクリプトの試作**
-
-   - 例: `git_rp_restore.ps1` — 最新タグ or 指定タグに一発で戻す仕組み。
-   - 安全モード（`--soft`）と強制モード（`--hard`）の 2 段階実装。
-
-2. **`tools/` 下にバックアップ統合ツール作成**
-
-   - `tools/backup_repo.ps1`：`data/`, `logs/`, `config/` の ZIP 化（日時タグ付き）
-   - `tools/restore_repo.ps1`：`rp-タグ`と整合するバックアップを選択して展開。
-
-3. **REPO_MAP と Restore Point の自動連携テスト**
-
-   - タグ生成時に `REPO_MAP` のスナップショットを `logs/restore_points/` に保存。
-   - Dashboard の「開発者設定」タブからタグを閲覧・選択できるようにする。
-
-4. **監査出力の統合化**
-
-   - `logs/audit.jsonl` に `restore_point.create` イベントを自動記録（actor/site/session/commit/tag）。
-
-### ⚙️ 状況まとめ
-
-- `scripts/git/git_rp_make.ps1` → **安定稼働確認済み（v1.2）**。
-- `scripts/git/git_rp_list.ps1` → **一覧正常動作確認済み**。
-- `.vscode/` 内警告 → `.gitignore` 追記で抑止予定。
-- 次フェーズは **「復元 → 監査 → バックアップ連携」** の 3 段階統合へ。
-
----
-
-## 引継ぎメモ（Live Handover 用）
-
 **今日やったこと:**
 
 - git バックアップ機構の安定化。タグ・コミット・メモ入力・一覧出力のすべてが正常化。
@@ -193,6 +130,147 @@ Collector 本体の基礎構築（Phase 2 手前）
 例外処理・リトライ・監査書き込みを組み込み。
 ユニットテスト最小セット整備
 common/\*、svc_health.evaluate、providers.dashboard の smoke テストを tools/ に配置。
+
+---
+
+本日の完了タスク（2025-10-14）
+git_rp_make.ps1：ブール引数修正、差分 ZIP 出力・メモ付き復元ポイント作成を安定化
+git_full_backup.ps1：出力先を外部 BtcTradeSystemV1_git\git_full に統一、bundle 検証・clone テスト完了
+git_rp_list.ps1：rp 差分・full bundle の重複排除と統合一覧出力を安定化（詳細表示含む）
+make_handoff.ps1：外部保存変更に対応（git 関連の影響なし確認済）
+差分検証手順を確立（git apply --check によるパッチ整合性テスト）
+フルバックアップ＋差分検証の最終統合テスト完了（final-check OK）
+Git Rp List の仕様書を docs に正式配置
+
+次回タスク
+監査タブ（Phase 1B）
+providers.audit で audit.tail.jsonl を読み込み、期間・feature・level でフィルタリング。
+
+UI: 検索・期間プリセット・CSV ダウンロード、長文折りたたみ。
+しきい値設定の統一
+monitoring.yaml を本番値へ戻し、UI 設定から保存/読込を正式化。
+色分けや閾値を動的変更可能に。
+カード ⇄ グラフ並びリンク（保存対応）
+並び順を config/ui/health.yaml: order へ保存/復元。
+
+bitflyer Collector 再接続
+IP 制限解除後の再疎通確認 (api_probe.ps1 で再確認)。
+OK/WARN/CRIT の再評価を collector スレッドで実施。
+
+Collector 本体の基礎構築（Phase 2 手前）
+各取引所アダプタのループ（stub 実装）を用意し、status.json 定期更新まで実現。
+例外処理・リトライ・監査書き込みを組み込み。
+ユニットテスト最小セット整備
+common/\*、svc_health.evaluate、providers.dashboard の smoke テストを tools/ に配置。
+
+---
+
+2025-10-15 作業報告・進捗サマリ
+✅ 今日終わらせた作業
+
+bitFlyer 公開 API アダプタ bitflyer_public.py 実装・完成
+
+/v1/executions（約定履歴）と /v1/board（板情報）の両エンドポイントを標準ライブラリのみで実装。
+
+Execution dataclass を追加し、整形済み出力を保証。
+
+board() で mid_price / best_bid / best_ask / bids / asks / raw_count を返す軽量サマリを構築。
+
+スモークテストで mid_price, bids3, asks3 を正常取得確認。
+
+collector core ワーカー (worker.py) 拡張
+
+fetch() に bitflyer board 分岐を新規追加。
+→ BitflyerPublic.board() を呼び出し mid/best などを返却。
+
+run_once() で trades と board の両ケースを正しく JSONL スナップショット出力化。
+
+保存は UTC 運用（JST 表示は UI 層で吸収）で統一。
+
+status.json に topic=board を追加し、OK 判定および retries/cause/notes 更新を確認。
+
+common/audit.py の安定化
+
+監査出力を StorageRouter 対応へ一本化（ENV → local 自動フォールバック）。
+
+環境文脈 actor/site/session/task/mode を set_context() で設定可能に。
+
+\_redact() による簡易マスキングを追加。
+
+core/status.py 強化
+
+StorageRouter 連携による primary/secondary 切替を実装。
+
+flush() で tmp→rename 原子的更新を保証。
+
+StatusItem を dataclass 化し to_ui() で ISO 時刻変換。
+
+統合スモークテスト成功
+
+bitflyer:trades および bitflyer:board の両トピックで fetch→status→snapshot 連携確認。
+
+audit.jsonl 出力・status.json 更新・data/collector/.../\*.jsonl 追記すべて OK。
+
+🧩 次の候補タスク
+
+A) 監査プロバイダ（providers.audit）プリセット一元化対応
+
+providers.audit で presets モジュールの LOOKBACKS と is_valid_lookback() を参照。
+
+期間選択値が None または不正の場合、既定（"1h"）へフォールバックする \_resolve_lookback() を追加。
+
+各関数（load_for_ui / export_csv / export_csv_compact / export_csv_compact_localtime）の 引数を lookback=None 化。
+
+スモークテストで None / "3h" 入力時も正常動作確認。
+
+B) Bybit 公開 API アダプタ作成（bybit_public.py）
+
+/v5/market/trades を標準ライブラリで叩く最小実装（依存ゼロ）。
+
+BitflyerPublic と同一インターフェース（executions() 返却型 List[Execution]）。
+
+worker.fetch() へ exchange=="bybit" 分岐を追加。
+
+C) ダッシュボード統合試験
+
+JST 変換済み status 表示確認。
+
+board/trades 両トピックの色分け・更新間隔・監査 CSV 連携チェック。
+
+D) Phase 1B 最終仕上げ
+
+監査タブ（期間プリセット、CSV、長文折り畳み）を UI 統合。
+
+各種 export 機能を UI 側ボタンから呼び出す連携コードを追加。
+
+🔗 参照
+
+実装: features/collector/adapters/bitflyer_public.py
+
+実装: features/collector/core/worker.py
+
+実装: common/audit.py, core/status.py
+
+検証: PowerShell 7.5.3 スモークログ （bitflyer:trades / board OK）
+
+---
+
+## 2025-10-15 フェーズ A 完了（status 安定化）
+
+- 追加: ./btc_trade_system/features/collector/core/status.py（StatusWriter）
+- 監査: collector.status.update を soft 出力（common.audit があれば）
+- 診断: ./scripts/diag/diag_env.ps1 を新規作成（UI 書込副作用=無し、netstat null 安全）
+- 動作: status.json の last_iso/updated_at の更新を確認、Health は読取専用で契約通り
+- 既知: ダッシュボードは停止中（8501/8503 リスナ無し）
+
+次回（フェーズ B）:
+
+- B1: leader_lock（単一アクティブ収集のロックと心拍）
+- B2: worker 側からのロック利用（多重起動ガードの実効化）
+- B3: storage_router スケルトン（primary=NAS/secondary=local ルーティング下地）
+- B4: status に leader/storage/sync フィールド拡張（28.2）
+- B5: Health 表示の注釈（leader.host / storage.primary / sync.pending）
+- B6: diag/sync スケルトン（ops/sync/sync_to_nas.ps1 の雛形）
 
 ---
 

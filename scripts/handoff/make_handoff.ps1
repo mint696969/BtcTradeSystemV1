@@ -16,8 +16,9 @@ $ErrorActionPreference = "Stop"
 
 # --- ルートと出力先 ---
 $V1  = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # ...\BtcTradeSystemV1
-$OUT = if ($TestOutput) { Join-Path $V1 "tmp" } else { Join-Path $V1 "docs\handoff" }
-$TMP = Join-Path $OUT ("CTX-" + (Get-Date -Format 'yyyyMMdd-HHmm'))
+$OUT   = if ($TestOutput) { Join-Path $V1 "tmp" } else { Join-Path $V1 "docs\handoff" }
+$stamp = Get-Date -Format "yyyyMMdd_HHmm"   # ← ここで統一
+$TMP   = Join-Path $OUT ("CTX-" + $stamp)
 New-Item -ItemType Directory -Force $OUT,$TMP | Out-Null
 
 # --- パス定義 ---
@@ -111,7 +112,12 @@ if ((Test-Path $pyTool) -and $py) {
 
 if (-not $py) {
   # ---- フォールバック（軽量・既存ロジック）----
-  $excludeDirs = @(".git",".venv","venv","node_modules","data","logs","artifacts","backup","cache","tmp")
+  $excludeDirs = @(
+  ".git",".venv","venv","node_modules",
+  "data","logs","artifacts","backup","cache","tmp",
+  "docs"                # ← ここを追加（docs 以下はREPO_MAP対象外に）
+)
+
   $textExt = @(".py",".ps1",".psm1",".psd1",".bat",".cmd",".sh",".yaml",".yml",".json",".md",".toml",".ini")
   $items = @()
   Get-ChildItem $V1 -Recurse -File -ErrorAction SilentlyContinue |
@@ -132,29 +138,18 @@ if (-not $py) {
     }
 
   # YAML（repo_structure.yaml）
-  $yaml = "repo_structure:`n" + ($items | Sort-Object path | ForEach-Object {
-    "  - path: `"$($_.path)`"`n" +
-    ($(if ($_.head1) { "    head1: `"$($_.head1.Replace('"','\"'))`"`n" } else { "" })) +
-    ($(if ($_.head2) { "    head2: `"$($_.head2.Replace('"','\"'))`"`n" } else { "" }))
-  }) -join ""
+$body = ($items | Sort-Object path | ForEach-Object {
+  "  - path: `"$($_.path)`"`n" +
+  ($(if ($_.head1) { "    head1: `"$($_.head1.Replace('"','\"'))`"`n" } else { "" })) +
+  ($(if ($_.head2) { "    head2: `"$($_.head2.Replace('"','\"'))`"`n" } else { "" }))
+}) -join ""
+$yaml = "repo_structure:`n$body"
 
 $yaml | Set-Content -Encoding UTF8 $structOut
 
   # Markdown（REPO_MAP.extract.md）
   "# REPO_MAP extract (header2 only)`n" | Set-Content -Encoding UTF8 $repoMapMd
   $items | Sort-Object path | ForEach-Object {
-    $p = if ($_.head1 -match "^\s*#\s*path:\s*(.+)$") { $Matches[1].Trim() } else { $_.path }
-    $d = if ($_.head2 -match "^\s*#\s*desc:\s*(.+)$") { $Matches[1].Trim() } else { "" }
-    "- **$p** — $d" | Add-Content -Encoding UTF8 $repoMapMd
-  }
-}
-
-if (-not $py) {
-  # 直下の簡易 REPO_MAP Markdown も作る
-  $repoMapMd = Join-Path $TMP "REPO_MAP.extract.md"
-  "# REPO_MAP extract (header2 only)`n" | Set-Content -Encoding UTF8 $repoMapMd
-  $items | Sort-Object path | ForEach-Object {
-    # head1/head2 から # path / # desc を拾って表示を最適化
     $p = if ($_.head1 -match "^\s*#\s*path:\s*(.+)$") { $Matches[1].Trim() } else { $_.path }
     $d = if ($_.head2 -match "^\s*#\s*desc:\s*(.+)$") { $Matches[1].Trim() } else { "" }
     "- **$p** — $d" | Add-Content -Encoding UTF8 $repoMapMd
@@ -168,6 +163,83 @@ if (Test-Path $structOut) {
     $all = Get-Content $structOut -Raw
     $fixed = $all -replace '^\s*files\s*:\s*', "repo_structure:`r`n"
     $fixed | Set-Content -Encoding UTF8 $structOut
+  }
+}
+
+# === 追記2: 外部パス(D:\BtcTS_V1\…)のフォルダ構造をコメントとして追記（各フォルダ1ファイルだけ例示） ===
+if (Test-Path $structOut) {
+  # 1) ルート決定：ENV から親フォルダを推定（data/logs の親が同じならそれを採用）
+  $dataDir = $env:BTC_TS_DATA_DIR
+  $logsDir = $env:BTC_TS_LOGS_DIR
+  $root = $null
+  try {
+    $dataParent = if ($dataDir) { Split-Path (Resolve-Path $dataDir) -Parent } else { $null }
+    $logsParent = if ($logsDir) { Split-Path (Resolve-Path $logsDir) -Parent } else { $null }
+    if ($dataParent -and $logsParent -and ($dataParent -eq $logsParent)) {
+      $root = $dataParent
+    } elseif ($dataParent) {
+      $root = $dataParent
+    } elseif ($logsParent) {
+      $root = $logsParent
+    }
+  } catch { }
+
+  # フォールバック：明示的に D:\BtcTS_V1 を試す（存在する場合のみ）
+  if (-not $root) {
+    $fallback = 'D:\BtcTS_V1'
+    if (Test-Path $fallback) { $root = (Resolve-Path $fallback).Path }
+  }
+
+  if ($root) {
+    # 2) ツリー生成（フォルダのみ + 各フォルダで代表1ファイルだけ記載）
+    $maxDepth = 4     # 出力が長くなり過ぎないよう適度に制限
+    $lines = New-Object System.Collections.Generic.List[string]
+
+    function Add-Tree {
+      param(
+        [string]$Path,
+        [int]$Depth,
+        [string]$Prefix
+      )
+      if ($Depth -ge $maxDepth) { return }
+
+      $dirs = Get-ChildItem -LiteralPath $Path -Directory -Force -ErrorAction SilentlyContinue | Sort-Object Name
+      $files = Get-ChildItem -LiteralPath $Path -File -Force -ErrorAction SilentlyContinue | Sort-Object Name
+
+      # 代表ファイル（この階層の直下から1つだけ）
+      $sampleFile = $null
+      if ($files.Count -gt 0) { $sampleFile = $files[0].Name }
+
+      # 子要素（ディレクトリ + サンプルファイル）を結合して“最後要素”判定
+      $items = @()
+      foreach ($d in $dirs)  { $items += @{ type='dir';  name=$d.Name;  full=$d.FullName } }
+      if ($sampleFile) { $items += @{ type='file'; name=$sampleFile; full=(Join-Path $Path $sampleFile) } }
+
+      for ($i=0; $i -lt $items.Count; $i++) {
+        $isLast = ($i -eq $items.Count - 1)
+        $connector = $(if ($isLast) { '└── ' } else { '├── ' })
+        $line = $Prefix + $connector + $(if ($items[$i].type -eq 'dir') { "$($items[$i].name)/" } else { $items[$i].name })
+        $lines.Add('# ' + $line)
+
+        if ($items[$i].type -eq 'dir') {
+          $nextPrefix = $Prefix + $(if ($isLast) { '    ' } else { '│   ' })
+          Add-Tree -Path $items[$i].full -Depth ($Depth+1) -Prefix $nextPrefix
+        }
+      }
+    }
+
+    # 3) 追記本文のヘッダ
+    $header = @(
+      '',
+      '# logs/data は ENV（BTC_TS_LOGS_DIR/BTC_TS_DATA_DIR）で D:\BtcTS_V1\… を指す',
+      '# [EXT_TREE] フォルダ + 各フォルダ直下から代表1ファイルのみ記載'
+    )
+    $header | ForEach-Object { Add-Content -Path $structOut -Value $_ -Encoding UTF8 }
+
+    # 4) ルート行とツリー本体を追記
+    Add-Content -Path $structOut -Value ('# ' + (Split-Path $root -Qualifier) + ( ($root -replace '^[A-Za-z]:\\','\') -replace '\\','/' )) -Encoding UTF8
+    Add-Tree -Path $root -Depth 0 -Prefix ''
+    $lines | ForEach-Object { Add-Content -Path $structOut -Value $_ -Encoding UTF8 }
   }
 }
 
@@ -246,8 +318,9 @@ if (Test-Path $handoverSrc) {
 
 # --- 6) サマリー（Pythonで整形） ---
 $pyTool = Join-Path $V1 "tools\handoff\gen_summary.py"
+$pyExe = if ($py) { $py } else { 'python' }
 if (Test-Path $pyTool) {
-  python $pyTool --v1 "$V1" --data "$DATA" --logs "$LOGS" --out (Join-Path $TMP "SUMMARY.md") 2>$null
+  & $pyExe $pyTool --v1 "$V1" --data "$DATA" --logs "$LOGS" --out (Join-Path $TMP "SUMMARY.md") 2>$null
 }
 
 # --- 6.5) 軽量Git復元情報の生成（自動） ---
@@ -289,10 +362,6 @@ if ($AutoRpTag) {
 }
 
 # --- 7) ZIP化 ---
-$stamp = Get-Date -Format "yyyyMMdd_HHmm"
-# 変更前:
-# $zip = Join-Path $OUT ("Handoff_" + $stamp + ".zip")
-# 変更後:
 $zip = Join-Path $OUT ("CTX-" + $stamp + ".zip")
 
 if (Test-Path $zip) { Remove-Item $zip -Force }
@@ -301,3 +370,4 @@ Add-Type -AssemblyName 'System.IO.Compression.FileSystem'
 
 Write-Host "OK: $zip"
 Remove-Item $TMP -Recurse -Force
+

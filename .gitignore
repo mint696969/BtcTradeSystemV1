@@ -3,3 +3,7 @@ logs/
 .vscode/
 *.zip
 secrets/
+
+__pycache__/
+*.pyc
+

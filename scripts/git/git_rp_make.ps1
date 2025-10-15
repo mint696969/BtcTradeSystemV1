@@ -84,7 +84,7 @@ function New-DiffBackup([string]$repoRoot, [string]$baseTag, [string]$headRef, [
   $numstat    = & git -C $repoRoot diff --numstat    $range
 
   $nameStatus | Out-File -FilePath $diffList -Encoding UTF8
-  & git -C $repoRoot diff $range | Out-File -FilePath $patchPath -Encoding UTF8
+  & git -C $repoRoot diff --binary --full-index $range | Out-File -FilePath $patchPath -Encoding UTF8
 
   foreach ($rel in $nameOnly) {
     $src = Join-Path $repoRoot $rel
@@ -178,3 +178,4 @@ if ($Diff -and $memo) { $msg += " : $memo" }
   exit 0
 }
 catch { Halt ("Unhandled error: {0}" -f $_.Exception.Message) }
+

@@ -1,0 +1,17 @@
+levels:
+  OK: 0
+  WARN: 1
+  CRIT: 2
+thresholds:
+  latency_ms:
+    warn: 400
+    crit: 1200
+  error_rate:
+    warn: 0.02
+    crit: 0.08
+colors:
+  OK: #00B050
+  WARN: #FFCC00
+  CRIT: #C00000
+presets:
+  lookbacks:
