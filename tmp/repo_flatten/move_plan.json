@@ -4,7 +4,7 @@
   "btc_trade_system/features/dash/providers/audit.py": "btc_trade_system/features/dash/svc_audit.py",
   "btc_trade_system/features/dash/providers/status_view.py": "btc_trade_system/features/dash/svc_health.py",
   "btc_trade_system/features/dash/providers/monitoring_config.py": "btc_trade_system/features/dash/svc_settings.py",
-  "btc_trade_system/features/dash/providers/health_order.py": "btc_trade_system/features/dash/svc_health.py",
+  "btc_trade_system/features/dash/providers/health_order.py": "btc_trade_system/features/dash/health_order.py",
   "btc_trade_system/features/dash/providers/presets.py": "btc_trade_system/features/dash/presets.py",
   "btc_trade_system/features/dash/health/leader_annotations.py": "btc_trade_system/features/dash/leader_annotations.py",
   "btc_trade_system/features/collector/core/status.py": "btc_trade_system/features/collector/status.py",
