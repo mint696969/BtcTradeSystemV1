@@ -101,7 +101,6 @@ function Write-Shims($shim){
     else { [IO.File]::WriteAllText($initPath, $content, (New-Object System.Text.UTF8Encoding($false))) }
   }
 }
-
 # ==== 実行フロー ====
 try {
   $move = Read-Json $MovePlanPath
