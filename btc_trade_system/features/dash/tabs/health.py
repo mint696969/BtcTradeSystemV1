@@ -147,21 +147,26 @@ def render():
     for i, c in enumerate(s.get("cards", [])):
         ex = c.get("exchange", "?")
         status = c.get("status", "-")
-        age = c.get("age_sec", 0)
+        age_val = c.get("age_sec", None)
         notes = c.get("notes", "")
         bg = PALE.get(status, {}).get("bg", "#fff")
         fg = PALE.get(status, {}).get("fg", "#374151")
         chip = f"<span class='chip' style='background:{fg};opacity:.85'>{status}</span>"
         note_html = f"<div class='muted'>{notes}</div>" if notes else ""
+        try:
+            age_display = f"{float(age_val):.1f}s"
+        except Exception:
+            age_display = "-"
 
         card_html = f"""
         <div class='card' style='background:{bg};'>
           <div class='title'>{ex} {chip}</div>
           <div class='muted'>更新遅延</div>
-          <div class='kv'>{age:.1f}s</div>
+          <div class='kv'>{age_display}</div>
           {note_html}
         </div>
         """
+        
         if cols[i]:
             st.markdown(card_html, unsafe_allow_html=True)
 
