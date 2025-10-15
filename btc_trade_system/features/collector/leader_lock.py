@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/collector/core/leader_lock.py
+# path: ./btc_trade_system/features/collector/leader_lock.py
 # desc: 収集の単一アクティブ性を担保する軽量ロック（NAS 共有前提）。昇格/心拍/降格を監査に記録。
 
 from __future__ import annotations

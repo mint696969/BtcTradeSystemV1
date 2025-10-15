@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/collector/core/snapshot_sink.py
+# path: ./btc_trade_system/features/collector/snapshot_sink.py
 # desc: 収集結果のスナップショットを data/collector/<exchange>/<topic>/YYYYMMDD.jsonl へ保存（StorageRouterで自動切替）。
 
 from __future__ import annotations

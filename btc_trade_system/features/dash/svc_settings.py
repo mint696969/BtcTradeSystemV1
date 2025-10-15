@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/dash/providers/monitoring_config.py
+# path: ./btc_trade_system/features/dash/svc_settings.py
 # desc: monitoring.yaml（閾値/色/プリセット）を最小YAMLで保存/読込。UIからの保存/復元の入口。
 
 from __future__ import annotations

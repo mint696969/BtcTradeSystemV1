@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/collector/worker/heartbeat.py
+# path: ./btc_trade_system/features/collector/heartbeat.py
 # desc: LeaderLock の renew と status.leader の heartbeat を一定間隔で更新する最小ループ（開発フェーズ用）
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/dash/providers/presets.py
+# # path: ./btc_trade_system/features/dash/presets.py
 # desc: ダッシュボード/監査UIの期間・レベル・色などのプリセットを一元管理する小モジュール。
 
 from __future__ import annotations

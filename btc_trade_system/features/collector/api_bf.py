@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/collector/adapters/bitflyer_public.py
+# path: ./btc_trade_system/features/collector/api_bf.py
 # desc: bitFlyer の公開API（/v1/executions, /v1/board）を標準ライブラリで叩く最小アダプタ。依存ゼロ・UA/Timeout対応。
 
 from __future__ import annotations

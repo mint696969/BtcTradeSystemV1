@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/collector/core/status.py
+# path: ./btc_trade_system/features/collector/status.py
 # desc: collector 健全性ステータスの更新/保存。data/collector/status.json を原子的に生成/上書き。
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/dash/health/leader_annotations.py
+# # path: ./btc_trade_system/features/dash/leader_annotations.py
 # desc: status.json から leader 情報を読み取り、items に leader.host / leader_age_sec を付与（UIは読取専用）
 
 from __future__ import annotations

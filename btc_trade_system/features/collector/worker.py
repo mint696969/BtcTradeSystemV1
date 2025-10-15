@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/collector/core/worker.py
+# path: ./btc_trade_system/features/collector/worker.py
 # desc: 各取引所用の最小ワーカ基底。レート制御・監査・status更新・リーダーロックを提供（API実装は fetch() を差し替え）。
 
 from __future__ import annotations

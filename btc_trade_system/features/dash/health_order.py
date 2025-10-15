@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/dash/providers/health_order.py
+# path: ./btc_trade_system/features/dash/health_order.py
 # desc: Health の並び順を config/ui/health.yaml に保存・復元する最小I/F（YAMLは自前の超軽量実装）。
 
 from __future__ import annotations
