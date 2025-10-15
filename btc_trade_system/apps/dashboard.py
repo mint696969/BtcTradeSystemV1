@@ -8,10 +8,9 @@ import streamlit as st
 # V1ルートを sys.path に（保険）
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-# tabs: health は features 側に統一
-from btc_trade_system.features.dash.tabs import health
+from btc_trade_system.features.dash.ui_health import render as health_render
+from btc_trade_system.features.dash.ui_audit import render as audit_render
 
-from btc_trade_system.features.dash.tabs import audit
 
 # 歯車コンポーネント（単一の正規位置に統一）
 from btc_trade_system.apps.components.settings_modal import settings_gear
@@ -25,6 +24,6 @@ settings_gear()
 # 設定はモーダルに集約したのでタブは2つ（健康・監査）のみ
 tab1, tab2 = st.tabs(["コレクターの健全性", "監査ログ"])
 with tab1:
-    health.render()
+    health_render()
 with tab2:
-    audit.render()
+    audit_render()

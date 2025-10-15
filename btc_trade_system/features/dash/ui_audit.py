@@ -16,7 +16,13 @@ def render():
     with c3:
         limit = st.selectbox("件数", [200,500,1000], index=1)
 
-    rows = get_audit_rows(limit=int(limit))
+    # --- 呼び出しパラメータ修正 ---
+    rows = get_audit_rows(
+        max_lines=int(limit),
+        level=None if level == "ALL" else level,
+        q=(q or None),
+    )
+
     def _match(r: dict) -> bool:
         if level != "ALL" and r.get("level") != level:
             return False
@@ -28,7 +34,6 @@ def render():
     rows = [r for r in rows if _match(r)]
     st.caption(f"{len(rows)} 件")
     if rows:
-        # 表示用に主要カラムだけ
         view = [
             {
                 "ts": r.get("ts"),
@@ -45,4 +50,3 @@ def render():
         st.dataframe(view, use_container_width=True, height=480)
     else:
         st.info("audit.jsonl が無いか、条件に一致する行がありません。")
-
