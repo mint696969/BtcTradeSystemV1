@@ -47,6 +47,6 @@ def render():
             }
             for r in rows
         ]
-        st.dataframe(view, use_container_width=True, height=480)
+        st.dataframe(view, width="stretch", height=480)
     else:
         st.info("audit.jsonl が無いか、条件に一致する行がありません。")

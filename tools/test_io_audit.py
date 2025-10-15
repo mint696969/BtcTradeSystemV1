@@ -1,5 +1,13 @@
 # path: tools/test_io_audit.py
 # desc: io_safe / audit の最小動作テスト
+
+# repo 直下を PYTHONPATH に追加（tools/ からの相対）
+import sys
+from pathlib import Path
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from btc_trade_system.common import io_safe, audit, paths
 from pathlib import Path
 
