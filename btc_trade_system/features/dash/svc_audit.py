@@ -1,5 +1,5 @@
-# path: ./btc_trade_system/features/dash/providers/audit.py
-# desc: 監査JSONLの読み口。期間/feature/level/キーワードでフィルタして返却＆CSV出力も提供。
+# path: ./btc_trade_system/features/dash/svc_audit.py
+# desc: 監査ログのサービス層（UI読み取り専用）— ui_audit から呼ばれるAPIを提供
 
 from __future__ import annotations
 import csv, json, re
@@ -173,6 +173,44 @@ def to_compact_rows(recs: Iterable[AuditRec], *, max_summary_len: int = 160) -> 
             "event": r.event,
             "summary": _summarize_obj(r.raw, max_len=max_summary_len),
         })
+    return rows
+
+# --- public API expected by ui_audit.py -------------------------------------
+def get_audit_rows(
+    *,
+    lookback: str = "1h",
+    level: Optional[str] = None,
+    q: Optional[str] = None,
+    feature: Optional[str] = None,
+    max_lines: int = 5000,
+    max_summary_len: int = 160,
+    tz_name: str = "Asia/Tokyo",
+) -> List[dict]:
+    """
+    ui_audit 用の最小API。
+    - lookback: '30m' / '1h' / '1d' など
+    - level:   'INFO' | 'WARN' | 'ERROR' ...（単一指定・省略可）
+    - q:       キーワード（要約・raw含むテキストに対して大小無視で検索）
+    - feature: 機能名（単一指定・省略可）
+    返り値: list[dict]（ts, ts_local, mode, feature, level, event, summary）
+    """
+    levels = [level] if level else None
+    features = [feature] if feature else None
+    recs = load_for_ui(
+        lookback=lookback,
+        features=features,
+        levels=levels,
+        keyword=q,
+        max_lines=max_lines,
+    )
+    rows = to_compact_rows(recs, max_summary_len=max_summary_len)
+    # ts_local を指定TZで付与（to_compact_rows内はデフォルトローカル→TZで上書き）
+    if tz_name:
+        for x in rows:
+            try:
+                x["ts_local"] = _ts_to_local_iso(x["ts"], tz_name=tz_name)
+            except Exception:
+                pass
     return rows
 
 def export_csv_compact(

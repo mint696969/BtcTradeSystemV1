@@ -1,27 +1,10 @@
-# path: ./btc_trade_system/features/dash/tabs/audit.py
+# path: ./btc_trade_system/features/dash/ui_audit.py
+# desc: AuditタブのUI（表示専用）— svc_audit で集計・検索したデータを描画
+
 from __future__ import annotations
 import streamlit as st
-# providers の所在を apps→features の順で解決
-import importlib
-_PROV_NAME = None
-for _name in (
-    "btc_trade_system.apps.boards.dashboard.providers",
-    "btc_trade_system.apps.dashboard.providers",
-    "btc_trade_system.features.dash.providers",
-):
-    try:
-        _prov = importlib.import_module(_name)
-        get_audit_rows = _prov.get_audit_rows  # type: ignore[attr-defined]
-        _PROV_NAME = _name
-        break
-    except Exception:
-        continue
-
-if _PROV_NAME is None:
-    # フォールバック（データが無い環境でもUIが落ちないように）
-    def get_audit_rows(*_, **__):
-        return []
-    _PROV_NAME = "fallback(stub)"
+# services（features 平置きの正式ルート）
+from btc_trade_system.features.dash.svc_audit import get_audit_rows
 
 def render():
     st.subheader("監査ログ")

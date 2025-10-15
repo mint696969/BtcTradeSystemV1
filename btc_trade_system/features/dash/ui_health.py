@@ -1,5 +1,5 @@
-# path: ./btc_trade_system/features/dash/tabs/health.py
-# desc: Healthタブ（status.json読取／leader注釈）。UIは読取専用
+# path: ./btc_trade_system/features/dash/ui_health.py
+# desc: HealthタブのUI（表示専用）— svc_* 集計を描画
 
 from __future__ import annotations
 import time
@@ -33,30 +33,13 @@ except ImportError:
         def close(self, *a, **k): pass
     plt = _DummyPlot()
 
-# --- providers (apps→features の両対応で動的解決) ---
-import importlib
-_PROV_NAME = None
-for _name in (
-    "btc_trade_system.apps.boards.dashboard.providers",
-    "btc_trade_system.apps.dashboard.providers",
-    "btc_trade_system.features.dash.providers",
-):
-    try:
-        _mod = importlib.import_module(_name)
-        get_health_summary = _mod.get_health_summary  # type: ignore[attr-defined]
-        get_health_table = _mod.get_health_table      # type: ignore[attr-defined]
-        _PROV_NAME = _name
-        break
-    except Exception:
-        continue
-if _PROV_NAME is None:
-    def get_health_summary():
-        return {"updated_at": "N/A", "all_ok": False, "cards": []}
-    def get_health_table():
-        return []
-    _PROV_NAME = "fallback(stub)"
+# --- services（features 平置きの正式ルート） ---
+from btc_trade_system.features.dash.svc_health import (
+    get_health_summary,
+    get_health_table,
+)
 
-from btc_trade_system.features.dash.health.leader_annotations import load_status_with_leader  # noqa: E402
+from btc_trade_system.features.dash.leader_annotations import load_status_with_leader  # noqa: E402
 
 PALE = {
     "OK":   {"fg":"#166534", "bg":"#ecfdf5"},

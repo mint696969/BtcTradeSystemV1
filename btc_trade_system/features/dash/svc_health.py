@@ -1,5 +1,5 @@
-# path: ./btc_trade_system/features/dash/providers/status_view.py
-# desc: data/collector/status.json を読み、UI向けに ts_local を付与して返す最小プロバイダ（UTC保存→JST表示）。
+# path: ./btc_trade_system/features/dash/svc_health.py
+# desc: status.json を読み、UI向け Health API（summary/table）を提供（UTC→ローカル変換含む）
 
 from __future__ import annotations
 import json, re
@@ -80,3 +80,28 @@ def load_for_ui(*, base_dir: Optional[Path] = None, tz_name: str = "Asia/Tokyo")
         "updated_at_local": updated_at_local,
         "source": str(path),
     }
+
+# --- public API expected by ui_health.py ------------------------------------
+def get_health_summary(*, base_dir: Optional[Path] = None, tz_name: str = "Asia/Tokyo") -> Dict[str, Any]:
+    """
+    ui 側のカード表示用に最低限のサマリを返す。
+    - updated_at: ローカル時刻優先（なければUTC文字列）
+    - all_ok: アイテムがあり、かつ last_local 欠損が無いとき True（暫定）
+    - cards: まずは空（UI側で拡張予定）
+    """
+    doc = load_for_ui(base_dir=base_dir, tz_name=tz_name)
+    items = doc.get("items") or []
+    all_ok = bool(items) and all(it.get("last_local") for it in items)
+    updated = doc.get("updated_at_local") or doc.get("updated_at")
+    return {
+        "updated_at": updated,
+        "all_ok": all_ok,
+        "cards": [],
+    }
+
+def get_health_table(*, base_dir: Optional[Path] = None, tz_name: str = "Asia/Tokyo"):
+    """
+    テーブル表示用の行データを返す。まずは list[dict] で返し、必要に応じて DataFrame 化は UI 側で実施。
+    """
+    doc = load_for_ui(base_dir=base_dir, tz_name=tz_name)
+    return doc.get("items") or []
