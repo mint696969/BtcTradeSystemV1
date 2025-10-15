@@ -87,13 +87,19 @@ function Apply-Moves($plan){
 
 function Write-Shims($shim){
   foreach($kv in $shim.PSObject.Properties){
-    $initPath = $kv.Name
-    $spec = $kv.Value
-    $dir = Split-Path -Parent $initPath
-    if(!(Test-Path $dir)){ if($WhatIf){ Write-Host "WhatIf: mkdir $dir" } else { New-Item -ItemType Directory -Force -Path $dir | Out-Null } }
+    $initRel = $kv.Name
+    $spec    = $kv.Value
+
+    # 絶対パスで扱う（System32誤爆防止）
+    $initFull = Join-Path $RepoRoot $initRel
+    $dirFull  = Split-Path -Parent $initFull
+    if(!(Test-Path $dirFull)){
+      if($WhatIf){ Write-Host "WhatIf: mkdir $dirFull" }
+      else { New-Item -ItemType Directory -Force -Path $dirFull | Out-Null }
+    }
 
     $lines = @()
-    $lines += "# path: ./$initPath"
+    $lines += "# path: ./$initRel"
     $lines += "# desc: 互換エクスポート（移行期間のみ使用）"
     $lines += "# NOTE: 移行完了後にこの __init__ は削除します"
     $lines += ""
@@ -109,21 +115,21 @@ function Write-Shims($shim){
 
     if($props.ContainsKey('exports') -and $spec.exports){
       foreach($kv2 in $spec.exports.PSObject.Properties){
-        $mod = $kv2.Value -replace '/', '.' -replace '\\.py$',''
+        $mod = $kv2.Value -replace '/', '.' -replace '\.py$',''
         $lines += "from ${mod} import *  # noqa: F401"
       }
     }
 
     if($props.ContainsKey('reexports') -and $spec.reexports){
       foreach($kv3 in $spec.reexports.PSObject.Properties){
-        $mod = $kv3.Value -replace '/', '.' -replace '\\.py$',''
+        $mod = $kv3.Value -replace '/', '.' -replace '\.py$',''
         $lines += "from ${mod} import *  # noqa: F401"
       }
     }
 
     $content = ($lines -join "`n")
-    if($WhatIf){ Write-Host "WhatIf: write $initPath (shim)" }
-    else { [IO.File]::WriteAllText($initPath, $content, (New-Object System.Text.UTF8Encoding($false))) }
+    if($WhatIf){ Write-Host "WhatIf: write $initRel (shim @ $initFull)" }
+    else { [IO.File]::WriteAllText($initFull, $content, (New-Object System.Text.UTF8Encoding($false))) }
   }
 }
 
