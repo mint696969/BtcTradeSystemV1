@@ -1,6 +1,8 @@
 # path: ./tmp/repo_flatten/apply_plan.ps1
 # desc: move_plan.json / shim_plan.json を用いた安全適用（RP作成→git mv→ヘッダ修正→簡易シム生成）
 
+# Disable PSScriptAnalyzer warnings for non-approved verbs
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseApprovedVerbs','',Justification='Internal tooling script')]
 param(
   [switch]$WhatIf,
   [string]$MovePlanPath = "./tmp/repo_flatten/move_plan.json",
@@ -52,17 +54,18 @@ function Git-Mv-Safe([string]$Src,[string]$Dst){
 }
 
 function Update-Header-Path([string]$File,[string]$NewPath){
-  if(!(Test-Path $File)){ return }
-  $lines = Get-Content $File -Raw -Encoding UTF8 -ErrorAction SilentlyContinue | Out-String
-  # 先頭2行のうち path 行のみ置換（desc は保持）
+  $fileFull = Join-Path $RepoRoot $File
+  if(!(Test-Path $fileFull)){ return }
+  $lines = Get-Content $fileFull -Raw -Encoding UTF8 -ErrorAction SilentlyContinue | Out-String
   $updated = $false
   $out = $lines -split "\r?\n"
-  if($out.Length -ge 1 -and $out[0] -match '^#\s*path\s*:\s*'){ $out[0] = "# path: ./$NewPath"; $updated = $true }
-  # desc はそのまま
+  if($out.Length -ge 1 -and $out[0] -match '^#\\s*path\\s*:\\s*'){
+    $out[0] = "# path: ./$NewPath"; $updated = $true
+  }
   $text = ($out -join "`n")
   if($updated){
     if($WhatIf){ Write-Host "WhatIf: update header in $File -> # path: ./$NewPath" }
-    else { [IO.File]::WriteAllText($File, $text, (New-Object System.Text.UTF8Encoding($false))) }
+    else { [IO.File]::WriteAllText($fileFull, $text, (New-Object System.Text.UTF8Encoding($false))) }
   }
 }
 
@@ -70,11 +73,15 @@ function Apply-Moves($plan){
   foreach($kv in $plan.PSObject.Properties){
     $src = $kv.Name; $dst = $kv.Value
     Git-Mv-Safe $src $dst
-    # パスヘッダの相対表示用（repo ルート基準）
-    $rel = $dst
-    if($dst.StartsWith('btc_trade_system')){ $rel = $dst }
-    # .py の場合は先頭 # path を修正
-    if($dst.ToLower().EndsWith('.py')){ Update-Header-Path $dst $rel }
+
+    if($dst.ToLower().EndsWith('.py')){
+      $dstFull = Join-Path $RepoRoot $dst
+      if(Test-Path $dstFull){
+        Update-Header-Path $dst $dst
+      } else {
+        Write-Warning "[SKIP] header update: not found after move -> $dst"
+      }
+    }
   }
 }
 
@@ -102,14 +109,14 @@ function Write-Shims($shim){
 
     if($props.ContainsKey('exports') -and $spec.exports){
       foreach($kv2 in $spec.exports.PSObject.Properties){
-        $mod = $kv2.Value -replace '/', '.' -replace '\.py$',''
+        $mod = $kv2.Value -replace '/', '.' -replace '\\.py$',''
         $lines += "from ${mod} import *  # noqa: F401"
       }
     }
 
     if($props.ContainsKey('reexports') -and $spec.reexports){
       foreach($kv3 in $spec.reexports.PSObject.Properties){
-        $mod = $kv3.Value -replace '/', '.' -replace '\.py$',''
+        $mod = $kv3.Value -replace '/', '.' -replace '\\.py$',''
         $lines += "from ${mod} import *  # noqa: F401"
       }
     }
@@ -119,13 +126,12 @@ function Write-Shims($shim){
     else { [IO.File]::WriteAllText($initPath, $content, (New-Object System.Text.UTF8Encoding($false))) }
   }
 }
-# ==== 実行フロー ====
+
 try {
   $move = Read-Json $MovePlanPath
   $shim  = Read-Json $ShimPlanPath
 
   Make-RestorePoint
-  # 念のため RP 側で場所が変わった場合でもRepoRootへ戻す
   Set-Location $RepoRoot
 
   Apply-Moves $move
