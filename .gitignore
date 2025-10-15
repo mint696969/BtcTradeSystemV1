@@ -1,3 +1,22 @@
+# path: ./.gitattributes
+# desc: 改行コードの統一（Windowsでも警告が出ないように）
+* text=auto
+
+# ソースコードは LF 固定
+*.py   text eol=lf
+*.ps1  text eol=lf
+*.sh   text eol=lf
+*.md   text eol=lf
+*.yaml text eol=lf
+*.yml  text eol=lf
+
+# そのほかバイナリ
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.zip  binary
+*.gz   binary
+
 data/
 logs/
 .vscode/
