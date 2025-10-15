@@ -1,0 +1,119 @@
+# path: ./tmp/repo_flatten/apply_plan.ps1
+# desc: move_plan.json / shim_plan.json を用いた安全適用（RP作成→git mv→ヘッダ修正→簡易シム生成）
+
+param(
+  [switch]$WhatIf,
+  [string]$MovePlanPath = "./tmp/repo_flatten/move_plan.json",
+  [string]$ShimPlanPath = "./tmp/repo_flatten/shim_plan.json",
+  [switch]$SkipRP
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+function Ensure-File([string]$Path){ if(!(Test-Path $Path)){ throw "Not found: $Path" } }
+function Read-Json([string]$Path){ Ensure-File $Path; (Get-Content $Path -Raw | ConvertFrom-Json) }
+
+function Make-RestorePoint{
+  if($SkipRP){ return }
+  $rp = Join-Path -Path "." -ChildPath "scripts/git/git_rp_make.ps1"
+  if(Test-Path $rp){
+    Write-Host "[RP] creating restore point..."
+    if($WhatIf){ Write-Host "WhatIf: & $rp -Commit -Diff -Zip -RpMemo 'repo_flatten apply'" }
+    else { & $rp -Commit -Diff -Zip -RpMemo "repo_flatten apply" }
+  } else {
+    Write-Warning "[RP] scripts/git/git_rp_make.ps1 が見つかりません。手動で保存してください。"
+  }
+}
+
+function Git-Mv-Safe([string]$Src,[string]$Dst){
+  $dstDir = Split-Path -Parent $Dst
+  if(!(Test-Path $dstDir)){ if($WhatIf){ Write-Host "WhatIf: mkdir $dstDir" } else { New-Item -ItemType Directory -Force -Path $dstDir | Out-Null } }
+  $cmd = "git mv -v -- `"$Src`" `"$Dst`""
+  if($WhatIf){ Write-Host "WhatIf: $cmd" } else { & git mv -v -- "$Src" "$Dst" }
+}
+
+function Update-Header-Path([string]$File,[string]$NewPath){
+  if(!(Test-Path $File)){ return }
+  $lines = Get-Content $File -Raw -Encoding UTF8 -ErrorAction SilentlyContinue | Out-String
+  # 先頭2行のうち path 行のみ置換（desc は保持）
+  $updated = $false
+  $out = $lines -split "\r?\n"
+  if($out.Length -ge 1 -and $out[0] -match '^#\s*path\s*:\s*'){ $out[0] = "# path: ./$NewPath"; $updated = $true }
+  # desc はそのまま
+  $text = ($out -join "`n")
+  if($updated){
+    if($WhatIf){ Write-Host "WhatIf: update header in $File -> # path: ./$NewPath" }
+    else { [IO.File]::WriteAllText($File, $text, (New-Object System.Text.UTF8Encoding($false))) }
+  }
+}
+
+function Apply-Moves($plan){
+  foreach($kv in $plan.PSObject.Properties){
+    $src = $kv.Name; $dst = $kv.Value
+    Git-Mv-Safe $src $dst
+    # パスヘッダの相対表示用（repo ルート基準）
+    $rel = $dst
+    if($dst.StartsWith('btc_trade_system')){ $rel = $dst }
+    # .py の場合は先頭 # path を修正
+    if($dst.ToLower().EndsWith('.py')){ Update-Header-Path $dst $rel }
+  }
+}
+
+function Write-Shims($shim){
+  foreach($kv in $shim.PSObject.Properties){
+    $initPath = $kv.Name
+    $spec = $kv.Value
+    $dir = Split-Path -Parent $initPath
+    if(!(Test-Path $dir)){ if($WhatIf){ Write-Host "WhatIf: mkdir $dir" } else { New-Item -ItemType Directory -Force -Path $dir | Out-Null } }
+
+    $lines = @()
+    $lines += "# path: ./$initPath"
+    $lines += "# desc: 互換エクスポート（移行期間のみ使用）"
+    $lines += "# NOTE: 移行完了後にこの __init__ は削除します"
+    $lines += ""
+
+    $props = @{}
+    foreach($p in $spec.PSObject.Properties){ $props[$p.Name] = $true }
+
+    if($props.ContainsKey('reexports_to')){
+      $target = $spec.reexports_to
+      $lines += "# reexports_to: $target"
+      $lines += "# (実際の中身は機能側へ移設済み)"
+    }
+
+    if($props.ContainsKey('exports') -and $spec.exports){
+      foreach($kv2 in $spec.exports.PSObject.Properties){
+        $mod = $kv2.Value -replace '/', '.' -replace '\.py$',''
+        $lines += "from ${mod} import *  # noqa: F401"
+      }
+    }
+
+    if($props.ContainsKey('reexports') -and $spec.reexports){
+      foreach($kv3 in $spec.reexports.PSObject.Properties){
+        $mod = $kv3.Value -replace '/', '.' -replace '\.py$',''
+        $lines += "from ${mod} import *  # noqa: F401"
+      }
+    }
+
+    $content = ($lines -join "`n")
+    if($WhatIf){ Write-Host "WhatIf: write $initPath (shim)" }
+    else { [IO.File]::WriteAllText($initPath, $content, (New-Object System.Text.UTF8Encoding($false))) }
+  }
+}
+
+# ==== 実行フロー ====
+try {
+  $move = Read-Json $MovePlanPath
+  $shim  = Read-Json $ShimPlanPath
+
+  Make-RestorePoint
+  Apply-Moves $move
+  Write-Shims $shim
+
+  Write-Host "[DONE] apply_plan completed. Use git status to review changes."
+}
+catch {
+  Write-Error "[FAILED] $($_.Exception.Message)"
+  throw
+}

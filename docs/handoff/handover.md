@@ -274,4 +274,36 @@ D) Phase 1B 最終仕上げ
 
 ---
 
+## 2025-10-15 Collector / Health / Audit 統合・整理
+
+- 作業メモ
+
+  - Collector の状態記録 (`status.json`) を拡張し、`leader` と `storage` 情報を統合。Bridge スクリプト (`leader_status_bridge.py` / `storage_status_bridge.py`) を `tools/collector` に設置。
+  - `features/collector/core/status.py` の再構成完了。データ構造を統一し、`StatusWriter.flush()` で leader・storage 両方のメタデータを安全書込。
+  - `features/dash/tabs/health.py` を正式位置へ移動し、デバッグ専用キャプション（storage/path 等）は `BTC_TS_DEBUG_UI=1` でのみ表示されるよう調整。
+  - `apps/dashboard.py` の import 構造をリファクタリング：apps→features の自動フェイルオーバーを導入。`settings_modal`, `health`, `audit` の各参照を整理。
+  - `features/dash/tabs/audit.py` の ImportError（`get_audit_rows`）を修正し、動的 import で安定化。
+
+- 完了タスク
+
+  1. Health タブを正式移設 (`apps/boards/dashboard/tabs/health.py` → `features/dash/tabs/health.py`)。
+  2. Leader／Storage 情報の status.json 統合・自動更新。
+  3. `dashboard.py` の import 経路を apps→features 対応で二重解消。
+  4. Audit タブ ImportError 修正・正常動作確認。
+  5. UI デバッグ要素の ON/OFF 制御（環境変数）実装。
+
+- 次の候補タスク
+  A) `features/dash/tabs/health.py` の age_sec None 表示を明示的にハイフン化 or 非表示。
+  B) Audit タブのログ整形と重要イベントの強調（level 別カラーリング）
+  C) 残 B シリーズの B6：`ops/sync`（バックアップ・同期機構）雛形設計
+  D) Dashboard／Health／Audit の統合テストスクリプト整備 (`tools/test_ui_health_audit.py`)
+
+- 参照:
+
+  - `tools/collector/leader_status_bridge.py`, `tools/collector/storage_status_bridge.py`
+  - `features/collector/core/status.py`, `features/dash/tabs/health.py`, `features/dash/tabs/audit.py`
+  - 実行ログ: PowerShell 出力 `storage -> status.json updated`, `ok: D:\BtcTS_V1\data\collector\status.json`
+
+---
+
 （以後、2025-10-14 以降の更新はこのセクション末尾に追記する）

@@ -1,0 +1,16 @@
+{
+  "btc_trade_system/features/dash/tabs/health.py": "btc_trade_system/features/dash/ui_health.py",
+  "btc_trade_system/features/dash/tabs/audit.py": "btc_trade_system/features/dash/ui_audit.py",
+  "btc_trade_system/features/dash/providers/audit.py": "btc_trade_system/features/dash/svc_audit.py",
+  "btc_trade_system/features/dash/providers/status_view.py": "btc_trade_system/features/dash/svc_health.py",
+  "btc_trade_system/features/dash/providers/monitoring_config.py": "btc_trade_system/features/dash/svc_settings.py",
+  "btc_trade_system/features/dash/providers/health_order.py": "btc_trade_system/features/dash/svc_health.py",
+  "btc_trade_system/features/dash/providers/presets.py": "btc_trade_system/features/dash/presets.py",
+  "btc_trade_system/features/dash/health/leader_annotations.py": "btc_trade_system/features/dash/leader_annotations.py",
+  "btc_trade_system/features/collector/core/status.py": "btc_trade_system/features/collector/status.py",
+  "btc_trade_system/features/collector/core/leader_lock.py": "btc_trade_system/features/collector/leader_lock.py",
+  "btc_trade_system/features/collector/core/snapshot_sink.py": "btc_trade_system/features/collector/snapshot_sink.py",
+  "btc_trade_system/features/collector/core/worker.py": "btc_trade_system/features/collector/worker.py",
+  "btc_trade_system/features/collector/worker/heartbeat.py": "btc_trade_system/features/collector/heartbeat.py",
+  "btc_trade_system/features/collector/adapters/bitflyer_public.py": "btc_trade_system/features/collector/api_bf.py"
+}

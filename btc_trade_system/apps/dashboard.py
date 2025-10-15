@@ -11,10 +11,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 # tabs: health は features 側に統一
 from btc_trade_system.features.dash.tabs import health
 
-try:
-    from btc_trade_system.apps.boards.dashboard.tabs import audit   # 旧配置（現状ここにある想定）
-except Exception:
-    from btc_trade_system.features.dash.tabs import audit           # 将来移設に備え
+from btc_trade_system.features.dash.tabs import audit
 
 # 歯車コンポーネント（単一の正規位置に統一）
 from btc_trade_system.apps.components.settings_modal import settings_gear

@@ -1,0 +1,32 @@
+{
+  "btc_trade_system/features/dash/tabs/__init__.py": {
+    "create_or_patch": true,
+    "exports": {
+      "health": "btc_trade_system/features/dash/ui_health.py",
+      "audit": "btc_trade_system/features/dash/ui_audit.py"
+    }
+  },
+  "btc_trade_system/features/dash/providers/__init__.py": {
+    "create_or_patch": true,
+    "exports": {
+      "audit": "btc_trade_system/features/dash/svc_audit.py",
+      "status_view": "btc_trade_system/features/dash/svc_health.py"
+    }
+  },
+  "btc_trade_system/features/collector/core/__init__.py": {
+    "create_or_patch": true,
+    "reexports_to": "btc_trade_system/features/collector/"
+  },
+  "btc_trade_system/features/collector/worker/__init__.py": {
+    "create_or_patch": true,
+    "reexports": {
+      "heartbeat": "btc_trade_system/features/collector/heartbeat.py"
+    }
+  },
+  "btc_trade_system/features/collector/adapters/__init__.py": {
+    "create_or_patch": true,
+    "reexports": {
+      "bitflyer_public": "btc_trade_system/features/collector/api_bf.py"
+    }
+  }
+}

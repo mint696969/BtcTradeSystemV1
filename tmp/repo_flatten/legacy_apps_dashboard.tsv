@@ -1,0 +1,7 @@
+btc_trade_system/apps/boards/dashboard/__init__.py
+btc_trade_system/apps/boards/dashboard/providers.py
+btc_trade_system/apps/boards/dashboard/tabs/settings.py
+btc_trade_system/apps/boards/dashboard/tabs/__pycache__/audit.cpython-310.pyc
+btc_trade_system/apps/boards/dashboard/tabs/__pycache__/settings.cpython-310.pyc
+btc_trade_system/apps/boards/dashboard/__pycache__/__init__.cpython-310.pyc
+btc_trade_system/apps/boards/dashboard/__pycache__/providers.cpython-310.pyc

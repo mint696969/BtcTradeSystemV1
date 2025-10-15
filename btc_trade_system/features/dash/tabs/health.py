@@ -129,17 +129,21 @@ def render():
 
     s = get_health_summary()
     st.caption(f"更新: {s['updated_at']} / all_ok={s['all_ok']}")
-    st.caption(f"provider: {_PROV_NAME}")
 
-    # storage メタを status.json から読み取って表示（読取専用）
+    # storage メタはデバッグ時のみキャプション表示（通常は非表示）
     try:
-        import json, os
+        import json as _json, os as _os
         from pathlib import Path as _P
-        _sp = _P(os.environ.get("BTC_TS_DATA_DIR", "data")) / "collector" / "status.json"
-        _raw = json.loads(_sp.read_text(encoding="utf-8"))
+        _sp = _P(_os.environ.get("BTC_TS_DATA_DIR", "data")) / "collector" / "status.json"
+        _raw = _json.loads(_sp.read_text(encoding="utf-8"))
         _stg = _raw.get("storage") or {}
-        if _stg:
-            st.caption(f"storage: primary_ok={_stg.get('primary_ok')} / logs_root={_stg.get('logs_root')} / data_root={_stg.get('data_root')}")
+        if _stg and _os.environ.get("BTC_TS_DEBUG_UI") == "1":
+            st.caption(
+                "storage: "
+                f"primary_ok={_stg.get('primary_ok')} / "
+                f"logs_root={_stg.get('logs_root')} / "
+                f"data_root={_stg.get('data_root')}"
+            )
     except Exception:
         pass
 
