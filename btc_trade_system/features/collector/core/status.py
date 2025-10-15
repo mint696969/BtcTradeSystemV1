@@ -59,6 +59,12 @@ class LeaderMeta:
     started_ms: int
     heartbeat_ms: int
 
+@dataclass
+class StorageMeta:
+    logs_root: str
+    data_root: str
+    primary_ok: bool
+
 class StatusWriter:
     def __init__(self, data_root: Optional[Path] = None) -> None:
         self.root = _to_data_root(data_root)
@@ -66,6 +72,7 @@ class StatusWriter:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._items: Dict[tuple[str, str], StatusItem] = {}
         self._leader: Optional[LeaderMeta] = None
+        self._storage: Optional[StorageMeta] = None
         self._load_if_exists()
 
     def update(
@@ -97,6 +104,9 @@ class StatusWriter:
         item.source = source or item.source
         self._items[key] = item
 
+    def set_storage(self, *, logs_root: str, data_root: str, primary_ok: bool) -> None:
+        self._storage = StorageMeta(logs_root=logs_root, data_root=data_root, primary_ok=primary_ok)
+
     def set_leader(self, host: str, pid: int, started_ms: int, heartbeat_ms: int) -> None:
         self._leader = LeaderMeta(host=host, pid=pid, started_ms=started_ms, heartbeat_ms=heartbeat_ms)
 
@@ -105,8 +115,10 @@ class StatusWriter:
             "items": [asdict(v) for v in self._items.values()],
             "updated_at": _utc_now_iso(),
         }
-        if self._leader is not None:
-            payload["leader"] = asdict(self._leader)
+        if getattr(self, "_leader", None) is not None:
+            payload["leader"] = asdict(self._leader)  # type: ignore[arg-type]
+        if getattr(self, "_storage", None) is not None:
+            payload["storage"] = asdict(self._storage)  # type: ignore[arg-type]
 
         tmp = self.path.with_suffix(".tmp")
         data = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n"
@@ -148,7 +160,19 @@ class StatusWriter:
                     notes=it.get("notes"),
                     source=it.get("source", "status"),
                 )
-                
+
+            # optional: storage meta の読み戻し
+            storage = raw.get("storage")
+            if storage:
+                try:
+                    self._storage = StorageMeta(
+                        logs_root=str(storage.get("logs_root", "")),
+                        data_root=str(storage.get("data_root", "")),
+                        primary_ok=bool(storage.get("primary_ok", False)),
+                    )
+                except Exception:
+                    self._storage = None
+
             # optional: leader meta の読み戻し
             leader = raw.get("leader")
             if leader:

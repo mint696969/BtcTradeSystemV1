@@ -70,10 +70,22 @@ class StorageRouter:
         return self._primary_root(domain) if self.is_primary_available(domain) \
                else self._secondary_root_for(domain)
 
+    def _safe_join(self, base: Path, relpath: str) -> Path:
+        """
+        base 配下への相対パスのみ許容。絶対/脱出を検知して拒否。
+        """
+        base_res = base.resolve()
+        target = (base / relpath).resolve()
+        # Windows/UNIX 両対応のため commonpath で配下判定
+        import os as _os
+        if _os.path.commonpath([str(target), str(base_res)]) != str(base_res):
+            raise ValueError(f"relpath escapes base: {relpath!r}")
+        return target
+
     # ---- JSONL append（冪等1行追記） ----------------------------------------
     def append_jsonl(self, domain: Domain, relpath: str, obj: dict) -> Path:
         base = self._resolve_base(domain)
-        path = base / relpath
+        path = self._safe_join(base, relpath)
         path.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(obj, ensure_ascii=False)
         with open(path, "a", encoding="utf-8", newline="\n") as f:
@@ -86,12 +98,13 @@ class StorageRouter:
     # ---- CSV atomic write（置換型） ------------------------------------------
     def write_atomic_csv(self, domain: Domain, relpath: str, rows: list[list[str]]) -> Path:
         base = self._resolve_base(domain)
-        path = base / relpath
+        path = self._safe_join(base, relpath)
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp_path = tempfile.mkstemp(prefix="csv_", suffix=".tmp", dir=str(path.parent))
         try:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
-                writer = csv.writer(f)
+            # newline=\"\\n\" + lineterminator='\\n' で OS に依存しないLF固定（diffが安定）
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+                writer = csv.writer(f, lineterminator="\n")
                 for r in rows:
                     writer.writerow(r)
                 f.flush()
@@ -104,3 +117,8 @@ class StorageRouter:
             except Exception:
                 pass
         return path
+
+    # --- introspection ---------------------------------------------------------
+    def current_root(self, domain: Domain) -> Path:
+        """現在の書き込み先ベース（probe結果）を返す。"""
+        return self._resolve_base(domain)

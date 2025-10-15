@@ -1,4 +1,6 @@
-# path: btc_trade_system/apps/dashboard.py
+# path: ./btc_trade_system/apps/dashboard.py
+# desc: StreamlitメインUI（Health/Audit）。features配下の新タブにも対応
+
 from __future__ import annotations
 import sys, pathlib
 import streamlit as st
@@ -6,9 +8,22 @@ import streamlit as st
 # V1ルートを sys.path に（保険）
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from btc_trade_system.apps.boards.dashboard.tabs import health
-from btc_trade_system.apps.boards.dashboard.tabs import audit
-from btc_trade_system.apps.components.settings_modal import settings_gear  # ← 追加（新規コンポーネント）
+# tabs: apps(old) → features(new) の順で解決
+try:
+    from btc_trade_system.apps.boards.dashboard.tabs import health  # 旧配置（互換）
+except Exception:
+    from btc_trade_system.features.dash.tabs import health          # 新配置（正）
+
+try:
+    from btc_trade_system.apps.boards.dashboard.tabs import audit   # 旧配置（現状ここにある想定）
+except Exception:
+    from btc_trade_system.features.dash.tabs import audit           # 将来移設に備え
+
+# 歯車コンポーネントも apps → features の順で解決
+try:
+    from btc_trade_system.apps.components.settings_modal import settings_gear
+except Exception:
+    from btc_trade_system.features.dash.app.settings_modal import settings_gear  # ※存在しないならこの except は通らないだけ
 
 st.set_page_config(page_title="BtcTS V1", layout="wide")
 st.title("BtcTradeSystem V1 ダッシュボード")

@@ -3,10 +3,60 @@
 
 from __future__ import annotations
 import time
-import streamlit as st
-import matplotlib.pyplot as plt
 
-from ...dashboard.providers import get_health_summary, get_health_table
+# --- streamlit ---
+try:
+    import streamlit as st  # type: ignore
+except ImportError:
+    import types as _t
+    st = _t.SimpleNamespace(
+        markdown=print,
+        subheader=print,
+        columns=lambda *a, **k: [None],
+        divider=lambda: None,
+        write=print,
+        dataframe=print,
+        info=print,
+        caption=print,
+        selectbox=lambda *a, **k: "10分",
+        toggle=lambda *a, **k: False,
+        experimental_rerun=lambda: None,
+        pyplot=lambda *a, **k: None,
+    )
+
+# --- matplotlib ---
+try:
+    import matplotlib.pyplot as plt  # type: ignore
+except ImportError:
+    class _DummyPlot:
+        def subplots(self, *a, **k): return (None, None)
+        def close(self, *a, **k): pass
+    plt = _DummyPlot()
+
+# --- providers (apps→features の両対応で動的解決) ---
+import importlib
+_PROV_NAME = None
+for _name in (
+    "btc_trade_system.apps.boards.dashboard.providers",
+    "btc_trade_system.apps.dashboard.providers",
+    "btc_trade_system.features.dash.providers",
+):
+    try:
+        _mod = importlib.import_module(_name)
+        get_health_summary = _mod.get_health_summary  # type: ignore[attr-defined]
+        get_health_table = _mod.get_health_table      # type: ignore[attr-defined]
+        _PROV_NAME = _name
+        break
+    except Exception:
+        continue
+if _PROV_NAME is None:
+    def get_health_summary():
+        return {"updated_at": "N/A", "all_ok": False, "cards": []}
+    def get_health_table():
+        return []
+    _PROV_NAME = "fallback(stub)"
+
+from btc_trade_system.features.dash.health.leader_annotations import load_status_with_leader  # noqa: E402
 
 PALE = {
     "OK":   {"fg":"#166534", "bg":"#ecfdf5"},
@@ -53,6 +103,7 @@ def _timeline(ax, status:str, age_sec:float|None, window_s:int):
     ok_color = "#e7f7ee"
     miss_color = {"OK":"#d9f5e3", "WARN":"#fff4d6", "CRIT":"#ffe4e6"}.get(status, "#eee")
 
+    if ax is None: return
     ax.barh([0], [ok_len], color=ok_color, height=0.5)
     ax.barh([0], [age], left=[ok_len], color=miss_color, height=0.5)
 
@@ -60,15 +111,10 @@ def _timeline(ax, status:str, age_sec:float|None, window_s:int):
     ax.set_yticks([]); ax.set_xticks([])
     for s in ax.spines.values(): s.set_visible(False)
 
-def _status_chip(status:str) -> str:
-    fg = PALE.get(status, {}).get("fg", "#374151")
-    return f"<span class='chip' style='background:{fg};opacity:.85'>{status}</span>"
-
 def render():
     _css()
     st.subheader("コレクターの健全性")
 
-    # --- ヘッダ（自動更新・期間） ---
     c1, c2, _ = st.columns([1, 1, 6])
     with c1:
         auto = st.toggle("自動更新（このタブ）", value=False)
@@ -81,16 +127,27 @@ def render():
         time.sleep(5)
         st.experimental_rerun()
 
-    # --- データ取得 ---
     s = get_health_summary()
     st.caption(f"更新: {s['updated_at']} / all_ok={s['all_ok']}")
+    st.caption(f"provider: {_PROV_NAME}")
 
-    # --- カード（1ブロックHTMLで描画） ---
-    cols = st.columns(max(1, len(s["cards"])))
-    for i, c in enumerate(s["cards"]):
-        ex = c["exchange"]
-        status = c["status"]
-        age = c["age_sec"]
+    # storage メタを status.json から読み取って表示（読取専用）
+    try:
+        import json, os
+        from pathlib import Path as _P
+        _sp = _P(os.environ.get("BTC_TS_DATA_DIR", "data")) / "collector" / "status.json"
+        _raw = json.loads(_sp.read_text(encoding="utf-8"))
+        _stg = _raw.get("storage") or {}
+        if _stg:
+            st.caption(f"storage: primary_ok={_stg.get('primary_ok')} / logs_root={_stg.get('logs_root')} / data_root={_stg.get('data_root')}")
+    except Exception:
+        pass
+
+    cols = st.columns(max(1, len(s.get("cards", []))))
+    for i, c in enumerate(s.get("cards", [])):
+        ex = c.get("exchange", "?")
+        status = c.get("status", "-")
+        age = c.get("age_sec", 0)
         notes = c.get("notes", "")
         bg = PALE.get(status, {}).get("bg", "#fff")
         fg = PALE.get(status, {}).get("fg", "#374151")
@@ -105,23 +162,84 @@ def render():
           {note_html}
         </div>
         """
-        with cols[i]:
+        if cols[i]:
             st.markdown(card_html, unsafe_allow_html=True)
 
-    # --- タイムライン ---
     st.divider()
     st.write("タイムライン（右端=現在／塗り=未更新区間・淡色）")
-    for c in s["cards"]:
-        st.markdown(f"**{c['exchange']}**")
-        fig, ax = plt.subplots(figsize=(8, 0.35), dpi=150)
-        _timeline(ax, c["status"], c["age_sec"], window_s)
-        st.pyplot(fig)
-        plt.close(fig)
+    for c in s.get("cards", []):
+        st.markdown(f"**{c.get('exchange','?')}**")
+        fig, ax = (plt.subplots(figsize=(8, 0.35), dpi=150) if hasattr(plt, 'subplots') else (None, None))
+        _timeline(ax, c.get("status"), c.get("age_sec"), window_s)
+        if hasattr(st, 'pyplot') and fig is not None:
+            st.pyplot(fig)
+        if hasattr(plt, 'close'):
+            plt.close(fig)
 
-    # --- 詳細表 ---
     st.divider()
     st.write("詳細")
     table = get_health_table()
+
+    try:
+        # leader メタのみ利用（items は UI 側で既に整形済みのため未使用）
+        _leader = load_status_with_leader()[1]
+        host = _leader.get("host") if _leader else None
+        hb_ms = int(_leader.get("heartbeat_ms", 0) or 0) if _leader else 0
+        import time as _t
+        age_sec = int(max(0, (_t.time() * 1000 - hb_ms)) / 1000) if hb_ms else None
+
+        if table:
+            if hasattr(table, "columns"):
+                if "leader.host" not in getattr(table, "columns", []):
+                    table["leader.host"] = host
+                if "leader_age_sec" not in getattr(table, "columns", []):
+                    table["leader_age_sec"] = age_sec
+            elif isinstance(table, list):
+                for row in table:
+                    row["leader.host"] = host
+                    row["leader_age_sec"] = age_sec
+
+    except Exception:
+        pass
+
+    # storage 注釈（status.json の storage ブロックを読んで付与）
+    try:
+        import json as _json, os as _os
+        from pathlib import Path as _P
+        _sp = _P(_os.environ.get("BTC_TS_DATA_DIR", "data")) / "collector" / "status.json"
+        _raw = _json.loads(_sp.read_text(encoding="utf-8"))
+        _stg = _raw.get("storage") or {}
+        s_primary = _stg.get("primary_ok")
+        s_logs = _stg.get("logs_root")
+        s_data = _stg.get("data_root")
+
+        if table:
+            if hasattr(table, "columns"):
+                if "storage.primary_ok" not in getattr(table, "columns", []):
+                    table["storage.primary_ok"] = s_primary
+                if "storage.logs_root" not in getattr(table, "columns", []):
+                    table["storage.logs_root"] = s_logs
+                if "storage.data_root" not in getattr(table, "columns", []):
+                    table["storage.data_root"] = s_data
+            elif isinstance(table, list):
+                for row in table:
+                    row["storage.primary_ok"] = s_primary
+                    row["storage.logs_root"] = s_logs
+                    row["storage.data_root"] = s_data
+    except Exception:
+        pass
+
+    # 並び替え（DataFrame のときのみ／list[dict] はそのまま）
+    try:
+        if hasattr(table, "sort_values") and "leader_age_sec" in getattr(table, "columns", []):
+            table = table.sort_values(
+                ["leader_age_sec", "exchange", "topic"],
+                ascending=[True, True, True],
+                na_position="last",
+            )
+    except Exception:
+        pass
+
     if table:
         st.dataframe(table, width="stretch")
     else:
