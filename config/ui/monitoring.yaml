@@ -9,9 +9,12 @@ thresholds:
   error_rate:
     warn: 0.02
     crit: 0.08
+  ok_sec: 60
+  warn_sec: 300
 colors:
   OK: #00B050
   WARN: #FFCC00
   CRIT: #C00000
 presets:
   lookbacks:
+  period_min: 10

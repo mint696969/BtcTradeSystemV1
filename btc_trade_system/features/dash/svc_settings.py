@@ -175,3 +175,93 @@ def save_config(cfg: Dict[str, Any]) -> Path:
         except Exception:
             pass
     return path
+
+# path: ./btc_trade_system/features/dash/svc_settings.py
+# desc: 互換I/F（tests / UI から利用）— load_monitoring / save_monitoring を提供
+
+from typing import Optional, Dict, Any
+from pathlib import Path
+
+def _settings_path(base_dir: Optional[Path] = None) -> Path:
+    # 実効ルート（base_dir優先／未指定ならカレント=リポ直下想定）
+    root = Path(base_dir) if base_dir else Path.cwd()
+    return (root / "config" / "ui" / "monitoring.yaml").resolve()
+
+def _try_existing_loader(base_dir: Optional[Path]) -> Optional[Dict[str, Any]]:
+    """
+    既存の内部関数（load_config / read_config / load / get など）があればそれを使う。
+    署名の違いはある程度吸収する。
+    """
+    for name in ("load_config", "read_config", "load", "get"):
+        f = globals().get(name)
+        if callable(f):
+            try:
+                return f(base_dir=base_dir)  # type: ignore[call-arg]
+            except TypeError:
+                try:
+                    return f()  # type: ignore[misc]
+                except Exception:
+                    continue
+            except Exception:
+                continue
+    return None
+
+def _try_existing_saver(doc: Dict[str, Any], base_dir: Optional[Path]) -> bool:
+    for name in ("save_config", "write_config", "save", "put"):
+        f = globals().get(name)
+        if callable(f):
+            try:
+                f(doc, base_dir=base_dir)  # type: ignore[call-arg]
+                return True
+            except TypeError:
+                try:
+                    f(doc)  # type: ignore[misc]
+                    return True
+                except Exception:
+                    continue
+            except Exception:
+                continue
+    return False
+
+def _yaml_load(p: Path) -> Dict[str, Any]:
+    try:
+        import yaml  # type: ignore
+        return (yaml.safe_load(p.read_text(encoding="utf-8")) or {}) if p.exists() else {}
+    except Exception:
+        # フォールバック: JSONとして読めるなら読む（簡易）
+        import json
+        if p.exists():
+            try:
+                return json.loads(p.read_text(encoding="utf-8"))
+            except Exception:
+                return {}
+        return {}
+
+def _yaml_dump(doc: Dict[str, Any], p: Path) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        import yaml  # type: ignore
+        p.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    except Exception:
+        # フォールバック: JSONで保存（簡易）
+        import json
+        p.write_text(json.dumps(doc, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def load_monitoring(*, base_dir: Optional[Path] = None) -> Dict[str, Any]:
+    """
+    設定（monitoring.yaml）をロード。既存内部実装があればそれを使用、
+    無ければローカルで YAML/JSON を読み取る。
+    """
+    doc = _try_existing_loader(base_dir)
+    if doc is not None:
+        return doc
+    return _yaml_load(_settings_path(base_dir))
+
+def save_monitoring(doc: Dict[str, Any], *, base_dir: Optional[Path] = None) -> None:
+    """
+    設定（monitoring.yaml）を保存。既存内部実装があればそれを使用、
+    無ければローカルで YAML/JSON として書き出す。
+    """
+    if _try_existing_saver(doc, base_dir):
+        return
+    _yaml_dump(doc, _settings_path(base_dir))
