@@ -9,6 +9,15 @@ param(
 )
 
 Set-StrictMode -Version Latest
+
+# --- repo root fix (workdir guard) ---
+$scriptDir = Split-Path -Parent $PSCommandPath
+# this script lives in ./tmp/repo_flatten/, so repo root = parent of ../
+$RepoRoot  = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
+$OrigLoc   = Get-Location
+Push-Location $RepoRoot
+# --------------------------------------
+
 $ErrorActionPreference = 'Stop'
 
 function Ensure-File([string]$Path){ if(!(Test-Path $Path)){ throw "Not found: $Path" } }
@@ -27,8 +36,17 @@ function Make-RestorePoint{
 }
 
 function Git-Mv-Safe([string]$Src,[string]$Dst){
-  $dstDir = Split-Path -Parent $Dst
-  if(!(Test-Path $dstDir)){ if($WhatIf){ Write-Host "WhatIf: mkdir $dstDir" } else { New-Item -ItemType Directory -Force -Path $dstDir | Out-Null } }
+  $srcFull = Join-Path $RepoRoot $Src
+  $dstFull = Join-Path $RepoRoot $Dst
+  $dstDir  = Split-Path -Parent $dstFull
+  if(!(Test-Path $srcFull)){
+    Write-Warning "[SKIP] git mv: source not found -> $Src"
+    return
+  }
+  if(!(Test-Path $dstDir)){
+    if($WhatIf){ Write-Host "WhatIf: mkdir $dstDir" }
+    else { New-Item -ItemType Directory -Force -Path $dstDir | Out-Null }
+  }
   $cmd = "git mv -v -- `"$Src`" `"$Dst`""
   if($WhatIf){ Write-Host "WhatIf: $cmd" } else { & git mv -v -- "$Src" "$Dst" }
 }
@@ -107,6 +125,9 @@ try {
   $shim  = Read-Json $ShimPlanPath
 
   Make-RestorePoint
+  # 念のため RP 側で場所が変わった場合でもRepoRootへ戻す
+  Set-Location $RepoRoot
+
   Apply-Moves $move
   Write-Shims $shim
 
@@ -115,4 +136,7 @@ try {
 catch {
   Write-Error "[FAILED] $($_.Exception.Message)"
   throw
+}
+finally {
+  if($OrigLoc){ Pop-Location }
 }
