@@ -1,5 +1,5 @@
-# path: btc_trade_system/features/settings/ui_settings.py
-# desc: 設定タブ（UI・保存/読取）。監視系ロジックは features/dash/providers に委譲
+# path: btc_trade_system/features/settings/ui_modal.py
+# desc: 右上の歯車→モーダル（ダイアログ）で設定を開く
 
 from __future__ import annotations
 import streamlit as st
