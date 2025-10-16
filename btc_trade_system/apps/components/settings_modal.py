@@ -1,11 +1,11 @@
-# path: btc_trade_system/apps/components/settings_modal.py
-# desc: 右上の歯車→モーダル（ダイアログ）で設定を開く
+# path: btc_trade_system/features/settings/ui_settings.py
+# desc: 設定タブ（UI・保存/読取）。監視系ロジックは features/dash/providers に委譲
 
 from __future__ import annotations
 import streamlit as st
 
 # 既存の設定UIを流用（健全性タブで作ったもの）
-from btc_trade_system.features.dash import settings as settings_tab
+from btc_trade_system.features.settings import ui_settings as settings_tab
 
 # Streamlit の dialog API（正式 or experimental）を吸収
 _DLG = getattr(st, "dialog", None) or getattr(st, "experimental_dialog", None)

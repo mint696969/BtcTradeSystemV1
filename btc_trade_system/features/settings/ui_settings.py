@@ -1,5 +1,5 @@
-# path: btc_trade_system/apps/boards/dashboard/tabs/settings.py
-# desc: 健全性ビューの設定（カード順序・しきい値）編集＆保存
+# path: btc_trade_system/features/settings/ui_settings.py
+# desc: 設定タブ（UI・保存/読取）。監視ロジックは features/dash/providers に委譲
 
 from __future__ import annotations
 import os
@@ -7,7 +7,7 @@ from pathlib import Path
 import streamlit as st
 
 # 既存プロバイダを利用して現在値を読む
-from .providers import get_health_summary, _cfg_root
+from ..dash.providers import get_health_summary, _cfg_root
 
 # YAML I/O（PyYAML）
 try:
