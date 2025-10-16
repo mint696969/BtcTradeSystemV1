@@ -93,7 +93,9 @@ if ($Diff) {
 
     # 差分（バイナリ含む）— base..tag
     $patchPath = Join-Path $dest "diff_$($base)_to_$($tag).patch"
-    $diffText = GitExec @("diff","--binary",$base,"..",$tag)
+    # git のレンジ指定は 1 引数で渡す（別引数だと path 解釈される）
+    $range    = "$base..$tag"
+    $diffText = GitExec @("diff","--binary",$range)
     $diffText | Set-Content -Path $patchPath -Encoding UTF8
 
     if ($Zip) {
