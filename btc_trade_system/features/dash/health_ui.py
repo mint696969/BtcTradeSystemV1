@@ -1,4 +1,3 @@
-# path: btc_trade_system/features/dash/health_ui.py
 # path: ./btc_trade_system/features/dash/health_ui.py
 # desc: HealthタブのUI（表示専用）— svc_* 集計を描画
 

@@ -1,4 +1,3 @@
-# path: btc_trade_system/features/dash/audit_ui.py
 # path: ./btc_trade_system/features/dash/audit_ui.py
 # desc: AuditタブのUI（表示専用）— svc_audit で集計・検索したデータを描画
 

@@ -1,11 +1,11 @@
-# path: btc_trade_system/features/settings/ui_modal.py
+# path: ./btc_trade_system/features/settings/modal_ui.py
 # desc: 右上の歯車→モーダル（ダイアログ）で設定を開く
 
 from __future__ import annotations
 import streamlit as st
 
 # 既存の設定UIを流用（健全性タブで作ったもの）
-from btc_trade_system.features.settings import ui_settings as settings_tab
+from btc_trade_system.features.settings import settings_ui as settings_tab
 
 # Streamlit の dialog API（正式 or experimental）を吸収
 _DLG = getattr(st, "dialog", None) or getattr(st, "experimental_dialog", None)
@@ -46,3 +46,5 @@ else:
         with c2:
             if st.button("⚙️", help="設定", use_container_width=True, key="gear_dialog"):
                 _open_settings_dialog()
+
+

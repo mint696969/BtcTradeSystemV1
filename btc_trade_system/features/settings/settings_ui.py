@@ -1,4 +1,4 @@
-# path: btc_trade_system/features/settings/ui_settings.py
+# path: ./btc_trade_system/features/settings/settings_ui.py
 # desc: 設定タブ（UI・保存/読取）。監視ロジックは features/dash/providers に委譲
 
 from __future__ import annotations
@@ -131,3 +131,4 @@ def render():
                 st.error(f"保存に失敗: {e}")
 
     st.caption("※ 保存先はいずれも `config/ui/` 配下です。保存後、健全性タブに反映されます。")
+

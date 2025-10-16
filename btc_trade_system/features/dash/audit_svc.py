@@ -1,4 +1,3 @@
-# path: btc_trade_system/features/dash/audit_svc.py
 # path: ./btc_trade_system/features/dash/audit_svc.py
 # desc: 監査ログのサービス層（UI読み取り専用）— ui_audit から呼ばれるAPIを提供
 

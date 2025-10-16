@@ -1,4 +1,3 @@
-# path: btc_trade_system/features/dash/health_svc.py
 # path: ./btc_trade_system/features/dash/health_svc.py
 # desc: 健全性評価（Monitoring読込の骨 + 簡易判定）
 

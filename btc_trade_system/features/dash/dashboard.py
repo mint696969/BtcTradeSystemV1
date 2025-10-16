@@ -13,7 +13,7 @@ from btc_trade_system.features.dash.audit_ui import render as audit_render
 
 
 # 歯車コンポーネント（単一の正規位置に統一）
-from btc_trade_system.features.settings.ui_modal import settings_gear
+from btc_trade_system.features.settings.modal_ui import settings_gear
 
 st.set_page_config(page_title="BtcTS V1", layout="wide")
 st.title("BtcTradeSystem V1 ダッシュボード")
@@ -27,5 +27,7 @@ with tab1:
     health_render()
 with tab2:
     audit_render()
+
+
 
 

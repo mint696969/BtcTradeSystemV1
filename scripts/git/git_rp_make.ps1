@@ -1,181 +1,112 @@
 # path: scripts/git/git_rp_make.ps1
-# desc: Git 復元ポイント（rp-YYYYMMDD_HHmmss）を作成。必要に応じて差分バックアップ（ZIP）を外部保存先へ出力（※サブプロセス停止なし／一切ポーズしない）
+# desc: 復元ポイント作成（rp-YYYYMMDD_HHmmss）。必要に応じてコミット・タグ付け・差分バックアップ（ZIP/フォルダ）を実施。
 
 param(
-  [switch]$Commit,                                      # ← スイッチ型（-Commit のみで True）
-  [switch]$Diff,                                        # ← 差分バックアップを作成する
-  [string]$BaseTag,                                     # ← 差分の起点タグ（未指定なら自動）
-  [string]$BackupRoot = "$env:USERPROFILE\BtcTradeSystemV1_git\git_rp",  # ← 保存先ルート（リポ外固定）
-  [switch]$Zip,                                         # ← 差分をZIP化（falseでディレクトリ展開）
-  [string]$RpMemo                                       # ← メモ入力
+  [switch]$Commit,                                      # 変更をコミットする（-Commit）
+  [switch]$Diff,                                        # 差分バックアップを作る（-Diff）
+  [string]$BaseTag,                                     # 差分の起点タグ（未指定なら直近の rp-* を自動採用）
+  [string]$BackupRoot = "$env:USERPROFILE\BtcTradeSystemV1_git\git_rp",
+  [switch]$Zip,                                         # 差分を ZIP にまとめる
+  [string]$RpMemo                                       # メモ（任意）
 )
 
+# ---- 共通設定 ---------------------------------------------------------------
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 [Console]::InputEncoding  = [System.Text.UTF8Encoding]::new()
 $ErrorActionPreference    = 'Stop'
 
-function Halt($msg) {
-  if ($msg) { Write-Host $msg -ForegroundColor Yellow }
+function Halt([string]$msg) {
+  Write-Host "ERROR: $msg" -ForegroundColor Red
   exit 1
 }
 
-function Find-RepoRoot([string]$start) {
-  $cur = (Resolve-Path -LiteralPath $start).Path
-  while ($true) {
-    $gitPath = Join-Path -Path $cur -ChildPath '.git'
-    if (Test-Path -LiteralPath $gitPath) { return $cur }
-    $parent = Split-Path -Path $cur -Parent
-    if ([string]::IsNullOrEmpty($parent) -or ($parent -eq $cur)) { break }
-    $cur = $parent
+function GitExec([string[]]$CmdArgs) {
+  if (-not $CmdArgs -or $CmdArgs.Count -eq 0) {
+    Halt "GitExec(): 引数が空です（内部バグ）。"
   }
-  return $null
+  # PowerShell ネイティブ実行で確実に終了コードを拾う
+  $cmd = "git " + ($CmdArgs -join ' ')
+  Write-Verbose "[git] $cmd"
+  $all = & git @CmdArgs 2>&1
+  $code = $LASTEXITCODE
+  if ($code -ne 0) {
+    $txt = ($all | Out-String).Trim()
+    Halt ("git {0} failed (exit={1}): {2}" -f ($CmdArgs -join ' '), $code, $txt)
+  }
+  return ($all | Out-String).Trim()
 }
 
-function Get-LastRestorePointTag([string]$repoRoot, [string]$excludeTag) {
-  $tags = & git -C $repoRoot tag --list "rp-*" | Sort-Object
-  $cand = $tags | Where-Object { $_ -ne $excludeTag } | Select-Object -Last 1
-  return $cand
+# ---- リポジトリルート検出 ---------------------------------------------------
+$here = (Get-Location).Path
+$repoRoot = $here
+while (-not (Test-Path (Join-Path $repoRoot ".git"))) {
+  $parent = Split-Path -Parent $repoRoot
+  if (-not $parent -or $parent -eq $repoRoot) { Halt "ここは Git リポジトリではありません: $here" }
+  $repoRoot = $parent
+}
+Set-Location $repoRoot
+
+# ---- 変更の有無メモ ---------------------------------------------------------
+$dirty = (GitExec @("status","--porcelain=v1"))
+$hasDirty = -not [string]::IsNullOrWhiteSpace($dirty)
+if ($hasDirty) { Write-Verbose "[git] working tree: DIRTY" }
+
+# ---- コミット（任意） -------------------------------------------------------
+$stamp = (Get-Date -Format 'yyyyMMdd_HHmmss')
+$tag   = "rp-$stamp"
+$memo  = if ($RpMemo) { $RpMemo } else { "" }
+
+if ($Commit) {
+  GitExec @("add","-A")
+  $msg = "[RP:$stamp] $memo"
+  # 空コミットも許可（--allow-empty）
+  GitExec @("commit","-m",$msg,"--allow-empty")
 }
 
-function Convert-NameStatus {
-  param([string[]]$nameStatusLines)
-  $add=$mod=$del=$ren=$cpy=0
-  foreach ($ln in $nameStatusLines) {
-    if (-not $ln) { continue }
-    $code = ($ln -split "\s+",2)[0]
-    switch -regex ($code) {
-      '^A' { $add++ }
-      '^M' { $mod++ }
-      '^D' { $del++ }
-      '^R' { $ren++ }
-      '^C' { $cpy++ }
-    }
-  }
-  return [pscustomobject]@{ added=$add; modified=$mod; deleted=$del; renamed=$ren; copied=$cpy }
-}
+# ---- タグ付け（常に実施） ---------------------------------------------------
+GitExec @("tag","-a",$tag,"-m",("[RP:{0}] {1}" -f $stamp,$memo))
 
-function Convert-Numstat {
-  param([string[]]$numstatLines)
-  $ins=0; $dels=0; $files=0
-  foreach ($ln in $numstatLines) {
-    if (-not $ln) { continue }
-    $parts = $ln -split "\t"
-    if ($parts.Count -ge 3) {
-      $i = $parts[0]; $d = $parts[1]
-      if ($i -match '^[0-9]+$') { $ins += [int]$i }
-      if ($d -match '^[0-9]+$') { $dels += [int]$d }
-      $files++
-    }
-  }
-  return [pscustomobject]@{ insertions=$ins; deletions=$dels; files=$files }
-}
-
-function New-DiffBackup([string]$repoRoot, [string]$baseTag, [string]$headRef, [string]$destDir, [string]$memo, [switch]$Zip) {
-  New-Item -ItemType Directory -Force -Path $destDir | Out-Null
-  $metaPath  = Join-Path $destDir "metadata.json"
-  $diffList  = Join-Path $destDir "changed_files.txt"
-  $patchPath = Join-Path $destDir "diff.patch"
-  $filesDir  = Join-Path $destDir "files"
-  New-Item -ItemType Directory -Force -Path $filesDir | Out-Null
-
-  $range      = "$baseTag..$headRef"
-  $nameStatus = & git -C $repoRoot diff --name-status $range
-  $nameOnly   = & git -C $repoRoot diff --name-only  $range
-  $numstat    = & git -C $repoRoot diff --numstat    $range
-
-  $nameStatus | Out-File -FilePath $diffList -Encoding UTF8
-  & git -C $repoRoot diff --binary --full-index $range | Out-File -FilePath $patchPath -Encoding UTF8
-
-  foreach ($rel in $nameOnly) {
-    $src = Join-Path $repoRoot $rel
-    if (Test-Path -LiteralPath $src) {
-      $dst = Join-Path $filesDir $rel
-      New-Item -ItemType Directory -Force -Path (Split-Path $dst -Parent) | Out-Null
-      Copy-Item -LiteralPath $src -Destination $dst -Force
-    }
-  }
-
-  $fileKinds = Convert-NameStatus $nameStatus
-  $numStats  = Convert-Numstat   $numstat
-
-  $headSha  = (& git -C $repoRoot rev-parse $headRef).Trim()
-  $branch   = (& git -C $repoRoot rev-parse --abbrev-ref HEAD).Trim()
-  $metaObj = [ordered]@{
-    created_at = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssK")
-    base_tag   = $baseTag
-    head_ref   = $headRef
-    head_sha   = $headSha
-    branch     = $branch
-    memo       = $memo
-    stats      = [ordered]@{
-      files_changed = $numStats.files
-      insertions    = $numStats.insertions
-      deletions     = $numStats.deletions
-      kinds         = $fileKinds
-    }
-  }
-  $metaObj | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 $metaPath
-
-  $summary = @()
-  $summary += "range: $range"
-  $summary += "files_changed: $($numStats.files) (+$($numStats.insertions)/-$($numStats.deletions))"
-  $summary += "added:$($fileKinds.added) modified:$($fileKinds.modified) deleted:$($fileKinds.deleted) renamed:$($fileKinds.renamed) copied:$($fileKinds.copied)"
-  $summary -join "`r`n" | Set-Content -Encoding UTF8 (Join-Path $destDir 'SUMMARY.txt')
-
-  if ($Zip) {
-    $zipPath = "$destDir.zip"
-    if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-    Compress-Archive -Path (Join-Path $destDir "*") -DestinationPath $zipPath
-    Write-Host ("[OK] Diff backup ZIP: {0}" -f $zipPath) -ForegroundColor Green
-  } else {
-    Write-Host ("[OK] Diff backup DIR: {0}" -f $destDir) -ForegroundColor Green
-  }
-}
-
-try {
-  if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Halt "git not found. Please check PATH." }
-
-  $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-  if (-not (Test-Path (Join-Path $repoRoot '.git'))) { $repoRoot = Find-RepoRoot $repoRoot }
-  if (-not $repoRoot) { Halt "No git repository found. Put this script inside the project tree." }
-
-  $tag  = "rp-{0:yyyyMMdd_HHmmss}" -f (Get-Date)
-
-  # メモは「手動の差分付き」時だけ受け付ける（-Diff のとき）
-$memo = $null
+# ---- 差分バックアップ（任意） -----------------------------------------------
 if ($Diff) {
-  if ($RpMemo) {
-    $memo = $RpMemo
+  if (-not (Test-Path $BackupRoot)) { New-Item -ItemType Directory -Path $BackupRoot -Force | Out-Null }
+
+  # BaseTag を決める：明示指定 > 自動（直近 rp-* のうち「今打ったタグ」を除く最新）
+  $base = $BaseTag
+  if (-not $base) {
+    $tags = GitExec @("tag","--list","rp-*","--sort=-creatordate")
+    $tagList = @()
+    if (-not [string]::IsNullOrWhiteSpace($tags)) {
+      $tagList = $tags -split "`r?`n" | Where-Object { $_ -and $_ -ne $tag }
+    }
+    if ($tagList.Count -gt 0) { $base = $tagList[0] }
+  }
+
+  if (-not $base) {
+    Write-Host "[WARN] 差分の起点 rp-* が見つからないため、今回の実行はタグ作成のみです。" -ForegroundColor Yellow
   } else {
-    Write-Host "Memo for DIFF (optional): " -NoNewline
-    $memo = Read-Host
-  }
-}
+    $dest = Join-Path $BackupRoot ("{0}\{1}" -f $base, $tag)
+    New-Item -ItemType Directory -Path $dest -Force | Out-Null
 
-  if ($Commit) {
-    & git -C $repoRoot add -A 1>$null 2>$null
-    & git -C $repoRoot commit -m "chore: snapshot for $tag" --no-verify 1>$null 2>$null
-  }
+    # 参考情報を保存
+    (GitExec @("status","--porcelain=v1")) | Out-File (Join-Path $dest "status.txt") -Encoding UTF8
+    (GitExec @("log","-1","--pretty=fuller",$tag))   | Out-File (Join-Path $dest "commit_show.txt") -Encoding UTF8
 
-  $msg = "Restore Point $tag"
-if ($Diff -and $memo) { $msg += " : $memo" }
-  & git -C $repoRoot tag -a $tag -m $msg 2>$null
-  if ($LASTEXITCODE -ne 0) { & git -C $repoRoot tag $tag 2>$null }
+    # 差分（バイナリ含む）— base..tag
+    $patchPath = Join-Path $dest "diff_$($base)_to_$($tag).patch"
+    $diffText = GitExec @("diff","--binary",$base,"..",$tag)
+    $diffText | Set-Content -Path $patchPath -Encoding UTF8
 
-  if ($Diff) {
-    New-Item -ItemType Directory -Force -Path $BackupRoot | Out-Null
-    $base = if ($BaseTag) { $BaseTag } else { Get-LastRestorePointTag -repoRoot $repoRoot -excludeTag $tag }
-    if (-not $base) {
-      Write-Host "[WARN] 差分の起点となる rp-* タグが見つかりません。最初の実行はタグ作成のみになります。" -ForegroundColor Yellow
-    } else {
-      $dest = Join-Path $BackupRoot ("{0}\{1}" -f $base, $tag)
-      New-DiffBackup -repoRoot $repoRoot -baseTag $base -headRef "HEAD" -destDir $dest -memo $memo -Zip:$Zip
+    if ($Zip) {
+      $zipPath = "$dest.zip"
+      if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+      Compress-Archive -Path (Join-Path $dest "*") -DestinationPath $zipPath -Force
+      Remove-Item -Recurse -Force $dest
+      Write-Host ("[ZIP] {0}" -f $zipPath) -ForegroundColor DarkGray
     }
   }
-
-  Write-Host ""; Write-Host ("OK: Restore Point -> {0}" -f $tag) -ForegroundColor Green
-  if ($memo) { Write-Host ("MEMO: {0}" -f $memo) -ForegroundColor DarkGray }
-  exit 0
 }
-catch { Halt ("Unhandled error: {0}" -f $_.Exception.Message) }
 
+Write-Host ""
+Write-Host ("OK: Restore Point -> {0}" -f $tag) -ForegroundColor Green
+if ($memo) { Write-Host ("MEMO: {0}" -f $memo) -ForegroundColor DarkGray }
+exit 0

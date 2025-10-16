@@ -1,4 +1,3 @@
-# path: btc_trade_system/features/dash/settings_ui.py
 # path: ./btc_trade_system/features/dash/settings_ui.py
 # desc: 設定タブのUI（monitoring.yaml の閲覧/保存を svc_settings 経由で行う）
 

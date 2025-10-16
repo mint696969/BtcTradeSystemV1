@@ -1,4 +1,3 @@
-# path: btc_trade_system/features/dash/settings_svc.py
 # path: ./btc_trade_system/features/dash/settings_svc.py
 # desc: monitoring.yaml（閾値/色/プリセット）を最小YAMLで保存/読込。UIからの保存/復元の入口。
 
