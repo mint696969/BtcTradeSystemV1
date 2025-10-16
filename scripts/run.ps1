@@ -16,7 +16,7 @@ $env:PYTHONPATH = (Get-Location).Path
 $py = ".\.venv\Scripts\python.exe"; if (-not (Test-Path $py)) { $py = "python" }
 
 # --- ダッシュボード エントリ ------------------------------------------------
-$dash = Join-Path $repoRoot "btc_trade_system\apps\dashboard.py"
+$dash = Join-Path $repoRoot "btc_trade_system\features\dash\dashboard.py"
 
 # --- ダイアグ表示 -----------------------------------------------------------
 Write-Host "DATA=$env:BTC_TS_DATA_DIR"
