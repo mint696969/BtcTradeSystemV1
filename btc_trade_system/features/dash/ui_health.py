@@ -34,7 +34,7 @@ except ImportError:
     plt = _DummyPlot()
 
 # --- services（features 平置きの正式ルート） ---
-from btc_trade_system.features.dash.svc_health import (
+from btc_trade_system.features.dash.providers import (
     get_health_summary,
     get_health_table,
 )

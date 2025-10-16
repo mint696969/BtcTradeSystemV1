@@ -4,7 +4,7 @@
 from __future__ import annotations
 from pathlib import Path
 from ...common import paths
-from ...core.svc_health import evaluate  # ← 3ドット：btc_trade_system.core.svc_health
+from .svc_health import evaluate
 from collections import deque
 import json
 

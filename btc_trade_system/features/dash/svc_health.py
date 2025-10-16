@@ -1,145 +1,124 @@
 # path: ./btc_trade_system/features/dash/svc_health.py
-# desc: status.json を読み、UI向け Health API（summary/table）を提供（UTC→ローカル変換含む）
+# desc: 健全性評価（Monitoring読込の骨 + 簡易判定）
 
 from __future__ import annotations
-import json, re
-from datetime import datetime, timezone
+import os, json, time, datetime as dt
 from pathlib import Path
-from typing import Dict, Any, List, Optional
-from btc_trade_system.common import paths
 
-UTC = timezone.utc
-_ISO_PAT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+# ---- Monitoring 読込（PyYAMLが無ければ既定にフォールバック） ----
+_DEFAULTS = {
+    "health": {
+        "age_sec":   {"ok": 10, "warn": 20, "crit": 30},
+        "latency_ms":{"warn": 400, "crit": 1200},
+        "gap_rate":  {"warn": 0.05, "crit": 0.15},
+        "window_min": 5,
+        "require_all_ok": True,
+    },
+    "slo": {
+        "trades":    {"exp_intv_s": 1.0, "max_stale_s": 5},
+        "ticker":    {"exp_intv_s": 1.0, "max_stale_s": 5},
+        "orderbook": {"exp_intv_s": 2.0, "max_stale_s": 6},
+    },
+    "audit": {"success_sample_n": 50},
+}
 
-# zoneinfo は存在すれば使う（Py3.9+）
-try:
-    from zoneinfo import ZoneInfo
-except Exception:  # pragma: no cover
-    ZoneInfo = None  # type: ignore
+def _load_yaml(path: Path) -> dict|None:
+    try:
+        import yaml  # type: ignore
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
+    except Exception:
+        return None
 
-def _parse_iso_utc(ts: str) -> datetime:
-    if not _ISO_PAT.match(ts):
-        # status.json の last_iso/updated_at は秒精度固定の想定
-        raise ValueError(f"invalid UTC iso: {ts}")
-    return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+def load_monitoring(cfg_root: Path) -> dict:
+    # 優先: config/ui/monitoring.yaml → 次: config/ui_defaults/monitoring.yaml → 既定
+    ui = cfg_root / "config" / "ui" / "monitoring.yaml"
+    ui_def = cfg_root / "config" / "ui_defaults" / "monitoring.yaml"
+    data = {}
+    # 先に defaults → 後から user を当てて「user が最優先」になるようにする
+    for p in (ui_def, ui):  # ← 順序を逆転（ui が最後）
+        if p.exists():
+            y = _load_yaml(p)
+            if y:
+                data.update(y)
 
-def _to_local_iso(ts_utc: str, tz_name: str = "Asia/Tokyo") -> str:
-    dt = _parse_iso_utc(ts_utc)
-    if ZoneInfo is None:
-        return dt.astimezone().isoformat(timespec="seconds")
-    return dt.astimezone(ZoneInfo(tz_name)).isoformat(timespec="seconds")
+    if not data:
+        data = _DEFAULTS
+    # 足りない所は既定で埋める
+    def deepmerge(a, b):
+        for k, v in b.items():
+            if isinstance(v, dict):
+                a.setdefault(k, {})
+                deepmerge(a[k], v)
+            else:
+                a.setdefault(k, v)
+        return a
+    return deepmerge(data, _DEFAULTS)
 
-def _status_path_candidates(base_dir: Path) -> List[Path]:
-    # primary → secondary(./local) の順で探す
-    p1 = paths.data_dir() / "collector" / "status.json"
-    p2 = base_dir / "local" / "data" / "collector" / "status.json"
-    return [p1, p2]
+# ---- 評価ロジック（簡易版：status.json優先） ----
+def _now_ms() -> int:
+    return int(time.time() * 1000)
 
-def load_for_ui(*, base_dir: Optional[Path] = None, tz_name: str = "Asia/Tokyo") -> Dict[str, Any]:
-    """
-    status.json を読み、UI向けに各 item に last_local、ルートに updated_at_local を付与して返す。
-    読み出しは primary → secondary の順で存在確認。
-    """
-    base_dir = Path(base_dir or ".")
-    path: Optional[Path] = None
-    for cand in _status_path_candidates(base_dir):
-        if cand.exists():
-            path = cand
-            break
-    if path is None:
-        return {"items": [], "updated_at": None, "updated_at_local": None, "source": "missing"}
+def evaluate(status_json: Path, cfg_root: Path) -> dict:
+    conf = load_monitoring(cfg_root)
+    thr = conf["health"]
+    slo = conf["slo"]
+    require_all = thr.get("require_all_ok", True)
 
-    doc = json.loads(path.read_text(encoding="utf-8"))
-    items = doc.get("items") or []
+    items = []
+    now = _now_ms()
 
-    out_items: List[Dict[str, Any]] = []
-    for it in items:
-        last_iso = it.get("last_iso")
-        it2 = dict(it)
-        if isinstance(last_iso, str) and last_iso:
-            try:
-                it2["last_local"] = _to_local_iso(last_iso, tz_name=tz_name)
-            except Exception:
-                it2["last_local"] = None
-        else:
-            it2["last_local"] = None
-        out_items.append(it2)
+    # status.json が無ければ空で返す
+    if not status_json.exists():
+        return {"items": [], "updated_at": dt.datetime.utcnow().isoformat() + "Z", "all_ok": False}
 
-    updated_at = doc.get("updated_at")
-    if isinstance(updated_at, str) and updated_at:
-        try:
-            updated_at_local = _to_local_iso(updated_at, tz_name=tz_name)
-        except Exception:
-            updated_at_local = None
-    else:
-        updated_at_local = None
+    with open(status_json, "r", encoding="utf-8") as f:
+        st = json.load(f)
 
-    return {
-        "items": out_items,
-        "updated_at": updated_at,
-        "updated_at_local": updated_at_local,
-        "source": str(path),
-    }
+    for it in st.get("items", []):
+        ex   = it.get("exchange")
+        tp   = it.get("topic")
+        last = it.get("last_ok_ms") or it.get("last_ok")  # 互換
+        lat  = it.get("latency_ms")
+        cause= it.get("cause")
+        retries = it.get("retries", 0)
 
-# --- public API expected by ui_health.py ------------------------------------
-def get_health_summary(*, base_dir: Optional[Path] = None, tz_name: str = "Asia/Tokyo") -> Dict[str, Any]:
-    """
-    ui_health.py が期待する“旧フォーマット”で返す:
-      - updated_at: str（ローカル優先）
-      - all_ok: bool
-      - cards: list[dict] … {exchange, topic, status, age_sec, notes}
-    """
-    from datetime import datetime
+        age_sec = None
+        if isinstance(last, (int, float)):
+            age_sec = max(0.0, (now - int(last)) / 1000.0)
 
-    def _age_seconds_from_iso(iso: Optional[str]) -> Optional[float]:
-        if not iso:
-            return None
-        s = str(iso)
-        # '...Z' は fromisoformat で扱えないため +00:00 に置換
-        if s.endswith("Z"):
-            s = s[:-1] + "+00:00"
-        try:
-            dt = datetime.fromisoformat(s)  # 例: '2025-10-15T09:00:00+09:00'
-        except Exception:
-            return None
-        # tz 無しなら UTC として扱う
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=UTC)
-        now = datetime.now(dt.tzinfo)
-        return max(0.0, (now - dt).total_seconds())
+        # 1) 外因（cause）優先
+        status = "OK"
+        notes = []
+        if cause in ("NET_BLOCK","AUTH_FAIL","RATE_LIMIT","DNS_FAIL","SRC_DOWN"):
+            status = "CRIT"; notes.append(f"cause={cause}")
 
-    doc = load_for_ui(base_dir=base_dir, tz_name=tz_name)
-    items: List[Dict[str, Any]] = list(doc.get("items") or [])
-    updated = doc.get("updated_at_local") or doc.get("updated_at") or None
+        # 2) SLO違反（topicごとの max_stale_s）
+        if status == "OK" and age_sec is not None:
+            slo_key = "trades" if tp == "trades" else ("orderbook" if tp == "orderbook" else "ticker")
+            max_stale = slo.get(slo_key, {}).get("max_stale_s", 30)
+            if age_sec > max_stale:
+                status = "CRIT"; notes.append(f"age={age_sec:.1f}s>max_stale={max_stale}")
 
-    cards: List[Dict[str, Any]] = []
-    errs = 0
-    for it in items:
-        status = (it.get("status") or "OK").upper()
-        if status != "OK":
-            errs += 1
-        # last_local（tz付き）→ last_iso（UTC '...Z'）の順に見る
-        age_sec = _age_seconds_from_iso(it.get("last_local") or it.get("last_iso") or it.get("last"))
+        # 3) 閾値判定
+        if status == "OK" and age_sec is not None:
+            if age_sec > thr["age_sec"]["crit"]:
+                status = "CRIT"; notes.append(f"age>{thr['age_sec']['crit']}")
+            elif age_sec > thr["age_sec"]["warn"]:
+                status = "WARN"; notes.append(f"age>{thr['age_sec']['warn']}")
 
-        cards.append({
-            "exchange": it.get("exchange") or "?",
-            "topic": it.get("topic") or "?",
-            "status": status,
-            "age_sec": age_sec,
-            "notes": it.get("notes") or "",
+        if status == "OK" and lat is not None:
+            if lat >= thr["latency_ms"]["crit"]:
+                status = "CRIT"; notes.append(f"lat>={thr['latency_ms']['crit']}")
+            elif lat >= thr["latency_ms"]["warn"]:
+                status = "WARN"; notes.append(f"lat>={thr['latency_ms']['warn']}")
+
+        items.append({
+            "exchange": ex, "topic": tp, "status": status,
+            "last_iso": dt.datetime.utcfromtimestamp((last or now)/1000).isoformat()+"Z",
+            "age_sec": age_sec, "cause": cause, "retries": retries,
+            "source": "status", "notes": " / ".join(notes),
         })
 
-    all_ok = (len(items) > 0 and errs == 0)
-
-    return {
-        "updated_at": updated,
-        "all_ok": all_ok,
-        "cards": cards,
-    }
-
-def get_health_table(*, base_dir: Optional[Path] = None, tz_name: str = "Asia/Tokyo"):
-    """
-    テーブル表示用の行データを返す。まずは list[dict] で返し、必要に応じて DataFrame 化は UI 側で実施。
-    """
-    doc = load_for_ui(base_dir=base_dir, tz_name=tz_name)
-    return doc.get("items") or []
+    all_ok = all(i["status"]=="OK" for i in items) if require_all else (all(i["status"]!="CRIT" for i in items) and any(i["status"]=="OK" for i in items))
+    return {"items": items, "updated_at": dt.datetime.utcnow().isoformat() + "Z", "all_ok": all_ok}
