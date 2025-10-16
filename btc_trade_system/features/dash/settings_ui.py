@@ -1,4 +1,5 @@
-# path: ./btc_trade_system/features/dash/ui_settings.py
+# path: btc_trade_system/features/dash/settings_ui.py
+# path: ./btc_trade_system/features/dash/settings_ui.py
 # desc: 設定タブのUI（monitoring.yaml の閲覧/保存を svc_settings 経由で行う）
 
 from __future__ import annotations
@@ -32,7 +33,7 @@ except Exception:  # pragma: no cover
 # --- svc_settings の API を多段で解決（名前差異に強く） ---
 def _resolve_api() -> Tuple[Callable[[], Any], Callable[[Any], None]]:
     from importlib import import_module
-    svc = import_module("btc_trade_system.features.dash.svc_settings")
+    svc = import_module("btc_trade_system.features.dash.settings_svc")
 
     # 候補（load系 / save系）
     load_candidates = [
@@ -99,3 +100,5 @@ def render():
                 st.write(cfg2)
             except Exception as e:
                 st.error(f"再読込に失敗しました: {e}")
+
+

@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from btc_trade_system.features.dash.svc_settings import (
+from btc_trade_system.features.dash.settings_svc import (
     load_monitoring,
     save_monitoring,
 )
@@ -52,3 +52,4 @@ else:
     ps["period_min"] = orig_val
     after_fix["presets"] = ps
     save_monitoring(after_fix)
+

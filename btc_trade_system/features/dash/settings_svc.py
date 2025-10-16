@@ -1,4 +1,5 @@
-# path: ./btc_trade_system/features/dash/svc_settings.py
+# path: btc_trade_system/features/dash/settings_svc.py
+# path: ./btc_trade_system/features/dash/settings_svc.py
 # desc: monitoring.yaml（閾値/色/プリセット）を最小YAMLで保存/読込。UIからの保存/復元の入口。
 
 from __future__ import annotations
@@ -176,7 +177,7 @@ def save_config(cfg: Dict[str, Any]) -> Path:
             pass
     return path
 
-# path: ./btc_trade_system/features/dash/svc_settings.py
+# path: ./btc_trade_system/features/dash/settings_svc.py
 # desc: 互換I/F（tests / UI から利用）— load_monitoring / save_monitoring を提供
 
 from typing import Optional, Dict, Any
@@ -265,3 +266,5 @@ def save_monitoring(doc: Dict[str, Any], *, base_dir: Optional[Path] = None) -> 
     if _try_existing_saver(doc, base_dir):
         return
     _yaml_dump(doc, _settings_path(base_dir))
+
+

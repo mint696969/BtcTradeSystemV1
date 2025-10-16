@@ -1,4 +1,5 @@
-# path: ./btc_trade_system/features/dash/svc_audit.py
+# path: btc_trade_system/features/dash/audit_svc.py
+# path: ./btc_trade_system/features/dash/audit_svc.py
 # desc: 監査ログのサービス層（UI読み取り専用）— ui_audit から呼ばれるAPIを提供
 
 from __future__ import annotations
@@ -256,3 +257,5 @@ def export_csv_compact_localtime(
             ts_local = _ts_to_local_iso(x["ts"], tz_name=tz_name)
             w.writerow([x["ts"], ts_local, x["mode"], x["feature"], x["level"], x["event"], x["summary"]])
     return out
+
+

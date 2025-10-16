@@ -1,10 +1,11 @@
-# path: ./btc_trade_system/features/dash/ui_audit.py
+# path: btc_trade_system/features/dash/audit_ui.py
+# path: ./btc_trade_system/features/dash/audit_ui.py
 # desc: AuditタブのUI（表示専用）— svc_audit で集計・検索したデータを描画
 
 from __future__ import annotations
 import streamlit as st
 # services（features 平置きの正式ルート）
-from btc_trade_system.features.dash.svc_audit import get_audit_rows
+from btc_trade_system.features.dash.audit_svc import get_audit_rows
 
 def render():
     st.subheader("監査ログ")
@@ -50,3 +51,5 @@ def render():
         st.dataframe(view, width="stretch", height=480)
     else:
         st.info("audit.jsonl が無いか、条件に一致する行がありません。")
+
+

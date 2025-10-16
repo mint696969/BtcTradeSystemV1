@@ -4,7 +4,7 @@
 from __future__ import annotations
 from pathlib import Path
 from ...common import paths
-from .svc_health import evaluate
+from .health_svc import evaluate
 from collections import deque
 import json
 

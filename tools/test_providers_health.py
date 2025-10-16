@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]  # リポのルート
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from btc_trade_system.features.dash.svc_health import (
+from btc_trade_system.features.dash.health_svc import (
     get_health_summary,
     get_health_table,
 )
@@ -30,3 +30,4 @@ for row in t:
         f"{row.get('exchange','?'):8s}  {row.get('topic','?'):7s}  "
         f"{row.get('status','-'):4s}  age={age_s}  {row.get('last_iso','-')}  {row.get('source','-')}"
     )
+

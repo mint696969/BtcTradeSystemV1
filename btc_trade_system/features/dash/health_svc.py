@@ -1,4 +1,5 @@
-# path: ./btc_trade_system/features/dash/svc_health.py
+# path: btc_trade_system/features/dash/health_svc.py
+# path: ./btc_trade_system/features/dash/health_svc.py
 # desc: 健全性評価（Monitoring読込の骨 + 簡易判定）
 
 from __future__ import annotations
@@ -122,3 +123,5 @@ def evaluate(status_json: Path, cfg_root: Path) -> dict:
 
     all_ok = all(i["status"]=="OK" for i in items) if require_all else (all(i["status"]!="CRIT" for i in items) and any(i["status"]=="OK" for i in items))
     return {"items": items, "updated_at": dt.datetime.utcnow().isoformat() + "Z", "all_ok": all_ok}
+
+
