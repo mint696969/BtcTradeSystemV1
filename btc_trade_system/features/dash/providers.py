@@ -1,16 +1,16 @@
-# path: btc_trade_system/apps/boards/dashboard/providers.py
+# path: ./btc_trade_system/features/dash/providers.py
 # desc: ダッシュボード用データ供給（健全性サマリ/表）
 
 from __future__ import annotations
 from pathlib import Path
-from ....common import paths
-from ....core.svc_health import evaluate
+from ...common import paths
+from ...core.svc_health import evaluate  # ← 3ドット：btc_trade_system.core.svc_health
 from collections import deque
 import json
 
 def _cfg_root() -> Path:
-    # apps/boards/dashboard/providers.py から見た pkg ルート（parents[3]）
-    return Path(__file__).resolve().parents[3]  # => .../btc_trade_system
+    # features/dash/providers.py から見た pkg ルート（parents[2]）
+    return Path(__file__).resolve().parents[2]  # => .../btc_trade_system
 
 def _load_order(cfg_root: Path) -> list[str]:
     """

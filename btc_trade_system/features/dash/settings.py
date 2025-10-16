@@ -7,7 +7,7 @@ from pathlib import Path
 import streamlit as st
 
 # 既存プロバイダを利用して現在値を読む
-from ..providers import get_health_summary, _cfg_root  # _cfg_root は同パッケージ内なので利用OK
+from .providers import get_health_summary, _cfg_root
 
 # YAML I/O（PyYAML）
 try:

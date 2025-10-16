@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/apps/dashboard.py
+# path: ./btc_trade_system/features/dash/dashboard.py
 # desc: StreamlitメインUI（Health/Audit）。features配下の新タブにも対応
 
 from __future__ import annotations

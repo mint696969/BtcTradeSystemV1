@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 # 既存の設定UIを流用（健全性タブで作ったもの）
-from btc_trade_system.apps.boards.dashboard.tabs import settings as settings_tab
+from btc_trade_system.features.dash import settings as settings_tab
 
 # Streamlit の dialog API（正式 or experimental）を吸収
 _DLG = getattr(st, "dialog", None) or getattr(st, "experimental_dialog", None)
