@@ -31,9 +31,9 @@ def _load_yaml(path: Path) -> dict|None:
         return None
 
 def load_monitoring(cfg_root: Path) -> dict:
-    # 優先: config/ui/monitoring.yaml → 次: config/ui_defaults/monitoring.yaml → 既定
+    # 優先: config/ui/monitoring.yaml → 次: config/ui/monitoring_def.yaml → 既定
     ui = cfg_root / "config" / "ui" / "monitoring.yaml"
-    ui_def = cfg_root / "config" / "ui_defaults" / "monitoring.yaml"
+    ui_def = cfg_root / "config" / "ui" / "monitoring_def.yaml"
     data = {}
     # 先に defaults → 後から user を当てて「user が最優先」になるようにする
     for p in (ui_def, ui):  # ← 順序を逆転（ui が最後）
@@ -122,5 +122,7 @@ def evaluate(status_json: Path, cfg_root: Path) -> dict:
 
     all_ok = all(i["status"]=="OK" for i in items) if require_all else (all(i["status"]!="CRIT" for i in items) and any(i["status"]=="OK" for i in items))
     return {"items": items, "updated_at": dt.datetime.utcnow().isoformat() + "Z", "all_ok": all_ok}
+
+
 
 
