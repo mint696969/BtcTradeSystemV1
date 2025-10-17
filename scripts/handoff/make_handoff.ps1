@@ -31,8 +31,13 @@ if (-not $LOGS) { $LOGS = "D:\BtcTS_V1\logs" }
 # --- 1) 有効設定・しきい値 ---
 $cfgOut = Join-Path $TMP "config"
 New-Item -ItemType Directory -Force $cfgOut | Out-Null
-Copy-Item (Join-Path $PKG "config\ui_defaults\health.yaml")     -Destination (Join-Path $cfgOut "health.defaults.yaml")     -ErrorAction SilentlyContinue
-Copy-Item (Join-Path $PKG "config\ui_defaults\monitoring.yaml") -Destination (Join-Path $cfgOut "monitoring.defaults.yaml") -ErrorAction SilentlyContinue
+
+# 最終値（あれば）
+Copy-Item (Join-Path $PKG "config\ui\monitoring.yaml")    -Destination (Join-Path $cfgOut "monitoring.yaml")          -ErrorAction SilentlyContinue
+Copy-Item (Join-Path $PKG "config\ui\health.yaml")        -Destination (Join-Path $cfgOut "health.yaml")              -ErrorAction SilentlyContinue
+
+# 既定（新配置）
+Copy-Item (Join-Path $PKG "config\ui\monitoring_def.yaml") -Destination (Join-Path $cfgOut "monitoring.defaults.yaml") -ErrorAction SilentlyContinue
 
 # --- 2) ステータス・監査抜粋 ---
 $diagOut = Join-Path $TMP "diagnostics"

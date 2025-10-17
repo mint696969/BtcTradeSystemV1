@@ -1,3 +1,6 @@
+# path: ./btc_trade_system/config/ui/monitoring_def.yaml
+# desc: ダッシュボード「コレクター健全性」タブの初期しきい値設定（UIモーダルのデフォルト）
+
 health:
   age_sec:   { ok: 10, warn: 20, crit: 30 }
   latency_ms:{ warn: 400, crit: 1200 }
@@ -10,3 +13,4 @@ slo:
   trades:    { exp_intv_s: 1.0,  max_stale_s: 5 }
   ticker:    { exp_intv_s: 1.0,  max_stale_s: 5 }
   orderbook: { exp_intv_s: 2.0,  max_stale_s: 6 }
+

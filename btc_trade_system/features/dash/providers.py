@@ -15,10 +15,10 @@ def _cfg_root() -> Path:
 def _load_order(cfg_root: Path) -> list[str]:
     """
     表示順序（カード順）:
-    - config/ui/health.yaml の order を最優先
-    - なければ config/ui_defaults/health.yaml
-    - それも無ければ evaluate() の items の出現順
+    - config/ui/health.yaml の order を使用
+    - 無ければ evaluate() の items の出現順
     """
+
     def _yload(p: Path):
         try:
             import yaml  # type: ignore
@@ -27,13 +27,6 @@ def _load_order(cfg_root: Path) -> list[str]:
         except Exception:
             pass
         return {}
-    ui = cfg_root / "config" / "ui" / "health.yaml"
-    ui_def = cfg_root / "config" / "ui_defaults" / "health.yaml"
-    for p in (ui, ui_def):
-        y = _yload(p)
-        if isinstance(y, dict) and isinstance(y.get("order"), list):
-            return [str(x) for x in y["order"]]
-    return []
 
 def get_health_summary() -> dict:
     """

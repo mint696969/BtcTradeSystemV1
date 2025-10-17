@@ -22,10 +22,11 @@ def main():
     root = pathlib.Path(a.v1) / "btc_trade_system"
     cfg  = root / "config"
     ui   = cfg / "ui"
-    deflt= cfg / "ui_defaults"
-
-    health = yload(ui / "health.yaml") or yload(deflt / "health.yaml")
-    mon    = yload(ui / "monitoring.yaml") or yload(deflt / "monitoring.yaml")
+    # 旧 ui_defaults は廃止。最終値→既定(= monitoring_def.yaml) の順で解決
+    health = yload(ui / "health.yaml")
+    mon_final = yload(ui / "monitoring.yaml")
+    mon_def   = yload(ui / "monitoring_def.yaml")
+    mon = {**(mon_def or {}), **(mon_final or {})}
 
     order = []
     if isinstance(health, dict):

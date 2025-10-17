@@ -1,0 +1,4 @@
+# path: ./btc_trade_system/config/ui/health.yaml
+# desc: ダッシュボード「Health」タブの構成定義。Collectorの健全性テーブル列・表示順・カテゴリ設定を指定する。
+
+order: [bitflyer, binance, bybit, okx]
