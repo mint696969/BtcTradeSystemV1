@@ -167,90 +167,53 @@ common/\*、svc_health.evaluate、providers.dashboard の smoke テストを too
 
 2025-10-15 作業報告・進捗サマリ
 ✅ 今日終わらせた作業
-
 bitFlyer 公開 API アダプタ bitflyer_public.py 実装・完成
-
 /v1/executions（約定履歴）と /v1/board（板情報）の両エンドポイントを標準ライブラリのみで実装。
-
 Execution dataclass を追加し、整形済み出力を保証。
-
 board() で mid_price / best_bid / best_ask / bids / asks / raw_count を返す軽量サマリを構築。
-
 スモークテストで mid_price, bids3, asks3 を正常取得確認。
-
 collector core ワーカー (worker.py) 拡張
-
 fetch() に bitflyer board 分岐を新規追加。
 → BitflyerPublic.board() を呼び出し mid/best などを返却。
-
 run_once() で trades と board の両ケースを正しく JSONL スナップショット出力化。
-
 保存は UTC 運用（JST 表示は UI 層で吸収）で統一。
-
 status.json に topic=board を追加し、OK 判定および retries/cause/notes 更新を確認。
-
 common/audit.py の安定化
-
 監査出力を StorageRouter 対応へ一本化（ENV → local 自動フォールバック）。
-
 環境文脈 actor/site/session/task/mode を set_context() で設定可能に。
-
 \_redact() による簡易マスキングを追加。
-
 core/status.py 強化
-
 StorageRouter 連携による primary/secondary 切替を実装。
-
 flush() で tmp→rename 原子的更新を保証。
-
 StatusItem を dataclass 化し to_ui() で ISO 時刻変換。
-
 統合スモークテスト成功
-
 bitflyer:trades および bitflyer:board の両トピックで fetch→status→snapshot 連携確認。
-
 audit.jsonl 出力・status.json 更新・data/collector/.../\*.jsonl 追記すべて OK。
 
 🧩 次の候補タスク
-
 A) 監査プロバイダ（providers.audit）プリセット一元化対応
-
 providers.audit で presets モジュールの LOOKBACKS と is_valid_lookback() を参照。
-
 期間選択値が None または不正の場合、既定（"1h"）へフォールバックする \_resolve_lookback() を追加。
-
 各関数（load_for_ui / export_csv / export_csv_compact / export_csv_compact_localtime）の 引数を lookback=None 化。
-
 スモークテストで None / "3h" 入力時も正常動作確認。
 
 B) Bybit 公開 API アダプタ作成（bybit_public.py）
-
 /v5/market/trades を標準ライブラリで叩く最小実装（依存ゼロ）。
-
 BitflyerPublic と同一インターフェース（executions() 返却型 List[Execution]）。
-
 worker.fetch() へ exchange=="bybit" 分岐を追加。
 
 C) ダッシュボード統合試験
-
 JST 変換済み status 表示確認。
-
 board/trades 両トピックの色分け・更新間隔・監査 CSV 連携チェック。
 
 D) Phase 1B 最終仕上げ
-
 監査タブ（期間プリセット、CSV、長文折り畳み）を UI 統合。
-
 各種 export 機能を UI 側ボタンから呼び出す連携コードを追加。
 
 🔗 参照
-
 実装: features/collector/adapters/bitflyer_public.py
-
 実装: features/collector/core/worker.py
-
 実装: common/audit.py, core/status.py
-
 検証: PowerShell 7.5.3 スモークログ （bitflyer:trades / board OK）
 
 ---
@@ -306,4 +269,20 @@ D) Phase 1B 最終仕上げ
 
 ---
 
-（以後、2025-10-14 以降の更新はこのセクション末尾に追記する）
+2025-10-17 パッケージ構造最適化・命名整理
+
+完了タスク:
+apps/boards 残骸を完全削除し、features/dash・features/settings に統合。
+UI/Service 層の命名を統一：ui_xxx.py → xxx_ui.py、svc_xxx.py → xxx_svc.py。
+設定モジュールも同様に ui_settings.py → settings_ui.py、ui_modal.py → modal_ui.py へ変更。
+import 構文と #path コメントを全自動置換し、Streamlit 起動・設定モーダル動作ともに確認済み。
+features/ パッケージ階層の整理完了。
+不要フォルダ (apps/boards, components, core/svc_health.py) の安全除去完了。
+Git 復元ポイント機構の完全修復（差分指定のバグ修正含む）。
+
+次の候補タスク:
+A) 監査出力（restore_point.create）と Dashboard タグ閲覧連携の設計
+B) UI/Service の責務整理ドキュメントを docs/arch に追加。
+C) import パス検証と REPO_MAP 自動更新スクリプトの改修。
+
+---

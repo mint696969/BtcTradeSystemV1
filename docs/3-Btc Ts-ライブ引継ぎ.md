@@ -318,4 +318,20 @@ D) Phase 1B 最終仕上げ
 
 ---
 
-（以後、2025-10-14 以降の更新はこのセクション末尾に追記する）
+2025-10-17 パッケージ構造最適化・命名整理
+
+完了タスク:
+apps/boards 残骸を完全削除し、features/dash・features/settings に統合。
+UI/Service 層の命名を統一：ui_xxx.py → xxx_ui.py、svc_xxx.py → xxx_svc.py。
+設定モジュールも同様に ui_settings.py → settings_ui.py、ui_modal.py → modal_ui.py へ変更。
+import 構文と #path コメントを全自動置換し、Streamlit 起動・設定モーダル動作ともに確認済み。
+features/ パッケージ階層の整理完了。
+不要フォルダ (apps/boards, components, core/svc_health.py) の安全除去完了。
+Git 復元ポイント機構の完全修復（差分指定のバグ修正含む）。
+
+次の候補タスク:
+A) 監査出力（restore_point.create）と Dashboard タグ閲覧連携の設計
+B) UI/Service の責務整理ドキュメントを docs/arch に追加。
+C) import パス検証と REPO_MAP 自動更新スクリプトの改修。
+
+---
