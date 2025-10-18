@@ -4,6 +4,7 @@
 from __future__ import annotations
 import os, json, time, datetime as dt
 from pathlib import Path
+from ...common import paths
 
 # ---- Monitoring 読込（PyYAMLが無ければ既定にフォールバック） ----
 _DEFAULTS = {
@@ -59,6 +60,76 @@ def load_monitoring(cfg_root: Path) -> dict:
 def _now_ms() -> int:
     return int(time.time() * 1000)
 
+def _fallback_from_mtime(cfg_root: Path, conf: dict) -> list[dict]:
+    """
+    status.json が無い/空のときに data/latest/* の mtime から簡易判定を行う。
+    ファイル名規約: data/latest/<exchange>-<topic>.csv
+    可能なら data/raw/<exchange>/<topic>/YYYYMMDD/*.jsonl も参照してより新しければ優先。
+    """
+    data_root = paths.data_dir()
+    latest = data_root / "latest"
+    raw = data_root / "raw"
+    now = _now_ms()
+    thr = conf["health"]
+    slo = conf["slo"]
+
+    items: list[dict] = []
+    if not latest.exists():
+        return items
+
+    for p in latest.glob("*-*.csv"):
+        name = p.stem  # e.g. "bitflyer-board"
+        if "-" not in name:
+            continue
+        exchange, topic = name.split("-", 1)
+
+        # 最新時刻（latest の mtime）
+        mtime = int(p.stat().st_mtime * 1000)
+
+        # raw の末尾ファイルがさらに新しければ優先
+        try:
+            raw_dir = raw / exchange / topic
+            if raw_dir.exists():
+                # YYYYMMDD/ の最新 → その配下の *.jsonl の最新
+                days = sorted(raw_dir.glob("[0-9]"*8), reverse=True)
+                for d in days:
+                    jsonls = sorted(d.glob("*.jsonl"), reverse=True)
+                    if jsonls:
+                        mtime = max(mtime, int(jsonls[0].stat().st_mtime * 1000))
+                        break
+        except Exception:
+            pass
+
+        age_sec = max(0.0, (now - mtime) / 1000.0)
+        status = "OK"
+        notes: list[str] = []
+
+        # SLO 判定
+        slo_key = "trades" if topic == "trades" else ("orderbook" if topic == "orderbook" else "ticker")
+        max_stale = slo.get(slo_key, {}).get("max_stale_s", 30)
+        if age_sec > max_stale:
+            status = "CRIT"; notes.append(f"age={age_sec:.1f}s>max_stale={max_stale}")
+
+        # 閾値判定
+        if status == "OK":
+            if age_sec > thr["age_sec"]["crit"]:
+                status = "CRIT"; notes.append(f"age>{thr['age_sec']['crit']}")
+            elif age_sec > thr["age_sec"]["warn"]:
+                status = "WARN"; notes.append(f"age>{thr['age_sec']['warn']}")
+
+        items.append({
+            "exchange": exchange,
+            "topic": topic,
+            "status": status,
+            "last_iso": dt.datetime.utcfromtimestamp(mtime/1000).isoformat()+"Z",
+            "age_sec": age_sec,
+            "cause": None,
+            "retries": 0,
+            "source": "mtime",
+            "notes": " / ".join(notes),
+        })
+    return items
+
 def evaluate(status_json: Path, cfg_root: Path) -> dict:
     conf = load_monitoring(cfg_root)
     thr = conf["health"]
@@ -68,12 +139,19 @@ def evaluate(status_json: Path, cfg_root: Path) -> dict:
     items = []
     now = _now_ms()
 
-    # status.json が無ければ空で返す
+    # status.json が無ければ mtime フォールバック
     if not status_json.exists():
-        return {"items": [], "updated_at": dt.datetime.utcnow().isoformat() + "Z", "all_ok": False}
+        items = _fallback_from_mtime(cfg_root, conf)
+        all_ok = all(i["status"]=="OK" for i in items) if require_all else (all(i["status"]!="CRIT" for i in items) and any(i["status"]=="OK" for i in items))
+        return {"items": items, "updated_at": dt.datetime.utcnow().isoformat() + "Z", "all_ok": all_ok}
 
     with open(status_json, "r", encoding="utf-8") as f:
         st = json.load(f)
+    if not st.get("items"):
+        # status.json はあるが items が空 → mtime フォールバック
+        items = _fallback_from_mtime(cfg_root, conf)
+        all_ok = all(i["status"]=="OK" for i in items) if require_all else (all(i["status"]!="CRIT" for i in items) and any(i["status"]=="OK" for i in items))
+        return {"items": items, "updated_at": dt.datetime.utcnow().isoformat() + "Z", "all_ok": all_ok}
 
     for it in st.get("items", []):
         ex   = it.get("exchange")
@@ -113,9 +191,10 @@ def evaluate(status_json: Path, cfg_root: Path) -> dict:
             elif lat >= thr["latency_ms"]["warn"]:
                 status = "WARN"; notes.append(f"lat>={thr['latency_ms']['warn']}")
 
+        last_ms = int(last) if isinstance(last, (int, float)) else now
         items.append({
             "exchange": ex, "topic": tp, "status": status,
-            "last_iso": dt.datetime.utcfromtimestamp((last or now)/1000).isoformat()+"Z",
+            "last_iso": dt.datetime.utcfromtimestamp(last_ms/1000).isoformat()+"Z",
             "age_sec": age_sec, "cause": cause, "retries": retries,
             "source": "status", "notes": " / ".join(notes),
         })

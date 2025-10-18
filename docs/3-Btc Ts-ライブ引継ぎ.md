@@ -335,3 +335,29 @@ B) UI/Service の責務整理ドキュメントを docs/arch に追加。
 C) import パス検証と REPO_MAP 自動更新スクリプトの改修。
 
 ---
+
+## 2025-10-18 アダプタ設置・監査安定化
+
+### 完了タスク
+
+- `collector/adapters/api_bf.py` を新設し、bitFlyer 公開 API（/board, /executions）に対応する最小アダプタを実装。
+- 監査システム（audit.jsonl 出力・UI 反映・collector 連携）の全体動作を確認。基盤として完成。
+- `local/` および ルート直下 `collector/` の残存フォルダを解析し、安全に削除可能と確認。
+- `status.json` の正しい出力パス `data/collector/status.json` を確認し、collector 健全稼働を確認。
+- ダッシュボード上の監査モード（PROD/DEBUG/DIAG）動作と ENV 優先設定の挙動を確認。
+
+### 次回タスク（優先度順）
+
+- [P0] `collector/adapters/` 配下に bitFlyer 以外（Binance / Bybit / OKX）のアダプタを順次追加。
+- [P1] `api_bf.py` の board/trades 取得における rate-limit 時の再試行制御・リトライバックオフを追加。
+- [P2] board データの `rows` 精密化を他取引所アダプタでも統一化（count_bids/count_asks を標準化）。
+- [P3] 監査 UI の保存ボタンを不要化し、操作即時反映型に改善（要 Streamlit 側再構成）。
+
+### 共有/注意
+
+- **監査基盤は完成済み。** collector・dashboard・audit 出力の三点は同期動作を確認。
+- **重要情報：** 現在 collector は正規ディレクトリ `btc_trade_system/features/collector/` を使用中。誤ってルート`collector/`直下を再生成しないよう注意。
+- **重要情報：** `BTC_TS_MODE` の環境変数が UI 設定を上書きする（ENV > UI）。調整時は再起動が必要。
+- 次回以降、アダプタ群の拡張に入るため `collector/adapters/` 構成を共通化して進行する。
+
+---

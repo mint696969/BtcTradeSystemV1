@@ -15,18 +15,21 @@ def _cfg_root() -> Path:
 def _load_order(cfg_root: Path) -> list[str]:
     """
     表示順序（カード順）:
-    - config/ui/health.yaml の order を使用
-    - 無ければ evaluate() の items の出現順
+    - btc_trade_system/config/ui/health.yaml の order を使用
+    - 無ければ空配列（呼び出し側で items の出現順を採用）
     """
-
-    def _yload(p: Path):
-        try:
-            import yaml  # type: ignore
-            if p.exists():
-                return (yaml.safe_load(p.read_text(encoding="utf-8")) or {})
-        except Exception:
-            pass
-        return {}
+    from pathlib import Path as _P
+    cfg = _P(cfg_root) / "config" / "ui" / "health.yaml"
+    try:
+        import yaml  # type: ignore
+        if cfg.exists():
+            data = yaml.safe_load(cfg.read_text(encoding="utf-8")) or {}
+            order = data.get("order") or []
+            if isinstance(order, list):
+                return [str(x) for x in order]
+    except Exception:
+        pass
+    return []
 
 def get_health_summary() -> dict:
     """
@@ -59,7 +62,11 @@ def get_health_summary() -> dict:
             "exchange": i.get("exchange"),
             "status":   i.get("status"),
             "age_sec":  i.get("age_sec"),
-            "notes":    i.get("notes",""),
+            "notes":    i.get("notes", ""),
+            # UI が注記表示する追加フィールド
+            "source":   i.get("source"),           # "status" or "mtime"
+            "cause":    i.get("cause"),            # 外因/内因コード（例: RATE_LIMIT）
+            "retries":  i.get("retries"),          # 再試行回数など（あれば）
         }
         for i in items
     ]
@@ -96,8 +103,10 @@ def get_health_table() -> list[dict]:
             "last_iso": i.get("last_iso"),
             "age_sec":  i.get("age_sec"),
             "status":   i.get("status"),
-            "notes":    i.get("notes",""),
+            "notes":    i.get("notes", ""),
             "source":   i.get("source"),
+            "cause":    i.get("cause"),
+            "retries":  i.get("retries"),
         })
     return table
 

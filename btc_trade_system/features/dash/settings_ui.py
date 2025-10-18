@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 import json
+import os
 from typing import Any, Callable, Tuple
 
 # --- streamlit（無ければダミーで崩れないように） ---
@@ -78,6 +79,46 @@ def render():
         st.warning(f"設定の読み込みに失敗しました: {e}")
         cfg = {}
 
+    # UIで選んだ監査モードを monitoring.yaml に即保存（ENV優先はランタイムで維持）
+    def _save_audit_mode_selected():
+        try:
+            sel = st.session_state.get("audit_mode_select", "PROD")
+            obj = load_fn() or {}
+            if not isinstance(obj, dict):
+                obj = {}
+            audit_block = obj.get("audit") if isinstance(obj.get("audit"), dict) else {}
+            audit_block["mode"] = sel
+            obj["audit"] = audit_block
+            save_fn(obj)
+            st.toast(f"保存しました（audit.mode = {sel}）")
+        except Exception as e:
+            st.warning(f"モードの保存に失敗しました: {e}")
+
+    # --- 運転モード（UI側）＆ 有効モード（ENV > UI）の表示 ---
+    modes = ["PROD", "DEBUG", "DIAG"]
+    ui_mode = (isinstance(cfg, dict) and isinstance(cfg.get("audit"), dict) and cfg["audit"].get("mode")) or "PROD"
+    env_mode = os.getenv("BTC_TS_MODE")
+    effective_mode = (env_mode or ui_mode or "PROD").upper()
+
+    st.caption("運転モード（監査の出力量）")
+    c_mode, c_eff = st.columns([1, 1])
+    with c_mode:
+        st.selectbox(
+            "UIで設定（monitoring.yaml の audit.mode に保存）",
+            modes,
+            index=modes.index(ui_mode) if ui_mode in modes else 0,
+            key="audit_mode_select",
+            help="※ 実際の出力量は環境変数 BTC_TS_MODE が設定されている場合そちらが優先されます。",
+            on_change=_save_audit_mode_selected,
+        )
+
+    with c_eff:
+        st.write("**有効モード**（優先度: ENV > UI）")
+        st.metric(label="audit mode", value=effective_mode)
+        if env_mode:
+            st.caption(f"ENV: BTC_TS_MODE={env_mode}")
+
+
     text = _to_text(cfg if isinstance(cfg, (dict, list)) else (cfg or {}))
     text = st.text_area("設定（YAML / JSON）", text, height=360)
 
@@ -86,8 +127,16 @@ def render():
         if st.button("保存", use_container_width=True):
             try:
                 obj = _from_text(text)
+                if not isinstance(obj, dict):
+                    obj = {}
+                # UIの選択値を audit.mode に反映（ENV 優先はランタイム側で維持）
+                sel = st.session_state.get("audit_mode_select", "PROD")
+                audit_block = obj.get("audit") if isinstance(obj.get("audit"), dict) else {}
+                audit_block["mode"] = sel
+                obj["audit"] = audit_block
+
                 save_fn(obj)
-                st.success("保存しました。")
+                st.success(f"保存しました。（audit.mode = {sel}）")
             except Exception as e:
                 st.error(f"保存に失敗しました: {e}")
 

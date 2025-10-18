@@ -4,6 +4,7 @@
 from __future__ import annotations
 import sys, pathlib
 import streamlit as st
+from btc_trade_system.features.dash.settings_ui import render as render_settings_ui
 
 # V1ルートを sys.path に（保険）
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))

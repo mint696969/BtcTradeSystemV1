@@ -27,18 +27,79 @@ def set_context(*, actor: str | None = None, site: str | None = None,
 
 _MASK_KEYS = ("secret", "token", "apikey", "password", "passphrase")
 
+# --- mode gate ---------------------------------------------------------------
+_LEVEL_ORDER = {"INFO": 10, "WARN": 20, "ERROR": 30, "CRIT": 40}
+
+def _norm_level(s: str | None) -> str:
+    return (s or "INFO").upper()
+
+def _norm_mode(s: str | None) -> str:
+    m = (s or "DEBUG").upper()
+    return m if m in ("PROD", "DEBUG", "DIAG") else "DEBUG"
+
+def should_emit(*, mode: str | None, level: str | None, event: str, fields: dict | None = None) -> bool:
+    """
+    モード別の出力判定（最小ルール）:
+      - DIAG: すべて出す
+      - DEBUG: WARN以上はすべて / INFOは一部（retry/rate-limit/latency>1s/開始終了）
+      - PROD: ERROR/CRIT / 重大遷移(OK->WARN|CRIT) / 開始終了のみ
+    """
+    m = _norm_mode(mode)
+    lv = _norm_level(level)
+    ev = (event or "").lower()
+    fx = fields or {}
+
+    if m == "DIAG":
+        return True
+
+    # 共通：開始/終了イベントは常に出す（起動/停止の監査）
+    if ev.endswith(".start") or ev.endswith(".stop"):
+        return True
+
+    # 重大遷移: *.transition で to=WARN|CRIT
+    to_state = (fx.get("to") or fx.get("next") or "").upper()
+    if ev.endswith(".transition") and to_state in ("WARN", "CRIT"):
+        return True
+
+    if m == "PROD":
+        return lv in ("ERROR", "CRIT")
+
+    # DEBUG
+    if lv in ("WARN", "ERROR", "CRIT"):
+        return True
+
+    # INFO のうち重要そうなものだけ
+    cause = (fx.get("cause") or "").upper()
+    if ".retry" in ev or cause in ("RATE_LIMIT", "NET_BLOCK"):
+        return True
+    try:
+        lat = float(fx.get("latency_ms", 0) or 0)
+        if lat >= 1000:  # 1s 以上は採取
+            return True
+    except Exception:
+        pass
+    return False
+
 _AUDIT_REL = "audit.jsonl"
 _router = StorageRouter(Path("."))
 
 def _write_audit_line(obj: dict) -> None:
     """
-    primary(ENV) → secondary(./local/logs) の自動切替で追記。
-    ルータで失敗した場合は従来の io_safe にフォールバック。
+    まず StorageRouter（環境に応じた保存先）へ。
+    併せてローカル `./logs/audit.jsonl` にも必ず追記（観測性の担保）。
+    どちらかが失敗してももう一方は試みる（監査が原因で本流を止めない）。
     """
+    # 1) Router 側（失敗しても握りつぶす）
     try:
         _router.append_jsonl("logs", _AUDIT_REL, obj)
     except Exception:
+        pass
+
+    # 2) ローカル固定（./logs/audit.jsonl）
+    try:
         io_safe.append_jsonl(paths.logs_dir() / _AUDIT_REL, obj)
+    except Exception:
+        pass
 
 def _redact(obj):
     """簡易マスキング：キー名に機密っぽい語が含まれる場合は値を '***' に置換。"""
@@ -60,10 +121,10 @@ def _redact(obj):
 
 def audit(event: str, *, feature: str = "core", level: str = "INFO",
           payload: dict | None = None, **fields) -> None:
-    """audit.jsonl へ1行追記。
-    - 既存互換: 引数は同じ（payload任意）。呼び出し側は変更不要。
-    - 追加: set_context で与えた actor/site/session/task/mode を優先採用。
-    - 追加: payload と追加フィールドは _redact() で簡易マスキングして保存。
+    """audit.jsonl へ1行追記（モード別ゲートで間引き）。
+    - 既存互換: 呼び出し側の引数はそのまま。
+    - 追加: should_emit(mode, level, event, fields) で PROD/DEBUG/DIAG を切替。
+    - 追加: set_context の文脈を採用。payload/fields は _redact() で簡易マスキング。
     """
     paths.ensure_dirs()
     # 文脈は set_context 優先 → 環境変数（後方互換）
@@ -73,12 +134,20 @@ def audit(event: str, *, feature: str = "core", level: str = "INFO",
     session = _CTX.get("session") or os.getenv("SESSION")
     task = _CTX.get("task")  # env には通常載せない
 
+    # ---- ここでモード別の出力判定（間引き）----
+    try:
+        if not should_emit(mode=mode, level=level, event=event, fields=fields):
+            return
+    except Exception:
+        # 何があっても監査が原因で本流を止めない
+        pass
+
     line = {
         "ts": dt.datetime.utcnow().isoformat(timespec="milliseconds") + "Z",
         "mode": mode,
         "event": event,
         "feature": feature,
-        "level": level,
+        "level": _norm_level(level),
         "actor": actor,
         "site": site,
         "session": session,
@@ -94,10 +163,10 @@ def audit(event: str, *, feature: str = "core", level: str = "INFO",
 
 # --- convenience wrappers ----------------------------------------------------
 def audit_ok(event: str, *, feature: str = "core", payload: dict | None = None, **fields) -> None:
-    audit(event, feature=feature, level="INFO", payload=payload, **fields)
+    audit(event, feature=feature, level=_norm_level("INFO"), payload=payload, **fields)
 
 def audit_warn(event: str, *, feature: str = "core", payload: dict | None = None, **fields) -> None:
-    audit(event, feature=feature, level="WARN", payload=payload, **fields)
+    audit(event, feature=feature, level=_norm_level("WARN"), payload=payload, **fields)
 
 def audit_err(event: str, *, feature: str = "core", payload: dict | None = None, **fields) -> None:
-    audit(event, feature=feature, level="ERROR", payload=payload, **fields)
+    audit(event, feature=feature, level=_norm_level("ERROR"), payload=payload, **fields)

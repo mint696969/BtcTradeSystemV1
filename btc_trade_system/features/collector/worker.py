@@ -6,13 +6,13 @@ import time
 import random
 _monotonic = time.perf_counter  # システム時計の跳ねに影響されない
 from pathlib import Path
+from btc_trade_system.common.audit import audit_ok, audit_warn, audit_err
 from typing import Optional, Any
 from btc_trade_system.common.rate import RateRegistry, RateLimitExceeded
-from btc_trade_system.common.audit import audit_ok, audit_err
-from btc_trade_system.features.collector.core.status import StatusWriter
-from btc_trade_system.features.collector.core.leader_lock import LeaderLock
-from btc_trade_system.features.collector.adapters.bitflyer_public import BitflyerPublic
-from btc_trade_system.features.collector.core.snapshot_sink import SnapshotSink
+from btc_trade_system.features.collector.status import StatusWriter
+from btc_trade_system.features.collector.leader_lock import LeaderLock
+from btc_trade_system.features.collector.api_bf import BitflyerPublic
+from btc_trade_system.features.collector.snapshot_sink import SnapshotSink
 
 class CollectorWorker:
     """
@@ -23,6 +23,43 @@ class CollectorWorker:
       - use_leader_lock=True の場合は単一アクティブ運用（acquire/renew/release）
     実 API は fetch() をサブクラス or ラムダで差し替える。
     """
+
+    # --- audit helpers (追加のみ／既存処理は変更しない) -----------------------
+    def _audit_fetch_success(self, exchange: str, topic: str,
+                             *, latency_ms: float, rows: int | None = None) -> None:
+        audit_ok("collector.fetch.success", feature="collector",
+                 exchange=exchange, topic=topic,
+                 latency_ms=int(latency_ms), rows=int(rows or 0))
+
+    def _audit_fetch_retry(self, exchange: str, topic: str,
+                           *, cause: str, retries: int) -> None:
+        audit_warn("collector.fetch.retry", feature="collector",
+                   exchange=exchange, topic=topic,
+                   cause=cause, retries=int(retries))
+
+    def _audit_fetch_fail(self, exchange: str, topic: str,
+                          *, cause: str | None = None,
+                          code: int | None = None,
+                          endpoint: str | None = None,
+                          message: str | None = None) -> None:
+        payload = {}
+        if code is not None: payload["code"] = int(code)
+        if endpoint:         payload["endpoint"] = endpoint
+        if message:          payload["message"] = message
+        audit_err("collector.fetch.fail", feature="collector",
+                  exchange=exchange, topic=topic, cause=cause, payload=payload)
+
+    # 軽量なレイテンシ計測（perf_counter → ms）
+    import time as _t
+    def _now_ms(self) -> float:
+        return self._t.perf_counter() * 1000.0
+
+    class _Timer:
+        def __init__(self, owner: "CollectorWorker"):
+            self.o = owner
+            self.t0 = owner._now_ms()
+        def ms(self) -> float:
+            return max(0.0, self.o._now_ms() - self.t0)
 
     def __init__(self, base_dir: Path, *, exchange: str, topic: str,
                 rate_name: str, capacity: float, refill_per_sec: float,
@@ -106,6 +143,7 @@ class CollectorWorker:
 
         # 実行
         try:
+            t0_ms = self._now_ms()
             result = self.fetch()
             # 成功: status を OK に
             # 収集スナップショット（UTC日付で日別JSONLへ）
@@ -141,18 +179,49 @@ class CollectorWorker:
                     obj["count"] = 1 if result is not None else 0
 
                 self.sink.write_jsonl(exchange=self.exchange, topic=self.topic, obj=obj)
-            except Exception:
-                # スナップショット失敗は致命ではないので握りつぶす
-                pass
+            except Exception as e:
+                # スナップショット失敗は致命ではないので握りつぶしつつ監査に残す
+                audit_warn(
+                    "collector.file.write.fail",
+                    feature="collector",
+                    exchange=self.exchange,
+                    topic=self.topic,
+                    payload={"error": str(e)}
+                )
 
             self.status.update(self.exchange, self.topic, ok=True, notes="ok")
             self.status.flush()
+
+            # 収集成功の監査（レイテンシ/件数を付加）
+            latency_ms = max(0, int(self._now_ms() - t0_ms))
+            rows = None
+            if isinstance(result, dict):
+                if "count" in result:
+                    rows = result.get("count")
+                    try:
+                        rows = int(rows) if rows is not None else None
+                    except Exception:
+                        rows = None
+                else:
+                    # board 系: count_bids / count_asks の合計で概算（0なら未表示扱い）
+                    try:
+                        cb = int(result.get("count_bids") or 0)
+                        ca = int(result.get("count_asks") or 0)
+                        rows = (cb + ca) or None
+                    except Exception:
+                        rows = None
+
+            # 既存イベント名は維持（下位互換）
             audit_ok(
                 "collector.fetch.ok",
                 feature="collector",
                 exchange=self.exchange,
                 topic=self.topic,
-                payload={"sample": bool(result is not None)},
+                payload={
+                    "sample": bool(result is not None),
+                    "latency_ms": latency_ms,
+                    **({"rows": rows} if rows is not None else {})
+                },
             )
 
             # 成功したらバックオフ解除
@@ -173,8 +242,10 @@ class CollectorWorker:
                 feature="collector",
                 exchange=self.exchange,
                 topic=self.topic,
+                cause=type(e).__name__,
                 payload={"error": str(e)},
             )
+
             # 失敗したのでバックオフを指数的に延伸
             self._backoff_ms = min(
                 self._max_backoff_ms,
@@ -209,11 +280,20 @@ class CollectorWorker:
 
                 # 心拍（一定間隔で renew）
                 if self.use_leader_lock and self._lock:
-                    now = time.time()
                     now_m = _monotonic()
                     if (now_m - self._last_renew_m) >= self._renew_every_sec:
-                        self._lock.renew()
-                        self._last_renew_m = now_m
+                        try:
+                            self._lock.renew()
+                            self._last_renew_m = now_m
+                        except Exception as e:
+                            audit_err(
+                                "collector.worker.renew.fail",
+                                feature="collector",
+                                exchange=self.exchange,
+                                topic=self.topic,
+                                cause=type(e).__name__,
+                                payload={"error": str(e)},
+                            )
 
                 count += 1
                 if stop_after is not None and count >= stop_after:

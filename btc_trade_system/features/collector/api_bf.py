@@ -124,15 +124,25 @@ class BitflyerPublic:
         if mid_price is None and best_bid and best_ask:
             mid_price = (best_bid["price"] + best_ask["price"]) / 2.0
 
+        # 追加: 件数メタ（board の rows 可視化用）
+        _rc_bids = len(data.get("bids") or [])
+        _rc_asks = len(data.get("asks") or [])
+
         return {
             "product_code": product_code,
             "mid_price": float(mid_price) if mid_price is not None else None,
             "best_bid": best_bid,
             "best_ask": best_ask,
-            "bids": bids,
-            "asks": asks,
+            "bids": bids,   # 表示用に top でスライス
+            "asks": asks,   # 表示用に top でスライス
+            # 総件数は raw 全体から算出（top に依存しない）
             "raw_count": {
-                "bids": len(data.get("bids") or []),
-                "asks": len(data.get("asks") or []),
+                "bids": _rc_bids,
+                "asks": _rc_asks,
             },
+            # rows 導出を確実化するためのフラットな件数フィールド
+            "count_bids": _rc_bids,
+            "count_asks": _rc_asks,
+            # 将来の集計互換用（UIや他アダプタと合わせやすい）
+            "counts": {"bids": _rc_bids, "asks": _rc_asks},
         }

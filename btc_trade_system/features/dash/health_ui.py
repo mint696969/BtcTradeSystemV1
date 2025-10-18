@@ -154,6 +154,17 @@ def render():
         </div>
         """
         
+                # 追加注記（source / cause / retries）
+        src = c.get("source")
+        cause = c.get("cause")
+        retries = c.get("retries")
+        extra_bits = []
+        if src:      extra_bits.append(f"source={src}")
+        if cause:    extra_bits.append(f"cause={cause}")
+        if isinstance(retries, (int, float)): extra_bits.append(f"retries={int(retries)}")
+        if extra_bits:
+            st.caption(" / ".join(extra_bits))
+
         if cols[i]:
             st.markdown(card_html, unsafe_allow_html=True)
 
@@ -171,6 +182,23 @@ def render():
     st.divider()
     st.write("詳細")
     table = get_health_table()
+    st.caption("source=status: status.json 由来 / mtime: data/latest/raw の更新日時から推定")
+
+    # source 列が無い場合は補助（summary.cards を参照できるときのみ）
+    try:
+        if table:
+            have_source = (hasattr(table, "columns") and "source" in getattr(table, "columns", []))
+            if not have_source and isinstance(s.get("cards"), list):
+                card_sources = {c.get("exchange"): c.get("source") for c in s["cards"] if c.get("exchange")}
+                if hasattr(table, "columns"):
+                    if "exchange" in table.columns:
+                        table["source"] = table["exchange"].map(card_sources).fillna(table.get("source"))
+                elif isinstance(table, list):
+                    for row in table:
+                        if "source" not in row:
+                            row["source"] = card_sources.get(row.get("exchange"))
+    except Exception:
+        pass
 
     try:
         # leader メタのみ利用（items は UI 側で既に整形済みのため未使用）
