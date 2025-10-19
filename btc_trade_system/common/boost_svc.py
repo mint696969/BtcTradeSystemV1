@@ -9,9 +9,10 @@ import pkgutil
 import time
 import datetime as dt
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional, Literal
 
 from btc_trade_system.common import paths, io_safe
+from btc_trade_system.features.audit_dev import writer  # 現在の実効モード取得に使用
 
 # --- レート制御（プロセス内） ---
 _LAST_WRITE_MS: float | None = None
@@ -89,11 +90,17 @@ def _list_tree(base: Path, *, max_depth: int = 2, max_entries: int = 200) -> Dic
     return {"root": str(base), "entries": entries}
 
 
-def make_snapshot() -> Dict[str, Any]:
+def make_snapshot(mode: Literal["DEBUG", "BOOST"]) -> Dict[str, Any]:
+    """
+    mode=DEBUG: LITE（軽量） / mode=BOOST: FULL（詳細）
+    """
     data_root = paths.data_dir()
     logs_root = paths.logs_dir()
+
+    # 共通ヘッダ
     snapshot: Dict[str, Any] = {
         "ts": _utc_iso(),
+        "mode": mode,
         "env": {
             "BTC_TS_MODE": os.getenv("BTC_TS_MODE"),
             "PYTHON": os.getenv("PYTHON") or os.getenv("VIRTUAL_ENV"),
@@ -103,43 +110,58 @@ def make_snapshot() -> Dict[str, Any]:
             ),
         },
         "roots": {"data_root": str(data_root), "logs_root": str(logs_root)},
-        "tree": {
-            "data": _list_tree(Path(data_root)),
-            "logs": _list_tree(Path(logs_root)),
-        },
-        "modules": _list_modules("btc_trade_system"),
         "recent": {
-            "audit_tail": _tail_jsonl(Path(logs_root) / "audit.jsonl", 50),
-            "dev_audit_tail": _tail_jsonl(Path(logs_root) / "dev_audit.jsonl", 50),
+            "audit_tail": _tail_jsonl(Path(logs_root) / "audit.jsonl", 20 if mode == "DEBUG" else 50),
+            "dev_audit_tail": _tail_jsonl(Path(logs_root) / "dev_audit.jsonl", 20 if mode == "DEBUG" else 50),
         },
     }
+
+    if mode == "BOOST":
+        # FULL: 重めの情報も同梱
+        snapshot["tree"] = {
+            "data": _list_tree(Path(data_root)),
+            "logs": _list_tree(Path(logs_root)),
+        }
+        snapshot["modules"] = _list_modules("btc_trade_system")
+    else:
+        # LITE: ヘッダ系のみ（tree/modulesは省略）
+        pass
+
     return snapshot
 
-
-def export_snapshot(out_path: Path | None = None, *, force: bool = False) -> str:
+def export_snapshot(
+    out_path: Path | None = None,
+    *,
+    mode: Optional[Literal["DEBUG", "BOOST"]] = None,
+    force: bool = False,
+) -> str:
     """
     logs/boost_snapshot.json を生成（原子的上書き）。
+    mode 未指定なら writer.get_mode() → OFF の場合は DEBUG とみなす。
     - BOOST切替直後は force=True で即出力
     - 以降は 10 秒以内の連続生成をスキップ
-    戻り値: 生成（または既存）ファイルのフルパス（str）
-    例外: I/O 系は OSError に統一して送出（UI側でトレース可能にする）
     """
     global _LAST_WRITE_MS
     now_ms = time.time() * 1000
     out = out_path or (Path(paths.logs_dir()) / "boost_snapshot.json")
 
+    # レート制御
     if not force and _LAST_WRITE_MS is not None and (now_ms - _LAST_WRITE_MS) < _RATE_MS:
         return str(out)
 
-    snap = make_snapshot()
+    # 実効モードを決定
+    eff = (mode or (writer.get_mode() or "DEBUG")).upper()
+    if eff not in ("DEBUG", "BOOST"):
+        eff = "DEBUG"
+
+    snap = make_snapshot(eff)
     data = json.dumps(snap, ensure_ascii=False).encode("utf-8")
 
     try:
         out.parent.mkdir(parents=True, exist_ok=True)
         io_safe.write_atomic(out, data)
         _LAST_WRITE_MS = now_ms
-    except Exception as e:
-        # 最低限のフォールバックを試すが、失敗したら OSError で明示的に投げる
+    except Exception:
         try:
             tmp = out.with_suffix(out.suffix + ".tmp")
             tmp.write_bytes(data)
@@ -153,17 +175,21 @@ def export_snapshot(out_path: Path | None = None, *, force: bool = False) -> str
 # desc: スナップショットJSONから、GPT引き継ぎ向けのテキストを生成する
 def build_handover_text(snapshot: dict | None = None) -> str:
     try:
-        snap = snapshot or make_snapshot()
+        snap = snapshot or {}
     except Exception:
         snap = {}
+    mode = (snap.get("mode") or "DEBUG").upper()
+    if mode not in ("DEBUG", "BOOST"):
+        mode = "DEBUG"
+
     roots = snap.get("roots", {})
     recent = snap.get("recent", {})
     modules = snap.get("modules", [])
     env = snap.get("env", {})
 
-    lines = []
+    lines: List[str] = []
     p = lines.append
-    p("# BtcTradeSystemV1 Handover (BOOST)")
+    p(f"# BtcTradeSystemV1 Handover ({mode})")
     p(f"- ts: {snap.get('ts','')}")
     p("## Roots")
     p(f"- data_root: {roots.get('data_root','')}")
@@ -171,9 +197,12 @@ def build_handover_text(snapshot: dict | None = None) -> str:
     p("## Env")
     p(f"- BTC_TS_MODE: {env.get('BTC_TS_MODE')}")
     p(f"- PYTHONPATH_contains_repo: {env.get('PYTHONPATH_contains_repo')}")
-    p("## Loaded modules (top 50)")
-    for m in modules[:50]:
-        p(f"- {m}")
+
+    if mode == "BOOST":
+        p("## Loaded modules (top 50)")
+        for m in modules[:50]:
+            p(f"- {m}")
+
     p("## Recent dev_audit tail (last 20)")
     for r in (recent.get("dev_audit_tail") or [])[-20:]:
         ev = r.get("event","")
@@ -181,6 +210,7 @@ def build_handover_text(snapshot: dict | None = None) -> str:
         ts  = r.get("ts","")
         feat= r.get("feature","")
         p(f"- [{ts}] {lvl} {ev} ({feat})")
+
     p("## How to reproduce (PowerShell)")
     p("```powershell")
     p("Set-Location $env:USERPROFILE\\BtcTradeSystemV1")
@@ -191,13 +221,18 @@ def build_handover_text(snapshot: dict | None = None) -> str:
     return "\n".join(lines) + "\n"
 
 # desc: BOOST時に handover テキストも同時出力（logs/handover_gpt.txt）
-def export_handover_text(force: bool = False) -> str:
+def export_handover_text(*, mode: Optional[Literal["DEBUG","BOOST"]] = None, force: bool = False) -> str:
     """
     handover_gpt.txt を logs に出力してフルパス（str）を返す。
-    例外: 失敗時は OSError を送出（UI 側でトレース可能）
+    mode 未指定なら writer.get_mode() → OFF は DEBUG とみなす。
     """
     out = Path(paths.logs_dir()) / "handover_gpt.txt"
-    snap = make_snapshot()  # ここでの失敗はそのまま外へ（原因特定が容易）
+
+    eff = (mode or (writer.get_mode() or "DEBUG")).upper()
+    if eff not in ("DEBUG", "BOOST"):
+        eff = "DEBUG"
+
+    snap = make_snapshot(eff)
     text = build_handover_text(snap)
 
     try:

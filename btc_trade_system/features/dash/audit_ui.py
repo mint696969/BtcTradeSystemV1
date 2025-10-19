@@ -108,10 +108,6 @@ def render():
                 f"writer_mode_try={eff_mode}"
             )
 
-        # コピペ用テキスト表示（st.code の標準コピー機能を利用）
-        st.markdown("**コピペ用テキスト**")
-        st.code(st.session_state.snapshot_text or "", language=None)
-
         b1, b2, b3 = st.columns([1.6, 1.1, 3.3])
         with b1:
             regen = st.button("スナップショット", key="btn_snapshot_regen", disabled=snapshot_disabled, use_container_width=True)
@@ -121,15 +117,18 @@ def render():
         if regen:
             try:
                 # 仕様：DEBUG→LITE / BOOST→FULL。内部ファイルは維持（DLボタンは廃止）。
-                # テキスト（hand-over）を生成→読み込み→表示
-                text_path = boost_svc.export_handover_text(force=True)
+                # いまの実効モード（DEBUG/BOOST のみ想定）
+                mode_for_snap = "DEBUG" if eff_mode == "DEBUG" else "BOOST"
+
+                # テキスト（handover）を “モード指定” で生成して保存し、その内容を画面へ
+                text_path = boost_svc.export_handover_text(mode=mode_for_snap, force=True)
                 try:
                     st.session_state.snapshot_text = Path(text_path).read_text(encoding="utf-8", errors="ignore")
                 except Exception:
                     st.session_state.snapshot_text = f"[handover_gpt.txt] {text_path}"
 
-                # JSONスナップショットも更新してメタ表示に反映（サイズ・パス・mtime）
-                json_path = boost_svc.export_snapshot(force=True)
+                # JSONスナップショットも “モード指定” で生成して保存し、メタ表示へ反映
+                json_path = boost_svc.export_snapshot(mode=mode_for_snap, force=True)
                 try:
                     p = Path(json_path)
                     size = p.stat().st_size
@@ -138,7 +137,9 @@ def render():
                     size, mtime = 0, 0.0
                 st.session_state.snapshot_meta = {"path": str(json_path), "size": size, "mtime": mtime}
 
-                st.success("スナップショットを再生成しました。")
+                # ボタンの有効/無効を即反映させる
+                st.rerun()
+
             except Exception as e:
                 st.warning(f"スナップショット生成に失敗しました: {e!r}")
 
@@ -146,11 +147,30 @@ def render():
             # 実コピーは st.code の ⧉ ボタンで行う（仕様F）。ここではユーザに明示。
             st.toast("内容をコピーしました（上の ⧉ ボタンをご利用ください）", icon="✅")
 
+        # 表示内容を組み立て：OFF時は1行目に固定メッセージを入れる
+        content = st.session_state.snapshot_text or ""
+        if is_off:
+            prefix = "監査停止中（OFF）"
+            content = (prefix + ("\n" + content if content else ""))
+
+        # 初期化：まだ作られていない時だけ初期値を設定
+        if "snapshot_view" not in st.session_state:
+            st.session_state["snapshot_view"] = content
+        else:
+            # ランタイム更新時は Session State のみ上書き（value は渡さない）
+            st.session_state["snapshot_view"] = content
+
+        # 高さ240px固定（≒10行）。value は指定せず、key のみで描画する
+        st.text_area(
+            label="コピペ用テキスト",
+            height=240,
+            key="snapshot_view",
+            label_visibility="collapsed",
+        )
+
         meta = st.session_state.snapshot_meta or {}
         if meta.get("path"):
             st.caption(f"snapshot: {meta['path']} ({meta.get('size', 0)} bytes)")
-        elif is_off:
-            st.info("監査停止中（OFF）")
 
         c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1, 1])
         with c1:
