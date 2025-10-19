@@ -1,173 +1,207 @@
 # path: ./btc_trade_system/features/dash/audit_ui.py
-# desc: AuditタブのUI（表示専用）— svc_audit で集計・検索したデータを描画
+# desc: AuditタブのUI（開発監査表示専用）。BOOST切替時スナップショット生成対応・lint誤検出回避。ボタン色: OFF=白, DEBUG=黄, BOOST=赤。
 
 from __future__ import annotations
-from ...common import paths
 import streamlit as st
-# services（features 平置きの正式ルート）
-from btc_trade_system.features.dash.audit_svc import get_audit_rows
-
-import json
-from collections import deque
+import json, time
 from pathlib import Path
-from typing import Iterable
+
+from ...common import paths
+from btc_trade_system.features.dash.audit_svc import get_audit_rows as svc_get_audit_rows
+from btc_trade_system.features.audit_dev.writer import get_mode as _dev_get_mode, set_mode as _dev_set_mode
+from btc_trade_system.common import boost_svc
 
 def _log_file() -> Path:
-    # logs/audit.jsonl を返す（環境変数に依存せず paths で解決）
-    return paths.logs_dir() / "audit.jsonl"
+    return paths.logs_dir() / "dev_audit.jsonl"
 
-def _iter_lines(p: Path) -> Iterable[str]:
-    if not p.exists():
-        return []
-    with open(p, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line:
-                yield line
+def _mode_next(m: str) -> str:
+    chain = ["OFF", "DEBUG", "BOOST"]
+    m = (m or "OFF").upper()
+    return chain[(chain.index(m) + 1) % len(chain)] if m in chain else "OFF"
 
-def get_audit_rows(
-    max_lines: int = 500,
-    *,
-    level: str | None = None,
-    q: str | None = None,
-    exchange: str | None = None,
-    component: str | None = None,
-) -> list[dict]:
-    """
-    logs/audit.jsonl の末尾から新しい順に最大 max_lines を返す。
-    level は大文字(INFO/WARN/ERROR/CRIT)で一致、q/交換/コンポーネントは部分一致(大小無視)。
-    """
-    p = _log_file()
-    buf: deque[dict] = deque(maxlen=max(100, int(max_lines) * 3))  # フィルタ後に目減りしにくいよう余裕を持つ
-
-    for line in _iter_lines(p):
-        try:
-            obj = json.loads(line)
-        except Exception:
-            continue
-        buf.append(obj)
-
-    rows = list(reversed(buf))  # 新しい順
-    if not rows:
-        return []
-
-    # 正規化（欠損に強い）
-    def norm(s): return (s or "").strip()
-    L = level.upper() if isinstance(level, str) else None
-    ql = (q or "").lower()
-    exl = (exchange or "").lower()
-    col = (component or "").lower()
-
-    out: list[dict] = []
-    for r in rows:
-        r_level = norm(r.get("level")).upper()
-        r_exchange = norm(r.get("exchange"))
-        r_component = norm(r.get("component") or r.get("feature") or r.get("module"))
-        r_text = " ".join([
-            norm(r.get("event")), norm(r.get("feature")), r_exchange, r_component,
-            norm(r.get("actor")), norm(r.get("site")), norm(r.get("session")),
-            json.dumps(r.get("payload"), ensure_ascii=False) if isinstance(r.get("payload"), (dict, list)) else norm(r.get("payload")),
-            norm(r.get("message")),
-        ]).lower()
-
-        if L and r_level != L:
-            continue
-        if exl and exl not in r_exchange.lower():
-            continue
-        if col and col not in r_component.lower():
-            continue
-        if ql and ql not in r_text:
-            continue
-
-        out.append(r)
-
-        if len(out) >= max_lines:
-            break
-
-    return out
+def _auto_interval_ms(m: str) -> int:
+    m = (m or "OFF").upper()
+    return 0 if m == "OFF" else (2000 if m == "DEBUG" else 1000)
 
 def render():
-    st.subheader("監査ログ")
-    st.caption("Tail: PowerShell →  Get-Content .\\logs\\audit.jsonl -Tail 50 -Wait")
-    c1, c2, c3, c4, c5 = st.columns([2,1,1,1,1])
+    st.markdown("<div id='audit-area'>", unsafe_allow_html=True)
+
+    # セッション最初の1回だけ、UI/Writer を OFF に強制同期する（リロード時は毎回OFFスタート）
+    if "_init_off_done" not in st.session_state:
+        try:
+            _dev_set_mode("OFF")
+        except Exception:
+            pass
+        st.session_state.dev_mode = "OFF"
+        st.session_state["_init_off_done"] = True
+        st.session_state["mode_changed_at_ms"] = int(time.time() * 1000)
+
+    c0, c1 = st.columns([1.2, 6.8])
+
+    with c0:
+        cur = (st.session_state.get("dev_mode", "OFF") or "OFF").upper()
+        next_mode = _mode_next(cur)
+
+        # ボタンの表示は「現在モード」。クリックで next_mode に切替。
+        label = cur
+        if st.button(label, key="btn_mode_cycle", use_container_width=True, help=f"クリックで {next_mode} に切替"):
+            try:
+                _dev_set_mode(next_mode)
+                st.session_state.dev_mode = next_mode
+                st.session_state["mode_changed_at_ms"] = int(time.time() * 1000)
+                st.rerun()
+            except Exception as e:
+                st.warning(f"モード更新に失敗しました: {e!r}")
+
+        ui_mode = (st.session_state.get("dev_mode", "OFF") or "OFF").upper()
+        try:
+            writer_mode = _dev_get_mode()
+        except Exception:
+            writer_mode = "UNKNOWN"
+        ts_ms = st.session_state.get("mode_changed_at_ms")
+        st.caption(
+            f"現在モード: UI=`{ui_mode}` / writer=`{writer_mode}`"
+            + (f"（changed_at={ts_ms}ms）" if ts_ms else "")
+        )
+
     with c1:
-        q = st.text_input("キーワード", "", placeholder="event=/feature=/payload 内を部分一致（例: RATE_LIMIT）")
-    with c2:
-        level = st.selectbox("レベル", ["ALL","INFO","WARN","ERROR","CRIT"], index=0)
-    with c3:
-        exchange = st.text_input("exchange", "", placeholder="binance / bitflyer / ...")
-    with c4:
-        component = st.text_input("component", "", placeholder="collector / dashboard / ...")
-    with c5:
-        limit = st.selectbox("件数", [200,500,1000], index=1)
+        st.subheader("開発監査ログ（dev_audit.jsonl）")
+        st.caption(r"Tail（PowerShell）: Get-Content D:\\BtcTS_V1\\logs\\dev_audit.jsonl -Tail 50 -Wait")
 
-    # --- 呼び出しパラメータ修正 ---
-    rows = get_audit_rows(
-        max_lines=int(limit),
-        level=None if level == "ALL" else level,
-        q=(q or None),
-        exchange=(exchange or None),
-        component=(component or None),
-    )
+        # --- 追加: コピペ用テキスト窓 + スナップショット/コピー（OFFは無効） ---
+        if "snapshot_text" not in st.session_state:
+            st.session_state.snapshot_text = ""
+        if "snapshot_meta" not in st.session_state:
+            # path/size/mtime（UNIX秒）を持つ。copy可否の鮮度判定に使用。
+            st.session_state.snapshot_meta = {"path": None, "size": 0, "mtime": 0.0}
 
-    def _match(r: dict) -> bool:
-        if level != "ALL" and (r.get("level") or "").upper() != level:
-            return False
-        if exchange and exchange.lower() not in (r.get("exchange","") or "").lower():
-            return False
-        if component and component.lower() not in (r.get("component","") or "").lower():
-            return False
-        if q:
-            s = " ".join([
-                r.get("event",""), r.get("feature",""), r.get("exchange",""),
-                r.get("component",""), r.get("actor",""), r.get("site",""),
-                r.get("session",""), str(r.get("payload","")),
-            ]).lower()
-            return q.lower() in s
-        return True
+        # 実効モードは毎回 writer から直接取得（UI表示とズレないようにする）
+        try:
+            eff_mode = (_dev_get_mode() or "OFF").upper()
+        except Exception:
+            eff_mode = (st.session_state.get("dev_mode", "OFF") or "OFF").upper()
+        is_off = (eff_mode == "OFF")
 
-    rows = [r for r in rows if _match(r)]
-    st.caption(f"{len(rows)} 件")
-    # 実際の読み取り元パスを明示（迷子防止）
-    try:
-        st.caption(f"source: {(_log_file())}")
-    except Exception:
-        pass
+        # スナップショットの鮮度判定：直近5分以内に生成されたら「新しい」とみなす
+        FRESH_SEC = 300
+        _meta = st.session_state.snapshot_meta or {}
+        fresh = False
+        pth = _meta.get("path")
+        if pth:
+            try:
+                mtime = _meta.get("mtime") or Path(pth).stat().st_mtime
+                fresh = (time.time() - float(mtime)) <= FRESH_SEC
+            except Exception:
+                fresh = False
 
-    if rows:
-        import pandas as pd
-        import numpy as np
-        import json as _json
+        # ボタン有効/無効：
+        snapshot_disabled = is_off
+        copy_disabled = is_off or (not st.session_state.snapshot_text) or (not fresh)
 
-        df = pd.DataFrame(rows)
-
-        # “あれば表示”の優先順（存在しない列は自動で落ちる）
-        prefer = [
-            "ts","level","feature","event",
-            "exchange","topic","actor","site","session",
-            "latency_ms","rows","cause","retries",
-            "payload"
-        ]
-        show_cols = [c for c in prefer if c in df.columns]
-        if show_cols:
-            df = df[show_cols]
-
-        # Arrow 互換のための型整形（混在型を排除）
-        if "latency_ms" in df.columns:
-            # 数値列は NaN を保持できる pandas の nullable 型に
-            df["latency_ms"] = pd.to_numeric(df["latency_ms"], errors="coerce").astype("Int64")
-        if "rows" in df.columns:
-            df["rows"] = pd.to_numeric(df["rows"], errors="coerce").astype("Int64")
-        if "retries" in df.columns:
-            df["retries"] = pd.to_numeric(df["retries"], errors="coerce").astype("Int64")
-        # payload が dict/list の場合は JSON 文字列に正規化（Arrow で詰まらないように）
-        if "payload" in df.columns:
-            df["payload"] = df["payload"].apply(
-                lambda x: _json.dumps(x, ensure_ascii=False) if isinstance(x, (dict, list)) else ("" if x is None else x)
+        # いったん真値を見える化（チェックボックスでON/OFF）
+        _dev_dbg = st.checkbox("dev/debug panel", value=False)
+        if _dev_dbg:
+            st.caption(
+                f"[DBG] eff_mode={eff_mode} is_off={is_off} fresh={fresh} "
+                f"snapshot_disabled={snapshot_disabled} copy_disabled={copy_disabled} "
+                f"ui_mode={ (st.session_state.get('dev_mode','OFF') or 'OFF').upper() } "
+                f"writer_mode_try={eff_mode}"
             )
 
-        # 新 API 推奨パラメータに変更
-        st.dataframe(df, width="stretch", hide_index=True, height=480)
+        # コピペ用テキスト表示（st.code の標準コピー機能を利用）
+        st.markdown("**コピペ用テキスト**")
+        st.code(st.session_state.snapshot_text or "", language=None)
 
-    else:
-        st.info("audit.jsonl が無いか、条件に一致する行がありません。")
+        b1, b2, b3 = st.columns([1.6, 1.1, 3.3])
+        with b1:
+            regen = st.button("スナップショット", key="btn_snapshot_regen", disabled=snapshot_disabled, use_container_width=True)
+        with b2:
+            copy_req = st.button("コピー", key="btn_snapshot_copy", disabled=copy_disabled, use_container_width=True)
+
+        if regen:
+            try:
+                # 仕様：DEBUG→LITE / BOOST→FULL。内部ファイルは維持（DLボタンは廃止）。
+                # テキスト（hand-over）を生成→読み込み→表示
+                text_path = boost_svc.export_handover_text(force=True)
+                try:
+                    st.session_state.snapshot_text = Path(text_path).read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    st.session_state.snapshot_text = f"[handover_gpt.txt] {text_path}"
+
+                # JSONスナップショットも更新してメタ表示に反映（サイズ・パス・mtime）
+                json_path = boost_svc.export_snapshot(force=True)
+                try:
+                    p = Path(json_path)
+                    size = p.stat().st_size
+                    mtime = p.stat().st_mtime
+                except Exception:
+                    size, mtime = 0, 0.0
+                st.session_state.snapshot_meta = {"path": str(json_path), "size": size, "mtime": mtime}
+
+                st.success("スナップショットを再生成しました。")
+            except Exception as e:
+                st.warning(f"スナップショット生成に失敗しました: {e!r}")
+
+        if copy_req:
+            # 実コピーは st.code の ⧉ ボタンで行う（仕様F）。ここではユーザに明示。
+            st.toast("内容をコピーしました（上の ⧉ ボタンをご利用ください）", icon="✅")
+
+        meta = st.session_state.snapshot_meta or {}
+        if meta.get("path"):
+            st.caption(f"snapshot: {meta['path']} ({meta.get('size', 0)} bytes)")
+        elif is_off:
+            st.info("監査停止中（OFF）")
+
+        c1, c2, c3, c4, c5 = st.columns([2, 1, 1, 1, 1])
+        with c1:
+            q = st.text_input("キーワード", "", placeholder="event=/feature=/payload 内を部分一致（例: RATE_LIMIT）")
+        with c2:
+            level = st.selectbox("レベル", ["ALL", "INFO", "WARN", "ERROR", "CRIT"], index=0)
+        with c3:
+            exchange = st.text_input("exchange", "", placeholder="binance / bitflyer / ...")
+        with c4:
+            component = st.text_input("component", "", placeholder="collector / dashboard / ...")
+        with c5:
+            limit = st.selectbox("件数", [200, 500, 1000], index=1)
+
+        rows = svc_get_audit_rows(
+            max_lines=int(limit),
+            level=None if level == "ALL" else level,
+            q=(q or None),
+            exchange=(exchange or None),
+            component=(component or None),
+        )
+
+        st.caption(f"{len(rows)} 件")
+        try:
+            st.caption(f"source: {(_log_file())}")
+        except Exception:
+            pass
+
+        if rows:
+            import pandas as pd
+            import json as _json
+
+            df = pd.DataFrame(rows)
+            prefer = [
+                "ts", "level", "feature", "event", "exchange", "topic", "actor", "site", "session",
+                "latency_ms", "rows", "retries", "payload",
+            ]
+            show_cols = [c for c in prefer if c in df.columns]
+            if show_cols:
+                df = df[show_cols]
+
+            for col in ("latency_ms", "rows", "retries"):
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+
+            if "payload" in df.columns:
+                df["payload"] = df["payload"].apply(
+                    lambda x: _json.dumps(x, ensure_ascii=False) if isinstance(x, (dict, list)) else ("" if x is None else x)
+                )
+
+            st.dataframe(df, use_container_width=True, hide_index=True, height=480)
+        else:
+            st.info("dev_audit.jsonl が無いか、条件に一致する行がありません。")
+
+        st.markdown("</div>", unsafe_allow_html=True)

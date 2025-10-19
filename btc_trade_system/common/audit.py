@@ -13,17 +13,19 @@ _CTX: dict[str, str | None] = {
     "session": None,
     "task": None,
     "mode": os.getenv("BTC_TS_MODE", "DEBUG"),
+    "trace_id": None,  # 処理束ね用
 }
 
 def set_context(*, actor: str | None = None, site: str | None = None,
                 session: str | None = None, task: str | None = None,
-                mode: str | None = None) -> None:
-    """監査共通文脈（誰が/どこで/どのセッション/どの作業/どのモード）を設定。Noneは無視。"""
-    if actor is not None:   _CTX["actor"] = actor
-    if site is not None:    _CTX["site"] = site
-    if session is not None: _CTX["session"] = session
-    if task is not None:    _CTX["task"] = task
-    if mode is not None:    _CTX["mode"] = mode
+                mode: str | None = None, trace_id: str | None = None) -> None:
+    """監査共通文脈（誰が/どこで/どのセッション/どの作業/どのモード/同一処理束ねID）。Noneは無視。"""
+    if actor is not None:    _CTX["actor"] = actor
+    if site is not None:     _CTX["site"] = site
+    if session is not None:  _CTX["session"] = session
+    if task is not None:     _CTX["task"] = task
+    if mode is not None:     _CTX["mode"] = mode
+    if trace_id is not None: _CTX["trace_id"] = trace_id
 
 _MASK_KEYS = ("secret", "token", "apikey", "password", "passphrase")
 
@@ -85,21 +87,25 @@ _router = StorageRouter(Path("."))
 
 def _write_audit_line(obj: dict) -> None:
     """
-    まず StorageRouter（環境に応じた保存先）へ。
-    併せてローカル `./logs/audit.jsonl` にも必ず追記（観測性の担保）。
-    どちらかが失敗してももう一方は試みる（監査が原因で本流を止めない）。
+    StorageRouter へまず書き込み、成功したらローカル固定追記はスキップ。
+    Router が失敗した場合のみローカル固定（片系フォールバック）。
+    → 同一物理パスを指す環境での二重書込ノイズを抑止。
     """
-    # 1) Router 側（失敗しても握りつぶす）
+    wrote = False
+    # 1) Router 側
     try:
         _router.append_jsonl("logs", _AUDIT_REL, obj)
+        wrote = True
     except Exception:
-        pass
+        wrote = False  # フォールバックへ
 
-    # 2) ローカル固定（./logs/audit.jsonl）
-    try:
-        io_safe.append_jsonl(paths.logs_dir() / _AUDIT_REL, obj)
-    except Exception:
-        pass
+    # 2) Router が失敗した時だけローカル固定（./logs/audit.jsonl）
+    if not wrote:
+        try:
+            io_safe.append_jsonl(paths.logs_dir() / _AUDIT_REL, obj)
+        except Exception:
+            # 監査が原因で本流を止めない
+            pass
 
 def _redact(obj):
     """簡易マスキング：キー名に機密っぽい語が含まれる場合は値を '***' に置換。"""
@@ -142,6 +148,7 @@ def audit(event: str, *, feature: str = "core", level: str = "INFO",
         # 何があっても監査が原因で本流を止めない
         pass
 
+    # 監査1行の骨格
     line = {
         "ts": dt.datetime.utcnow().isoformat(timespec="milliseconds") + "Z",
         "mode": mode,
@@ -153,13 +160,55 @@ def audit(event: str, *, feature: str = "core", level: str = "INFO",
         "session": session,
         "task": task,
     }
-    # 任意の追加フィールド（例: endpoint, code, latency_ms など）
-    if fields:
-        line.update(_redact(fields))
-    # payload は従来キーを維持しつつマスク
-    line["payload"] = _redact(payload or {})
 
+    # 文脈 trace_id（任意）
+    if _CTX.get("trace_id"):
+        line["trace_id"] = _CTX["trace_id"]
+
+    # 任意の追加フィールド（endpoint/code/latency_ms など）
+    if fields:
+        try:
+            line.update(_redact(fields))
+        except Exception:
+            # もし型が崩れても監査は止めない
+            line.update(fields)
+
+    # payload はマスク後にモード別上限で要約
+    redacted = _redact(payload or {})
+    line["payload"] = _truncate_payload(redacted, mode=mode)
+
+    # 最終書き出し
     _write_audit_line(line)
+
+def _payload_limit_for_mode(mode: str) -> int:
+    """モード別のpayload上限（バイト）。PROD=1KB / DEBUG=2KB / DIAG=8KB"""
+    m = _norm_mode(mode)
+    return 1024 if m == "PROD" else (2048 if m == "DEBUG" else 8192)
+
+def _truncate_payload(obj: dict, *, mode: str) -> dict:
+    """
+    payload を簡易要約して上限内に収める。
+    - まずはマスク後の dict を JSON にシリアライズして長さ判定
+    - 超過時は先頭プレビューを残し、_truncated フラグと合計サイズを付与
+    """
+    import json
+    try:
+        raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+    except Exception:
+        raw = str(obj)
+
+    limit = _payload_limit_for_mode(mode)
+    if len(raw.encode("utf-8")) <= limit:
+        return obj
+
+    # プレビューは概ね limit の 70% 程度を目安に（UTF-8境界は雑に扱う）
+    preview_bytes = int(limit * 0.7)
+    preview = raw.encode("utf-8")[:preview_bytes].decode("utf-8", errors="ignore")
+    return {
+        "_truncated": True,
+        "_preview": preview,
+        "_orig_bytes": len(raw.encode("utf-8")),
+    }
 
 # --- convenience wrappers ----------------------------------------------------
 def audit_ok(event: str, *, feature: str = "core", payload: dict | None = None, **fields) -> None:

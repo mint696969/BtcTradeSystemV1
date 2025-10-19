@@ -1,18 +1,43 @@
 # path: ./tmp/audit_smoke.py
-# desc: 監査ゲートの出力差を簡易確認（安全・無副作用）
+# desc: 監査スモークテスト（err/transition/大きいpayloadを生成）— 実運転コードは触らない
 
 import os, time
-from btc_trade_system.common import audit
+from btc_trade_system.common.audit import audit, audit_err, set_context
 
-def one_round(tag: str):
-    audit.audit_ok(f"smoke.{tag}.start", feature="audit", payload={"msg":"hello"})
-    audit.audit_warn("smoke.retry", feature="collector", payload={"cause":"RATE_LIMIT"}, retries=2)
-    audit.audit_err("smoke.err.demo", feature="collector", payload={"code":504, "endpoint":"/api"})
-    audit.audit_ok(f"smoke.{tag}.stop", feature="audit")
+# ★ モードはここで指定（UI未連動のためテスト時だけ強制）
+os.environ["BTC_TS_MODE"] = "DEBUG"  # DEBUG で出やすくする。終わったら外してOK
 
-print("writing...")
-for m in ["PROD","DEBUG","DIAG"]:
-    os.environ["BTC_TS_MODE"] = m
-    one_round(m)
-    time.sleep(0.05)
-print("done.")
+# トレース束ね（一連のイベントに同じIDを付与）
+set_context(trace_id="SMOKE-TRACE-001", actor="tester", site="local", session="S-TEST", task="audit.smoke")
+
+# 1) 失敗系（endpoint/code/elapsed_ms を fields 経由で出す）
+audit_err(
+    "smoke.err.demo",
+    feature="collector",
+    endpoint="/api",
+    code=504,
+    elapsed_ms=1234,
+    cause="NET_BLOCK",
+)
+
+# 2) 遷移（to=WARN → should_emit許可）
+audit(
+    "collector.status.transition",
+    feature="collector",
+    level="INFO",
+    payload={"hint": "simulated transition"},
+    from_state="OK",
+    to="WARN",
+    cause="RATE_LIMIT",
+)
+
+# 3) 大きい payload（要約と _truncated を確認）
+big_payload = {"k": "x" * (10 * 1024)}  # 10KB
+audit(
+    "smoke.payload.big",
+    feature="audit",
+    level="INFO",
+    payload=big_payload,
+)
+
+print("done")

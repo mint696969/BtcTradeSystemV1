@@ -97,10 +97,14 @@ def filter_recs(
     features: Optional[Sequence[str]] = None,
     levels: Optional[Sequence[str]] = None,
     keyword: Optional[str] = None,
+    exchange: Optional[str] = None,
+    component: Optional[str] = None,
 ) -> Iterator[AuditRec]:
     kw_pat = re.compile(re.escape(keyword), re.IGNORECASE) if keyword else None
     feat_set = set(x.lower() for x in features) if features else None
     lvl_set  = set(x.upper() for x in levels) if levels else None
+    exq      = (exchange or "").lower()
+    cmpq     = (component or "").lower()
 
     for r in recs:
         try:
@@ -112,6 +116,12 @@ def filter_recs(
         if until and t >= until: continue
         if feat_set and (r.feature or "").lower() not in feat_set: continue
         if lvl_set and r.level.upper() not in lvl_set: continue
+
+        # 追加: exchange/component は raw に入っている想定。部分一致・大小無視。
+        if exq and exq not in ((r.raw.get("exchange") or "").lower()):
+            continue
+        if cmpq and cmpq not in ((r.raw.get("component") or "").lower()):
+            continue
 
         if kw_pat:
             blob = f"{r.event} {r.feature} {r.level} {json.dumps(r.raw, ensure_ascii=False)}"
@@ -135,6 +145,8 @@ def load_for_ui(
     features: Optional[Sequence[str]] = None,
     levels: Optional[Sequence[str]] = None,
     keyword: Optional[str] = None,
+    exchange: Optional[str] = None,
+    component: Optional[str] = None,
     max_lines: int = 5000,
 ) -> List[AuditRec]:
     now = datetime.now(tz=UTC)
@@ -151,7 +163,13 @@ def load_for_ui(
         p = paths.logs_dir() / "audit.jsonl"
 
     recs = tail_read(p, max_lines=max_lines)
-    return list(filter_recs(recs, since=since, until=until, features=features, levels=levels, keyword=keyword))
+    return list(filter_recs(
+        recs,
+        since=since, until=until,
+        features=features, levels=levels,
+        keyword=keyword,
+        exchange=exchange, component=component,
+    ))
 
 def export_csv(
     out_rel: str = "export/audit_ui.csv",
@@ -177,42 +195,45 @@ def to_compact_rows(recs: Iterable[AuditRec], *, max_summary_len: int = 160) -> 
 
 # --- public API expected by ui_audit.py -------------------------------------
 def get_audit_rows(
-    *,
-    lookback: str = "1h",
-    level: Optional[str] = None,
-    q: Optional[str] = None,
-    feature: Optional[str] = None,
-    max_lines: int = 5000,
-    max_summary_len: int = 160,
-    tz_name: str = "Asia/Tokyo",
+  *,
+  lookback: str = "1h",
+  level: Optional[str] = None,
+  q: Optional[str] = None,
+  feature: Optional[str] = None,
+  exchange: Optional[str] = None,
+  component: Optional[str] = None,
+  max_lines: int = 5000,
+  max_summary_len: int = 160,
+  tz_name: str = "Asia/Tokyo",
 ) -> List[dict]:
-    """
-    ui_audit 用の最小API。
-    - lookback: '30m' / '1h' / '1d' など
-    - level:   'INFO' | 'WARN' | 'ERROR' ...（単一指定・省略可）
-    - q:       キーワード（要約・raw含むテキストに対して大小無視で検索）
-    - feature: 機能名（単一指定・省略可）
-    返り値: list[dict]（ts, ts_local, mode, feature, level, event, summary）
-    """
-    levels = [level] if level else None
-    features = [feature] if feature else None
-    recs = load_for_ui(
-        lookback=lookback,
-        features=features,
-        levels=levels,
-        keyword=q,
-        max_lines=max_lines,
-    )
-    rows = to_compact_rows(recs, max_summary_len=max_summary_len)
-    # ts_local を指定TZで付与（to_compact_rows内はデフォルトローカル→TZで上書き）
-    if tz_name:
-        for x in rows:
-            try:
-                x["ts_local"] = _ts_to_local_iso(x["ts"], tz_name=tz_name)
-            except Exception:
-                pass
-    return rows
-
+  """
+  ui_audit 用の最小API。
+  - lookback: '30m' / '1h' / '1d' など
+  - level:    'INFO' | 'WARN' | 'ERROR' ...（単一・省略可）
+  - q:        キーワード（要約・raw含むテキストに対して大小無視で検索）
+  - feature:  機能名（単一・省略可）
+  - exchange/component: 部分一致の前段フィルタ（大小無視）
+  返り値: list[dict]（ts, ts_local, mode, feature, level, event, summary）
+  """
+  levels   = [level] if level else None
+  features = [feature] if feature else None
+  recs = load_for_ui(
+      lookback=lookback,
+      features=features,
+      levels=levels,
+      keyword=q,
+      exchange=exchange,
+      component=component,
+      max_lines=max_lines,
+  )
+  rows = to_compact_rows(recs, max_summary_len=max_summary_len)
+  if tz_name:
+      for x in rows:
+          try:
+              x["ts_local"] = _ts_to_local_iso(x["ts"], tz_name=tz_name)
+          except Exception:
+              pass
+  return rows
 def export_csv_compact(
     out_rel: str = "export/audit_ui_compact.csv",
     *,
@@ -256,5 +277,3 @@ def export_csv_compact_localtime(
             ts_local = _ts_to_local_iso(x["ts"], tz_name=tz_name)
             w.writerow([x["ts"], ts_local, x["mode"], x["feature"], x["level"], x["event"], x["summary"]])
     return out
-
-
