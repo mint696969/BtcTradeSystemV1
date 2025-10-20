@@ -1,5 +1,6 @@
 # path: btc_trade_system/common/audit.py
 # desc: 監査イベント出力（緑/黄/赤の粒度に依らず1行JSONL）
+
 from __future__ import annotations
 import os, datetime as dt
 from pathlib import Path
