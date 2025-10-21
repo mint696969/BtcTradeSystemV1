@@ -385,3 +385,25 @@ C) import パス検証と REPO_MAP 自動更新スクリプトの改修。
 4. 開発監査ログ(dev_audit.jsonl)のエントリ検証およびサマリ出力整備
 
 ---
+
+## 2025-10-22 UI 整備と P0 完了確認
+
+- 作業メモ
+  P0 タスク群の実装・動作テストを完了。REPO_MAP 抜粋、Errors only tail 抽出、Config ハッシュ・更新時刻確認の 3 機能を全て正常に動作確認。ワンライナーテストでオールグリーンを達成。UI 側ではスナップショット表示窓の高さ固定が未反映のため、CSS 再調整を次回タスクへ持ち越し。snapshot_ui.py 内 ensure_snapshot_code_css()の min/max height 設定見直しが必要。
+
+- 完了タスク
+
+  - **REPO_MAP 抜粋機能の追加**：boost_snapshot.json から抽出し、各ファイルの#path/#desc を整理表示。最大 200 件（DEBUG は 50 件）までのサマリ出力を実装。
+  - **Errors only tail 機能の追加**：dev_audit.jsonl から ERROR/CRITICAL のみ抽出し、直近 N 件（デフォルト 150 件）を整形して UI に表示。
+  - **Config ダイジェスト機能の追加**：config/settings.yaml(.yml)を走査し、存在確認・ファイルサイズ・更新時刻・SHA256 ハッシュを取得。欠落時は N/A として扱う安全設計。
+  - **audit_ui.py の整理**：render_snapshot_code()呼び出しへ一本化し、ensure_snapshot_code_css()の二重注入を解消。スナップショット表示をコードウィンドウ方式へ統一。
+
+- 次の候補タスク
+  A) snapshot_ui.py の CSS を再調整し、空でも 10 行固定かつスクロール動作を保証。
+  B) UI テスト後、P3（ディスク容量・ストレージ実体確認）へ移行。
+  C) snapshot_ui のコードと CSS 調整を分離し、他コンポーネント影響を最小化する。
+
+- 参照
+  PowerShell テストログ（P0_ALL_OK=True）、UI スクリーンショット（監査ログタブ表示）確認済み。
+
+---
