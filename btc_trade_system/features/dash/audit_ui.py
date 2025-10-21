@@ -2,15 +2,22 @@
 # desc: AuditタブのUI（開発監査表示専用）。BOOST切替時スナップショット生成対応・lint誤検出回避。ボタン色: OFF=白, DEBUG=黄, BOOST=赤。
 
 from __future__ import annotations
+
 import streamlit as st
 import json, time
 from pathlib import Path
 import streamlit.components.v1 as components
 import os, sys, datetime as _dt
 import platform, hashlib, subprocess
+
 from ...common import paths
 from btc_trade_system.features.dash.audit_svc import get_audit_rows as svc_get_audit_rows
 from btc_trade_system.features.audit_dev.writer import get_mode as _dev_get_mode, set_mode as _dev_set_mode
+
+from btc_trade_system.common.boost_svc import (
+    export_snapshot as boost_export_snapshot,
+    build_handover_text as boost_build_handover_text,
+)
 
 def _log_file() -> Path:
     return paths.logs_dir() / "dev_audit.jsonl"
@@ -285,11 +292,34 @@ def render():
                 st.session_state.dev_mode = next_mode
                 st.session_state["mode_changed_at_ms"] = int(time.time() * 1000)
 
-                # ▼ 追加：モード遷移時は“コピー後と同じように”スナップショットを空にする
+                # ▼ 追加：スナップショットのUI側キャッシュは毎回クリア
                 st.session_state.snapshot_text = ""
                 st.session_state.snapshot_meta = {"path": None, "size": 0, "mtime": 0.0}
-                # 表示も空へ（iframe表示は snapshot_text を使っているので次レンダで空になる）
                 st.session_state["snapshot_view"] = ""
+
+                # ▼ 追加：BOOSTに入るタイミングで“公式”スナップショットを即時生成
+                if (next_mode or "OFF").upper() == "BOOST":
+                    try:
+                        snap_path = Path(boost_export_snapshot(mode="BOOST", force=True))
+                        # handover テキスト（公式ビルダー）を生成してテキスト窓に流し込む
+                        try:
+                            snap_json = json.loads(snap_path.read_text(encoding="utf-8", errors="ignore"))
+                            txt = boost_build_handover_text(snap_json)
+                            st.session_state.snapshot_text = txt
+                            st.session_state.snapshot_meta = {
+                                "path": str(snap_path),
+                                "size": len(txt.encode("utf-8", errors="ignore")),
+                                "mtime": time.time(),
+                            }
+                        except Exception:
+                            pass
+                    except Exception:
+                        # 失敗時はUI内の簡易スナップショットでフォールバック
+                        try:
+                            st.session_state.snapshot_text = _make_snapshot(next_mode)
+                            st.session_state.snapshot_meta = {"path": None, "size": len(st.session_state.snapshot_text.encode("utf-8")), "mtime": time.time()}
+                        except Exception:
+                            pass
 
                 st.rerun()
             except Exception as e:
@@ -336,17 +366,33 @@ def render():
         # 1) 先に生成を反映
         if regen:
             try:
-                snap = _make_snapshot(eff_mode)
-                st.session_state.snapshot_text = snap
+                # 1) 公式スナップショットを出力（連打時も force=True で最新化）
+                snap_path = Path(boost_export_snapshot(mode=eff_mode, force=True))
+                # 2) JSON → handover テキスト化
+                try:
+                    snap_json = json.loads(snap_path.read_text(encoding="utf-8", errors="ignore"))
+                    snap_text = boost_build_handover_text(snap_json)
+                except Exception:
+                    # JSON読み込みに失敗したらフォールバック
+                    snap_text = _make_snapshot(eff_mode)
+
+                st.session_state.snapshot_text = snap_text
                 st.session_state.snapshot_meta = {
-                    "path": None,
-                    "size": len(snap.encode("utf-8", errors="ignore")),
+                    "path": str(snap_path) if snap_path.exists() else None,
+                    "size": len(snap_text.encode("utf-8", errors="ignore")),
                     "mtime": time.time(),
                 }
-                st.session_state["snapshot_view"] = snap
+                st.session_state["snapshot_view"] = snap_text
 
-            except Exception as e:
-                st.warning(f"スナップショット生成に失敗しました: {e!r}")
+            except Exception:
+                # export が失敗したら完全フォールバック（従来の軽量生成）
+                try:
+                    snap_text = _make_snapshot(eff_mode)
+                    st.session_state.snapshot_text = snap_text
+                    st.session_state.snapshot_meta = {"path": None, "size": len(snap_text.encode("utf-8")), "mtime": time.time()}
+                    st.session_state["snapshot_view"] = snap_text
+                except Exception as e:
+                    st.warning(f"スナップショット生成に失敗しました: {e!r}")
 
         # 2) 生成結果に基づいて鮮度/可否を再計算（←これが copy の可否に直結）
         FRESH_SEC = 300

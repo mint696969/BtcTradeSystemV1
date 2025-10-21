@@ -8,19 +8,25 @@ from btc_trade_system.common.storage_router import StorageRouter
 from . import io_safe, paths
 
 # --- context (actor/site/session/task/mode) & redact helpers ----------------
+_MASK_KEYS = ("secret", "token", "apikey", "password", "passphrase")
+
+# --- mode gate ---------------------------------------------------------------
+_LEVEL_ORDER = {"INFO": 10, "WARN": 20, "ERROR": 30, "CRIT": 40}
+
+# 監査の実行文脈（誰が/どこで/どのセッション/どの作業/どのモード/同一処理束ねID）
 _CTX: dict[str, str | None] = {
     "actor": None,
     "site": None,
     "session": None,
     "task": None,
     "mode": os.getenv("BTC_TS_MODE", "DEBUG"),
-    "trace_id": None,  # 処理束ね用
+    "trace_id": None,  # 任意の処理束ねID
 }
 
 def set_context(*, actor: str | None = None, site: str | None = None,
                 session: str | None = None, task: str | None = None,
                 mode: str | None = None, trace_id: str | None = None) -> None:
-    """監査共通文脈（誰が/どこで/どのセッション/どの作業/どのモード/同一処理束ねID）。Noneは無視。"""
+    """監査共通文脈（None は上書きしない）"""
     if actor is not None:    _CTX["actor"] = actor
     if site is not None:     _CTX["site"] = site
     if session is not None:  _CTX["session"] = session
@@ -28,26 +34,55 @@ def set_context(*, actor: str | None = None, site: str | None = None,
     if mode is not None:     _CTX["mode"] = mode
     if trace_id is not None: _CTX["trace_id"] = trace_id
 
-_MASK_KEYS = ("secret", "token", "apikey", "password", "passphrase")
+# with 構文で一時的に文脈を適用できるヘルパ
+from contextlib import contextmanager
 
-# --- mode gate ---------------------------------------------------------------
-_LEVEL_ORDER = {"INFO": 10, "WARN": 20, "ERROR": 30, "CRIT": 40}
+@contextmanager
+def context(**kwargs):
+    """
+    使い方:
+        with context(actor="worker", session="abc", mode="BOOST"):
+            audit_ok("job.start", feature="worker")
+            ...
+    ブロック終了時に文脈を元へ戻します。
+    """
+    prev = dict(_CTX)
+    try:
+        set_context(**kwargs)
+        yield
+    finally:
+        _CTX.update(prev)
 
 def _norm_level(s: str | None) -> str:
     return (s or "INFO").upper()
 
 def _norm_mode(s: str | None) -> str:
+    """
+    標準化:
+      - OFF   → OFF（完全抑止）
+      - BOOST → DIAG（詳細採取）
+      - DEBUG/PROD/DIAG はそのまま
+      - それ以外は DEBUG
+    """
     m = (s or "DEBUG").upper()
-    return m if m in ("PROD", "DEBUG", "DIAG") else "DEBUG"
+    if m == "BOOST":
+        return "DIAG"
+    if m in ("OFF", "PROD", "DEBUG", "DIAG"):
+        return m
+    return "DEBUG"
 
 def should_emit(*, mode: str | None, level: str | None, event: str, fields: dict | None = None) -> bool:
     """
     モード別の出力判定（最小ルール）:
-      - DIAG: すべて出す
+      - OFF : 何も出さない（完全抑止）
+      - DIAG: すべて出す（BOOST は DIAG と同義）
       - DEBUG: WARN以上はすべて / INFOは一部（retry/rate-limit/latency>1s/開始終了）
       - PROD: ERROR/CRIT / 重大遷移(OK->WARN|CRIT) / 開始終了のみ
     """
     m = _norm_mode(mode)
+    if m == "OFF":
+        return False
+
     lv = _norm_level(level)
     ev = (event or "").lower()
     fx = fields or {}
@@ -182,33 +217,59 @@ def audit(event: str, *, feature: str = "core", level: str = "INFO",
     _write_audit_line(line)
 
 def _payload_limit_for_mode(mode: str) -> int:
-    """モード別のpayload上限（バイト）。PROD=1KB / DEBUG=2KB / DIAG=8KB"""
+    """モード別のpayload上限（バイト）。OFF=0 / PROD=1KB / DEBUG=2KB / DIAG=8KB（BOOSTはDIAG相当）"""
     m = _norm_mode(mode)
-    return 1024 if m == "PROD" else (2048 if m == "DEBUG" else 8192)
+    if m == "OFF":
+        return 0
+    if m == "PROD":
+        return 1024
+    if m == "DEBUG":
+        return 2048
+    return 8192  # DIAG（BOOST 含む）
 
 def _truncate_payload(obj: dict, *, mode: str) -> dict:
     """
-    payload を簡易要約して上限内に収める。
-    - まずはマスク後の dict を JSON にシリアライズして長さ判定
-    - 超過時は先頭プレビューを残し、_truncated フラグと合計サイズを付与
+    payload を安全化して上限内に収める。
+    - すべての値をUTF-8シリアライズ可能に変換（datetime, Decimal, Pathなどは文字列化）
+    - JSON変換エラーを防ぎ audit.jsonl の破損を回避
+    - 超過時はプレビューを残して要約
     """
     import json
+    from decimal import Decimal
+    from pathlib import Path
+    import datetime as _dt
+
+    def _safe(v):
+        # 型に応じて安全化
+        if isinstance(v, (str, int, float, bool)) or v is None:
+            return v
+        if isinstance(v, (list, tuple, set)):
+            return [_safe(x) for x in v]
+        if isinstance(v, dict):
+            return {str(k): _safe(vv) for k, vv in v.items()}
+        if isinstance(v, (Decimal, _dt.datetime, _dt.date, Path)):
+            return str(v)
+        # 想定外の型はrepr文字列で代替
+        return repr(v)
+
+    safe_obj = _safe(obj)
     try:
-        raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+        raw = json.dumps(safe_obj, ensure_ascii=False, separators=(",", ":"))
     except Exception:
-        raw = str(obj)
+        # どうしても失敗する場合はreprで代替
+        raw = repr(safe_obj)
 
     limit = _payload_limit_for_mode(mode)
-    if len(raw.encode("utf-8")) <= limit:
-        return obj
+    encoded = raw.encode("utf-8", errors="ignore")
+    if len(encoded) <= limit:
+        return safe_obj
 
-    # プレビューは概ね limit の 70% 程度を目安に（UTF-8境界は雑に扱う）
     preview_bytes = int(limit * 0.7)
-    preview = raw.encode("utf-8")[:preview_bytes].decode("utf-8", errors="ignore")
+    preview = encoded[:preview_bytes].decode("utf-8", errors="ignore")
     return {
         "_truncated": True,
         "_preview": preview,
-        "_orig_bytes": len(raw.encode("utf-8")),
+        "_orig_bytes": len(encoded),
     }
 
 # --- convenience wrappers ----------------------------------------------------
