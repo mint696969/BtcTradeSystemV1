@@ -230,3 +230,49 @@ D) Phase 1B 最終仕上げ
   PowerShell テストログ（P0_ALL_OK=True）、UI スクリーンショット（監査ログタブ表示）確認済み。
 
 ---
+
+2025-10-22 スナップショット機能最終調整・UI 安定化
+
+作業メモ
+
+features/dash/audit_ui.py と features/audit_dev/snapshot_ui.py のリストアポイント（rp-20251022_201141）へ巻き戻し実施。
+
+プレースホルダ固定化や CSS による高さ制御など複数の UI 安定化案を検証。
+
+最終的に以前の安定版構成に復帰し、動作確認で全モード（OFF/DEBUG/BOOST）間の切替とスナップショット撮影を正常動作として確認。
+
+Git にて差分なし（git diff 結果空）を確認、完全復元完了。
+
+開発監査関連ファイルの分散化を解消し、features/audit_dev/ へ集約。これにより監査機能の依存関係と再利用性を大幅に改善。
+
+完了タスク
+
+BOOST/DEBUG スナップショット生成系の全処理確認（export_and_build_text 経由で snapshot_text / meta 更新）。
+
+エラーハンドリングおよび UI 表示（Errors & Critical(recent)）の安定化。
+
+メタバー（id/utc/size/path/age）情報の整形表示を確認。
+
+features/audit_dev 配下への監査系モジュール集約完了。
+
+boost.py: スナップショット生成ロジック。
+
+writer.py: 開発監査 I/F（audit_event / audit_error など）統合。
+
+snapshot_compose.py: メタ情報およびエラー要約生成のロジックを新設。
+
+snapshot_ui.py: スナップショット UI の表示ラッパおよび CSS 管理。
+
+既存の common/audit.py との役割重複を整理し、開発監査（dev audit）系を明確に分離。
+
+audit_ui.py 内のイベント駆動構造（トグル・スナップショット・自動撮影・オプション付加）を整理。
+
+次の候補タスク
+A) スナップショット UI の高さ固定・スクロール領域の恒常化（必要なら Streamlit DOM 補強 CSS 検討）
+B) メタ情報表示の拡張（branch/commit などを mini meta bar に追加）
+C) エクスポート済み handover の比較ビュー実装（差分比較 / 履歴閲覧）
+D) features/audit_dev 機能の REPO_MAP 自動反映テスト
+
+参照: Restore Point rp-20251022_201141 / スクリーンショット一式（OFF→DEBUG/BOOST 動作確認）
+
+---

@@ -116,27 +116,24 @@ def build_errors_summary(*, limit: int = 150) -> str:
 
 def parse_header_meta(text: str) -> dict:
     """
-    handover本文先頭の [[snapshot]] 直下に差し込んだ key: value を辞書化して返す。
-    例:
-      snapshot_id: ...
-      created_utc: ...
-      mode: BOOST
-      repo: ...  branch: ...  commit: ...  dirty: 0
-      logs_dir: ...  data_dir: ...
+    handover本文先頭の key: value ブロックを辞書化して返す。
+    先頭行が [[snapshot]] の場合はその次行から、無い場合は先頭から
+    空行が現れるまでをメタブロックとして解釈する。
     """
     if not text:
         return {}
     lines = text.splitlines()
-    try:
-        i = lines.index("[[snapshot]]")
-    except ValueError:
-        return {}
+    start = 0
+    if lines and lines[0].strip() == "[[snapshot]]":
+        start = 1
     meta: dict[str, str] = {}
-    for ln in lines[i+1:]:
-        if not ln.strip():
+    for ln in lines[start:]:
+        s = ln.strip()
+        if not s:
             break
-        if ":" not in ln:
-            continue
-        k, v = ln.split(":", 1)
+        if ":" not in s:
+            # ラベルや見出しが来たらメタ終端とみなす
+            break
+        k, v = s.split(":", 1)
         meta[k.strip()] = v.strip()
     return meta

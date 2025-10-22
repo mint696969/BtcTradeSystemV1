@@ -61,31 +61,35 @@ def repo_map_excerpt(snap_json: dict, mode: str) -> str:
 # --- copyable code-box helpers -------------------------------------------------
 
 def ensure_snapshot_code_css() -> None:
-    """st.code を10行固定（空でも潰れない）＋縦横スクロールにするCSSを一度だけ注入。"""
-    key = "_snap_code_css_done_v2"
-    if st.session_state.get(key):
-        return
+    """st.code を10行固定（空でも潰れない）＋縦横スクロールにするCSSを毎回注入。
+    rerun で DOM が再構成され <style> が外れる環境でも必ず効くように、ガードは外す。
+    """
     st.markdown(
         """
         <style>
-        /* st.code（コピーアイコン付き）を“常に10行ぶんの高さ”で表示し、横/縦スクロールさせる */
-        /* コンテナ側にも min-height を入れて、内容が空でも潰れないようにする */
+        :root { --snap-line: 1.45em; }
+
+        /* st.code の外枠（バージョン差異に両対応） */
+        [data-testid="stCode"],
         [data-testid="stCodeBlock"] {
-            min-height: calc(1.45em * 10);
+            min-height: calc(var(--snap-line) * 10) !important;
         }
-        [data-testid="stCodeBlock"] pre {
-            min-height: calc(1.45em * 10);   /* 空でも10行ぶんの高さを確保 */
-            max-height: calc(1.45em * 10);   /* 伸びすぎ防止（常に10行ぶん）*/
-            overflow: auto;                  /* 横/縦スクロール */
-            white-space: pre;                /* 折り返さず横スクロール */
-            margin: 0;
+
+        /* pre/code どちらでも 10 行ぶん固定＋スクロール */
+        [data-testid="stCode"] pre,
+        [data-testid="stCode"] code,
+        [data-testid="stCodeBlock"] pre,
+        [data-testid="stCodeBlock"] code {
+            min-height: calc(var(--snap-line) * 10) !important;
+            max-height: calc(var(--snap-line) * 10) !important;
+            overflow: auto !important;   /* 縦横スクロール */
+            white-space: pre !important; /* 折返し禁止（横スクロール） */
+            margin: 0 !important;
         }
         </style>
         """,
         unsafe_allow_html=True,
     )
-
-    st.session_state[key] = True
 
 def render_snapshot_code(text: str) -> None:
     """
@@ -93,5 +97,6 @@ def render_snapshot_code(text: str) -> None:
     高さは10行固定。引数 text はそのままコピー対象になります。
     """
     ensure_snapshot_code_css()
-    # st.code を使うと自動でコピーアイコンが付く
-    st.code(text or "", language="")
+    # 空だと DOM が簡略化され高さが潰れるケースに備えて“不可視の1文字＋改行”を入れておく
+    content = text if (text and len(text) > 0) else "\u200b\n"
+    st.code(content, language="text")

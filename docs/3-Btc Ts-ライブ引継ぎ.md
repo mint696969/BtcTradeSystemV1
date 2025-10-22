@@ -407,3 +407,72 @@ C) import パス検証と REPO_MAP 自動更新スクリプトの改修。
   PowerShell テストログ（P0_ALL_OK=True）、UI スクリーンショット（監査ログタブ表示）確認済み。
 
 ---
+
+## 2025-10-22 UI 整備と P0 完了確認
+
+- 作業メモ
+  P0 タスク群の実装・動作テストを完了。REPO_MAP 抜粋、Errors only tail 抽出、Config ハッシュ・更新時刻確認の 3 機能を全て正常に動作確認。ワンライナーテストでオールグリーンを達成。UI 側ではスナップショット表示窓の高さ固定が未反映のため、CSS 再調整を次回タスクへ持ち越し。snapshot_ui.py 内 ensure_snapshot_code_css()の min/max height 設定見直しが必要。
+
+- 完了タスク
+
+  - **REPO_MAP 抜粋機能の追加**：boost_snapshot.json から抽出し、各ファイルの#path/#desc を整理表示。最大 200 件（DEBUG は 50 件）までのサマリ出力を実装。
+  - **Errors only tail 機能の追加**：dev_audit.jsonl から ERROR/CRITICAL のみ抽出し、直近 N 件（デフォルト 150 件）を整形して UI に表示。
+  - **Config ダイジェスト機能の追加**：config/settings.yaml(.yml)を走査し、存在確認・ファイルサイズ・更新時刻・SHA256 ハッシュを取得。欠落時は N/A として扱う安全設計。
+  - **audit_ui.py の整理**：render_snapshot_code()呼び出しへ一本化し、ensure_snapshot_code_css()の二重注入を解消。スナップショット表示をコードウィンドウ方式へ統一。
+  - **テストスクリプトの整備**：PowerShell 上で REPO_MAP/ERR_ONLY/CFG を単独・一括検証できるワンライナーを追加。すべて TRUE で動作確認済み。
+
+- 次の候補タスク
+  A) snapshot_ui.py の CSS を再調整し、空でも 10 行固定かつスクロール動作を保証。
+  B) UI テスト後、P3（ディスク容量・ストレージ実体確認）へ移行。
+  C) snapshot_ui のコードと CSS 調整を分離し、他コンポーネント影響を最小化する。
+
+- 参照
+  PowerShell テストログ（P0_ALL_OK=True）、UI スクリーンショット（監査ログタブ表示）確認済み。
+
+---
+
+2025-10-22 スナップショット機能最終調整・UI 安定化
+
+作業メモ
+
+features/dash/audit_ui.py と features/audit_dev/snapshot_ui.py のリストアポイント（rp-20251022_201141）へ巻き戻し実施。
+
+プレースホルダ固定化や CSS による高さ制御など複数の UI 安定化案を検証。
+
+最終的に以前の安定版構成に復帰し、動作確認で全モード（OFF/DEBUG/BOOST）間の切替とスナップショット撮影を正常動作として確認。
+
+Git にて差分なし（git diff 結果空）を確認、完全復元完了。
+
+開発監査関連ファイルの分散化を解消し、features/audit_dev/ へ集約。これにより監査機能の依存関係と再利用性を大幅に改善。
+
+完了タスク
+
+BOOST/DEBUG スナップショット生成系の全処理確認（export_and_build_text 経由で snapshot_text / meta 更新）。
+
+エラーハンドリングおよび UI 表示（Errors & Critical(recent)）の安定化。
+
+メタバー（id/utc/size/path/age）情報の整形表示を確認。
+
+features/audit_dev 配下への監査系モジュール集約完了。
+
+boost.py: スナップショット生成ロジック。
+
+writer.py: 開発監査 I/F（audit_event / audit_error など）統合。
+
+snapshot_compose.py: メタ情報およびエラー要約生成のロジックを新設。
+
+snapshot_ui.py: スナップショット UI の表示ラッパおよび CSS 管理。
+
+既存の common/audit.py との役割重複を整理し、開発監査（dev audit）系を明確に分離。
+
+audit_ui.py 内のイベント駆動構造（トグル・スナップショット・自動撮影・オプション付加）を整理。
+
+次の候補タスク
+A) スナップショット UI の高さ固定・スクロール領域の恒常化（必要なら Streamlit DOM 補強 CSS 検討）
+B) メタ情報表示の拡張（branch/commit などを mini meta bar に追加）
+C) エクスポート済み handover の比較ビュー実装（差分比較 / 履歴閲覧）
+D) features/audit_dev 機能の REPO_MAP 自動反映テスト
+
+参照: Restore Point rp-20251022_201141 / スクリーンショット一式（OFF→DEBUG/BOOST 動作確認）
+
+---
