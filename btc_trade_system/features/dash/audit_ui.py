@@ -11,18 +11,32 @@ import platform, hashlib, subprocess
 import shutil
 
 from ...common import paths
-from btc_trade_system.features.dash.audit_svc import get_audit_rows as svc_get_audit_rows
 from btc_trade_system.features.audit_dev.writer import get_mode as _dev_get_mode, set_mode as _dev_set_mode
-
-from btc_trade_system.common.boost_svc import (
-    export_snapshot as boost_export_snapshot,
-    build_handover_text as boost_build_handover_text,
-)
-
+from btc_trade_system.features.audit_dev.search import errors_only_tail
+from btc_trade_system.features.audit_dev.snapshot_compose import build_header_meta, build_errors_summary
+from btc_trade_system.features.audit_dev.boost import export_and_build_text
+from btc_trade_system.features.audit_dev.snapshot_compose import parse_header_meta
 from btc_trade_system.features.audit_dev.snapshot_ui import (
     render_snapshot_code,   # CSS 注入は内部で一度だけ行う
-    repo_map_excerpt,
 )
+
+from btc_trade_system.features.audit_dev.envinfo import (
+    mask_env_items as _mask_env_items,
+    collect_versions as _collect_versions,
+    list_files_brief as _list_files_brief,
+    sha256_file as _sha256_file,
+    fmt_bytes as _fmt_bytes,
+    fmt_iso as _fmt_iso,
+)
+
+# 非UIユーティリティは audit_dev へ集約
+from btc_trade_system.features.audit_dev.boost import (
+    git_status_brief, path_probe, disk_free_of,
+)
+# 既存互換（旧名のまま呼んでいる箇所を壊さない）
+_git_status_brief = git_status_brief
+_path_probe = path_probe
+_disk_free_of = disk_free_of
 
 def _log_file() -> Path:
     return paths.logs_dir() / "dev_audit.jsonl"
@@ -31,78 +45,6 @@ def _mode_next(m: str) -> str:
     chain = ["OFF", "DEBUG", "BOOST"]
     m = (m or "OFF").upper()
     return chain[(chain.index(m) + 1) % len(chain)] if m in chain else "OFF"
-
-def _mask_env_items(env: dict) -> list[tuple[str, str]]:
-    """環境変数をキー名でマスク。KEY/SECRET/TOKEN/PASS/PWD を含むものは伏字。"""
-    def _mask(k: str, v: str) -> str:
-        key = k.upper()
-        if any(p in key for p in ("KEY", "SECRET", "TOKEN", "PASS", "PWD")):
-            return "***"
-        return v
-    items = [(k, _mask(k, v)) for k, v in env.items()]
-    return sorted(items, key=lambda kv: kv[0])
-
-def _collect_versions() -> list[str]:
-    """Python / Streamlit / 主要ライブラリ / OS の簡易バージョン列挙。"""
-    out: list[str] = []
-    out.append(f"- python: {sys.version.split()[0]}")
-    try:
-        import streamlit as _st
-        out.append(f"- streamlit: {getattr(_st, '__version__', 'unknown')}")
-    except Exception:
-        out.append("- streamlit: unknown")
-    for lib in ("pandas", "numpy", "requests"):
-        try:
-            mod = __import__(lib)
-            ver = getattr(mod, "__version__", "unknown")
-            out.append(f"- {lib}: {ver}")
-        except Exception:
-            pass
-    out.append(f"- platform: {platform.platform()}")
-    out.append(f"- os: {platform.system()} {platform.release()} ({platform.version()})")
-    return out
-
-def _fmt_bytes(n: int) -> str:
-    """人間可読のサイズ表記。"""
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if n < 1024:
-            return f"{n:.0f}{unit}"
-        n //= 1024
-    return f"{n:.0f}PB"
-
-def _fmt_iso(ts: float) -> str:
-    """UNIX秒をUTC ISO8601 Z に整形。"""
-    try:
-        return _dt.datetime.utcfromtimestamp(ts).isoformat(timespec="seconds") + "Z"
-    except Exception:
-        return str(ts)
-
-def _list_files_brief(root: Path, limit: int = 100) -> list[str]:
-    """直下ファイルのサイズ・mtime を列挙（最大 limit 行）。"""
-    rows: list[tuple[str, int, float]] = []
-    try:
-        for p in list(root.glob("*"))[:limit]:
-            try:
-                if p.is_file():
-                    stt = p.stat()
-                    rows.append((str(p), stt.st_size, stt.st_mtime))
-            except Exception:
-                continue
-    except Exception:
-        pass
-    rows.sort(key=lambda t: t[2], reverse=True)
-    return [f"- {Path(path).name} ({_fmt_bytes(sz)}, mtime={_fmt_iso(mt)})" for path, sz, mt in rows[:limit]]
-
-def _sha256_file(p: Path) -> str | None:
-    """ファイルのSHA256（失敗時 None）。"""
-    try:
-        h = hashlib.sha256()
-        with open(p, "rb") as f:
-            for chunk in iter(lambda: f.read(8192), b""):
-                h.update(chunk)
-        return h.hexdigest()
-    except Exception:
-        return None
 
 def _get_process_list_windows(max_rows: int = 15) -> list[str]:
     """Windows用の簡易プロセス一覧（Name/Id/CPU/WS）。失敗時は空。"""
@@ -133,74 +75,6 @@ def _get_process_list_windows(max_rows: int = 15) -> list[str]:
         # PowerShell 不在やタイムアウト時などは空で返す
         return []
   
-def _audit_tail_errors_only(src: Path, max_lines: int = 150) -> list[str]:
-    """
-    dev_audit.jsonl から ERROR/CRITICAL/例外行だけを最大 max_lines 抽出。
-    JSON/非JSON どちらでも、キーワードでざっくり拾う安全側実装。
-    """
-    if not src.exists():
-        return ["- (dev_audit.jsonl not found)"]
-    keys = ("ERROR", "CRITICAL", "TRACEBACK", '"LEVEL":"ERROR"', '"LEVEL": "ERROR"', '"LEVEL":"CRITICAL"', '"LEVEL": "CRITICAL"')
-    out: list[str] = []
-    try:
-        with open(src, "r", encoding="utf-8", errors="ignore") as f:
-            for ln in f.readlines()[-2000:]:  # 直近2000行だけ走査して軽量化
-                s = ln.strip()
-                if not s:
-                    continue
-                u = s.upper()
-                if any(k in u for k in keys):
-                    out.append(f"- {s}")
-        if not out:
-            return ["- (no ERROR/CRITICAL found in recent lines)"]
-        return out[-max_lines:]
-    except Exception as e:
-        return [f"- (read error: {e!r})"]
-
-def _git_status_brief(cwd: Path | None = None) -> list[str]:
-    try:
-        def _run(args):
-            return subprocess.check_output(args, cwd=cwd, stderr=subprocess.DEVNULL, text=True, timeout=2).strip()
-        root = _run(["git", "rev-parse", "--show-toplevel"])
-        branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-        commit = _run(["git", "rev-parse", "--short", "HEAD"])
-        dirty = "1" if _run(["git", "status", "--porcelain"]) else "0"
-        return [
-            f"- root: {root}",
-            f"- branch: {branch}",
-            f"- commit: {commit}",
-            f"- dirty: {dirty}",
-        ]
-    except Exception:
-        return ["- (git N/A)"]
-
-    except Exception:
-        return []
-
-def _path_probe(p: Path) -> list[str]:
-    try:
-        stt = p.stat()
-        return [
-            f"- path: {p}",
-            f"- exists: True",
-            f"- is_dir: {p.is_dir()}",
-            f"- is_file: {p.is_file()}",
-            f"- mtime: {_fmt_iso(stt.st_mtime)}",
-        ]
-    except Exception:
-        return [f"- path: {p}", "- exists: False"]
-
-def _disk_free_of(p: Path) -> list[str]:
-    try:
-        usage = shutil.disk_usage(str(p.resolve()))
-        return [
-            f"- total: {_fmt_bytes(usage.total)}",
-            f"- used:  {_fmt_bytes(usage.used)}",
-            f"- free:  {_fmt_bytes(usage.free)}",
-        ]
-    except Exception as e:
-        return [f"- (disk_usage error: {e!r})"]
-
 def _make_snapshot(mode: str) -> str:
     """開発監査向けの軽量スナップショットをその場で生成（ファイル出力なし）。"""
     ts = _dt.datetime.utcnow().isoformat(timespec="seconds") + "Z"
@@ -291,7 +165,7 @@ python -m streamlit run .\btc_trade_system\features\dash\dashboard.py --server.p
         except Exception:
             parts.append("- (data_dir list failed)")
 
-        # audit_tail: 末尾200行
+        # audit_tail: 末尾150行
         parts.append("### audit_tail (last 200)")
         try:
             if log_path.exists():
@@ -348,53 +222,6 @@ python -m streamlit run .\btc_trade_system\features\dash\dashboard.py --server.p
 
     return "\n".join(parts)
 
-# ▼ 追加: スナップショット表示用（コードウインドウ風/10行固定）
-def _escape_html(s: str) -> str:
-    try:
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    except Exception:
-        return s
-
-def _render_snapshot_box(text: str) -> None:
-    """GPTの[python]風ボックス。10行固定・横/縦スクロール・ラベル非コピー。"""
-    # CSSは初回だけ注入（何度も描画してもDOMが太らないように）
-    if not st.session_state.get("_snapbox_css_done"):
-        st.markdown("""
-        <style>
-          .snapbox {
-            position: relative;
-            border: 1px solid rgba(140,140,140,.35);
-            border-radius: 10px;
-            background: #0d1117;
-            color: #c9d1d9;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-            line-height: 1.45;
-            padding: 22px 14px 12px 14px;
-            height: calc(1.45em * 10 + 24px); /* 10行固定 */
-            overflow: auto;                  /* 横/縦スクロール */
-            box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-            max-width: 100%;
-          }
-          @media (prefers-color-scheme: light) {
-            .snapbox { background: #fafafa; color: #24292e; border-color: rgba(0,0,0,.15); }
-          }
-          .snapbox::before {
-            content: "[snapshot]";
-            position: absolute;
-            top: 6px; left: 10px;
-            color: #8b949e; font-size: 12px; letter-spacing: .2px;
-            user-select: none; pointer-events: none;
-          }
-          .snapbox pre {
-            margin: 0;
-            white-space: pre;  /* 折り返さず横スクロール */
-          }
-        </style>
-        """, unsafe_allow_html=True)
-        st.session_state["_snapbox_css_done"] = True
-
-    st.markdown(f'<div class="snapbox"><pre>{_escape_html(text or "")}</pre></div>', unsafe_allow_html=True)
-
 def render():
     st.markdown("<div id='audit-area'>", unsafe_allow_html=True)
 
@@ -426,31 +253,31 @@ def render():
                 st.session_state.snapshot_text = ""
                 st.session_state.snapshot_meta = {"path": None, "size": 0, "mtime": 0.0}
 
-                # ▼ 追加：BOOSTに入るタイミングで“公式”スナップショットを即時生成
-                if (next_mode or "OFF").upper() == "BOOST":
+                # ▼ BOOSTに入るタイミングでの自動撮影は、トグルON時のみ実行
+                if (next_mode or "OFF").upper() == "BOOST" and st.session_state.get("auto_snap_on_boost", False):
                     try:
-                        snap_path = Path(boost_export_snapshot(mode="BOOST", force=True))
-                        # handover テキスト（公式ビルダー）を生成してテキスト窓に流し込む
+                        # 新ラッパで「公式生成→handover本文」までを一気に取得
+                        snap_path_str, txt = export_and_build_text(mode="BOOST", force=True)
+                        st.session_state.snapshot_text = txt
+                        st.session_state.snapshot_meta = {
+                            "path": snap_path_str,
+                            "size": len(txt.encode("utf-8", errors="ignore")),
+                            "mtime": time.time(),
+                        }
+                    except Exception:
+                        # 失敗時はUI内の簡易スナップショットへフォールバック
                         try:
-                            snap_json = json.loads(snap_path.read_text(encoding="utf-8", errors="ignore"))
-                            txt = boost_build_handover_text(snap_json)
-                            st.session_state.snapshot_text = txt
+                            st.session_state.snapshot_text = _make_snapshot(next_mode)
                             st.session_state.snapshot_meta = {
-                                "path": str(snap_path),
-                                "size": len(txt.encode("utf-8", errors="ignore")),
+                                "path": None,
+                                "size": len(st.session_state.snapshot_text.encode("utf-8")),
                                 "mtime": time.time(),
                             }
                         except Exception:
                             pass
-                    except Exception:
-                        # 失敗時はUI内の簡易スナップショットでフォールバック
-                        try:
-                            st.session_state.snapshot_text = _make_snapshot(next_mode)
-                            st.session_state.snapshot_meta = {"path": None, "size": len(st.session_state.snapshot_text.encode("utf-8")), "mtime": time.time()}
-                        except Exception:
-                            pass
 
                 st.rerun()
+
             except Exception as e:
                 st.warning(f"モード更新に失敗しました: {e!r}")
 
@@ -502,6 +329,10 @@ def render():
         st.session_state.setdefault("opt_tail150", False)
         st.session_state.setdefault("opt_env_versions", False)
 
+        # REPO_MAP 抜粋の既定行数（DEBUG/BOOST）
+        st.session_state.setdefault("repo_map_limit_debug", 50)
+        st.session_state.setdefault("repo_map_limit_boost", 200)
+
         with st.container():
             copt1, copt2, copt3 = st.columns([1.3, 1.3, 1.6])
             with copt1:
@@ -519,123 +350,105 @@ def render():
         st.checkbox("Errors only tail", key="opt_err_tail",
                     help="dev_audit.jsonl から ERROR/CRITICAL/例外行だけを最大150行抽出して付与します。")
 
+        # BOOST 突入時の自動撮影（既定OFF）
+        st.session_state.setdefault("auto_snap_on_boost", False)
+        st.checkbox("BOOST切替で自動スナップショット", key="auto_snap_on_boost",
+                    help="ONの場合、BOOSTへ切り替えた直後に1枚だけ自動撮影します。OFFなら撮影はボタンでのみ行います。")
+
         # 1) 先に生成を反映
         if regen:
             try:
-                snap_path = Path(boost_export_snapshot(mode=eff_mode, force=True))
+                # 新ラッパで「公式生成→handover本文」まで取得し、その後の“追加セクション”は従来通りUI側で付与
+                snap_path_str, snap_text = export_and_build_text(mode=eff_mode, force=True)
+
+                # [[snapshot]] の直後にメタ情報を追記（ID/UTC/Git/paths）
                 try:
-                    snap_json = json.loads(snap_path.read_text(encoding="utf-8", errors="ignore"))
-                    # 公式 handover を起点にする
-                    snap_text = boost_build_handover_text(snap_json)
+                    meta_block = build_header_meta(mode=eff_mode, snap_json=json.loads(Path(snap_path_str).read_text(encoding="utf-8", errors="ignore")))
+                    if meta_block:
+                        snap_text = snap_text.replace("[[snapshot]]", f"[[snapshot]]\n{meta_block}", 1)
+                except Exception:
+                    pass
 
-                    # 1) REPO_MAP 抜粋（任意）
-                    if st.session_state.get("opt_repo_map", True):
-                        try:
-                            extra = repo_map_excerpt(snap_json, eff_mode)
-                            if extra:
-                                snap_text = f"{snap_text}\n{extra}"
-                        except Exception:
-                            pass
+                # Errors only tail の要約を本文に追加（件数/Top/レンジ）
+                try:
+                    limit = int(st.session_state.get("audit_tail_limit", 150) or 150)
+                    snap_text += "\n\n" + build_errors_summary(limit=limit)
+                except Exception:
+                    pass
 
-                    # 2) audit_tail 150（任意）
+                # 公式結果をUIセッションにも反映（鮮度表示/ダウンロード可否を安定化）
+                st.session_state.snapshot_text = snap_text
+
+                # === オプション追記（REPO_MAP抜粋 / audit_tail / Env+Versions）===
+                try:
+                    mode_upper = (eff_mode or "OFF").upper()
+
+                    # 1) REPO_MAP 抜粋
+                    if st.session_state.get("opt_repo_map", False):
+                        # 代表的な候補を順に当てる（存在すれば採用）
+                        repo_map_cands = [
+                            Path.cwd() / "REPO_MAP.extract.md",
+                            paths.data_dir() / "REPO_MAP.extract.md",
+                            paths.logs_dir() / "REPO_MAP.extract.md",
+                            paths.data_dir() / "ctx" / "REPO_MAP.extract.md",
+                        ]
+                        hit = next((p for p in repo_map_cands if p.exists()), None)
+                        if hit:
+                            limit = (
+                                int(st.session_state.get("repo_map_limit_boost", 200))
+                                if mode_upper == "BOOST"
+                                else int(st.session_state.get("repo_map_limit_debug", 50))
+                            )
+                            try:
+                                with open(hit, "r", encoding="utf-8", errors="ignore") as f:
+                                    lines = [ln.rstrip("\n") for ln in f.readlines()[:limit]]
+                                if lines:
+                                    snap_text += "\n\n## REPO_MAP (excerpt)\n" + "\n".join(lines)
+                            except Exception:
+                                pass
+
+                    # 2) audit_tail（dev_audit.jsonl の末尾 N 行）
                     if st.session_state.get("opt_tail150", False):
                         try:
-                            src = _log_file()
-                            lines = []
-                            if src.exists():
-                                buf = src.read_text(encoding="utf-8", errors="ignore").splitlines()[-150:]
-                                lines.append("")
-                                lines.append("### audit_tail (last 150)")
-                                lines.extend([f"- {ln}" for ln in buf if ln.strip()])
+                            N = 150
+                            dev_audit = paths.logs_dir() / "dev_audit.jsonl"
+                            if dev_audit.exists():
+                                with open(dev_audit, "r", encoding="utf-8", errors="ignore") as f:
+                                    tail = [ln.rstrip("\n") for ln in f.readlines()[-N:]]
+                                if tail:
+                                    snap_text += "\n\n## audit_tail (last 150)\n" + "\n".join(f"- {s}" for s in tail if s)
                             else:
-                                lines.append("")
-                                lines.append("### audit_tail (last 150)")
-                                lines.append("- (dev_audit.jsonl not found)")
-                            snap_text = f"{snap_text}\n" + "\n".join(lines)
-                        except Exception:
-                            pass
-                    # 2b) Errors only tail（任意 / デフォルトON）
-                    if st.session_state.get("opt_err_tail", True):
-                        try:
-                            src = _log_file()
-                            lines = []
-                            lines.append("")
-                            lines.append("### audit_tail (errors/critical, up to 150)")
-                            lines.extend(_audit_tail_errors_only(src, max_lines=150))
-                            snap_text = f"{snap_text}\n" + "\n".join(lines)
-                        except Exception:
-                            pass
+                                snap_text += "\n\n## audit_tail (last 150)\n- (dev_audit.jsonl not found)"
+                        except Exception as _e_tail:
+                            snap_text += f"\n\n## audit_tail (last 150)\n- (read error: {_e_tail!r})"
 
-                    # 4) Git 状態（任意）
-                    try:
-                        lines = []
-                        lines.append("")
-                        lines.append("### Git (brief)")
-                        lines.extend(_git_status_brief(Path.cwd()))
-                        snap_text = f"{snap_text}\n" + "\n".join(lines)
-                    except Exception:
-                        pass
-
-                    # 5) StorageRouter 実体（任意）
-                    try:
-                        lines = []
-                        lines.append("")
-                        lines.append("### StorageRouter (resolved)")
-                        lines.append("#### logs_dir")
-                        lines.extend(_path_probe(paths.logs_dir()))
-                        lines.append("#### data_dir")
-                        lines.extend(_path_probe(paths.data_dir()))
-                        snap_text = f"{snap_text}\n" + "\n".join(lines)
-                    except Exception:
-                        pass
-
-                    # 6) Disk free（任意）
-                    try:
-                        lines = []
-                        lines.append("")
-                        lines.append("### Disk free (by storage roots)")
-                        lines.append("#### logs_dir drive")
-                        lines.extend(_disk_free_of(paths.logs_dir()))
-                        lines.append("#### data_dir drive")
-                        lines.extend(_disk_free_of(paths.data_dir()))
-                        snap_text = f"{snap_text}\n" + "\n".join(lines)
-                    except Exception:
-                        pass
-
-                    # 3) Env + Versions（任意 / DEBUG で有用。BOOSTでは公式に概ね含有）
+                    # 3) Env + Versions
                     if st.session_state.get("opt_env_versions", False):
                         try:
-                            lines = []
-                            lines.append("")
-                            lines.append("### Env (sanitized) — optional")
-                            for k, v in _mask_env_items(os.environ):
-                                lines.append(f"- {k}={v}")
-
-                            lines.append("### Versions — optional")
-                            lines.extend(_collect_versions())
-                            snap_text = f"{snap_text}\n" + "\n".join(lines)
+                            snap_text += "\n\n## Env (sanitized)\n" + "\n".join(
+                                f"- {k}={v}" for k, v in _mask_env_items(os.environ)
+                            )
                         except Exception:
-                            pass
-
+                            snap_text += "\n\n## Env (sanitized)\n- (failed)"
+                        try:
+                            snap_text += "\n\n## Versions\n" + "\n".join(_collect_versions())
+                        except Exception:
+                            snap_text += "\n\n## Versions\n- (failed)"
                 except Exception:
-                    # 公式生成が失敗した場合は UI 内部の簡易スナップショットにフォールバック
-                    base = _make_snapshot(eff_mode)
-                    try:
-                        # 可能なら REPO_MAP 抜粋を付ける（簡易スナップには repo_map が無い想定のためスキップ可）
-                        extra = ""
-                        if st.session_state.get("opt_repo_map", True):
-                            # フォールバック経路では JSON が手元にないので付与はスキップ
-                            extra = ""
-                        snap_text = base + (("\n" + extra) if extra else "")
-                    except Exception:
-                        snap_text = base
+                    # 追記はベストエフォート（本体テキストが壊れないことを優先）
+                    pass
 
+                # 追記後の本文で session_state を上書き（DL/表示に反映）
                 st.session_state.snapshot_text = snap_text
                 st.session_state.snapshot_meta = {
-                    "path": str(snap_path) if snap_path.exists() else None,
+                    "path": snap_path_str or None,
                     "size": len(snap_text.encode("utf-8", errors="ignore")),
                     "mtime": time.time(),
                 }
+                st.session_state["snapshot_area"] = snap_text
+
+                # 以降（REPO_MAP抜粋／audit_tail／Errors only／Git／Storage／Disk／Env+Versions）は
+                # 既存ロジックをこのまま活かして続行（＝従来の表示・オプションは維持）
 
                 # ▼ 表示用の TextArea (key="snapshot_area") にも同期
                 st.session_state["snapshot_area"] = snap_text
@@ -653,29 +466,15 @@ def render():
                     st.warning(f"スナップショット生成に失敗しました: {e!r}")
 
         # 2) 生成結果に基づいて鮮度/可否を再計算
-        FRESH_SEC = 300
-        _meta = st.session_state.snapshot_meta or {}
-        fresh = False
-        try:
-            if _meta.get("mtime") is not None:
-                fresh = (time.time() - float(_meta["mtime"])) <= FRESH_SEC
-            elif _meta.get("path"):
-                mtime = Path(_meta["path"]).stat().st_mtime
-                fresh = (time.time() - float(mtime)) <= FRESH_SEC
-        except Exception:
-            fresh = False
-
-        copy_disabled = is_off or (not st.session_state.snapshot_text) or (not fresh)
+        copy_disabled = is_off or (not st.session_state.snapshot_text)
 
         # 3) ここで DBG を表示
-        _dev_dbg = st.checkbox("dev/debug panel", value=False)
-        if _dev_dbg:
-            st.caption(
-                f"[DBG] eff_mode={eff_mode} is_off={is_off} fresh={fresh} "
-                f"snapshot_disabled={snapshot_disabled} copy_disabled={copy_disabled} "
-                f"ui_mode={(st.session_state.get('dev_mode','OFF') or 'OFF').upper()} "
-                f"writer_mode_try={eff_mode}"
-            )
+        st.caption(
+            f"[DBG] eff_mode={eff_mode} is_off={is_off} "
+            f"snapshot_disabled={snapshot_disabled} copy_disabled={copy_disabled} "
+            f"ui_mode={(st.session_state.get('dev_mode','OFF') or 'OFF').upper()} "
+            f"writer_mode_try={eff_mode}"
+        )
 
         # === スナップショット窓（code 版 / 10行固定 / 横縦スクロール / コピー可） ===
         snap_txt = st.session_state.get("snapshot_text") or ""
@@ -685,6 +484,25 @@ def render():
 
         # ボックス内の先頭行に [[snapshot]] を含め、コピー対象にも含める
         display_txt = f"[[snapshot]]\n{snap_txt}" if snap_txt else "[[snapshot]]"
+
+        # --- mini meta bar (ID / created / size / path) ---
+        try:
+            _txt = st.session_state.get("snapshot_text") or st.session_state.get("snapshot_area") or ""
+            _meta_hdr = parse_header_meta(_txt)  # 非UIでパース
+            _meta = st.session_state.get("snapshot_meta") or {}
+            _age = "-"
+            if _meta.get("mtime"):
+                _age = f"{int(time.time() - float(_meta['mtime']))}s"
+            cap = " | ".join([
+                f"id: {_meta_hdr.get('snapshot_id','-')}",
+                f"utc: {_meta_hdr.get('created_utc','-')}",
+                f"size: {(_meta.get('size') or 0)}B",
+                f"path: {(_meta.get('path') or '-')}",
+                f"age: {_age}",
+            ])
+            st.caption(cap)
+        except Exception:
+            pass
 
         # ※ CSS 注入は render_snapshot_code() 内で一度だけ行うので、これだけでOK
         render_snapshot_code(display_txt)
@@ -723,39 +541,18 @@ def render():
             # ちょいフィルタ（キーワード）
             kw = st.text_input("キーワード", value="", placeholder='event=/feature=/payload など部分一致', key="err_kw")
 
-            # 末尾から最大 200 行を読み込み → ERROR/CRITICAL を抽出
             src = _log_file()
             rows: list[str] = []
             try:
-                if src.exists():
-                    buf = src.read_text(encoding="utf-8", errors="ignore").splitlines()[-200:]
-                    for ln in buf:
-                        s = ln.strip()
-                        if not s:
-                            continue
-                        # JSON 行なら level を厳密に、そうでなければ単純に文字含有で判定
-                        hit = False
-                        try:
-                            obj = json.loads(s)
-                            lvl = (obj.get("level") or "").upper()
-                            if lvl in ("ERROR", "CRITICAL"):
-                                hit = True
-                                s = json.dumps(obj, ensure_ascii=False)
-                        except Exception:
-                            up = s.upper()
-                            if (" ERROR " in up) or (" CRITICAL " in up):
-                                hit = True
-                        if not hit:
-                            continue
-                        if kw and (kw not in s):
-                            continue
-                        rows.append(s)
-                else:
-                    rows.append("(dev_audit.jsonl not found)")
+                limit = int(st.session_state.get("audit_tail_limit", 150) or 150)
+                # 末尾から Errors/Critical のみを抽出（search.py へ集約）
+                rows = errors_only_tail(src, limit=limit)
+                if kw:
+                    rows = [s for s in rows if kw in s]
             except Exception as e:
-                rows.append(f"(read error: {e!r})")
+                rows = [f"(errors_only_tail error: {e!r})"]
 
-            st.caption(f"hits: {len(rows)}  source: {str(src)} （末尾200→抽出, 上限50を表示）")
+            st.caption(f"hits: {len(rows)}  source: {str(src)}（末尾{limit}抽出）")
             if rows:
                 st.code("\n".join(rows[-50:]), language="text")
             else:

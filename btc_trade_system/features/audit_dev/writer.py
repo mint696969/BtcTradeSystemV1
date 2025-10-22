@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from btc_trade_system.common.paths import logs_dir
-from btc_trade_system.common import boost_svc
 
 # === 定数（固定仕様） ===
 _LOG_DIR = Path(logs_dir())  # 正規のログディレクトリ D:\BtcTS_V1\logs など
@@ -121,6 +120,67 @@ def _tail_replace_locked(path: Path, keep_bytes: int) -> None:
         os.fsync(wf.fileno())
     os.replace(tmp, path)
 
+# === マスキング & サイズ制御（正準） ===
+import re
+
+_MASK_KEY_RE = re.compile(
+    r"(?i)(key|secret|token|pass|pwd|cookie|authorization|bearer|credential|sign|private|api[_-]?key|access[_-]?key|refresh)"
+)
+
+def _mask_value(v: Any) -> Any:
+    if v is None:
+        return None
+    if not isinstance(v, (str, bytes)):
+        return "[REDACTED]" if isinstance(v, (dict, list, tuple, set)) else v
+    if isinstance(v, bytes):
+        return "[REDACTED]"
+    s = v
+    if len(s) < 8:
+        return "[REDACTED]"
+    return s[:4] + ("*" * max(4, len(s) - 8)) + s[-4:]
+
+def _redact_payload(obj: Any) -> Any:
+    try:
+        if isinstance(obj, dict):
+            return {k: (_mask_value(v) if _MASK_KEY_RE.search(k) else _redact_payload(v)) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [_redact_payload(x) for x in obj]
+        return obj
+    except Exception:
+        return "[REDACTED]"
+
+def _truncate_payload(obj: Any, *, field_limit_bytes: int = 2 * 1024, line_limit_bytes: int = 10 * 1024) -> Any:
+    """
+    - 各フィールド最大 ~2KB
+    - 1行（JSONL）最大 ~10KB を目安に縮約（超過時は '...(truncated N bytes)' を付記）
+    """
+    def _clip_str(s: str) -> str:
+        b = s.encode("utf-8", "ignore")
+        if len(b) <= field_limit_bytes:
+            return s
+        over = len(b) - field_limit_bytes
+        return b[:field_limit_bytes].decode("utf-8", "ignore") + f"...(truncated {over} bytes)"
+
+    def _walk(x: Any) -> Any:
+        if isinstance(x, dict):
+            return {k: _walk(v) for k, v in x.items()}
+        if isinstance(x, list):
+            return [_walk(v) for v in x]
+        if isinstance(x, str):
+            return _clip_str(x)
+        return x
+
+    trimmed = _walk(obj)
+    # 仕上げに行全体の上限をざっくり担保
+    try:
+        blob = json.dumps(trimmed, ensure_ascii=False, separators=(",", ":")).encode("utf-8", "ignore")
+        if len(blob) <= line_limit_bytes:
+            return trimmed
+        over = len(blob) - line_limit_bytes
+        return {"payload_truncated": True, "note": f"line truncated {over} bytes"}
+    except Exception:
+        return trimmed
+
 def emit(event: str, level: str = "INFO", **fields: Any) -> None:
     mode = get_mode()
     if not _should_emit(mode, level):
@@ -128,18 +188,24 @@ def emit(event: str, level: str = "INFO", **fields: Any) -> None:
 
     _ensure_parents()
 
+    # 入力payloadを先に取り出し
+    user_payload = fields if fields else None
+    if user_payload is not None:
+        user_payload = _redact_payload(user_payload)
+        user_payload = _truncate_payload(user_payload)
+
     rec: Dict[str, Any] = {
         "ts": _ts_iso(),
         "mode": mode,
         "event": event if event.startswith("dev.") else f"dev.{event}",
-        "feature": str(fields.pop("feature", "dev")),
+        "feature": str(fields.pop("feature", "dev")) if fields and "feature" in fields else "dev",
         "level": level.upper(),
-        "actor": fields.pop("actor", None),
-        "site": fields.pop("site", None),
-        "session": fields.pop("session", None),
-        "task": fields.pop("task", None),
-        "trace_id": fields.pop("trace_id", None),
-        "payload": fields if fields else None,
+        "actor": (fields.pop("actor", None) if fields else None),
+        "site": (fields.pop("site", None) if fields else None),
+        "session": (fields.pop("session", None) if fields else None),
+        "task": (fields.pop("task", None) if fields else None),
+        "trace_id": (fields.pop("trace_id", None) if fields else None),
+        "payload": user_payload,
     }
 
     _LOCKFILE.parent.mkdir(parents=True, exist_ok=True)
@@ -160,6 +226,11 @@ def emit(event: str, level: str = "INFO", **fields: Any) -> None:
     except Exception:
         pass
 
+def audit_debug(event: str, **kw): return emit(event, level="DEBUG", **kw)
+def audit_info(event: str, **kw):  return emit(event, level="INFO", **kw)
+def audit_warn(event: str, **kw):  return emit(event, level="WARN", **kw)
+def audit_error(event: str, **kw): return emit(event, level="ERROR", **kw)
+def audit_crit(event: str, **kw):  return emit(event, level="CRIT", **kw)
 
 if __name__ == "__main__":
     set_mode("DEBUG")

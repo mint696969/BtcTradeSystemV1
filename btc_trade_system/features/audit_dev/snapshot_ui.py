@@ -27,22 +27,37 @@ def repo_map_excerpt(snap_json: dict, mode: str) -> str:
         repo_map = snap_json.get("repo_map", {}) if isinstance(snap_json, dict) else {}
         if not repo_map:
             return ""
+
         total = int(repo_map.get("total", 0) or 0)
         items = repo_map.get("items") or []
+
+        # --- 重複除去（path を大文字小文字無視＆区切り統一） ---
+        seen = set()
+        uniq_items = []
+        for it in items:
+            p = (it.get("path", "") or "").strip()
+            key = p.lower().replace("\\", "/")
+            if key and key not in seen:
+                seen.add(key)
+                uniq_items.append(it)
+
         show_n = 50 if (mode or "").upper() == "DEBUG" else 200
-        head = items[:show_n]
-        lines = []
+        head = uniq_items[:show_n]
+
+        lines: list[str] = []
         lines.append("")
         lines.append("## REPO_MAP (excerpt)")
-        lines.append(f"- showing: {min(len(items), show_n)}/{total}")
+        # 表示件数はユニーク後ベースに合わせる
+        lines.append(f"- showing: {min(len(uniq_items), show_n)}/{len(uniq_items)}")
         for it in head:
             pth = it.get("path", "")
             desc = it.get("desc", "")
             lines.append(f"- {pth} — {desc}")
+
         return "\n".join(lines)
     except Exception:
         return ""
-    
+
 # --- copyable code-box helpers -------------------------------------------------
 
 def ensure_snapshot_code_css() -> None:

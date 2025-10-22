@@ -1,30 +1,42 @@
 # path: ./tmp/dev_audit_smoke.py
-# desc: 開発監査(OFF/DEBUG/BOOST)のスモーク。dev_audit.jsonl の動作確認。
+# desc: dev監査の書き込み→Errors only 抽出のスモーク（writer/search の最短動作確認）
 
-import sys, pathlib, time
-_repo_root = pathlib.Path(__file__).resolve().parents[1]
-if str(_repo_root) not in sys.path:
-    sys.path.insert(0, str(_repo_root))
+from __future__ import annotations
+import sys, time
+from pathlib import Path
 
-from btc_trade_system.features.audit_dev.writer import set_mode, get_mode, dev_ok, dev_err
-from btc_trade_system.common.audit import set_context
+# --- ensure repo root on sys.path ---
+REPO_ROOT = Path(__file__).resolve().parent.parent  # .../BtcTradeSystemV1
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-set_context(trace_id="DEV-TRACE-001", actor="tester", site="local", session="S-DEV", task="dev.audit")
+from btc_trade_system.features.audit_dev.writer import audit_info, audit_error, set_mode, get_mode
+from btc_trade_system.features.audit_dev.search import errors_only_tail
+from btc_trade_system.common import paths
 
-# 1) OFF: 何も出ない
-set_mode("OFF")
-dev_ok("dev.off.should_skip", feature="audit_dev", payload={"n": 1})
+def main() -> int:
+    logs = paths.logs_dir()
+    target = logs / "dev_audit.jsonl"
 
-# 2) DEBUG: 重要情報のみ出力(should_emit準拠)
-set_mode("DEBUG")
-dev_err("dev.debug.err", feature="audit_dev", endpoint="/dbg", code=501, cause="DBG_ERR")
-dev_ok("dev.debug.info", feature="audit_dev", payload={"info": "may sample"})
+    # 0) まずはモードを DEBUG に（OFF だと間引かれる場合があります）
+    set_mode("DEBUG")
+    cur = get_mode()
+    print(f"MODE={cur}")
 
-# 3) BOOST: 全部出る + 大きいpayloadはDIAG上限で要約
-set_mode("BOOST")
-big = {"k": "x" * (10 * 1024)}
-dev_ok("dev.boost.big", feature="audit_dev", payload=big)
-dev_ok("dev.boost.info", feature="audit_dev", payload={"ok": True})
+    # 1) 書き込み（INFO と ERROR）
+    audit_info("dev.smoke.info", feature="audit_dev", payload={"ok": True, "msg": "hello"})
+    audit_error("dev.smoke.error", feature="audit_dev", payload={"ng": True, "msg": "boom"})
+    time.sleep(0.1)  # fsync済みでも念のため
 
-print("mode:", get_mode())
-print("done")
+    # 2) Errors only tail を取得
+    rows = errors_only_tail(target, limit=50)
+
+    # 3) 期待：直近の ERROR が >=1
+    hits = sum("dev.smoke.error" in r for r in rows)
+    ok = hits >= 1
+    print(f"FILE: {target}")
+    print(f"ROWS(HITS): {len(rows)}  EXPECT>=1  FOUND: {hits}")
+    return 0 if ok else 2
+
+if __name__ == "__main__":
+    sys.exit(main())

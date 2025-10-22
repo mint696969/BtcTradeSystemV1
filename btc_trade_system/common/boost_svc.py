@@ -359,9 +359,21 @@ def make_snapshot(mode: Literal["DEBUG", "BOOST"]) -> Dict[str, Any]:
         # REPO_MAP（BOOSTのみ・上限300件まで出力、総数は total に入れる）
         try:
             _all = _build_repo_map(repo_root, max_files=1000)
+
+            # --- 重複排除：path を大小文字無視＆区切り統一で一意化 ---
+            _seen: set[str] = set()
+            _uniq: list[dict[str, str]] = []
+            for it in _all:
+                p = (it.get("path", "") or "").strip()
+                key = p.lower().replace("\\", "/")
+                if key and key not in _seen:
+                    _seen.add(key)
+                    _uniq.append(it)
+
+            # 一意化後の件数を total に反映し、items は 300 件で打ち切り
             snapshot["repo_map"] = {
-                "total": len(_all),
-                "items": _all[:300],  # handover/boost_snapshot の肥大化を防ぐ
+                "total": len(_uniq),
+                "items": _uniq[:300],  # handover/boost_snapshot の肥大化を防ぐ
             }
         except Exception:
             snapshot["repo_map"] = {"total": 0, "items": []}
