@@ -7,9 +7,7 @@ import streamlit as st
 import json, time
 from pathlib import Path
 import os, sys, datetime as _dt
-import platform, hashlib, subprocess
-import shutil
-
+import subprocess
 from ...common import paths
 from btc_trade_system.features.audit_dev.writer import get_mode as _dev_get_mode, set_mode as _dev_set_mode
 from btc_trade_system.features.audit_dev.search import errors_only_tail
@@ -20,6 +18,28 @@ from btc_trade_system.features.audit_dev.snapshot_ui import (
     render_snapshot_code,   # CSS 注入は内部で一度だけ行う
 )
 
+def _inject_current_mode_css(_: str) -> None:
+    """現在モードのボタン（type='primary'）を灰ベタ＋白抜きに。その他は既存の色設計のまま。"""
+    st.markdown(
+        """
+        <style>
+        /* 左列ブロックのボタン間隔（少し詰める） */
+        .mode-col .stButton>button { margin-bottom: 6px; padding-top: 6px; padding-bottom: 6px; }
+
+        /* 現在モードだけ type='primary' にし、ここで色を強制 */
+        .mode-col [data-testid="baseButton-primary"] {
+            background-color: #6b7280 !important;   /* gray-500 */
+            color: #ffffff !important;
+            border-color: #6b7280 !important;
+        }
+        .mode-col [data-testid="baseButton-primary"]:hover {
+            filter: brightness(0.95);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 from btc_trade_system.features.audit_dev.envinfo import (
     mask_env_items as _mask_env_items,
     collect_versions as _collect_versions,
@@ -28,15 +48,6 @@ from btc_trade_system.features.audit_dev.envinfo import (
     fmt_bytes as _fmt_bytes,
     fmt_iso as _fmt_iso,
 )
-
-# 非UIユーティリティは audit_dev へ集約
-from btc_trade_system.features.audit_dev.boost import (
-    git_status_brief, path_probe, disk_free_of,
-)
-# 既存互換（旧名のまま呼んでいる箇所を壊さない）
-_git_status_brief = git_status_brief
-_path_probe = path_probe
-_disk_free_of = disk_free_of
 
 def _log_file() -> Path:
     return paths.logs_dir() / "dev_audit.jsonl"
@@ -161,11 +172,12 @@ python -m streamlit run .\btc_trade_system\features\dash\dashboard.py --server.p
             parts.append("- (data_dir list failed)")
 
         # audit_tail: 末尾150行
-        parts.append("### audit_tail (last 200)")
+        parts.append("### audit_tail (last 150)")
         try:
             if log_path.exists():
                 with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
                     tail200 = f.readlines()[-150:]
+
                 for ln in tail200:
                     s = ln.rstrip("\n")
                     if s:
@@ -240,12 +252,9 @@ def render():
                     _dev_set_mode(target)
                     st.session_state.dev_mode = target
                     st.session_state["mode_changed_at_ms"] = int(time.time() * 1000)
-
-                    # スナップショットのUI側キャッシュを毎回リセット
                     st.session_state.snapshot_text = ""
                     st.session_state.snapshot_meta = {"path": None, "size": 0, "mtime": 0.0}
 
-                    # BOOST選択時のみ自動撮影（オプションON時）
                     if (target or "OFF").upper() == "BOOST" and st.session_state.get("auto_snap_on_boost", False):
                         try:
                             snap_path_str, txt = export_and_build_text(mode="BOOST", force=True)
@@ -256,7 +265,6 @@ def render():
                                 "mtime": time.time(),
                             }
                         except Exception:
-                            # 失敗時は簡易スナップショットへフォールバック
                             try:
                                 st.session_state.snapshot_text = _make_snapshot(target)
                                 st.session_state.snapshot_meta = {
@@ -266,24 +274,39 @@ def render():
                                 }
                             except Exception:
                                 pass
-
                     st.rerun()
-
                 except Exception as e:
                     st.warning(f"モード更新に失敗しました: {e!r}")
 
-            # --- 個別ボタン（縦並び） ---
-            if st.button("OFF", key="btn_mode_OFF", use_container_width=True, help="監査を停止します（軽量）"):
-                if cur != "OFF":
-                    _apply_mode_change("OFF")
+            # ボタンの親をクラス指定（CSSの適用スコープ）
+            with st.container():
+                st.markdown("<div class='mode-col'>", unsafe_allow_html=True)
 
-            if st.button("DEBUG", key="btn_mode_DEBUG", use_container_width=True, help="開発監査（要点＋1/Nサンプル）"):
-                if cur != "DEBUG":
-                    _apply_mode_change("DEBUG")
+                # OFF
+                btn_type = "primary" if cur == "OFF" else "secondary"
+                if st.button("OFF", key="btn_mode_OFF", use_container_width=True, type=btn_type,
+                             help="監査を停止します（軽量）"):
+                    if cur != "OFF":
+                        _apply_mode_change("OFF")
 
-            if st.button("BOOST", key="btn_mode_BOOST", use_container_width=True, help="原因特定モード（詳細、短時間のみ）"):
-                if cur != "BOOST":
-                    _apply_mode_change("BOOST")
+                # DEBUG
+                btn_type = "primary" if cur == "DEBUG" else "secondary"
+                if st.button("DEBUG", key="btn_mode_DEBUG", use_container_width=True, type=btn_type,
+                             help="開発監査（要点＋1/Nサンプル）"):
+                    if cur != "DEBUG":
+                        _apply_mode_change("DEBUG")
+
+                # BOOST
+                btn_type = "primary" if cur == "BOOST" else "secondary"
+                if st.button("BOOST", key="btn_mode_BOOST", use_container_width=True, type=btn_type,
+                             help="原因特定モード（詳細、短時間のみ）"):
+                    if cur != "BOOST":
+                        _apply_mode_change("BOOST")
+                
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            # 現在モードのボタンだけ灰ベタ＋白抜き（primaryにCSSを当てる）
+            _inject_current_mode_css(cur)
 
             # 表示（UI / writer）
             ui_mode = (st.session_state.get("dev_mode", "OFF") or "OFF").upper()
@@ -348,7 +371,7 @@ def render():
                             help="dev_audit.jsonl の末尾150行を handover 末尾に付けます。（主に DEBUG 向け）")
             with copt3:
                 st.checkbox("Env + Versions", key="opt_env_versions",
-                            help="環境変数(マスク済)と主要バージョン表を付けます。BOOST では公式hander に概ね含まれます。")
+                            help="環境変数(マスク済)と主要バージョン表を付けます。BOOST では公式handoverに概ね含まれます。")
 
         # 追加：エラー/クリティカル抽出 tail の付与
         st.session_state.setdefault("opt_err_tail", True)
@@ -475,22 +498,16 @@ def render():
 
         # 3) ここで DBG を表示
         st.caption(
-            f"[DBG] eff_mode={eff_mode} is_off={is_off} "
-            f"snapshot_disabled={snapshot_disabled} copy_disabled={copy_disabled} "
-            f"ui_mode={(st.session_state.get('dev_mode','OFF') or 'OFF').upper()} "
-            f"writer_mode_try={eff_mode}"
+            f"[DBG] ui_mode={ui_mode} writer_try={writer_try} eff_mode={eff_mode} "
+            f"is_off={is_off} snapshot_disabled={snapshot_disabled} copy_disabled={copy_disabled}"
         )
 
         # === スナップショット窓（code 版 / 10行固定 / 横縦スクロール / コピー可） ===
         snap_txt = st.session_state.get("snapshot_text") or ""
-        if is_off:
-            prefix = "監査停止中（OFF）"
-            snap_txt = prefix + ("\n" + snap_txt if snap_txt else "")
 
-        # ボックス内の先頭行に [[snapshot]] を含め、コピー対象にも含める
-        display_txt = f"[[snapshot]]\n{snap_txt}" if snap_txt else "[[snapshot]]"
+        # OFF のときは何も表示しない（空表示）。DEBUG/BOOST は中身だけをそのまま表示。
+        display_txt = "" if is_off else snap_txt
 
-        # --- mini meta bar (ID / created / size / path) ---
         try:
             _txt = st.session_state.get("snapshot_text") or st.session_state.get("snapshot_area") or ""
             _meta_hdr = parse_header_meta(_txt)  # 非UIでパース
@@ -548,8 +565,9 @@ def render():
 
             src = _log_file()
             rows: list[str] = []
+            # 先にデフォルトを定義しておく（例外時の未定義を防ぐ）
+            limit = int(st.session_state.get("audit_tail_limit", 150) or 150)
             try:
-                limit = int(st.session_state.get("audit_tail_limit", 150) or 150)
                 # 末尾から Errors/Critical のみを抽出（search.py へ集約）
                 rows = errors_only_tail(src, limit=limit)
                 if kw:
