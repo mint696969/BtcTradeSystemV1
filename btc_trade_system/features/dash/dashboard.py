@@ -23,7 +23,7 @@ st.title("BtcTradeSystem V1 ダッシュボード")
 settings_gear()
 
 # 設定はモーダルに集約したのでタブは2つ（健康・監査）のみ
-tab1, tab2 = st.tabs(["コレクターの健全性", "監査ログ"])
+tab1, tab2 = st.tabs(["コレクターの健全性", "開発監査"])
 with tab1:
     health_render()
 with tab2:

@@ -1,5 +1,6 @@
-# path: features/audit_dev/writer.py
+# path: ./btc_trade_system/features/audit_dev/writer.py
 # desc: 開発監査（dev audit）出力。logs_dir()を使用し、128MB超時に末尾32MB保持。portalocker対応、全変数定義済み。
+
 from __future__ import annotations
 
 import io
@@ -39,13 +40,19 @@ def _ensure_parents() -> None:
     _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
-def set_mode(mode: str) -> None:
-    m = mode.upper().strip()
+def set_mode(mode: str, *, source: str = "ui") -> None:
+    m = (mode or "OFF").upper().strip()
     if m not in {"OFF", "DEBUG", "BOOST"}:
         raise ValueError(f"invalid dev-audit mode: {mode}")
     with _MODE_LOCK:
         global _MODE
+        old = _MODE
         _MODE = m
+    # モード切替はフィルタに関係なく必ず1行残す（emitを使わず生書き）
+    try:
+        _log_toggle_raw(old_mode=old, new_mode=_MODE, source=source)
+    except Exception:
+        pass
 
 def get_mode() -> str:
     with _MODE_LOCK:
@@ -181,6 +188,120 @@ def _truncate_payload(obj: Any, *, field_limit_bytes: int = 2 * 1024, line_limit
     except Exception:
         return trimmed
 
+# === 軽量レート制御（既定OFF / UI変更なし） ==========================
+# 目的: GPTに渡す際のノイズ低減。BOOST時の DEBUG/INFO 連発を短時間窓で間引きし、
+#      溜まったら要約1行（dev.rate.dropped）を出す。
+_RATE_ENABLED = False   # ★必要時だけ True に。既定は無効＝現在と同一動作
+_RATE_WINDOW_MS = 2000
+_RATE_MAX_PER_WINDOW = 60
+_RATE_SUMMARY_EVERY = 200
+
+from typing import List  # 既存で未使用ならスルー可
+_RATE_STATE: Dict[str, Dict[str, int]] = {}
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+def _rate_sig(event: str, level: str, feature: str, payload: Any) -> str:
+    kind = type(payload).__name__ if payload is not None else "-"
+    note = ""
+    if isinstance(payload, dict) and "note" in payload:
+        note = str(payload.get("note", ""))[:24]
+    return f"{event}|{level}|{feature}|{kind}|{note}"
+
+def _log_event_raw(*, event: str, level: str, feature: str = "audit_dev", payload: Any = None, mode: Optional[str] = None) -> None:
+    """
+    フィルタを無視して 1 行を書き出す汎用版（要約通知などに使用）。
+    """
+    try:
+        _ensure_parents()
+        m = (mode or get_mode() or "OFF").upper()
+        rec = {
+            "ts": _ts_iso(),
+            "mode": m,
+            "event": event if event.startswith("dev.") else f"dev.{event}",
+            "feature": feature,
+            "level": (level or "INFO").upper(),
+            "actor": None, "site": None, "session": None, "task": None, "trace_id": None,
+            "payload": _truncate_payload(_redact_payload(payload)) if payload is not None else None,
+        }
+        f = _open_with_lock(_LOG_PATH)
+        try:
+            line = json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n"
+            f.write(line); f.flush(); os.fsync(f.fileno())
+        finally:
+            _release_lock(f)
+        if _LOG_PATH.exists() and _LOG_PATH.stat().st_size > _MAX_BYTES:
+            _atomic_tail_trim(_LOG_PATH, _TRIM_TO)
+    except Exception:
+        pass
+
+def _rate_should_drop(event: str, level: str, feature: str, payload: Any) -> bool:
+    """
+    Trueを返したら「この1行はDROP」。対象は BOOST かつ DEBUG/INFO。
+    溜まったら dev.rate.dropped をINFOで1行だけ出す。
+    """
+    lvl = (level or "").upper()
+    if lvl not in ("DEBUG", "INFO"):
+        return False
+    sig = _rate_sig(event, lvl, feature or "dev", payload)
+    now = _now_ms()
+    stt = _RATE_STATE.get(sig)
+    if not stt:
+        _RATE_STATE[sig] = stt = {"win_start": now, "count": 0, "dropped": 0, "last_summary": 0}
+    # 窓進行
+    if now - stt["win_start"] > _RATE_WINDOW_MS:
+        stt["win_start"] = now
+        stt["count"] = 0
+    stt["count"] += 1
+    if stt["count"] <= _RATE_MAX_PER_WINDOW:
+        return False  # まだ通す
+    # 以降はDROP扱い
+    stt["dropped"] += 1
+    # 過剰に要約が出ないよう、一定件数ごとにのみ出力
+    if stt["dropped"] % _RATE_SUMMARY_EVERY == 0:
+        try:
+            _log_event_raw(
+                event="dev.rate.dropped", level="INFO", feature="audit_dev",
+                payload={"sig": sig, "dropped": stt["dropped"],
+                         "window_ms": _RATE_WINDOW_MS, "max_per_window": _RATE_MAX_PER_WINDOW},
+                mode=get_mode(),
+            )
+            stt["last_summary"] = now
+        except Exception:
+            pass
+    return True
+
+def _log_toggle_raw(old_mode: str, new_mode: str, source: str = "ui") -> None:
+    """
+    モード切替をフィルタに関係なく常に1行記録するための生書き関数。
+    emit() を経由しない = OFF でも確実に残す。
+    """
+    try:
+        _ensure_parents()
+        rec = {
+            "ts": _ts_iso(),
+            "mode": new_mode,
+            "event": "dev.ui.toggle",
+            "feature": "audit_dev",
+            "level": "INFO",
+            "payload": {"old": old_mode, "new": new_mode, "source": source},
+        }
+        f = _open_with_lock(_LOG_PATH)
+        try:
+            line = json.dumps(rec, ensure_ascii=False, separators=(",", ":")) + "\n"
+            f.write(line)
+            f.flush()
+            os.fsync(f.fileno())
+        finally:
+            _release_lock(f)
+
+        if _LOG_PATH.exists() and _LOG_PATH.stat().st_size > _MAX_BYTES:
+            _atomic_tail_trim(_LOG_PATH, _TRIM_TO)
+    except Exception:
+        # 記録失敗は握り潰す（モード切替そのものは継続）
+        pass
+
 def emit(event: str, level: str = "INFO", **fields: Any) -> None:
     mode = get_mode()
     if not _should_emit(mode, level):
@@ -188,25 +309,38 @@ def emit(event: str, level: str = "INFO", **fields: Any) -> None:
 
     _ensure_parents()
 
-    # 入力payloadを先に取り出し
-    user_payload = fields if fields else None
+    # --- 予約キーを先に分離して、payload へは入れない ---
+    RESERVED = ("feature", "actor", "site", "session", "task", "trace_id")
+    meta: Dict[str, Any] = {}
+    if fields:
+        for k in list(fields.keys()):
+            if k in RESERVED:
+                meta[k] = fields.pop(k)
+
+    # 残りの fields のみを payload 化（マスク→縮約）
+    user_payload = fields or None
     if user_payload is not None:
         user_payload = _redact_payload(user_payload)
         user_payload = _truncate_payload(user_payload)
 
     rec: Dict[str, Any] = {
-        "ts": _ts_iso(),
+        "ts": _ts_iso(),  # ここはUTCのまま。JST表示はUIで変換する
         "mode": mode,
         "event": event if event.startswith("dev.") else f"dev.{event}",
-        "feature": str(fields.pop("feature", "dev")) if fields and "feature" in fields else "dev",
+        "feature": str(meta.get("feature") or "dev"),
         "level": level.upper(),
-        "actor": (fields.pop("actor", None) if fields else None),
-        "site": (fields.pop("site", None) if fields else None),
-        "session": (fields.pop("session", None) if fields else None),
-        "task": (fields.pop("task", None) if fields else None),
-        "trace_id": (fields.pop("trace_id", None) if fields else None),
+        "actor": meta.get("actor"),
+        "site": meta.get("site"),
+        "session": meta.get("session"),
+        "task": meta.get("task"),
+        "trace_id": meta.get("trace_id"),
         "payload": user_payload,
     }
+
+    # --- レート制御：既定OFF／BOOSTのDEBUG/INFOのみ間引き ---
+    if _RATE_ENABLED and (mode or "").upper() == "BOOST":
+        if _rate_should_drop(rec["event"], rec["level"], rec["feature"], user_payload):
+            return  # この行はスキップ（必要に応じて dev.rate.dropped が別途1行出る）
 
     _LOCKFILE.parent.mkdir(parents=True, exist_ok=True)
     _LOCKFILE.touch(exist_ok=True)
