@@ -276,3 +276,75 @@ D) features/audit_dev 機能の REPO_MAP 自動反映テスト
 参照: Restore Point rp-20251022_201141 / スクリーンショット一式（OFF→DEBUG/BOOST 動作確認）
 
 ---
+
+🗓 開発日報（2025-10-23）
+🧩 本日の主な成果
+
+1. 開発監査ログ機構の完成
+
+features/audit_dev/writer.py に最終調整を実施
+
+BOOST モード時の DEBUG/INFO 連発を自動間引きする軽量レート制御を追加（既定 OFF）
+
+\_RATE_ENABLED フラグにより GPT 提出時のノイズ抑制が可能に
+
+WARN/ERROR/CRIT は常に通す安全設計を維持
+
+既存挙動（OFF/DEBUG/BOOST）は完全非破壊
+
+2. ログビューウインドウの完全安定化
+
+audit タブ最下部に配置した「ログ表示ウインドウ」が
+
+高さ 10 行固定で、
+
+内容有無に関係なくスクロール可能
+
+2 秒周期で自動更新
+に安定動作。
+
+モード切替後も高さが崩れず、再レンダリング時もリセットされないことを確認。
+
+3. モード別ログ出力の健全性確認
+
+BOOST では正常にイベントが追記され、サイズ・時刻が更新されることを PowerShell で確認。
+
+DEBUG／OFF モードもスキップ条件が仕様通りに機能。
+
+ダミーイベント挿入で全モードの UI 反映を検証済。
+
+4. 開発監査ログ仕様書（Markdown）作成
+
+ログ構造・I/O 制御・フィルタ・容量管理・UI 構成などを
+1 ファイルに体系化した正式仕様書を策定。
+→ docs/specs/dev_audit_log_spec.md に配置予定。
+
+🧠 技術的ポイント・知見
+
+Streamlit の st.text_area 系コンポーネントは再描画時の高さリセット問題があり、
+→ 「固定 CSS ＋ scrollable container」で安定化。
+
+PowerShell 側のブックマーク付きログ監視コマンドで、
+writer 動作と UI 表示の乖離検知に有効。
+
+BOOST モードの膨大な DEBUG 出力は GPT 解析時に冗長となるため、
+軽量レート制御が実用的改善点となった。
+
+📘 次回タスク候補
+
+UI 再整理
+
+監査タブ上部を再構成し、
+スクロールせず全体を視認できるように配置最適化。
+
+collector／health 連携の再確認
+
+dev_audit ログとの突き合わせで collector のエラーハンドリング強化。
+
+開発監査仕様書のリポ反映
+
+docs/specs/dev_audit_log_spec.md として正式コミット。
+
+trace_id 自動付与（with context） の実装検討。
+
+---

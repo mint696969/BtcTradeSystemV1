@@ -41,11 +41,6 @@ _disk_free_of = disk_free_of
 def _log_file() -> Path:
     return paths.logs_dir() / "dev_audit.jsonl"
 
-def _mode_next(m: str) -> str:
-    chain = ["OFF", "DEBUG", "BOOST"]
-    m = (m or "OFF").upper()
-    return chain[(chain.index(m) + 1) % len(chain)] if m in chain else "OFF"
-
 def _get_process_list_windows(max_rows: int = 15) -> list[str]:
     """Windows用の簡易プロセス一覧（Name/Id/CPU/WS）。失敗時は空。"""
     try:
@@ -238,59 +233,69 @@ def render():
     c0, c1 = st.columns([1.2, 6.8])
 
     with c0:
-        cur = (st.session_state.get("dev_mode", "OFF") or "OFF").upper()
-        next_mode = _mode_next(cur)
+            cur = (st.session_state.get("dev_mode", "OFF") or "OFF").upper()
 
-        # ボタンの表示は「現在モード」。クリックで next_mode に切替。
-        label = cur
-        if st.button(label, key="btn_mode_cycle", use_container_width=True, help=f"クリックで {next_mode} に切替"):
-            try:
-                _dev_set_mode(next_mode)
-                st.session_state.dev_mode = next_mode
-                st.session_state["mode_changed_at_ms"] = int(time.time() * 1000)
+            def _apply_mode_change(target: str) -> None:
+                try:
+                    _dev_set_mode(target)
+                    st.session_state.dev_mode = target
+                    st.session_state["mode_changed_at_ms"] = int(time.time() * 1000)
 
-                # ▼ 追加：スナップショットのUI側キャッシュは毎回クリア
-                st.session_state.snapshot_text = ""
-                st.session_state.snapshot_meta = {"path": None, "size": 0, "mtime": 0.0}
+                    # スナップショットのUI側キャッシュを毎回リセット
+                    st.session_state.snapshot_text = ""
+                    st.session_state.snapshot_meta = {"path": None, "size": 0, "mtime": 0.0}
 
-                # ▼ BOOSTに入るタイミングでの自動撮影は、トグルON時のみ実行
-                if (next_mode or "OFF").upper() == "BOOST" and st.session_state.get("auto_snap_on_boost", False):
-                    try:
-                        # 新ラッパで「公式生成→handover本文」までを一気に取得
-                        snap_path_str, txt = export_and_build_text(mode="BOOST", force=True)
-                        st.session_state.snapshot_text = txt
-                        st.session_state.snapshot_meta = {
-                            "path": snap_path_str,
-                            "size": len(txt.encode("utf-8", errors="ignore")),
-                            "mtime": time.time(),
-                        }
-                    except Exception:
-                        # 失敗時はUI内の簡易スナップショットへフォールバック
+                    # BOOST選択時のみ自動撮影（オプションON時）
+                    if (target or "OFF").upper() == "BOOST" and st.session_state.get("auto_snap_on_boost", False):
                         try:
-                            st.session_state.snapshot_text = _make_snapshot(next_mode)
+                            snap_path_str, txt = export_and_build_text(mode="BOOST", force=True)
+                            st.session_state.snapshot_text = txt
                             st.session_state.snapshot_meta = {
-                                "path": None,
-                                "size": len(st.session_state.snapshot_text.encode("utf-8")),
+                                "path": snap_path_str,
+                                "size": len(txt.encode("utf-8", errors="ignore")),
                                 "mtime": time.time(),
                             }
                         except Exception:
-                            pass
+                            # 失敗時は簡易スナップショットへフォールバック
+                            try:
+                                st.session_state.snapshot_text = _make_snapshot(target)
+                                st.session_state.snapshot_meta = {
+                                    "path": None,
+                                    "size": len(st.session_state.snapshot_text.encode("utf-8")),
+                                    "mtime": time.time(),
+                                }
+                            except Exception:
+                                pass
 
-                st.rerun()
+                    st.rerun()
 
-            except Exception as e:
-                st.warning(f"モード更新に失敗しました: {e!r}")
+                except Exception as e:
+                    st.warning(f"モード更新に失敗しました: {e!r}")
 
-        ui_mode = (st.session_state.get("dev_mode", "OFF") or "OFF").upper()
-        try:
-            writer_mode = _dev_get_mode()
-        except Exception:
-            writer_mode = "UNKNOWN"
-        ts_ms = st.session_state.get("mode_changed_at_ms")
-        st.caption(
-            f"現在モード: UI=`{ui_mode}` / writer=`{writer_mode}`"
-            + (f"（changed_at={ts_ms}ms）" if ts_ms else "")
-        )
+            # --- 個別ボタン（縦並び） ---
+            if st.button("OFF", key="btn_mode_OFF", use_container_width=True, help="監査を停止します（軽量）"):
+                if cur != "OFF":
+                    _apply_mode_change("OFF")
+
+            if st.button("DEBUG", key="btn_mode_DEBUG", use_container_width=True, help="開発監査（要点＋1/Nサンプル）"):
+                if cur != "DEBUG":
+                    _apply_mode_change("DEBUG")
+
+            if st.button("BOOST", key="btn_mode_BOOST", use_container_width=True, help="原因特定モード（詳細、短時間のみ）"):
+                if cur != "BOOST":
+                    _apply_mode_change("BOOST")
+
+            # 表示（UI / writer）
+            ui_mode = (st.session_state.get("dev_mode", "OFF") or "OFF").upper()
+            try:
+                writer_mode = _dev_get_mode()
+            except Exception:
+                writer_mode = "UNKNOWN"
+            ts_ms = st.session_state.get("mode_changed_at_ms")
+            st.caption(
+                f"現在モード: UI=`{ui_mode}` / writer=`{writer_mode}`"
+                + (f"（changed_at={ts_ms}ms）" if ts_ms else "")
+            )
 
     with c1:
         st.subheader("開発監査ログ（dev_audit.jsonl）")
