@@ -178,3 +178,41 @@ def build_tail_block(*, mode: str, last_n: int = 20) -> str:
         return "\n".join([title] + body) if body else f"{title}\n- (no rows)"
     except Exception as e:
         return f"## audit_tail (last {last_n})\n- (error: {e!r})"
+
+# === Decisions 抜粋（dev.decision./dev.signal./dev.strategy.） ==================
+
+def build_decisions_block(log_path: Path, last_n: int = 50) -> str:
+    """
+    dev.decision.* / dev.signal.* / dev.strategy.* を末尾から抽出して Markdown を返す。
+    """
+    try:
+        # tail_lines は本ファイル先頭ですでに import 済み
+        lines = tail_lines(log_path, limit=2000)
+    except Exception:
+        return f"## Decisions (last {last_n})\n- (unavailable)"
+
+    rows = []
+    for s in lines:
+        try:
+            o = json.loads(s)
+        except Exception:
+            continue
+        ev = str(o.get("event", ""))
+        if ev.startswith(("dev.decision.", "dev.signal.", "dev.strategy.")):
+            rows.append(o)
+
+    rows = rows[-last_n:]
+    out = [f"## Decisions (last {last_n})"]
+    if not rows:
+        out.append("- (no decisions)")
+        return "\n".join(out)
+
+    for r in rows:
+        ev = r.get("event", "-").split(".")[-1]
+        lvl = str(r.get("level", "")).upper()
+        p = r.get("payload") or {}
+        out.append(
+            f"- [{lvl}] {ev:10s} decision_id={p.get('decision_id','-')} "
+            f"policy={p.get('policy','-')} score={p.get('score')}"
+        )
+    return "\n".join(out)

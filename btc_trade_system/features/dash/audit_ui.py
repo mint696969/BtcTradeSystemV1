@@ -580,6 +580,18 @@ def render():
         except Exception:
             pass
 
+        # === 監査サマリ（UI最小） ===
+        from btc_trade_system.features.audit_dev.summary_panels import (
+            render_health_panel, render_quota_panel, render_orders_timeline
+        )
+        src_path = _log_file()
+        with st.expander("Collector Health", expanded=False):
+            render_health_panel(src_path)
+        with st.expander("API Quota", expanded=False):
+            render_quota_panel(src_path)
+        with st.expander("Orders Timeline", expanded=False):
+            render_orders_timeline(src_path)
+
         # === Errors & Critical（recent） ===============================
         with st.expander("Errors & Critical（recent）", expanded=False):
             # ちょいフィルタ（キーワード）

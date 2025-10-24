@@ -35,9 +35,16 @@ def export_and_build_text(*, mode: str, force: bool = True) -> Tuple[str, str]:
         tail_block = build_tail_block(mode="DEBUG", last_n=20)
         text += "\n" + tail_block + "\n"
 
-    # handover_gpt.txt を必ず logs に書き出す（テスト対象を常に最新にする）
+    # Decisions 抜粋を末尾に（DEBUG/BOOST 共通）
+    from btc_trade_system.features.audit_dev.snapshot_compose import build_decisions_block
+    from btc_trade_system.common import paths as _paths
     try:
-        from btc_trade_system.common import paths as _paths
+        text += "\n\n" + build_decisions_block(_paths.logs_dir() / "dev_audit.jsonl", last_n=50)
+    except Exception:
+        pass
+
+    # handover_gpt.txt を必ず logs に書き出す（Decisions 追記後の完成版を保存）
+    try:
         (_paths.logs_dir() / "handover_gpt.txt").write_text(text, encoding="utf-8")
     except Exception:
         pass

@@ -311,6 +311,11 @@ def emit(event: str, level: str = "INFO", **fields: Any) -> None:
 
     # --- 予約キーを先に分離して、payload へは入れない ---
     RESERVED = ("feature", "actor", "site", "session", "task", "trace_id")
+
+    # 解析側が拾う既知キーは名称固定で payload に残す（値にはマスク/縮約を適用）
+    KNOWN_PASS = {"trace_id","decision_id","symbol","venue","order_id","client_order_id",
+                  "side","qty","price","latency_ms","retry","backoff_ms","quota_bucket","remaining","policy","score"}
+
     meta: Dict[str, Any] = {}
     if fields:
         for k in list(fields.keys()):
@@ -320,8 +325,12 @@ def emit(event: str, level: str = "INFO", **fields: Any) -> None:
     # 残りの fields のみを payload 化（マスク→縮約）
     user_payload = fields or None
     if user_payload is not None:
+        passthrough = {k: user_payload[k] for k in list(user_payload.keys()) if k in KNOWN_PASS}
         user_payload = _redact_payload(user_payload)
         user_payload = _truncate_payload(user_payload)
+        if passthrough:
+            try: user_payload.update(passthrough)
+            except Exception: pass
 
     rec: Dict[str, Any] = {
         "ts": _ts_iso(),  # ここはUTCのまま。JST表示はUIで変換する
