@@ -42,23 +42,13 @@ def _mode_min_level(mode:str) -> int:
 
 _JST = timezone(timedelta(hours=9))
 
+from btc_trade_system.features.audit_dev.search import tail_lines as _tail_lines
+
 def _iter_tail(path: Path, max_bytes: int = int(1.5 * 1024 * 1024)) -> Iterable[str]:
-    """末尾から最大 ~1.5MB を読み、行で返す（サイズは十分に軽量）。"""
-    if not path.exists():
-        return []
-    size = path.stat().st_size
-    with open(path, "rb") as rf:
-        if size > max_bytes:
-            rf.seek(size - max_bytes)
-            blob = rf.read()
-            # 途中行を切り捨てて先頭の完全行へ
-            p = blob.find(b"\n")
-            if p != -1:
-                blob = blob[p+1:]
-        else:
-            blob = rf.read()
-    text = blob.decode("utf-8", "ignore")
-    return text.splitlines()
+    """末尾から最大 ~1.5MB 相当の範囲で、おおむね limit を満たす行数を返す（search.tail_lines に統一）。"""
+    # ここでは search.tail_lines に委譲（limit は呼び出し側が制御）
+    # max_bytes は互換のため残すが、内部では未使用
+    return _tail_lines(path, limit=500)  # 500行程度を上限に読み、下流で 50/500 に間引く
 
 def _parse_and_filter(lines: Iterable[str], mode:str, hours:int, limit:int, keyword: str = "") -> Tuple[List[str], List[dict]]:
     """UI表示用テキスト行（JST）と、DL用の構造行（JST変換済）を返す。keyword は表示フィルタのみ。"""
@@ -75,19 +65,48 @@ def _parse_and_filter(lines: Iterable[str], mode:str, hours:int, limit:int, keyw
             rec = json.loads(raw)
         except Exception:
             continue
-        ts = rec.get("ts")
-        lvl = str(rec.get("level","")).upper()
+        # --- level 正規化（表記揺れ・数値レベルの吸収） ---
+        raw_lvl = rec.get("level", "")
+        lvl = str(raw_lvl).upper() if not isinstance(raw_lvl, (int, float)) else ""
+
+        # 文字表記のゆれ
+        if lvl == "ERR":
+            lvl = "ERROR"
+        if lvl == "WARNING":
+            lvl = "WARN"
+
+        # 数値レベル（logging レベル相当）→ 表記へ寄せる
+        if isinstance(raw_lvl, (int, float)):
+            try:
+                num = int(raw_lvl)
+                if   num >= 50: lvl = "CRIT"
+                elif num >= 40: lvl = "ERROR"
+                elif num >= 30: lvl = "WARN"
+                elif num >= 20: lvl = "INFO"
+                else:           lvl = "DEBUG"
+            except Exception:
+                lvl = "DEBUG"  # フォールバック
+
         if _LEVEL_RANK.get(lvl, 999) < min_rank:
             continue
+
+        # --- ts パース強化：ISO/Z付き/epoch/epoch_ms を吸収 ---
+        ts = rec.get("ts")
         try:
-            # ts: "YYYY-MM-DDTHH:MM:SS(.mmm)Z" をUTCとして解釈（ミリ秒あり/なし両対応）
-            if ts and ts.endswith("Z"):
-                try:
-                    dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
-                except ValueError:
-                    dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            if isinstance(ts, (int, float)):
+                # epoch 秒/ミリ秒（13桁以上をミリ秒扱い）
+                sec = float(ts) / (1000.0 if ts > 1e12 else 1.0)
+                dt = datetime.fromtimestamp(sec, tz=timezone.utc)
+            elif isinstance(ts, str) and ts:
+                if ts.endswith("Z"):
+                    try:
+                        dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+                    except ValueError:
+                        dt = datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                else:
+                    dt = datetime.fromisoformat(ts).astimezone(timezone.utc)
             else:
-                dt = datetime.fromisoformat(ts).astimezone(timezone.utc) if ts else now_utc
+                dt = now_utc
         except Exception:
             dt = now_utc
 
@@ -131,6 +150,7 @@ def _parse_and_filter(lines: Iterable[str], mode:str, hours:int, limit:int, keyw
 
         # DLはJSONだが ts を JST に差し替え（ts_jst キーで保持）
         rec_dl = dict(rec)
+        rec_dl["mode"] = (mode or "OFF").upper()
         rec_dl["ts_jst"] = jst.strftime("%Y-%m-%d %H:%M:%S")
         kept.append(rec_dl)
 
