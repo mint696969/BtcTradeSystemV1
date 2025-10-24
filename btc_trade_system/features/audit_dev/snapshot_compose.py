@@ -131,9 +131,50 @@ def parse_header_meta(text: str) -> dict:
         s = ln.strip()
         if not s:
             break
-        if ":" not in s:
             # ラベルや見出しが来たらメタ終端とみなす
             break
         k, v = s.split(":", 1)
         meta[k.strip()] = v.strip()
     return meta
+
+# === 追加: handoverテキストへの安全な章追加ヘルパ & モード別 tail 章 ===
+
+def ensure_errors_summary_in_text(text: str, *, limit: int = 150) -> str:
+    """
+    handover本文内に '## errors_summary' が無ければ末尾に追記して返す（重複しない安全な後付け）。
+    """
+    try:
+        if "## errors_summary" in (text or ""):
+            return text
+        block = build_errors_summary(limit=limit)
+        if not text:
+            return block + "\n"
+        return text + ("\n" if not text.endswith("\n") else "") + block + "\n"
+    except Exception:
+        return text
+
+def build_tail_block(*, mode: str, last_n: int = 20) -> str:
+    """
+    モード別に tail 章を構築して返す。
+      - DEBUG: errors_only_tail() を使い「errors-only」表記で出力
+      - BOOST: 従来 tail_lines() を使いそのまま出力
+    """
+    try:
+        dev_audit = paths.logs_dir() / "dev_audit.jsonl"
+        m = (mode or "OFF").upper()
+        if m == "DEBUG":
+            rows = errors_only_tail(dev_audit, limit=last_n)
+            title = f"## audit_tail (errors-only, last {last_n})"
+        else:
+            rows = tail_lines(dev_audit, limit=last_n)
+            title = f"## audit_tail (last {last_n})"
+
+        body = []
+        for s in rows:
+            s2 = s.rstrip("\n")
+            if not s2:
+                continue
+            body.append(f"- {s2}")
+        return "\n".join([title] + body) if body else f"{title}\n- (no rows)"
+    except Exception as e:
+        return f"## audit_tail (last {last_n})\n- (error: {e!r})"

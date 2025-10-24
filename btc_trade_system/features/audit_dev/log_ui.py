@@ -152,30 +152,6 @@ def render_log_panel(mode: str) -> None:
     共通条件: 最新から24時間・最大50行をJSTで1窓に表示（10行固定）。DLはモード別フィルタでJST、最大500行。
     """
 
-    # --- Auto refresh（リアルタイム表示用。既定ON / 2秒） ---
-    try:
-        # streamlit の autorefresh（未実装版でも例外で無視）
-        from streamlit import experimental_rerun  # noqa: F401
-        from streamlit import autorefresh as st_autorefresh  # type: ignore[attr-defined]
-    except Exception:
-        st_autorefresh = None  # type: ignore
-
-    # UIで切替可能（既定ON）。重い環境ではOFFにできる。
-    st.session_state.setdefault("log_autorefresh", True)
-    with st.container():
-        col_a, col_b = st.columns([1.2, 6])
-        with col_a:
-            st.checkbox("Auto refresh (2s)", key="log_autorefresh")
-        with col_b:
-            # 最終更新時刻の表示（JST）
-            st.caption("updated at " + datetime.now(_JST).strftime("%Y-%m-%d %H:%M:%S JST"))
-
-    if st_autorefresh and st.session_state.get("log_autorefresh", True):
-        try:
-            st_autorefresh(interval=2000, key="log_panel_autorefresh")
-        except Exception:
-            pass
-
     # --- Filter（表示のみ適用。DLには影響させない） ---
     with st.expander("Filter (display only)", expanded=False):
         _kw = st.text_input(

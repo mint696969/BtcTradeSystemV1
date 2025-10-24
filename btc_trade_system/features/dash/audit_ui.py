@@ -1,5 +1,5 @@
 # path: ./btc_trade_system/features/dash/audit_ui.py
-# desc: AuditタブのUI（開発監査表示専用）。BOOST切替時スナップショット生成対応・lint誤検出回避。ボタン色: OFF=白, DEBUG=黄, BOOST=赤。
+# desc: 開発監査UI。モード3ボタン（現在モードのみprimary＝灰ベタ/白抜き）、BOOST切替時は任意で自動スナップショット。
 
 from __future__ import annotations
 
@@ -35,6 +35,17 @@ def _inject_current_mode_css(_: str) -> None:
         .mode-col [data-testid="baseButton-primary"]:hover {
             filter: brightness(0.95);
         }
+
+        /* ▼ スナップショット / Download 行のボタン高さを揃える */
+        .snap-row .stButton>button,
+        .snap-row .stDownloadButton>button {
+            padding-top: 6px !important;
+            padding-bottom: 6px !important;
+            line-height: 1.2 !important;
+            min-height: 38px !important;   /* 目安: Streamlit標準に近い高さ */
+            white-space: nowrap !important; /* ラベル改行を防ぐ */
+        }
+
         </style>
         """,
         unsafe_allow_html=True,
@@ -176,9 +187,9 @@ python -m streamlit run .\btc_trade_system\features\dash\dashboard.py --server.p
         try:
             if log_path.exists():
                 with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
-                    tail200 = f.readlines()[-150:]
+                    tail150 = f.readlines()[-150:]
 
-                for ln in tail200:
+                for ln in tail150:
                     s = ln.rstrip("\n")
                     if s:
                         parts.append(f"- {s}")
@@ -308,22 +319,36 @@ def render():
             # 現在モードのボタンだけ灰ベタ＋白抜き（primaryにCSSを当てる）
             _inject_current_mode_css(cur)
 
-            # 表示（UI / writer）
+            # BOOST自動撮影（左列へ移動）
+            st.session_state.setdefault("auto_snap_on_boost", False)
+            st.checkbox("BOOST自動撮影", key="auto_snap_on_boost", help="BOOST切替時に自動で1枚撮影します。", value=st.session_state.get("auto_snap_on_boost", False))
+
+            # 表示（UI / writer） — A仕様で '◯s前' を表示
             ui_mode = (st.session_state.get("dev_mode", "OFF") or "OFF").upper()
             try:
                 writer_mode = _dev_get_mode()
             except Exception:
                 writer_mode = "UNKNOWN"
             ts_ms = st.session_state.get("mode_changed_at_ms")
-            st.caption(
-                f"現在モード: UI=`{ui_mode}` / writer=`{writer_mode}`"
-                + (f"（changed_at={ts_ms}ms）" if ts_ms else "")
+            ago_txt = ""
+            if isinstance(ts_ms, (int, float)) and ts_ms:
+                try:
+                    ago_s = max(0, int(time.time() - (ts_ms/1000.0)))
+                    ago_txt = f"（{ago_s}s前）"
+                except Exception:
+                    ago_txt = ""
+            st.caption(f"現在モード: UI=`{ui_mode}` / writer=`{writer_mode}` {ago_txt}")
+
+            # オートリフレッシュ（左列へ移動）
+            st.session_state.setdefault("auto_refresh_on", True)  # 既定をONに
+            st.session_state.setdefault("auto_refresh_sec", 2)
+            st.checkbox(
+                f"オートリフレッシュ ({st.session_state['auto_refresh_sec']}s)",
+                key="auto_refresh_on",
+                help="下部ログ/エラー表示を自動更新します。",
             )
 
     with c1:
-        st.subheader("開発監査ログ（dev_audit.jsonl）")
-        st.caption(r"Tail（PowerShell）: Get-Content D:\\BtcTS_V1\\logs\\dev_audit.jsonl -Tail 50 -Wait")
-
         # --- 追加: コピペ用テキスト窓 + スナップショット/コピー（OFFは無効） ---
         if "snapshot_text" not in st.session_state:
             st.session_state.snapshot_text = ""
@@ -345,12 +370,37 @@ def render():
         # （UIとwriterのズレがあっても「実際に動く/動かない」で判断され直感的）
         is_off = ((eff_mode or "OFF").upper() == "OFF")
         snapshot_disabled = is_off
-
+        
+        # ▼ ボタン行（同一の columns に収め、同じ div スコープ内で横並びにする）
+        st.markdown("<div class='snap-row'>", unsafe_allow_html=True)
         b1, b2, b3 = st.columns([1.6, 1.1, 3.3])
 
         with b1:
-            regen = st.button("スナップショット", key="btn_snapshot_regen",
-                            disabled=snapshot_disabled, use_container_width=True)
+            regen = st.button(
+                "スナップショット",
+                key="btn_snapshot_regen",
+                disabled=snapshot_disabled,
+                use_container_width=True,
+            )
+
+        with b2:
+            _txt_now = st.session_state.get("snapshot_text") or ""
+            st.download_button(
+                label="Download",  # ← 短くして改行を防ぐ
+                help="現在のスナップショット本文を handover_gpt.txt として保存します。",
+                data=_txt_now.encode("utf-8"),
+                file_name="handover_gpt.txt",
+                mime="text/plain",
+                key="dl_handover_txt_top",
+                use_container_width=True,
+                disabled=not _txt_now,
+            )
+
+        # b3 はスペーサ（未使用）— 横位置のバランス用に残す
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # （重要）ボタン行とオプション行を“別の行”に分けるための区切り
+        st.markdown("")  # 空行でレイアウトを確実に分離
 
         # === 追加: 付加オプション（構成切替） ==========================
         st.session_state.setdefault("opt_repo_map", True)
@@ -361,27 +411,21 @@ def render():
         st.session_state.setdefault("repo_map_limit_debug", 50)
         st.session_state.setdefault("repo_map_limit_boost", 200)
 
+        # ▼ オプション行（ボタン行とは独立させ、等幅で横一列）
         with st.container():
-            copt1, copt2, copt3 = st.columns([1.3, 1.3, 1.6])
-            with copt1:
-                st.checkbox("REPO_MAP 抜粋", key="opt_repo_map",
-                            help="DEBUG/BOOST いずれでも末尾に REPO_MAP の抜粋を付けます。")
-            with copt2:
-                st.checkbox("audit_tail 150", key="opt_tail150",
-                            help="dev_audit.jsonl の末尾150行を handover 末尾に付けます。（主に DEBUG 向け）")
-            with copt3:
-                st.checkbox("Env + Versions", key="opt_env_versions",
-                            help="環境変数(マスク済)と主要バージョン表を付けます。BOOST では公式handoverに概ね含まれます。")
-
-        # 追加：エラー/クリティカル抽出 tail の付与
-        st.session_state.setdefault("opt_err_tail", True)
-        st.checkbox("Errors only tail", key="opt_err_tail",
-                    help="dev_audit.jsonl から ERROR/CRITICAL/例外行だけを最大150行抽出して付与します。")
-
-        # BOOST 突入時の自動撮影（既定OFF）
-        st.session_state.setdefault("auto_snap_on_boost", False)
-        st.checkbox("BOOST切替で自動スナップショット", key="auto_snap_on_boost",
-                    help="ONの場合、BOOSTへ切り替えた直後に1枚だけ自動撮影します。OFFなら撮影はボタンでのみ行います。")
+            o1, o2, o3, o4 = st.columns([1, 1, 1, 1])
+            with o1:
+                st.checkbox("REPO_MAP", key="opt_repo_map",
+                            help="handover末尾に REPO_MAP の抜粋を付与")
+            with o2:
+                st.checkbox("tail150", key="opt_tail150",
+                            help="dev_audit.jsonl の末尾150行を付与")
+            with o3:
+                st.checkbox("Env+Ver", key="opt_env_versions",
+                            help="環境変数(マスク済)と主要バージョン表を付与")
+            with o4:
+                st.checkbox("ErrOnly", key="opt_err_tail",
+                            help="ERROR/CRITICAL だけを最大150行抽出して付与")
 
         # 1) 先に生成を反映
         if regen:
@@ -398,11 +442,13 @@ def render():
                     pass
 
                 # Errors only tail の要約を本文に追加（件数/Top/レンジ）
-                try:
-                    limit = int(st.session_state.get("audit_tail_limit", 150) or 150)
-                    snap_text += "\n\n" + build_errors_summary(limit=limit)
-                except Exception:
-                    pass
+                # ※ DEBUG は boost.py 側で付与済みなので、UIでは重複させない
+                if (eff_mode or "OFF").upper() != "DEBUG":
+                    try:
+                        limit = int(st.session_state.get("audit_tail_limit", 150) or 150)
+                        snap_text += "\n\n" + build_errors_summary(limit=limit)
+                    except Exception:
+                        pass
 
                 # 公式結果をUIセッションにも反映（鮮度表示/ダウンロード可否を安定化）
                 st.session_state.snapshot_text = snap_text
@@ -474,12 +520,10 @@ def render():
                     "mtime": time.time(),
                 }
                 st.session_state["snapshot_area"] = snap_text
+                st.rerun()
 
                 # 以降（REPO_MAP抜粋／audit_tail／Errors only／Git／Storage／Disk／Env+Versions）は
                 # 既存ロジックをこのまま活かして続行（＝従来の表示・オプションは維持）
-
-                # ▼ 表示用の TextArea (key="snapshot_area") にも同期
-                st.session_state["snapshot_area"] = snap_text
 
             except Exception:
                 try:
@@ -497,11 +541,7 @@ def render():
         copy_disabled = is_off or (not st.session_state.snapshot_text)
 
         # 3) ここで DBG を表示
-        st.caption(
-            f"[DBG] ui_mode={ui_mode} writer_try={writer_try} eff_mode={eff_mode} "
-            f"is_off={is_off} snapshot_disabled={snapshot_disabled} copy_disabled={copy_disabled}"
-        )
-
+        
         # === スナップショット窓（code 版 / 10行固定 / 横縦スクロール / コピー可） ===
         snap_txt = st.session_state.get("snapshot_text") or ""
 
@@ -539,24 +579,6 @@ def render():
                 _age_txt = f"{_age:.0f}s ago"
         except Exception:
             pass
-
-        st.caption(
-            f"snapshot: fresh={_age_txt}  "
-            f"size={_size if _size is not None else '-'}B  "
-            f"path={_path or '(memory only)'}"
-        )
-
-        # ダウンロード（常設）
-        _txt = st.session_state.get("snapshot_text") or ""
-        st.download_button(
-            "Download handover_gpt.txt",
-            data=_txt.encode("utf-8"),
-            file_name="handover_gpt.txt",
-            mime="text/plain",
-            key="dl_handover_txt",
-            use_container_width=False,
-            disabled=not _txt,
-        )
 
         # === Errors & Critical（recent） ===============================
         with st.expander("Errors & Critical（recent）", expanded=False):

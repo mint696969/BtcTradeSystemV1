@@ -23,6 +23,25 @@ def export_and_build_text(*, mode: str, force: bool = True) -> Tuple[str, str]:
     snap_path = Path(_export_snapshot(mode=mode, force=force))
     snap_json = json.loads(snap_path.read_text(encoding="utf-8", errors="ignore"))
     text = _build_handover_text(snap_json)
+
+    # === DEBUG の場合は 'errors_summary' と 'errors-only tail' を必ず末尾に追記 ===
+    from btc_trade_system.features.audit_dev.snapshot_compose import (
+        ensure_errors_summary_in_text,
+        build_tail_block,
+    )
+    m = (mode or "OFF").upper()
+    if m == "DEBUG":
+        text = ensure_errors_summary_in_text(text, limit=150)
+        tail_block = build_tail_block(mode="DEBUG", last_n=20)
+        text += "\n" + tail_block + "\n"
+
+    # handover_gpt.txt を必ず logs に書き出す（テスト対象を常に最新にする）
+    try:
+        from btc_trade_system.common import paths as _paths
+        (_paths.logs_dir() / "handover_gpt.txt").write_text(text, encoding="utf-8")
+    except Exception:
+        pass
+
     return str(snap_path), text
 
 # --- utilities moved from UI (kept UI logic unchanged) ---
