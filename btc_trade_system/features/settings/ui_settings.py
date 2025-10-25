@@ -132,3 +132,42 @@ def render():
 
     st.caption("※ 保存先はいずれも `config/ui/` 配下です。保存後、健全性タブに反映されます。")
 
+# --- 歯車ボタン（枠なしの素ボタン → モーダルで設定を開く） ---
+def settings_gear(label: str = "⚙️", key: str = "btn_settings_gear"):
+    import streamlit as st
+    st.markdown('<div id="gear-btn-wrap" style="display:inline-flex;align-items:center;">', unsafe_allow_html=True)
+    clicked = st.button(label, key=key, help="設定")
+    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+      #gear-btn-wrap .stButton > button,
+      #gear-btn-wrap a[role='button'] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 6px 8px !important;
+      }
+      #gear-btn-wrap .stButton > button:hover,
+      #gear-btn-wrap a[role='button']:hover {
+        background: rgba(0,0,0,0.06) !important;
+      }
+      #gear-btn-wrap .stButton > button:focus,
+      #gear-btn-wrap .stButton > button:focus-visible {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+    </style>
+    """, unsafe_allow_html=True)
+    if clicked:
+        st.session_state["_settings_open"] = True
+    if st.session_state.get("_settings_open", False):
+        @st.dialog("設定")
+        def _settings_dialog():
+            try:
+                render(in_modal=True)
+            except Exception as e:
+                st.error(f"設定画面の描画に失敗しました: {e}")
+            if st.button("閉じる", key="settings_close"):
+                st.session_state["_settings_open"] = False
+
+        _settings_dialog()

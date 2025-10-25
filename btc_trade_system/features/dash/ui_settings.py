@@ -1,10 +1,11 @@
-# path: ./btc_trade_system/features/dash/settings_ui.py
-# desc: 設定タブのUI（monitoring.yaml の閲覧/保存を svc_settings 経由で行う）
+# path: ./btc_trade_system/features/settings/ui_settings.py
+# desc: 設定UI（歯車ボタン→モーダル、monitoring.yaml の閲覧/保存を svc_settings 経由）
 
 from __future__ import annotations
 import json
 import os
 from typing import Any, Callable, Tuple
+__all__ = ["settings_gear", "render"]
 
 # --- streamlit（無ければダミーで崩れないように） ---
 try:
@@ -68,18 +69,59 @@ def _resolve_api() -> Tuple[Callable[[], Any], Callable[[Any], None]]:
 
     return load_fn, save_fn
 
+# --- 歯車ボタン（枠なしの素ボタン → モーダルで設定を開く） ---
+def settings_gear(label: str = "⚙️", key: str = "btn_settings_gear"):
+    import streamlit as st
+    st.markdown('<div id="gear-btn-wrap" style="display:inline-flex;align-items:center;">', unsafe_allow_html=True)
+    clicked = st.button(label, key=key, help="設定")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # このボタンだけフラット化（枠/影/背景を消す）
+    st.markdown("""
+    <style>
+      #gear-btn-wrap .stButton > button,
+      #gear-btn-wrap a[role='button'] {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 6px 8px !important;
+      }
+      #gear-btn-wrap .stButton > button:hover,
+      #gear-btn-wrap a[role='button']:hover {
+        background: rgba(0,0,0,0.06) !important;
+      }
+      #gear-btn-wrap .stButton > button:focus,
+      #gear-btn-wrap .stButton > button:focus-visible {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # クリックでモーダルを開く
+    if clicked:
+        st.session_state["_settings_open"] = True
+
+    # モーダル表示
+    if st.session_state.get("_settings_open", False):
+        st.warning("モーダルは未対応のバージョンです（2025-10-25リストアポイント状態）")
+        try:
+            render()
+        except Exception as e:
+            st.error(f"設定UIの描画に失敗しました: {e}")
+        if st.button("閉じる", key="settings_close"):
+            st.session_state["_settings_open"] = False
+
 def render():
     st.subheader("設定（monitoring.yaml）")
     load_fn, save_fn = _resolve_api()
 
-    # 読み込み（dict/obj/None どれでもテキスト化）
     try:
         cfg = load_fn()
     except Exception as e:
         st.warning(f"設定の読み込みに失敗しました: {e}")
         cfg = {}
 
-    # UIで選んだ監査モードを monitoring.yaml に即保存（ENV優先はランタイムで維持）
     def _save_audit_mode_selected():
         try:
             sel = st.session_state.get("audit_mode_select", "PROD")
@@ -94,7 +136,6 @@ def render():
         except Exception as e:
             st.warning(f"モードの保存に失敗しました: {e}")
 
-    # --- 運転モード（UI側）＆ 有効モード（ENV > UI）の表示 ---
     modes = ["PROD", "DEBUG", "DIAG"]
     ui_mode = (isinstance(cfg, dict) and isinstance(cfg.get("audit"), dict) and cfg["audit"].get("mode")) or "PROD"
     env_mode = os.getenv("BTC_TS_MODE")
@@ -118,35 +159,30 @@ def render():
         if env_mode:
             st.caption(f"ENV: BTC_TS_MODE={env_mode}")
 
-
     text = _to_text(cfg if isinstance(cfg, (dict, list)) else (cfg or {}))
     text = st.text_area("設定（YAML / JSON）", text, height=360)
 
     c1, c2 = st.columns([1,1])
     with c1:
-        if st.button("保存", use_container_width=True):
+        if st.button("保存", use_container_width=True, key="btn_save_config"):
             try:
                 obj = _from_text(text)
                 if not isinstance(obj, dict):
                     obj = {}
-                # UIの選択値を audit.mode に反映（ENV 優先はランタイム側で維持）
                 sel = st.session_state.get("audit_mode_select", "PROD")
                 audit_block = obj.get("audit") if isinstance(obj.get("audit"), dict) else {}
                 audit_block["mode"] = sel
                 obj["audit"] = audit_block
-
                 save_fn(obj)
                 st.success(f"保存しました。（audit.mode = {sel}）")
             except Exception as e:
                 st.error(f"保存に失敗しました: {e}")
 
     with c2:
-        if st.button("再読込", use_container_width=True):
+        if st.button("再読込", use_container_width=True, key="btn_reload_config"):
             try:
                 cfg2 = load_fn()
                 st.info("読み込み完了。下のプレビューに反映しています。")
                 st.write(cfg2)
             except Exception as e:
                 st.error(f"再読込に失敗しました: {e}")
-
-
