@@ -1,0 +1,89 @@
+# REPO_MAP extract (header2 only)
+
+- **# BtcTradeSystemV1 Handover (BOOST).yaml** — 
+- **Btc Ts-引き継ぎ書類zip作成.bat** — 
+- **btc_trade_system/__init__.py** — V1 パッケージルート
+- **btc_trade_system/apps/__init__.py** — 互換のために残す空パッケージ（今は中身なし）
+- **btc_trade_system/common/__init__.py** — 共通ユーティリティ
+- **btc_trade_system/common/audit.py** — 監査イベント出力（緑/黄/赤の粒度に依らず1行JSONL）
+- **btc_trade_system/common/boost_svc.py** — BOOSTモード用スナップショット（構造/環境/直近監査）を logs/boost_snapshot.json に上書き出力（10秒レート制御）
+- **btc_trade_system/common/io_safe.py** — 安全書き込み（tmp→置換 / JSONL append+fsync）と小さなユーティリティ
+- **btc_trade_system/common/paths.py** — データ/ログ等のパス解決（ENV優先・無ければ安全既定）
+- **./btc_trade_system/common/rate.py** — 軽量トークンバケットとスコープ管理（global→group→endpoint の汎用構成に拡張可能な最小実装）。
+- **./btc_trade_system/common/storage_router.py** — ストレージの書き込み先を primary(ENV)→secondary(ローカル) に自動切替する最小ルータ。JSONL追記とCSV原子的置換を提供。
+- **./btc_trade_system/config/ui/health.yaml** — ダッシュボード「Health」タブの構成定義。Collectorの健全性テーブル列・表示順・カテゴリ設定を指定する。
+- **./btc_trade_system/config/ui/monitoring.yaml** — ダッシュボード「コレクターの健全性」タブ用しきい値設定（WARN/CRIT/SLO）。UIモーダルから自動保存される。
+- **./btc_trade_system/config/ui/monitoring_def.yaml** — ダッシュボード「コレクター健全性」タブの初期しきい値設定（UIモーダルのデフォルト）
+- **btc_trade_system/core/__init__.py** — コアモジュール群（低レベルサービスや共通関数）をまとめる初期化用ファイル。
+- **btc_trade_system/features/__init__.py** — 
+- **./btc_trade_system/features/audit_dev/boost.py** — BOOST/LITE スナップショットの“公式生成→handover本文”までを行う薄いラッパ（UIから1行で使う）
+- **./btc_trade_system/features/audit_dev/envinfo.py** — 環境・バージョン・ファイル概要のユーティリティ（UIから呼ぶだけにするための非UIロジック）
+- **./btc_trade_system/features/audit_dev/log_ui.py** — 開発監査ログのビュー部品。モード別フィルタで直近24hの最大50行をJST表示、10行固定窓に出す。DLはJSTで最大500行。
+- **./btc_trade_system/features/audit_dev/search.py** — dev_audit.jsonl / audit.jsonl のテール抽出（Errors only など）をUIから呼べる非UIロジックに集約
+- **./btc_trade_system/features/audit_dev/snapshot_compose.py** — スナップショット本文の強化（ヘッダメタ/エラー要約/レンジ）を組み立てる非UIロジック
+- **./btc_trade_system/features/audit_dev/snapshot_ui.py** — 開発監査UIヘルパー（スナップショットのテキストエリア描画・REPO_MAP抜粋整形）
+- **./btc_trade_system/features/audit_dev/summary_panels.py** — dev_audit.jsonl を薄く集約して UI/スナップショットに使える要約ブロックを描画/生成
+- **./btc_trade_system/features/audit_dev/writer.py** — 開発監査（dev audit）出力。logs_dir()を使用し、128MB超時に末尾32MB保持。portalocker対応、全変数定義済み。
+- **./btc_trade_system/features/collector/api_bf.py** — bitFlyer の公開API（/v1/executions, /v1/board）を標準ライブラリで叩く最小アダプタ。依存ゼロ・UA/Timeout対応。
+- **./btc_trade_system/features/collector/heartbeat.py** — LeaderLock の renew と status.leader の heartbeat を一定間隔で更新する最小ループ（開発フェーズ用）
+- **./btc_trade_system/features/collector/leader_lock.py** — 収集の単一アクティブ性を担保する軽量ロック（NAS 共有前提）。昇格/心拍/降格を監査に記録。
+- **./btc_trade_system/features/collector/snapshot_sink.py** — 収集結果のスナップショットを data/collector/<exchange>/<topic>/YYYYMMDD.jsonl へ保存（StorageRouterで自動切替）。
+- **./btc_trade_system/features/collector/status.py** — collector 健全性ステータスの更新/保存。data/collector/status.json を原子的に生成/上書き。
+- **./btc_trade_system/features/collector/worker.py** — 各取引所用の最小ワーカ基底。レート制御・監査・status更新・リーダーロックを提供（API実装は fetch() を差し替え）。
+- **btc_trade_system/features/dash/__init__.py** — 
+- **./btc_trade_system/features/dash/audit_svc.py** — 監査ログのサービス層（UI読み取り専用）— ui_audit から呼ばれるAPIを提供
+- **./btc_trade_system/features/dash/ui_audit.py** — 開発監査UI。モード3ボタン（現在モードのみprimary＝灰ベタ/白抜き）、BOOST切替時は任意で自動スナップショット。
+- **./btc_trade_system/features/dash/dashboard.py** — StreamlitメインUI（Health/Audit）。features配下の新タブにも対応
+- **./btc_trade_system/features/dash/health_order.py** — Health の並び順を config/ui/health.yaml に保存・復元する最小I/F（YAMLは自前の超軽量実装）。
+- **./btc_trade_system/features/dash/health_svc.py** — 健全性評価（Monitoring読込の骨 + 簡易判定）
+- **./btc_trade_system/features/dash/ui_health.py** — HealthタブのUI（表示専用）— svc_* 集計を描画
+- **btc_trade_system/features/dash/leader_annotations.py** — status.json から leader 情報を読み取り、items に leader.host / leader_age_sec を付与（UIは読取専用）
+- **btc_trade_system/features/dash/presets.py** — ダッシュボード/監査UIの期間・レベル・色などのプリセットを一元管理する小モジュール。
+- **./btc_trade_system/features/dash/providers.py** — ダッシュボード用データ供給（健全性サマリ/表）
+- **./btc_trade_system/features/dash/settings_svc.py** — monitoring.yaml（閾値/色/プリセット）を最小YAMLで保存/読込。UIからの保存/復元の入口。
+- **./btc_trade_system/features/dash/settings_ui.py** — 設定タブのUI（monitoring.yaml の閲覧/保存を svc_settings 経由で行う）
+- **./btc_trade_system/features/settings/modal_ui.py** — 右上の歯車→モーダル（ダイアログ）で設定を開く
+- **./btc_trade_system/features/settings/settings_ui.py** — 設定タブ（UI・保存/読取）。監視ロジックは features/dash/providers に委譲
+- **./btc_trade_system/ops/collector/start_heartbeat.ps1** — LeaderLock 心拍の単独起動（DEBUG/DIAG 用）。副作用は locks/status のみ。
+- **config/ui/health.yaml** — 
+- **config/ui/monitoring.yaml** — 
+- **docs/1-開発ルール（開発をするにあたっての絶対遵守の取り決め）.md** — 
+- **docs/2-1機能分離リポ再設計・実装予定.md** — 
+- **docs/2-2機能分離リポ再設計・実装予定.md** — 
+- **docs/2-3機能分離リポ再設計・実装予定.md** — 
+- **docs/2-4 機能分離リポ再設計・実装予定.md** — 
+- **docs/2-5 機能分離リポ再設計・実装予定.md** — 
+- **docs/2-6 機能分離リポ再設計・実装予定.md** — 
+- **docs/3-Btc Ts-ライブ引継ぎ.md** — 
+- **docs/BtcTradeSystem_コレクター動作仕様（周期・入出力・監視・運用）.md** — 
+- **docs/BtcTradeSystem_ダッシュボード動作仕様（UI構成・モード・連携・保存）.md** — 
+- **docs/handover.md** — 
+- **docs/仕様書一式/Git バックアップ・復元システム仕様書.md** — 
+- **docs/仕様書一式/企画原書/開発監査と運用監査.md** — 
+- **docs/仕様書一式/企画原書/開発監査スナップショット仕様書.md** — 
+- **docs/仕様書一式/企画原書/開発監査ログ仕様書.md** — 
+- **docs/仕様書一式/企画原書/開発監査仕様書（最終確定版）.md** — 
+- **docs/仕様書一式/開発監査仕様書.md** — 
+- **git_復元ポイント一覧.bat** — 
+- **git_復元ポイント作成.bat** — 
+- **README.md** — 
+- **./tools/collector/leader_status_bridge.py** — LeaderLockのメタをstatus.jsonのleaderへワンショット反映（開発テスト用）
+- **scripts/diag/api_probe.ps1** — 4取引所( bitFlyer / Binance / Bybit / OKX )の疎通＋中身チェック＋レポート
+- **scripts/diag/diag_api.ps1** — IPv4優先で取引所の疎通スモーク
+- **./scripts/diag/diag_env.ps1** — リポ環境スモーク＆UI純読取チェック（apps/dashからの書込/削除APIの粗スキャンを含む）
+- **scripts/git/git_full_backup.ps1** — リポジトリの**完全バックアップ**（git bundle）を作成し、検証＆メタ情報を出力
+- **scripts/git/git_restore_from_bundle.ps1** — 直近または指定の .bundle からワンショットで復元（clone or fetch）
+- **scripts/git/git_rp_list.ps1** — 復元ポイントの総合一覧（rp-* タグ＋差分ZIP／フルbundle）を“従来表示”で最新順に表示。外部 BtcTradeSystemV1_git を走査
+- **scripts/git/git_rp_make.ps1** — 復元ポイント作成（rp-YYYYMMDD_HHmmss）。必要に応じてコミット・タグ付け・差分バックアップ（ZIP/フォルダ）を実施。
+- **scripts/git/git_rp_restore.ps1** — 復元ポイントからブランチを作って切り替え
+- **scripts/handoff/make_handoff.ps1** — チャットまたぎ用ハンドオフZIPを作成（最小構成）
+- **./scripts/run.ps1** — Streamlit ダッシュボード起動（PYTHONPATH=リポ直下、venv優先起動／WhatIf対応）
+- **./tools/audit_smoke.py** — 監査出力の動作確認（文脈セット→INFO/ERRORを1行ずつ記録）
+- **./tools/collector/leader_status_bridge.py** — LeaderLockのメタをstatus.jsonのleaderへワンショット反映（開発テスト用）
+- **./tools/collector/storage_status_bridge.py** — StorageRouter の現状を書き出し、status.json の storage メタへ反映（開発確認用）
+- **tools/handoff/gen_summary.py** — 有効設定の実効値サマリーをMarkdown化
+- **tools/make_repo_map_extract.py** — リポジトリを走査し、各ファイル先頭の「# path / # desc」を抽出して REPO_MAP の Markdown / YAML を生成（make_handoff.ps1 からのサブプロセス呼び出し対応）
+- **tools/test_health_eval.py** — 
+- **tools/test_io_audit.py** — io_safe / audit の最小動作テスト
+- **./tools/test_providers_health.py** — Health関連の最小動作テスト（svc_healthのサマリ/テーブルを出力）
+- **フルバックアップ.bat** — 

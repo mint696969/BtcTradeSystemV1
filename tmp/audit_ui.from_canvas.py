@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/dash/audit_ui.py
+# path: ./btc_trade_system/features/dash/ui_audit.py
 # desc: AuditタブのUI（開発監査表示専用）。BOOST切替時スナップショット生成対応・lint誤検出回避。ボタン色: OFF=白, DEBUG=黄, BOOST=赤。
 
 from __future__ import annotations
@@ -305,3 +305,4 @@ def render():
 
     # 開始時に開いた div をここで閉じる（※関数外に出さない）
     st.markdown("</div>", unsafe_allow_html=True)
+

@@ -1,0 +1,280 @@
+{
+  "repoRoot": "C:\\Users\\mint777\\BtcTradeSystemV1",
+  "time": "2025-10-25T17:17:14",
+  "uiFiles": {
+    "audit_ui_py": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\audit_ui.py",
+    "health_ui_py": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\health_ui.py"
+  },
+  "refHits": [
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\audit_svc.py",
+      "Line": "out_rel: str = \"export/audit_ui.csv\",",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\audit_ui.py",
+      "Line": "# path: ./btc_trade_system/features/dash/audit_ui.py",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\dashboard.py",
+      "Line": "from btc_trade_system.features.dash.health_ui import render as health_render",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\dashboard.py",
+      "Line": "from btc_trade_system.features.dash.audit_ui import render as audit_render",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\health_ui.py",
+      "Line": "# path: ./btc_trade_system/features/dash/health_ui.py",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\_chk_import_audit_ui.py",
+      "Line": "m = importlib.import_module(\"btc_trade_system.features.dash.audit_ui\")",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\_chk_import_audit_ui.py",
+      "Line": "print(\"OK: audit_ui.py imported.\")",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\audit_ui.from_canvas.py",
+      "Line": "# path: ./btc_trade_system/features/dash/audit_ui.py",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\scripts\\refactor\\dash_ui_reorg.ps1",
+      "Line": "$oldAudit = Get-ChildItem -Path $DashDir -Recurse -Filter 'audit_ui.py' -ErrorAction SilentlyContinue",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\scripts\\refactor\\dash_ui_reorg.ps1",
+      "Line": "$oldHealth = Get-ChildItem -Path $DashDir -Recurse -Filter 'health_ui.py' -ErrorAction SilentlyContinue",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査スナップショット仕様書.md",
+      "Line": "| `features/dash/audit_ui.py`              | UI トリガー部。トグル操作や Snapshot ボタンの呼び出し管理。                           |",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査と運用監査.md",
+      "Line": "UI 描画 features/dash/audit_ui.py 開発専用タブ",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査と運用監査.md",
+      "Line": "運用健全性 UI features/dash/health_ui.py 通常稼働監査",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査ログ仕様書.md",
+      "Line": "| `features/dash/audit_ui.py`    | Streamlit タブ UI。BOOST 切替でスナップショット生成・DL・追加オプション制御 |",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査ログ仕様書.md",
+      "Line": "## 6. UI構成（audit_ui.py）",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査仕様書（最終確定版）.md",
+      "Line": "\"focus_files\": [\"audit_ui.py\",\"boost_svc.py\",\"writer.py\"],",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査仕様書（最終確定版）.md",
+      "Line": "audit_ui.py 側では render_snapshot_code(display_txt) の 1 呼び出しで完結。",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査仕様書（最終確定版）.md",
+      "Line": "次の段階では、上記に基づいて実装ロードマップをタスク単位で細分化していきます（1 つずつ audit_ui.py → boost_svc.py → writer.py の順にキャンバス提案）。",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査仕様書（最終確定版）.md",
+      "Line": "対象: btc_trade_system/features/dash/audit_ui.py",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査仕様書（最終確定版）.md",
+      "Line": "対象: audit_ui.py",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査仕様書（最終確定版）.md",
+      "Line": "対象: audit_ui.py（フロントで計測 → 結果 JSON）＋ boost_svc.py（受け取り合体）",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査仕様書（最終確定版）.md",
+      "Line": "対象: audit_ui.py・boost_svc.py",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査仕様書（最終確定版）.md",
+      "Line": "対象: audit_ui.py",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\仕様書一式\\企画原書\\開発監査仕様書（最終確定版）.md",
+      "Line": "対象: audit_ui.py",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\3-Btc Ts-ライブ引継ぎ.md",
+      "Line": "- 開発監査 UI（audit_ui.py）の安定稼働を確認。",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\3-Btc Ts-ライブ引継ぎ.md",
+      "Line": "- **audit_ui.py の整理**：render_snapshot_code()呼び出しへ一本化し、ensure_snapshot_code_css()の二重注入を解消。スナップショット表示をコードウィンドウ方式へ統一。",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\3-Btc Ts-ライブ引継ぎ.md",
+      "Line": "- **audit_ui.py の整理**：render_snapshot_code()呼び出しへ一本化し、ensure_snapshot_code_css()の二重注入を解消。スナップショット表示をコードウィンドウ方式へ統一。",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\3-Btc Ts-ライブ引継ぎ.md",
+      "Line": "features/dash/audit_ui.py と features/audit_dev/snapshot_ui.py のリストアポイント（rp-20251022_201141）へ巻き戻し実施。",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\3-Btc Ts-ライブ引継ぎ.md",
+      "Line": "audit_ui.py 内のイベント駆動構造（トグル・スナップショット・自動撮影・オプション付加）を整理。",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\docs\\handover.md",
+      "Line": "boost.py / snapshot_compose.py / writer.py / log_ui.py / audit_ui.py",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0244\\handover.md",
+      "Line": "boost.py / snapshot_compose.py / writer.py / log_ui.py / audit_ui.py",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0244\\REPO_MAP.extract.md",
+      "Line": "- **./btc_trade_system/features/dash/audit_ui.py** — 開発監査UI。モード3ボタン（現在モードのみprimary＝灰ベタ/白抜き）、BOOST切替時は任意で自動スナップショット。",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0244\\REPO_MAP.extract.md",
+      "Line": "- **./btc_trade_system/features/dash/health_ui.py** — HealthタブのUI（表示専用）— svc_* 集計を描画",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0248\\handover.md",
+      "Line": "boost.py / snapshot_compose.py / writer.py / log_ui.py / audit_ui.py",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0248\\REPO_MAP.extract.md",
+      "Line": "- **./btc_trade_system/features/dash/audit_ui.py** — 開発監査UI。モード3ボタン（現在モードのみprimary＝灰ベタ/白抜き）、BOOST切替時は任意で自動スナップショット。",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0248\\REPO_MAP.extract.md",
+      "Line": "- **./btc_trade_system/features/dash/health_ui.py** — HealthタブのUI（表示専用）— svc_* 集計を描画",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\snap_boost.md",
+      "Line": "- btc_trade_system.features.dash.audit_ui",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\snap_boost.md",
+      "Line": "- btc_trade_system.features.dash.health_ui",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\snap_debug.md",
+      "Line": "- btc_trade_system.features.dash.audit_ui",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\snap_debug.md",
+      "Line": "- btc_trade_system.features.dash.health_ui",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0244\\repo_structure.yaml",
+      "Line": "- path: \"btc_trade_system/features/dash/audit_ui.py\"",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0244\\repo_structure.yaml",
+      "Line": "head1: \"./btc_trade_system/features/dash/audit_ui.py\"",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0244\\repo_structure.yaml",
+      "Line": "- path: \"btc_trade_system/features/dash/health_ui.py\"",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0244\\repo_structure.yaml",
+      "Line": "head1: \"./btc_trade_system/features/dash/health_ui.py\"",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0248\\repo_structure.yaml",
+      "Line": "- path: \"btc_trade_system/features/dash/audit_ui.py\"",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0248\\repo_structure.yaml",
+      "Line": "head1: \"./btc_trade_system/features/dash/audit_ui.py\"",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0248\\repo_structure.yaml",
+      "Line": "- path: \"btc_trade_system/features/dash/health_ui.py\"",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\CTX-20251025_0248\\repo_structure.yaml",
+      "Line": "head1: \"./btc_trade_system/features/dash/health_ui.py\"",
+      "Match": "health_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\# BtcTradeSystemV1 Handover (BOOST).yaml",
+      "Line": "- btc_trade_system.features.dash.audit_ui",
+      "Match": "audit_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\# BtcTradeSystemV1 Handover (BOOST).yaml",
+      "Line": "- btc_trade_system.features.dash.health_ui",
+      "Match": "health_ui"
+    }
+  ],
+  "renamePlan": [
+    {
+      "src": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\audit_ui.py",
+      "dst": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\ui_audit.py",
+      "exists": false
+    },
+    {
+      "src": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\health_ui.py",
+      "dst": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\ui_health.py",
+      "exists": false
+    }
+  ],
+  "configPlan": {
+    "make_dirs": [
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\config\\ui",
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\config\\exchanges",
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\settings\\sections"
+    ],
+    "ui_defaults_candidates": []
+  }
+}

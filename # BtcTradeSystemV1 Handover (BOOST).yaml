@@ -17,9 +17,9 @@
 - btc_trade_system.features.audit_dev.writer
 - btc_trade_system.features.dash
 - btc_trade_system.features.dash.audit_svc
-- btc_trade_system.features.dash.audit_ui
+- btc_trade_system.features.dash.ui_audit
 - btc_trade_system.features.dash.health_svc
-- btc_trade_system.features.dash.health_ui
+- btc_trade_system.features.dash.ui_health
 - btc_trade_system.features.dash.leader_annotations
 - btc_trade_system.features.dash.providers
 - btc_trade_system.features.dash.settings_ui

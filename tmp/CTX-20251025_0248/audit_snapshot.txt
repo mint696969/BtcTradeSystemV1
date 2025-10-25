@@ -1,0 +1,108 @@
+# BtcTradeSystemV1 Handover (DEBUG)
+- ts: 2025-10-24T17:48:52Z
+## Roots
+- data_root: D:\BtcTS_V1\data
+- logs_root: D:\BtcTS_V1\logs
+- repo_root: C:\Users\mint777\BtcTradeSystemV1
+## Env
+- BTC_TS_MODE: None
+- PYTHONPATH_contains_repo: True
+### Versions
+- python: 3.10.6
+- streamlit: 1.50.0
+- pandas: 2.3.3
+- numpy: 2.2.6
+- requests: 2.32.5
+- platform: Windows-10-10.0.19045-SP0
+- os: Windows 10
+### Files (logs)
+- boost_snapshot.json (25973B, mtime=2025-10-24T17:44:32Z)
+- handover_gpt.txt (7339B, mtime=2025-10-24T17:44:32Z)
+- audit.jsonl (96430B, mtime=2025-10-18T10:46:45Z)
+- dev_audit.jsonl (58420132B, mtime=2025-10-24T16:31:35Z)
+### config/settings.yaml (digest)
+- (not found)
+## Errors & Critical (recent)
+### dev_audit (last 12)
+- [2025-10-24T10:33:14.261Z] dev.tst.matrix (matrix)
+- [2025-10-24T10:33:14.262Z] dev.tst.matrix (matrix)
+- [2025-10-24T10:33:14.603Z] dev.tst.matrix (matrix)
+- [2025-10-24T10:33:14.604Z] dev.tst.matrix (matrix)
+- [2025-10-24T10:42:21.534Z] dev.matrix TST-d9e5866d (dev.tst.matrix)
+- [2025-10-24T10:42:21.535Z] dev.matrix TST-d9e5866d (dev.tst.matrix)
+- [2025-10-24T10:42:21.893Z] dev.matrix TST-d9e5866d (dev.tst.matrix)
+- [2025-10-24T10:42:21.895Z] dev.matrix TST-d9e5866d (dev.tst.matrix)
+- [2025-10-24T10:48:30.606Z] dev.matrix TST-74347674 (dev.tst.matrix)
+- [2025-10-24T10:48:30.608Z] dev.matrix TST-74347674 (dev.tst.matrix)
+- [2025-10-24T10:48:30.953Z] dev.matrix TST-74347674 (dev.tst.matrix)
+- [2025-10-24T10:48:30.954Z] dev.matrix TST-74347674 (dev.tst.matrix)
+### audit (last 20)
+- [2025-10-17T12:06:19.848Z] smoke.err.demo (collector)
+- [2025-10-17T13:08:16.399Z] smoke.err.demo (collector)
+- [2025-10-17T13:08:16.399Z] smoke.err.demo (collector)
+- [2025-10-17T13:08:16.836Z] smoke.err.demo (collector)
+- [2025-10-17T13:08:16.836Z] smoke.err.demo (collector)
+- [2025-10-17T13:08:17.274Z] smoke.err.demo (collector)
+- [2025-10-17T13:08:17.274Z] smoke.err.demo (collector)
+- [2025-10-17T13:12:54.518Z] smoke.err.demo (collector)
+- [2025-10-17T13:12:54.518Z] smoke.err.demo (collector)
+- [2025-10-17T13:12:54.940Z] smoke.err.demo (collector)
+- [2025-10-17T13:12:54.940Z] smoke.err.demo (collector)
+- [2025-10-17T13:12:55.461Z] smoke.err.demo (collector)
+- [2025-10-17T13:12:55.461Z] smoke.err.demo (collector)
+- [2025-10-18T10:46:45.194Z] smoke.err.demo (collector)
+- [2025-10-14T15:13:56.966Z] smoke.err.demo (audit)
+- [2025-10-14T15:22:32.813Z] smoke.err.demo (audit)
+- [2025-10-14T15:22:54.160Z] smoke.err.demo (audit)
+- [2025-10-14T15:28:10.128Z] smoke.err.demo (audit)
+- [2025-10-14T16:58:27.090Z] collector.fetch.fail (collector)
+- [2025-10-14T18:09:14.330Z] router.err (collector)
+## Recent dev_audit tail (last 20)
+- [2025-10-23T06:54:40.492Z] DEBUG dev.stress.line (audit_dev)
+- [2025-10-23T06:54:40.500Z] DEBUG dev.stress.line (audit_dev)
+- [2025-10-23T06:54:40.507Z] DEBUG dev.stress.line (audit_dev)
+- [2025-10-23T06:54:40.515Z] DEBUG dev.stress.line (audit_dev)
+- [2025-10-23T06:54:40.523Z] DEBUG dev.stress.line (audit_dev)
+- [2025-10-23T06:54:40.531Z] DEBUG dev.stress.line (audit_dev)
+- [2025-10-23T06:54:40.538Z] DEBUG dev.stress.line (audit_dev)
+- [2025-10-23T06:54:40.545Z] DEBUG dev.stress.line (audit_dev)
+- [2025-10-23T06:54:40.553Z] DEBUG dev.stress.line (audit_dev)
+- [2025-10-23T06:54:40.560Z] DEBUG dev.stress.line (audit_dev)
+- [2025-10-23T08:27:55.843Z] INFO dev.ui.toggle (audit_dev)
+- [2025-10-23T08:28:09.453Z] INFO dev.ui.toggle (audit_dev)
+- [2025-10-23T08:28:15.976Z] INFO dev.ui.toggle (audit_dev)
+- [2025-10-23T09:13:07.110Z] INFO dev.ui.toggle (audit_dev)
+- [2025-10-23T09:13:18.782Z] INFO dev.ui.toggle (audit_dev)
+- [2025-10-23T09:13:18.798Z] WARN dev.dummy.warn (audit_dev)
+- [2025-10-23T09:13:26.429Z] INFO dev.ui.toggle (audit_dev)
+- [2025-10-23T09:13:37.353Z] INFO dev.ui.toggle (audit_dev)
+- [2025-10-23T09:13:42.272Z] INFO dev.ui.toggle (audit_dev)
+- [2025-10-23T09:13:42.288Z] WARN dev.dummy.warn (audit_dev)
+## How to reproduce (PowerShell)
+```powershell
+Set-Location $env:USERPROFILE\BtcTradeSystemV1
+$env:PYTHONPATH = (Get-Location).Path
+if (-not $env:BTC_TS_LOGS_DIR) { $env:BTC_TS_LOGS_DIR = "D:\BtcTS_V1\logs" }
+python -m streamlit run .\btc_trade_system\features\dash\dashboard.py --server.port 8501
+```
+## errors_summary
+- last_N: 150  counts: ERROR=6, CRIT=6  top_event: dev.tst.matrix(4)
+- range: 2025-10-23T06:54:39.348Z .. 2025-10-24T16:31:35.705Z
+
+## audit_tail (errors-only, last 20)
+- {"ts":"2025-10-24T10:33:14.261Z","mode":"DEBUG","event":"dev.tst.matrix","feature":"matrix","level":"ERROR","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"sid":"TST-9079dae8","lv":"ERROR"}}}
+- {"ts":"2025-10-24T10:33:14.262Z","mode":"DEBUG","event":"dev.tst.matrix","feature":"matrix","level":"CRIT","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"sid":"TST-9079dae8","lv":"CRIT"}}}
+- {"ts":"2025-10-24T10:33:14.603Z","mode":"BOOST","event":"dev.tst.matrix","feature":"matrix","level":"ERROR","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"sid":"TST-9079dae8","lv":"ERROR"}}}
+- {"ts":"2025-10-24T10:33:14.604Z","mode":"BOOST","event":"dev.tst.matrix","feature":"matrix","level":"CRIT","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"sid":"TST-9079dae8","lv":"CRIT"}}}
+- {"ts":"2025-10-24T10:42:21.534Z","mode":"DEBUG","event":"dev.matrix TST-d9e5866d","feature":"dev.tst.matrix","level":"ERROR","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"lv":"ERROR"}}}
+- {"ts":"2025-10-24T10:42:21.535Z","mode":"DEBUG","event":"dev.matrix TST-d9e5866d","feature":"dev.tst.matrix","level":"CRIT","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"lv":"CRIT"}}}
+- {"ts":"2025-10-24T10:42:21.893Z","mode":"BOOST","event":"dev.matrix TST-d9e5866d","feature":"dev.tst.matrix","level":"ERROR","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"lv":"ERROR"}}}
+- {"ts":"2025-10-24T10:42:21.895Z","mode":"BOOST","event":"dev.matrix TST-d9e5866d","feature":"dev.tst.matrix","level":"CRIT","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"lv":"CRIT"}}}
+- {"ts":"2025-10-24T10:48:30.606Z","mode":"DEBUG","event":"dev.matrix TST-74347674","feature":"dev.tst.matrix","level":"ERROR","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"lv":"ERROR"}}}
+- {"ts":"2025-10-24T10:48:30.608Z","mode":"DEBUG","event":"dev.matrix TST-74347674","feature":"dev.tst.matrix","level":"CRIT","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"lv":"CRIT"}}}
+- {"ts":"2025-10-24T10:48:30.953Z","mode":"BOOST","event":"dev.matrix TST-74347674","feature":"dev.tst.matrix","level":"ERROR","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"lv":"ERROR"}}}
+- {"ts":"2025-10-24T10:48:30.954Z","mode":"BOOST","event":"dev.matrix TST-74347674","feature":"dev.tst.matrix","level":"CRIT","actor":null,"site":null,"session":null,"task":null,"trace_id":null,"payload":{"payload":{"lv":"CRIT"}}}
+
+
+## Decisions (last 50)
+- (no decisions)

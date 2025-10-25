@@ -1,0 +1,22 @@
+{
+  "time": "2025-10-25T17:17:54",
+  "rp": "rp-20251025_171734_phase0",
+  "created_dirs": [
+    "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\config\\ui",
+    "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\config\\exchanges",
+    "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\settings",
+    "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\settings\\sections"
+  ],
+  "renamed": [
+    {
+      "src": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\audit_ui.py",
+      "dst": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\ui_audit.py",
+      "exists": false
+    },
+    {
+      "src": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\health_ui.py",
+      "dst": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\dash\\ui_health.py",
+      "exists": false
+    }
+  ]
+}

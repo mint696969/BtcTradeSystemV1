@@ -366,7 +366,7 @@ C) import パス検証と REPO_MAP 自動更新スクリプトの改修。
 
 ### 本日の成果
 
-- 開発監査 UI（audit_ui.py）の安定稼働を確認。
+- 開発監査 UI（ui_audit.py）の安定稼働を確認。
 - OFF / DEBUG / BOOST 各モードの切替動作およびスナップショット取得を完全に同期。
 - スナップショット表示ウインドウを常設化し、OFF 時には固定メッセージを表示するよう改善。
 - BOOST/DEBUG それぞれのスナップショット内容の差異を確認（正常動作）。
@@ -396,7 +396,7 @@ C) import パス検証と REPO_MAP 自動更新スクリプトの改修。
   - **REPO_MAP 抜粋機能の追加**：boost_snapshot.json から抽出し、各ファイルの#path/#desc を整理表示。最大 200 件（DEBUG は 50 件）までのサマリ出力を実装。
   - **Errors only tail 機能の追加**：dev_audit.jsonl から ERROR/CRITICAL のみ抽出し、直近 N 件（デフォルト 150 件）を整形して UI に表示。
   - **Config ダイジェスト機能の追加**：config/settings.yaml(.yml)を走査し、存在確認・ファイルサイズ・更新時刻・SHA256 ハッシュを取得。欠落時は N/A として扱う安全設計。
-  - **audit_ui.py の整理**：render_snapshot_code()呼び出しへ一本化し、ensure_snapshot_code_css()の二重注入を解消。スナップショット表示をコードウィンドウ方式へ統一。
+  - **ui_audit.py の整理**：render_snapshot_code()呼び出しへ一本化し、ensure_snapshot_code_css()の二重注入を解消。スナップショット表示をコードウィンドウ方式へ統一。
 
 - 次の候補タスク
   A) snapshot_ui.py の CSS を再調整し、空でも 10 行固定かつスクロール動作を保証。
@@ -418,7 +418,7 @@ C) import パス検証と REPO_MAP 自動更新スクリプトの改修。
   - **REPO_MAP 抜粋機能の追加**：boost_snapshot.json から抽出し、各ファイルの#path/#desc を整理表示。最大 200 件（DEBUG は 50 件）までのサマリ出力を実装。
   - **Errors only tail 機能の追加**：dev_audit.jsonl から ERROR/CRITICAL のみ抽出し、直近 N 件（デフォルト 150 件）を整形して UI に表示。
   - **Config ダイジェスト機能の追加**：config/settings.yaml(.yml)を走査し、存在確認・ファイルサイズ・更新時刻・SHA256 ハッシュを取得。欠落時は N/A として扱う安全設計。
-  - **audit_ui.py の整理**：render_snapshot_code()呼び出しへ一本化し、ensure_snapshot_code_css()の二重注入を解消。スナップショット表示をコードウィンドウ方式へ統一。
+  - **ui_audit.py の整理**：render_snapshot_code()呼び出しへ一本化し、ensure_snapshot_code_css()の二重注入を解消。スナップショット表示をコードウィンドウ方式へ統一。
   - **テストスクリプトの整備**：PowerShell 上で REPO_MAP/ERR_ONLY/CFG を単独・一括検証できるワンライナーを追加。すべて TRUE で動作確認済み。
 
 - 次の候補タスク
@@ -435,7 +435,7 @@ C) import パス検証と REPO_MAP 自動更新スクリプトの改修。
 
 作業メモ
 
-features/dash/audit_ui.py と features/audit_dev/snapshot_ui.py のリストアポイント（rp-20251022_201141）へ巻き戻し実施。
+features/dash/ui_audit.py と features/audit_dev/snapshot_ui.py のリストアポイント（rp-20251022_201141）へ巻き戻し実施。
 
 プレースホルダ固定化や CSS による高さ制御など複数の UI 安定化案を検証。
 
@@ -465,7 +465,7 @@ snapshot_ui.py: スナップショット UI の表示ラッパおよび CSS 管�
 
 既存の common/audit.py との役割重複を整理し、開発監査（dev audit）系を明確に分離。
 
-audit_ui.py 内のイベント駆動構造（トグル・スナップショット・自動撮影・オプション付加）を整理。
+ui_audit.py 内のイベント駆動構造（トグル・スナップショット・自動撮影・オプション付加）を整理。
 
 次の候補タスク
 A) スナップショット UI の高さ固定・スクロール領域の恒常化（必要なら Streamlit DOM 補強 CSS 検討）
@@ -548,3 +548,4 @@ docs/specs/dev_audit_log_spec.md として正式コミット。
 trace_id 自動付与（with context） の実装検討。
 
 ---
+

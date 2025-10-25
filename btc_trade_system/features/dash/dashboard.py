@@ -9,8 +9,8 @@ from btc_trade_system.features.dash.settings_ui import render as render_settings
 # V1ルートを sys.path に（保険）
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from btc_trade_system.features.dash.health_ui import render as health_render
-from btc_trade_system.features.dash.audit_ui import render as audit_render
+from btc_trade_system.features.dash.ui_health import render as health_render
+from btc_trade_system.features.dash.ui_audit import render as audit_render
 
 
 # 歯車コンポーネント（単一の正規位置に統一）
@@ -28,6 +28,7 @@ with tab1:
     health_render()
 with tab2:
     audit_render()
+
 
 
 

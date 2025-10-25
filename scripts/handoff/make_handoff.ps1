@@ -8,6 +8,8 @@ param(
   [switch]$AutoRpTag,                    # 追加: 自動で rp-* タグを切る
   [string]$RpMemo = "handoff auto",      # 追加: 自動タグに付けるメモ
   [switch]$IncludeGitScripts,             # 追加: 希望時のみ scripts/git を同梱
+  [switch]$IncludeAuditSnapshot = $true,  # 追加: GPT向け軽量スナップショットを同梱するか
+  [int]$GptBudgetKB = 800,                 # 追加: GPTが読みやすいサイズ上限（KB）
   [switch]$TestOutput               # 追加: テスト時は .\tmp 配下に出力
 )
 
@@ -58,7 +60,7 @@ if (Test-Path $st) {
   $o | Set-Content -Encoding UTF8 (Join-Path $diagOut "status_excerpt.json")
 }
 
-$audit = Join-Path $LOGS "audit.jsonl"
+$audit = Join-Path $LOGS "dev_audit.jsonl"
 if (Test-Path $audit) {
   Get-Content $audit -Tail $AuditTail | Set-Content -Encoding UTF8 (Join-Path $diagOut "audit.tail.jsonl")
 }
@@ -91,6 +93,59 @@ env:
   BTC_TS_LOGS_DIR: "$LOGS"
 generated_at_utc: "$((Get-Date).ToUniversalTime().ToString("s"))Z"
 "@ | Set-Content -Encoding UTF8 (Join-Path $envOut "env_manifest.yaml")
+
+# --- 3.7) GPT向け 軽量スナップショット（DEBUG要約） ---
+if ($IncludeAuditSnapshot) {
+  $auditSnap = Join-Path $TMP "audit_snapshot.txt"
+
+  if ($py) {
+    Write-Host "[STEP] dev_audit snapshot (DEBUG) -> audit_snapshot.txt" -ForegroundColor DarkCyan
+    # 一時Pyスクリプト経由で export_and_build_text を実行し、__OUT__ を PowerShell側で置換
+$pyScript = @'
+from btc_trade_system.features.audit_dev.boost import export_and_build_text
+p, txt = export_and_build_text(mode="DEBUG", force=True)
+open("__OUT__", "w", encoding="utf-8").write(txt)
+'@
+
+# 1) 正規表現ではなく「単純置換」を使う（ドット等のエスケープを避ける）
+# 2) Windowsでも安全に読めるよう、パスは「/」に正規化
+$pyOutPath = ($auditSnap -replace '\\','/')
+$pyScript  = $pyScript.Replace('__OUT__', $pyOutPath)
+
+$tmpPy = Join-Path $env:TEMP ("audit_snap_" + [guid]::NewGuid().ToString() + ".py")
+$pyScript | Set-Content -Encoding UTF8 $tmpPy
+
+# --- 子プロセスに PYTHONPATH を通す（repo root を import パスに追加） ---
+$prevPyPath = $env:PYTHONPATH
+$env:PYTHONPATH = if ($prevPyPath) { "$prevPyPath;$V1" } else { $V1 }
+& "$py" $tmpPy | Out-Null
+$env:PYTHONPATH = $prevPyPath
+
+Remove-Item $tmpPy -Force -ErrorAction SilentlyContinue
+
+  } else {
+    # フォールバック：handover_gpt.txt をコピー（存在しない場合はスキップ）
+    $handTxt = Join-Path $LOGS "handover_gpt.txt"
+    if (Test-Path $handTxt) {
+      Copy-Item $handTxt $auditSnap -Force
+    }
+  }
+
+  # 予算（$GptBudgetKB）で自動トリム：大きすぎる場合は先頭を優先して切り、末尾に告知を追記
+  if (Test-Path $auditSnap) {
+    $sizeKB = [int](([int64](Get-Item $auditSnap).Length + 1023) / 1024)
+    if ($sizeKB -gt $GptBudgetKB) {
+      $lines = Get-Content -Path $auditSnap -Encoding UTF8
+      $keep = [Math]::Max(300, [int]($lines.Count * ($GptBudgetKB / [double]$sizeKB)))
+      $keep = [Math]::Min($keep, $lines.Count)
+      $outLines = $lines[0..($keep-1)]
+      $outLines += ""
+      $outLines += "---"
+      $outLines += "(trimmed to ~$GptBudgetKB KB for GPT budget; some sections omitted)"
+      $outLines | Set-Content -Encoding UTF8 $auditSnap
+    }
+  }
+}
 
 # === 4) REPO_MAP（YAML/MD）を Python サブプロセスで生成 ===
 # 既存の $items 収集・手書きYAML化ロジックは不要（置換）
@@ -270,6 +325,7 @@ PowerShell:
 - handover.md                  : ライブ引継ぎメモ（次タスク・気づき）
 - diagnostics/status_excerpt.json : 最新 status 抜粋
 - diagnostics/audit.tail.jsonl : 監査末尾
+- audit_snapshot.txt           : ★ GPT向け軽量スナップショット（サイズ自動トリム）
 - git/HEAD.txt / BRANCH.txt    : 現在のHEAD/ブランチ
 - git/recent_commits.txt       : 直近コミット
 - git/restore_points.txt       : rp-* タグ一覧
@@ -293,12 +349,13 @@ pointers:
   audit_tail:     "diagnostics/audit.tail.jsonl"
   env_manifest:   "env/env_manifest.yaml"
   repo_structure: "repo_structure.yaml"
+  audit_snapshot: "audit_snapshot.txt"   # ★ 追加：GPTが最初に読む1枚
 notes:
   - "This file helps GPT reconstruct context on the next chat."
 "@ | Set-Content -Encoding UTF8 $ctxOut
 
 # --- 5.6) handover.md（存在すればコピー、無ければ雛形） ---
-$handoverSrc = Join-Path $V1 "docs\handoff\handover.md"
+$handoverSrc = Join-Path $V1 "docs\handover.md"
 $handoverDst = Join-Path $TMP "handover.md"
 if (Test-Path $handoverSrc) {
   Copy-Item $handoverSrc $handoverDst -Force
@@ -374,5 +431,6 @@ Add-Type -AssemblyName 'System.IO.Compression.FileSystem'
 [System.IO.Compression.ZipFile]::CreateFromDirectory($TMP, $zip)
 
 Write-Host "OK: $zip"
-Remove-Item $TMP -Recurse -Force
-
+if (-not $TestOutput) {
+  Remove-Item $TMP -Recurse -Force
+}
