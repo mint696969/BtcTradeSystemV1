@@ -1,0 +1,4 @@
+schema_rev: 1
+theme: "system"
+table: { default_rows: 25 }
+underline_active: true

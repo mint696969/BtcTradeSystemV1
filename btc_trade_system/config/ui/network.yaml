@@ -1,0 +1,7 @@
+schema_rev: 1
+net_pref: "ipv4"
+timeouts: { connect_ms: 5000, read_ms: 8000, total_ms: 15000 }
+retry: { max_retries: 3, strategy: "fixed", base_ms: 500, max_ms: 4000 }
+proxy: { http: "", https: "" }
+tls: { verify: true }
+server: { port: 8501, base_path: "/" }

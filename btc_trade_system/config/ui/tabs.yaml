@@ -1,0 +1,4 @@
+schema_rev: 1
+order: ["main","health","audit"]
+enabled: { main: true, health: true, audit: true }
+initial: "main"

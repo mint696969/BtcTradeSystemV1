@@ -1,0 +1,17 @@
+schema_rev: 1
+language: "ja"
+time: { format: "24h", display: "HH:MM:SS" }
+colors:
+  tab:
+    text_normal: "#000000"
+    text_warn:   "#CC9900"
+    text_crit:   "#FF0000"
+    bg_inactive: "#F0F0F0"
+  popup:
+    text_warn:   "#000000"
+    text_crit:   "#FFFFFF"
+    text_urgent: "#FFFFFF"
+    bg_warn:     "#FFF2CC"
+    bg_crit:     "#FFCCCC"
+    bg_urgent:   "#FF6666"
+underline_active: true
