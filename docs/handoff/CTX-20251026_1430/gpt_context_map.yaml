@@ -1,0 +1,12 @@
+phase: "handoff"
+mode:  "DEBUG"   # 必要に応じて UI設定から反映してもOK
+git:
+  branch: "main"
+  head:   "b5533de"
+pointers:
+  status_excerpt: "diagnostics/status_excerpt.json"
+  audit_tail:     "diagnostics/audit.tail.jsonl"
+  env_manifest:   "env/env_manifest.yaml"
+  repo_structure: "repo_structure.yaml"
+notes:
+  - "This file helps GPT reconstruct context on the next chat."

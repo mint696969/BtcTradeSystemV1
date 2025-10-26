@@ -1,0 +1,5 @@
+repo_root:  C:\Users\mint777\BtcTradeSystemV1
+python:     C:\Users\mint777\AppData\Local\Programs\Python\Python310\python.exe
+DATA_DIR:   D:\BtcTS_V1\data
+LOGS_DIR:   D:\BtcTS_V1\logs
+when_utc:   2025-10-26T05:30:34Z
