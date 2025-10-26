@@ -7,7 +7,7 @@ import streamlit as st
 # 既存の設定UIを流用（健全性タブで作ったもの）
 from btc_trade_system.features.settings import settings_ui as settings_tab
 # 今回追加: dash 側の設定UI（監査モード含む）
-from btc_trade_system.features.dash.settings_ui import render as render_settings_ui
+from btc_trade_system.features.dash.ui_settings import render as render_settings_ui
 
 # Streamlit の dialog API（正式 or experimental）を吸収
 _DLG = getattr(st, "dialog", None) or getattr(st, "experimental_dialog", None)
@@ -50,3 +50,4 @@ else:
         with c2:
             if st.button("⚙️", help="設定", use_container_width=True, key="gear_dialog"):
                 _open_settings_dialog()
+
