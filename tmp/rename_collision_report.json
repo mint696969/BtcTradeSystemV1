@@ -1,0 +1,34 @@
+{
+  "when": "2025-10-26T11:49:13",
+  "duplicate_files": null,
+  "duplicate_dirs": null,
+  "legacy_imports": null,
+  "local_legacy": null,
+  "stray_newnames": [
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\features\\settings\\modal_ui.py",
+      "LineNumber": 10,
+      "Line": "from btc_trade_system.features.dash.ui_settings import render as render_settings_ui"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\_chk_import_audit_ui.py",
+      "LineNumber": 3,
+      "Line": "m = importlib.import_module(\"btc_trade_system.features.dash.ui_audit\")"
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\check_dash_ui_imports.py",
+      "LineNumber": 4,
+      "Line": "  \"btc_trade_system.features.dash.ui_audit\","
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\check_dash_ui_imports.py",
+      "LineNumber": 5,
+      "Line": "  \"btc_trade_system.features.dash.ui_health\","
+    },
+    {
+      "Path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\check_dash_ui_imports.py",
+      "LineNumber": 6,
+      "Line": "  \"btc_trade_system.features.dash.ui_settings\","
+    }
+  ]
+}

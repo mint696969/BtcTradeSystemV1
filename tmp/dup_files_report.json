@@ -1,0 +1,34 @@
+[
+  {
+    "name": "audit_smoke.py",
+    "count": 2,
+    "paths": [
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\audit_smoke.py",
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\tools\\audit_smoke.py"
+    ]
+  },
+  {
+    "name": "health.yaml",
+    "count": 2,
+    "paths": [
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\config\\ui\\health.yaml",
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\config\\ui\\health.yaml"
+    ]
+  },
+  {
+    "name": "leader_status_bridge.py",
+    "count": 2,
+    "paths": [
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\scripts\\collector\\leader_status_bridge.py",
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\tools\\collector\\leader_status_bridge.py"
+    ]
+  },
+  {
+    "name": "monitoring.yaml",
+    "count": 2,
+    "paths": [
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\config\\ui\\monitoring.yaml",
+      "C:\\Users\\mint777\\BtcTradeSystemV1\\config\\ui\\monitoring.yaml"
+    ]
+  }
+]

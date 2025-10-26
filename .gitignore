@@ -26,3 +26,5 @@ secrets/
 __pycache__/
 *.pyc
 
+config/ui/monitoring.yaml
+config/ui/health.yaml
