@@ -28,3 +28,8 @@ __pycache__/
 
 config/ui/monitoring.yaml
 config/ui/health.yaml
+
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.py  text eol=lf
+*.yaml text eol=lf
