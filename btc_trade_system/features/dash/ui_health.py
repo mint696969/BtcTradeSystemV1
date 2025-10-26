@@ -1,5 +1,7 @@
-# path: ./btc_trade_system/features/dash/health_ui.py
-# desc: HealthタブのUI（表示専用）— svc_* 集計を描画
+# path: ./btc_trade_system/features/dash/ui_health.py
+# desc: コレクターの健全性タブ（UI表示専用）— providers/leader の集計を描画
+
+from __future__ import annotations
 
 from __future__ import annotations
 import time
@@ -264,5 +266,3 @@ def render():
         st.dataframe(table, width="stretch")
     else:
         st.info("status.json が見つかりません")
-
-

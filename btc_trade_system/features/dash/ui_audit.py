@@ -1,7 +1,5 @@
-# path: ./btc_trade_system/features/dash/audit_ui.py
-# desc: 開発監査UI。モード3ボタン（現在モードのみprimary＝灰ベタ/白抜き）、BOOST切替時は任意で自動スナップショット。
-
-from __future__ import annotations
+# path: ./btc_trade_system/features/dash/ui_audit.py
+# desc: 開発監査タブのUI（dev_auditログの要約・パネル表示）
 
 import streamlit as st
 import json, time
