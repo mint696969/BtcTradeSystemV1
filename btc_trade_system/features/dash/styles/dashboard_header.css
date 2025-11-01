@@ -1,0 +1,114 @@
+/* path: ./btc_trade_system/features/dash/styles/dashboard_header.css */
+/* desc: ヘッダー（タイトル／チップ／ギア）を、余白を増やさず縦中央で揃える最小セット */
+
+/* 上余白（Deployバー吸収） */
+.block-container {
+  padding-top: 0.6rem !important;
+}
+
+/* Streamlit標準ヘッダーはフラット化のみ */
+.stApp > header {
+  margin: 0 !important;
+  padding: 0.25rem 0.5rem !important;
+  background: transparent;
+}
+
+/* 右端ギアは右寄せ＆縦中央（深追いしない） */
+#app-header-row + div[data-testid="stHorizontalBlock"] #header-gear-anchor {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* 余白ゼロのマーカー（boxを作らない） */
+#app-header-row {
+  display: contents;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: 0 !important;
+}
+
+/* マーカー直後の“1行3カラム”だけ縦中央 */
+#app-header-row
+  + div[data-testid="stHorizontalBlock"]
+  > div[data-testid="stColumn"] {
+  display: flex;
+  align-items: center;
+}
+
+/* 見出しのデフォルト余白でズレないように */
+#app-header-row + div[data-testid="stHorizontalBlock"] h3 {
+  margin: 0;
+}
+
+/* ==== chip の強制スタイル（最優先・確実に当てる） ==== */
+.chip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chip-row .chip {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1;
+  padding: 0.22rem 0.6rem;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+/* 色バリエーション（!important で後勝ちを確保） */
+.chip-row .chip--urgent {
+  background: var(--chip-urgent-bg, #ffe3e3) !important;
+  color: var(--chip-urgent-fg, #c92a2a) !important;
+  border-color: #ffc9c9 !important;
+}
+.chip-row .chip--crit {
+  background: var(--chip-crit-bg, #ffe8ef) !important;
+  color: var(--chip-crit-fg, #a61e4d) !important;
+  border-color: #ffc2d1 !important;
+}
+.chip-row .chip--warn {
+  background: var(--chip-warn-bg, #fff3bf) !important;
+  color: var(--chip-warn-fg, #8d5a00) !important;
+  border-color: #ffe08a !important;
+}
+.chip-row .chip--more {
+  background: var(--chip-more-bg, #f1f3f5) !important;
+  color: var(--chip-more-fg, #495057) !important;
+  border-color: #dee2e6 !important;
+}
+
+/* gear（設定）ボタンの既定カプセルを st-key でピンポイント無効化 */
+.element-container.st-key-gear_dialog
+  button[data-testid="stBaseButton-secondary"],
+.element-container.st-key-gear_dialog [data-testid="stBaseButton-secondary"],
+.element-container.st-key-gear_dialog button {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* ギア中のテキスト/絵文字の余白もゼロ化 */
+.element-container.st-key-gear_dialog [data-testid="stMarkdownContainer"],
+.element-container.st-key-gear_dialog [data-testid="stMarkdownContainer"] p {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* チップが無い時でも折り返さないための“幅だけ確保”用プレースホルダ */
+.chip-row--ghost {
+  visibility: hidden; /* 目に見えない。占有だけする */
+  min-width: var(
+    --chip-ghost-minw,
+    240px
+  ); /* 4チップ相当の既定幅。必要なら微調整 */
+  height: 0; /* 高さはゼロ（行間を崩さない） */
+}

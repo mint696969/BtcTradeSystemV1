@@ -9,7 +9,6 @@ order:
   - health
   - audit
 
-# タブの有効/無効（将来、機能増にも対応）
 enabled:
   main: true
   health: true

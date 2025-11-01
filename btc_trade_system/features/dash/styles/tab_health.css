@@ -1,0 +1,67 @@
+/* path: ./btc_trade_system/features/dash/styles/tab_health.css */
+/* desc: コレクター健全性タブ（ui_health.py）の見た目一式。カード/チップ/配色/細部までここで管理 */
+
+/* スコープ：ヘルスタブ全体 */
+.health-tab div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+  padding: 4px !important;
+}
+
+/* カード */
+.health-tab .h-card {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  border-radius: 16px;
+  padding: 20px 22px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease-in-out;
+}
+.health-tab .h-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.08);
+}
+
+/* タイトル/注釈/値 */
+.health-tab .h-title {
+  margin: 0 0 8px 0;
+  font-weight: 700;
+}
+.health-tab .h-muted {
+  color: #6b7280;
+  font-size: 12px;
+}
+.health-tab .h-kv {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* ステータス別の背景色（カード） */
+.health-tab .h-card.status-OK {
+  background: #ecfdf5;
+}
+.health-tab .h-card.status-WARN {
+  background: #fff7ed;
+}
+.health-tab .h-card.status-CRIT {
+  background: #fef2f2;
+}
+
+/* ステータスチップ */
+.health-tab .h-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  opacity: 0.85;
+}
+.health-tab .h-chip.h-chip--OK {
+  background: #166534;
+}
+.health-tab .h-chip.h-chip--WARN {
+  background: #92400e;
+}
+.health-tab .h-chip.h-chip--CRIT {
+  background: #991b1b;
+}

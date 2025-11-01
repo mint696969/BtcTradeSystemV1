@@ -16,39 +16,6 @@ from btc_trade_system.features.audit_dev.snapshot_ui import (
     render_snapshot_code,   # CSS 注入は内部で一度だけ行う
 )
 
-def _inject_current_mode_css(_: str) -> None:
-    """現在モードのボタン（type='primary'）を灰ベタ＋白抜きに。その他は既存の色設計のまま。"""
-    st.markdown(
-        """
-        <style>
-        /* 左列ブロックのボタン間隔（少し詰める） */
-        .mode-col .stButton>button { margin-bottom: 6px; padding-top: 6px; padding-bottom: 6px; }
-
-        /* 現在モードだけ type='primary' にし、ここで色を強制 */
-        .mode-col [data-testid="baseButton-primary"] {
-            background-color: #6b7280 !important;   /* gray-500 */
-            color: #ffffff !important;
-            border-color: #6b7280 !important;
-        }
-        .mode-col [data-testid="baseButton-primary"]:hover {
-            filter: brightness(0.95);
-        }
-
-        /* ▼ スナップショット / Download 行のボタン高さを揃える */
-        .snap-row .stButton>button,
-        .snap-row .stDownloadButton>button {
-            padding-top: 6px !important;
-            padding-bottom: 6px !important;
-            line-height: 1.2 !important;
-            min-height: 38px !important;   /* 目安: Streamlit標準に近い高さ */
-            white-space: nowrap !important; /* ラベル改行を防ぐ */
-        }
-
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
 from btc_trade_system.features.audit_dev.envinfo import (
     mask_env_items as _mask_env_items,
     collect_versions as _collect_versions,
@@ -313,9 +280,6 @@ def render():
                         _apply_mode_change("BOOST")
                 
                 st.markdown("</div>", unsafe_allow_html=True)
-
-            # 現在モードのボタンだけ灰ベタ＋白抜き（primaryにCSSを当てる）
-            _inject_current_mode_css(cur)
 
             # BOOST自動撮影（左列へ移動）
             st.session_state.setdefault("auto_snap_on_boost", False)

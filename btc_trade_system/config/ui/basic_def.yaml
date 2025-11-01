@@ -1,0 +1,10 @@
+# path: ./btc_trade_system/config/ui/basic_def.yaml
+# desc: UI既定値（ユーザー上書き前のデフォルト）。basic.yaml 欠損時のフォールバック。
+
+title: BtcTradeSystem V1
+
+colors:
+  alert_chip:
+    warn: { fg: "#000000", bg: "#FFF2CC" } # 注意
+    crit: { fg: "#000000", bg: "#FFCCCC" } # 重大
+    urgent: { fg: "#FFFFFF", bg: "#FF6666" } # 緊急

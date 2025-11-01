@@ -1,0 +1,15 @@
+/* path: ./btc_trade_system/features/dash/styles/tab_main.css */
+/* desc: メインタブの見た目をまとめる（必要最小。今は土台のみ） */
+
+/* メインタブ全体の余白（過剰な上下の詰まりを防ぐ） */
+.main-tab {
+  padding-top: 0.25rem;
+}
+
+/* 情報カードの共通スタイル（薄い背景に微ボーダー） */
+.main-tab .info-card {
+  background: #f6f9ff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+}

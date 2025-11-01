@@ -3,5 +3,8 @@
 
 import streamlit as st
 
-def render() -> None:
-    st.info("「メイン」タブは後続フェーズで実装します。ここに普段見る情報（取引サポート/値動き/予測など）を配置します。")
+def render():
+    # メインタブの外側ラッパ（クラス名だけ付与）
+    st.markdown("<div class='main-tab'>", unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)

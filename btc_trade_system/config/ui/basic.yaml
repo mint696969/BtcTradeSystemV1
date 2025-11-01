@@ -1,36 +1,25 @@
-# path: ./btc_trade_system/config/ui/basic.yaml
-# desc: UIの基本設定（言語・時刻表示・タブ文字色・アラート色などの既定値）
-
 schema_rev: 1
-language: "ja"
-
-# 時刻表示設定（24h / ampm）
+language: ja
 time:
-  format: "24h"
-  display: "HH:MM:SS"
-
-# タブの文字色や非選択の見た目
+  format: 24h
+  display: HH:MM:SS
 colors:
   tab:
-    text_normal: "#000000"   # 非選択タブの文字色（白タブ想定）
-    text_active: "#FF5722"   # 選択タブの文字色（オレンジ）
-    text_hover:  "#FF7F27"   # ホバー時の文字色
-    bg_inactive: "#F5F5F5"   # 下線や土台に使う薄グレー（必要に応じて）
-
-  # ヘッダ右側のアラート・チップ用の色（必要に応じて変更可能）
+    text_normal: '#000000'
+    text_active: '#FF5722'
+    text_hover: '#FF7F27'
+    bg_inactive: '#F5F5F5'
   alert_chip:
     warn:
-      fg: "#000000"
-      bg: "#FFF2CC"
+      fg: '#000000'
+      bg: '#FFEB00'
     crit:
-      fg: "#FFFFFF"
-      bg: "#FFCCCC"
+      fg: '#FFFFFF'
+      bg: '#E500FF'
     urgent:
-      fg: "#FFFFFF"
-      bg: "#FF6666"
-
-# 将来拡張用（テーブルの既定行数など）
+      fg: '#FFFFFF'
+      bg: '#F10005'
 appearance:
-  theme: "system"
+  theme: system
   table:
     default_rows: 25

@@ -1,0 +1,6 @@
+order: [main, health, audit]
+initial: main
+enabled:
+  main: true
+  health: true
+  audit: true

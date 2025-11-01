@@ -11,7 +11,7 @@ author: SystemGPT (共同開発仕様統括)
 ダッシュボード構造・アラートシステム・設定モーダル・設定ファイル構成
 を一元的に定義する。
 
-目的は以下の3点。
+目的は以下の 3 点。
 
 機能追加時における UI／アラート／設定の設計基準統一
 
@@ -20,10 +20,10 @@ author: SystemGPT (共同開発仕様統括)
 将来的な機能分離／統合における再利用性の確保
 
 2. ダッシュボード構造仕様
-2.1 構成概要
-Header（タイトル＋設定ボタン）
- └─ Tabs（Main / Health / Audit / Snapshot …）
-     └─ Content（各タブの機能UI）
+   2.1 構成概要
+   Header（タイトル＋設定ボタン）
+   └─ Tabs（Main / Health / Audit / Snapshot …）
+   └─ Content（各タブの機能 UI）
 
 2.2 Header
 
@@ -31,19 +31,19 @@ Header（タイトル＋設定ボタン）
 
 右側：歯車（設定ボタン）
 
-高さ最小・1行構成
+高さ最小・1 行構成
 
 背景：白
 
 設定ボタン位置：最右端固定
 
 2.3 Tabs
-状態	背景	文字色	補足
-非選択	薄灰 #F0F0F0	黒 #000000	折返しなし・スクロール対応
-選択	白	黒	下線あり（underline_active: true）
-警告（warn）	薄灰	濃黄 #CC9900	
-重大（crit）	薄灰	赤 #FF0000	
-緊急（urgent）	薄灰	赤 #FF0000	赤系ポップアップと連動
+状態 背景 文字色 補足
+非選択 薄灰 #F0F0F0 黒 #000000 折返しなし・スクロール対応
+選択 白 黒 下線あり（underline_active: true）
+警告（warn） 薄灰 濃黄 #CC9900
+重大（crit） 薄灰 赤 #FF0000
+緊急（urgent） 薄灰 赤 #FF0000 赤系ポップアップと連動
 
 タブ数・順序・有効化は設定ファイル config/ui/tabs.yaml により制御。
 
@@ -54,19 +54,18 @@ Header（タイトル＋設定ボタン）
 各タブは登録制で管理される。
 
 tab = {
-  key: str,             # 一意キー ("main", "health" など)
-  label: str,           # 表示名（i18nキーでも可）
-  render: callable,     # 描画関数
-  get_status: callable, # 状態取得 normal|warn|crit|urgent
-  enabled: bool         # tabs.yaml により上書き
+key: str, # 一意キー ("main", "health" など)
+label: str, # 表示名（i18n キーでも可）
+render: callable, # 描画関数
+get_status: callable, # 状態取得 normal|warn|crit|urgent
+enabled: bool # tabs.yaml により上書き
 }
-
 
 ユーザーが新タブを追加する機能は提供しない。
 開発時のみ登録可能とする。
 
 3. アラートシステム仕様
-3.1 概要
+   3.1 概要
 
 全アラートはタブ状態色＋緊急ポップアップにより通知。
 
@@ -80,7 +79,7 @@ tab = {
 
 表示位置：画面右上
 
-常時1ウィンドウ
+常時 1 ウィンドウ
 
 内容：発生時刻（HH:MM:SS）＋要約＋「詳細」ボタン
 
@@ -105,9 +104,9 @@ tab = {
 保存先：一時セッションメモリ（永続化不要）
 
 4. 設定モーダル仕様
-4.1 構造
+   4.1 構造
 
-表示方式：ヘッダー右の歯車→モーダル（中央寄せ）
+表示方式：ヘッダー右の歯車 → モーダル（中央寄せ）
 
 初期表示タブ：Basic
 
@@ -116,10 +115,10 @@ tab = {
 Basic / Exchanges / Monitoring / Network / Appearance / Backup / Paths
 
 4.2 操作
-操作	動作
-Ctrl+S または「保存」	設定保存（即時反映）
-Esc または「閉じる」	モーダルを閉じる
-↺（復元）	個別キーを既定値に戻す（ホバー確認あり）
+操作 動作
+Ctrl+S または「保存」 設定保存（即時反映）
+Esc または「閉じる」 モーダルを閉じる
+↺（復元） 個別キーを既定値に戻す（ホバー確認あり）
 4.3 個別復元（↺）
 
 各入力欄右に小ボタン（既定が存在する項目のみ）
@@ -128,7 +127,7 @@ Esc または「閉じる」	モーダルを閉じる
 
 ［戻す］／［キャンセル］
 
-復元後5秒間アンドゥ可（右下スナックバー表示）
+復元後 5 秒間アンドゥ可（右下スナックバー表示）
 
 ログ：settings.<area>.reset_key を dev_audit に記録
 
@@ -138,9 +137,9 @@ Esc または「閉じる」	モーダルを閉じる
 
 検証：型・必須キーのみ軽量検証（不正時は即エラー表示）
 
-書込み：atomic replace（tmp→rename）＋fsync
+書込み：atomic replace（tmp→rename）＋ fsync
 
-保存対象：config/ui/*.yaml の該当項目のみ
+保存対象：config/ui/\*.yaml の該当項目のみ
 
 4.5 監査
 
@@ -155,17 +154,17 @@ settings.network.reset_key
 settings.tabs.update_order
 
 5. 設定ファイル構成
-./btc_trade_system/config/
-  ui/
-    basic.yaml / basic.defaults.yaml
-    tabs.yaml / tabs.defaults.yaml
-    network.yaml / network.defaults.yaml
-    monitoring.yaml / monitoring.defaults.yaml
-    appearance.yaml / appearance.defaults.yaml
-  exchanges/
-    registry.yaml / registry.defaults.yaml
-./config/
-  secrets.exchanges.yaml
+   ./btc_trade_system/config/
+   ui/
+   basic.yaml / basic.defaults.yaml
+   tabs.yaml / tabs.defaults.yaml
+   network.yaml / network.defaults.yaml
+   monitoring.yaml / monitoring.defaults.yaml
+   appearance.yaml / appearance.defaults.yaml
+   exchanges/
+   registry.yaml / registry.defaults.yaml
+   ./config/
+   secrets.exchanges.yaml
 
 5.1 読み込みルール
 
@@ -176,14 +175,13 @@ settings.tabs.update_order
 defaults は不変（リセット参照用）
 
 5.2 共通キー規則
-キー	内容
-schema_rev	スキーマ版
-meta.last_updated	最終更新日時（任意）
-colors.*	HTMLカラーコード
-time.format	24h / ampm
-time.display	HH:MM:SS
-underline_active	bool（タブ下線）
-6. 運用ルール
+キー 内容
+schema_rev スキーマ版
+meta.last_updated 最終更新日時（任意）
+colors.\* HTML カラーコード
+time.format 24h / ampm
+time.display HH:MM:SS
+underline_active bool（タブ下線） 6. 運用ルール
 
 defaults を直接変更しない。
 
@@ -195,11 +193,11 @@ defaults を直接変更しない。
 
 ファイル名・フォルダ構成を固定。
 
-config/ui/* および config/exchanges/* は絶対パスを基準にロード。
+config/ui/_ および config/exchanges/_ は絶対パスを基準にロード。
 
 開発時拡張ポリシー
 
-新タブ追加時は ui_.py を dash/ 配下に追加し、config/ui/ に必要設定を追加。
+新タブ追加時は ui\_.py を dash/ 配下に追加し、config/ui/ に必要設定を追加。
 
 既存スキーマと矛盾する場合は schema_rev を上げる。
 
@@ -212,14 +210,92 @@ schema_rev の不一致時は defaults から再生成。
 Backup タブで zip 生成、既定復元確認後 apply。
 
 7. 更新履歴
-Ver	Date	Author	Summary
-1.0	2025-10-25	SystemGPT	初版（ダッシュボード／アラート／設定仕様確定）
+   Ver Date Author Summary
+   1.0 2025-10-25 SystemGPT 初版（ダッシュボード／アラート／設定仕様確定）
+
+8. CSS 外出し追記仕様
+   配置と命名
+
+ルート: btc_trade_system/features/dash/styles/
+
+ファイル:
+
+dashboard_header.css … ダッシュボードのヘッダー／タイトル／注意チップ／設定ギア／タブ色
+
+tab_main.css … メインタブ（ui_main.py）
+
+tab_health.css … ヘルスタブ（ui_health.py）
+
+tab_audit.css … 監査タブ（ui_audit.py）
+
+settings.css … 設定 UI（ui_settings.py/ギアのポップオーバー含む）
+
+コメント形式は CSS 標準を使用：
+
+/_ path: ./btc_trade_system/features/dash/styles/<file>.css _/
+
+/_ desc: <簡単な説明> _/
+
+読み込みと適用順
+
+読み込みは dashboard.py の main() 内：
+
+:root へ 可変トークンを注入（高さ/色）
+
+\_inject_tokens(toolbar_h_px=32, header_h_px=42, …)
+
+\_inject_alert_palette_vars(\_get_chip_palette())
+
+外部 CSS の列挙読込（順序で上書き制御）
+
+dashboard_header.css → tab_main.css → tab_health.css → tab_audit.css → settings.css
+
+Python 側のルール：
+
+インライン <style> と style="..." は禁止（例外は上記トークン注入のみ）
+
+スコープ設計（衝突回避）
+
+ヘッダー: #app-header-row …
+
+設定タブ: .settings-tab …
+
+ヘルスタブ: .health-tab …
+
+監査タブ: .mode-col, .snap-row など タブ専用クラスで限定
+
+メインタブ: .main-tab …
+
+これにより、該当 CSS だけを触れば反映できる構成を保証
+
+可変トークン（CSS カスタムプロパティ）
+
+:root に注入：
+
+--tb-h: Deploy ツールバー高さ（px 想定）
+
+--hdr-h: ヘッダー行高さ
+
+--tab-text-normal / --tab-text-active / --tab-text-hover / --tab-bg-inactive
+
+--chip-warn-fg / --chip-warn-bg / --chip-crit-fg / --chip-crit-bg / --chip-urgent-fg / --chip-urgent-bg
+
+運用：数値調整は dashboard.py の \_inject_tokens() 引数を変更。
+スタイルロジックは CSS 側に集約。
+
+開発運用ルール
+
+追加・変更は必ず styles/ 配下。Python からは クラスを付けるだけ。
+
+新 UI を作るときは、まず スコープ用クラスを決めて CSS ファイルを新設（命名は上記規則）。
+
+既存 CSS をまたぐ調整が必要な場合は、**上位（header）→ 下位（tab）**の順で読込順を再確認。
+
+VS Code での確認：該当要素 → DevTools → Styles のファイル名と行番号で追跡。
 
 以上を正式仕様とし、次工程「ロードマップ（設定完成までの作業予定）」に引き継ぐ。
 
-
 ===============================================================================
-
 
 📘 BtcTradeSystemV1 ダッシュボード／設定 開発ロードマップ
 
@@ -235,27 +311,26 @@ author: SystemGPT（共同開発計画書）
 
 現状は以下の状態にある：
 
-項目	状態
-ダッシュボード構造仕様	v1.1 決定済み（凍結）
-設定モーダル仕様	確定（個別復元＋ホバー確認＋アンドゥ対応）
-Health／監査との接続	保留（後フェーズ）
-コード状態	UI骨格あり、開発監査完成、Dashboard一部構成済み
-2. フェーズ構成（短期ゴール）
-フェーズ	内容	目的
-A	Header + Tabs 実装	UI基盤確立（ハブ構造／状態色切替）
-B	Settings モーダル実装	設定画面起動／構造確定（Basic開始）
-C	Basic 設定タブ実装	色・言語・時間設定＋個別復元機能
-D	監査／ポップアップ確認	dev_audit出力／urgent挙動確認
+項目 状態
+ダッシュボード構造仕様 v1.1 決定済み（凍結）
+設定モーダル仕様 確定（個別復元＋ホバー確認＋アンドゥ対応）
+Health／監査との接続 保留（後フェーズ）
+コード状態 UI 骨格あり、開発監査完成、Dashboard 一部構成済み 2. フェーズ構成（短期ゴール）
+フェーズ 内容 目的
+A Header + Tabs 実装 UI 基盤確立（ハブ構造／状態色切替）
+B Settings モーダル実装 設定画面起動／構造確定（Basic 開始）
+C Basic 設定タブ実装 色・言語・時間設定＋個別復元機能
+D 監査／ポップアップ確認 dev_audit 出力／urgent 挙動確認
 
-💡 フェーズD以降（Health・Collector連携）は次期ロードマップにて扱う。
+💡 フェーズ D 以降（Health・Collector 連携）は次期ロードマップにて扱う。
 
 3. フェーズ別タスク詳細
-🟩 Phase A — Header & Tabs（ハブ基盤）
-タスク	ファイル	概要	テスト観点
-A1	features/dash/ui_main.py	ヘッダー・タブのベースUI作成	タブ色変化／クリック切替動作
-A2	features/dash/dashboard.py	レジストリ登録制導入	order/enabledの適用
-A3	config/ui/tabs.yaml	並び順・有効化のYAML読み込み	有効タブのみ描画確認
-A4	(内部)	normal/warn/crit/urgentの状態反映ロジック	色切替／スタイル整合性確認
+   🟩 Phase A — Header & Tabs（ハブ基盤）
+   タスク ファイル 概要 テスト観点
+   A1 features/dash/ui_main.py ヘッダー・タブのベース UI 作成 タブ色変化／クリック切替動作
+   A2 features/dash/dashboard.py レジストリ登録制導入 order/enabled の適用
+   A3 config/ui/tabs.yaml 並び順・有効化の YAML 読み込み 有効タブのみ描画確認
+   A4 (内部) normal/warn/crit/urgent の状態反映ロジック 色切替／スタイル整合性確認
 
 完了条件
 
@@ -266,69 +341,69 @@ A4	(内部)	normal/warn/crit/urgentの状態反映ロジック	色切替／ス�
 tabs.yaml の変更が即時反映
 
 🟦 Phase B — Settings モーダル実装
-タスク	ファイル	概要	テスト観点
-B1	features/settings/modal_settings.py	モーダル起動枠／Basic初期表示	歯車クリックで開閉
-B2	features/settings/modal_sections.py	機能別タブ構造生成	各セクション見出し確認
-B3	UI	保存（Ctrl+S／ボタン）／閉じる（Esc）実装	即時反映／再起動不要
-B4	共通	入力バリデーション実装	無効カラーコード警告
-B5	共通	dev_audit への記録	settings.*.update 出力
+タスク ファイル 概要 テスト観点
+B1 features/settings/modal_settings.py モーダル起動枠／Basic 初期表示 歯車クリックで開閉
+B2 features/settings/modal_sections.py 機能別タブ構造生成 各セクション見出し確認
+B3 UI 保存（Ctrl+S／ボタン）／閉じる（Esc）実装 即時反映／再起動不要
+B4 共通 入力バリデーション実装 無効カラーコード警告
+B5 共通 dev_audit への記録 settings.\*.update 出力
 
 完了条件
 
 Basic 初期表示／タブ遷移正常
 
-保存が即時反映（YAML更新）
+保存が即時反映（YAML 更新）
 
 監査ログ出力確認
 
 🟨 Phase C — Basic 設定タブ実装
-タスク	ファイル	概要	テスト観点
-C1	features/settings/sections/basic.py	言語／色／時刻入力欄作成	入力UI整列／ラベル表示
-C2	同上	色入力をHTMLカラーコード対応	変更即反映
-C3	同上	個別復元（↺）＋確認ポップ＋5秒アンドゥ	戻す／キャンセル／Undo確認
-C4	同上	検証と保存	defaults→currentマージ動作確認
+タスク ファイル 概要 テスト観点
+C1 features/settings/sections/basic.py 言語／色／時刻入力欄作成 入力 UI 整列／ラベル表示
+C2 同上 色入力を HTML カラーコード対応 変更即反映
+C3 同上 個別復元（↺）＋確認ポップ＋ 5 秒アンドゥ 戻す／キャンセル／Undo 確認
+C4 同上 検証と保存 defaults→current マージ動作確認
 
 完了条件
 
 各項目の変更が即時反映
 
-↺復元＋確認ポップ正常
+↺ 復元＋確認ポップ正常
 
 dev_audit に reset_key 記録あり
 
 🟥 Phase D — 監査・ポップアップ連携確認
-タスク	ファイル	概要	テスト観点
-D1	features/audit_dev/writer.py	settings更新イベント監査連携	audit.jsonl に出力
-D2	features/dash/ui_main.py	urgentポップアップの表示連携	試験的トリガで表示確認
-D3	共通	既読管理（issue_id単位）	既読→個別消去動作
+タスク ファイル 概要 テスト観点
+D1 features/audit_dev/writer.py settings 更新イベント監査連携 audit.jsonl に出力
+D2 features/dash/ui_main.py urgent ポップアップの表示連携 試験的トリガで表示確認
+D3 共通 既読管理（issue_id 単位） 既読 → 個別消去動作
 
 完了条件
 
 監査出力が整合
 
-ポップアップが1ウィンドウで積み上げ
+ポップアップが 1 ウィンドウで積み上げ
 
 既読単位で再ポップ制御
 
 4. テスト＆確認チェックリスト
-項目	確認内容	OK条件
-タブ切替	色・下線の切替	全状態正常
-Basic 保存	設定変更→YAML更新	即反映／再起動不要
-↺復元	ホバー確認→戻す	defaults値と一致
-Undo	5秒以内操作で復帰	値が元通り
-dev_audit	settings更新記録	JSONL出力確認
-urgentポップ	複数積層・個別既読	再表示正常
+   項目 確認内容 OK 条件
+   タブ切替 色・下線の切替 全状態正常
+   Basic 保存 設定変更 →YAML 更新 即反映／再起動不要
+   ↺ 復元 ホバー確認 → 戻す defaults 値と一致
+   Undo 5 秒以内操作で復帰 値が元通り
+   dev_audit settings 更新記録 JSONL 出力確認
+   urgent ポップ 複数積層・個別既読 再表示正常
 5. 完了条件と引継ぎ基準
 
-すべてのフェーズA～Dを通過し、
+すべてのフェーズ A ～ D を通過し、
 
-dashboard.py 起動でUI完全動作
+dashboard.py 起動で UI 完全動作
 
-config/ui/*.yaml が正常読書き可能
+config/ui/\*.yaml が正常読書き可能
 
 監査・ポップアップが仕様通り
 
-Health/Audit連携以降は次ロードマップに引き継ぐ。
+Health/Audit 連携以降は次ロードマップに引き継ぐ。
 
 ✅ これをもって設定モーダル完成までの短期開発計画（v1.0）とする。
 すべての仕様変更は docs/spec_dashboard_settings.md に追記・履歴管理を行う。

@@ -1,6 +1,0 @@
-# path: ./btc_trade_system/config/ui/monitoring.yaml
-# desc: ダッシュボード「コレクターの健全性」タブ用しきい値設定（WARN/CRIT/SLO）。UIモーダルから自動保存される。
-
-slo:
-  ticker:
-    max_stale_s: 60   # ← デモのため緩める（本番は5へ戻す）

@@ -43,43 +43,6 @@ from btc_trade_system.features.dash.providers import (
 
 from btc_trade_system.features.dash.leader_annotations import load_status_with_leader  # noqa: E402
 
-PALE = {
-    "OK":   {"fg":"#166534", "bg":"#ecfdf5"},
-    "WARN": {"fg":"#92400e", "bg":"#fff7ed"},
-    "CRIT": {"fg":"#991b1b", "bg":"#fef2f2"},
-    "MUTED": "#6b7280",
-    "BORDER": "rgba(0,0,0,.04)",
-    "SHADOW": "0 1px 2px rgba(0,0,0,.05)",
-}
-
-def _css():
-    st.markdown(f"""
-    <style>
-      div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {{
-        padding: 4px !important;
-      }}
-      .card {{
-        width: 100%;
-        border:1px solid {PALE['BORDER']};
-        border-radius:16px;
-        padding:20px 22px;
-        box-shadow:{PALE['SHADOW']};
-        transition: all .2s ease-in-out;
-      }}
-      .card:hover {{
-        transform: translateY(-2px);
-        box-shadow:0 3px 6px rgba(0,0,0,.08);
-      }}
-      .title {{ margin:0 0 8px 0; font-weight:700; }}
-      .chip {{
-        display:inline-block; padding:2px 8px; border-radius:999px;
-        font-size:12px; font-weight:600; color:#fff;
-      }}
-      .muted {{ color:{PALE['MUTED']}; font-size:12px; }}
-      .kv {{ margin-top:6px; font-size:18px; font-weight:600; }}
-    </style>
-    """, unsafe_allow_html=True)
-
 def _timeline(ax, status:str, age_sec:float|None, window_s:int):
     age = max(0.0, float(age_sec or 0.0))
     age = min(age, float(window_s))
@@ -96,8 +59,23 @@ def _timeline(ax, status:str, age_sec:float|None, window_s:int):
     ax.set_yticks([]); ax.set_xticks([])
     for s in ax.spines.values(): s.set_visible(False)
 
+def _fmt_age(sec) -> str:
+    """age秒を見やすい文字列に整形（例: 75s, 12m, 1.5h）。Noneはダッシュ。"""
+    if sec is None:
+        return "—"
+    try:
+        s = int(float(sec))
+    except Exception:
+        return "—"
+    if s < 120:
+        return f"{s}s"
+    if s < 3600:
+        return f"{s // 60}m"
+    return f"{s / 3600:.1f}h"
+
 def render():
-    _css()
+    # CSSは外部 styles/tab_health.css に集約。タブ内スコープ用のラッパーを張る
+    st.markdown("<div class='health-tab'>", unsafe_allow_html=True)
     st.subheader("コレクターの健全性")
 
     c1, c2, _ = st.columns([1, 1, 6])
@@ -138,24 +116,23 @@ def render():
         status = c.get("status", "-")
         age_val = c.get("age_sec", None)
         notes = c.get("notes", "")
-        bg = PALE.get(status, {}).get("bg", "#fff")
-        fg = PALE.get(status, {}).get("fg", "#374151")
-        chip = f"<span class='chip' style='background:{fg};opacity:.85'>{status}</span>"
-        note_html = f"<div class='muted'>{notes}</div>" if notes else ""
-        try:
-            age_display = f"{float(age_val):.1f}s"
-        except Exception:
-            age_display = "-"
 
+        # 表示用に整形（CSS分離後は見た目はクラスで制御）
+        age_display = _fmt_age(age_val)
+        note_html = f"<div class='h-muted'>{notes}</div>" if notes else ""
+
+        # クラスで配色を当てる（tab_health.css 側に定義）
+        status_cls = f"status-{status}"
+        chip = f"<span class='h-chip h-chip--{status}'>{status}</span>"
         card_html = f"""
-        <div class='card' style='background:{bg};'>
-          <div class='title'>{ex} {chip}</div>
-          <div class='muted'>更新遅延</div>
-          <div class='kv'>{age_display}</div>
+        <div class='h-card {status_cls}'>
+          <div class='h-title'>{ex} {chip}</div>
+
+          <div class='h-muted'>更新遅延</div>
+          <div class='h-kv'>{age_display}</div>
           {note_html}
-        </div>
         """
-        
+
                 # 追加注記（source / cause / retries）
         src = c.get("source")
         cause = c.get("cause")
@@ -266,3 +243,5 @@ def render():
         st.dataframe(table, width="stretch")
     else:
         st.info("status.json が見つかりません")
+
+    st.markdown("</div>", unsafe_allow_html=True)

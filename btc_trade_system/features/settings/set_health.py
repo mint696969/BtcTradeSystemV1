@@ -1,11 +1,12 @@
-# path: ./btc_trade_system/features/settings/settings_ui.py
-# desc: 設定タブ（UI・保存/読取）。監視ロジックは features/dash/providers に委譲
+# path: btc_trade_system/features/settings/set_health.py
+# desc: 「健全性」タブのUI（説明・SLOしきい値編集）。I/Oは settings_svc に委譲
 
 from __future__ import annotations
 import os
 from pathlib import Path
 import streamlit as st
-
+import json  # ← PyYAMLが無いときのフォールバックで使用
+from btc_trade_system.features.settings import settings_svc
 # 既存プロバイダを利用して現在値を読む
 from ..dash.providers import get_health_summary, _cfg_root
 
@@ -23,17 +24,19 @@ def _ensure_ui_dir() -> None:
     d.mkdir(parents=True, exist_ok=True)
 
 def _read_yaml(path: Path) -> dict:
-    if not path.exists() or not yaml:
-        return {}
     try:
-        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        # settings_svc 側が相対/絶対どちらでも解決できる実装に委譲
+        return settings_svc.load_yaml(str(path)) or {}
     except Exception:
         return {}
 
+
 def _write_yaml(path: Path, data: dict) -> None:
-    from btc_trade_system.common.io_safe import write_atomic_text  # 遅延importでもOK
-    text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False)
-    write_atomic_text(path, text)
+    try:
+        text = yaml.safe_dump(data, allow_unicode=True, sort_keys=False) if yaml else json.dumps(data, ensure_ascii=False)
+        settings_svc.write_atomic(str(path), text)
+    except Exception as e:
+        st.error(f"write failed: {e}")
 
 def render():
     st.subheader("設定（健全性ビュー）")
@@ -131,4 +134,3 @@ def render():
                 st.error(f"保存に失敗: {e}")
 
     st.caption("※ 保存先はいずれも `config/ui/` 配下です。保存後、健全性タブに反映されます。")
-

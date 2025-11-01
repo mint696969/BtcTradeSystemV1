@@ -1,0 +1,167 @@
+# path: ./btc_trade_system/features/settings/settings.py
+# desc: 設定タブのUI本体（monitoring.yaml の閲覧/保存や配色の今回のみ適用を提供）
+
+from __future__ import annotations
+import json
+import os
+from typing import Any, Callable, Tuple
+
+# dev_audit 記録
+from btc_trade_system.features.audit_dev import writer as W
+
+# --- streamlit（無ければダミーで崩れないように） ---
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover
+    import types as _t
+    st = _t.SimpleNamespace(
+        subheader=print, text_area=lambda *a, **k: "", button=lambda *a, **k: False,
+        success=print, warning=print, error=print, info=print, caption=print, columns=lambda *a, **k: [None, None],
+        write=print, checkbox=lambda *a, **k: False, color_picker=lambda *a, **k: "#000000", toast=print,
+        divider=lambda *a, **k: None, markdown=print, selectbox=lambda *a, **k: None, rerun=lambda: None,
+        metric=lambda *a, **k: None
+    )
+
+def _norm_hex(c: str, fallback: str) -> str:
+    """#RRGGBB に正規化（失敗時は fallback）"""
+    if isinstance(c, str):
+        c = c.strip()
+        if len(c) == 7 and c.startswith("#"):
+            try:
+                int(c[1:], 16)
+                return c.upper()
+            except Exception:
+                pass
+    return fallback
+
+def _get_session_palette() -> dict:
+    """セッション上書きパレット（無ければ空）"""
+    pal =  (st.session_state.get("alert_palette_overrides") or {}) if hasattr(st, "session_state") else {}
+    return pal if isinstance(pal, dict) else {}
+
+def _apply_session_palette(new_pal: dict) -> None:
+    """セッション限定パレットを適用し、監査に記録"""
+    st.session_state["alert_palette_overrides"] = new_pal
+    W.emit("settings.palette.apply_session", level="INFO", feature="settings", payload={"overrides": new_pal})
+    st.toast("アラート色を今回のセッションに適用しました", icon="🎨")
+
+def _reset_session_palette() -> None:
+    """セッション限定パレットを解除し、監査に記録"""
+    if "alert_palette_overrides" in st.session_state:
+        del st.session_state["alert_palette_overrides"]
+    W.emit("settings.palette.reset_session", level="INFO", feature="settings", payload={})
+    st.toast("アラート色を既定に戻しました（セッション適用解除）", icon="↺")
+
+def _toggle_demo_alerts():
+    """デモアラートの投入/解除（即時反映のため rerun も行う）"""
+    if st.session_state.get("demo_alerts"):
+        st.session_state["_alerts"] = [
+            {"level": "urgent", "label": "緊急Y"},
+            {"level": "crit",   "label": "重大X"},
+            {"level": "warn",   "label": "注意A"},
+            {"level": "more",   "label": "+1"},
+        ]
+        W.emit("settings.demo_alerts.enable", level="INFO", feature="settings", payload={"count": 4})
+        st.toast("デモアラートを表示しました", icon="🔔")
+        st.rerun()
+    else:
+        st.session_state["_alerts"] = []
+        W.emit("settings.demo_alerts.disable", level="INFO", feature="settings", payload={})
+        st.toast("デモアラートを非表示にしました", icon="🧹")
+        st.rerun()
+
+# --- yaml は任意（無ければ JSON で代替） ---
+try:
+    import yaml  # type: ignore
+    def _to_text(obj: Any) -> str:
+        return yaml.safe_dump(obj, sort_keys=False, allow_unicode=True)
+    def _from_text(text: str) -> Any:
+        return yaml.safe_load(text) if text.strip() else {}
+except Exception:  # pragma: no cover
+    def _to_text(obj: Any) -> str:
+        return json.dumps(obj, ensure_ascii=False, indent=2)
+    def _from_text(text: str) -> Any:
+        return json.loads(text) if text.strip() else {}
+
+# --- svc_settings の API を多段で解決（settings 配下の svc を参照） ---
+def _resolve_api() -> Tuple[Callable[[], Any], Callable[[Any], None]]:
+    from importlib import import_module
+    svc = import_module("btc_trade_system.features.settings.settings_svc")
+
+    load_candidates = ["load_for_ui", "load", "load_monitoring", "read", "read_monitoring", "get_monitoring"]
+    save_candidates = ["save_from_ui", "save", "save_monitoring", "write", "write_monitoring", "put_monitoring"]
+
+    load_fn = next((getattr(svc, n) for n in load_candidates if callable(getattr(svc, n, None))), None)
+    if load_fn is None:
+        def _load_stub(): return {}
+        load_fn = _load_stub
+
+    save_fn = next((getattr(svc, n) for n in save_candidates if callable(getattr(svc, n, None))), None)
+    if save_fn is None:
+        def _save_stub(_obj: Any) -> None:
+            raise RuntimeError("settings_svc に保存用APIが見つかりません")
+        save_fn = _save_stub
+
+    return load_fn, save_fn
+
+def render():
+    st.markdown("<div class='settings-tab'>", unsafe_allow_html=True)
+
+    st.subheader("設定（monitoring.yaml）")
+
+    # ---- デモアラート投入（ヘッダーの表示確認用） ----
+    st.divider()
+    st.checkbox("デモアラートを投入", key="demo_alerts", on_change=_toggle_demo_alerts)
+    st.caption("※ ヘッダー右のチップ表示・配置の確認用途。保存は行いません。")
+
+    # ---- アラート色（今回のみ適用） ----
+    st.subheader("アラート色（今回のみ適用）")
+
+    pal_now = _get_session_palette()
+    defaults = {
+        "warn":   {"fg": "#000000", "bg": "#FDE8C8"},
+        "crit":   {"fg": "#FFFFFF", "bg": "#F9C8C8"},
+        "urgent": {"fg": "#FFFFFF", "bg": "#FF6B6B"},
+    }
+
+    use = {
+        k: {
+            "fg": _norm_hex((pal_now.get(k, {}) or {}).get("fg", defaults[k]["fg"]), defaults[k]["fg"]),
+            "bg": _norm_hex((pal_now.get(k, {}) or {}).get("bg", defaults[k]["bg"]), defaults[k]["bg"]),
+        }
+        for k in ["urgent", "crit", "warn"]
+    }
+
+    c_urgent, c_crit, c_warn = st.columns(3)
+    with c_urgent:
+        st.caption("緊急")
+        u_fg = st.color_picker("文字", use["urgent"]["fg"], key="pick_urgent_fg", label_visibility="collapsed")
+        u_bg = st.color_picker("背景", use["urgent"]["bg"], key="pick_urgent_bg", label_visibility="collapsed")
+    with c_crit:
+        st.caption("重大")
+        c_fg = st.color_picker("文字", use["crit"]["fg"], key="pick_crit_fg", label_visibility="collapsed")
+        c_bg = st.color_picker("背景", use["crit"]["bg"], key="pick_crit_bg", label_visibility="collapsed")
+    with c_warn:
+        st.caption("注意")
+        w_fg = st.color_picker("文字", use["warn"]["fg"], key="pick_warn_fg", label_visibility="collapsed")
+        w_bg = st.color_picker("背景", use["warn"]["bg"], key="pick_warn_bg", label_visibility="collapsed")
+
+    c_apply, c_reset, c_save = st.columns([1, 1, 1])
+    with c_apply:
+        if st.button("適用（今回のみ）", use_container_width=True):
+            _apply_session_palette({
+                "warn":   {"fg": _norm_hex(w_fg, use["warn"]["fg"]),   "bg": _norm_hex(w_bg, use["warn"]["bg"])},
+                "crit":   {"fg": _norm_hex(c_fg, use["crit"]["fg"]),   "bg": _norm_hex(c_bg, use["crit"]["bg"])},
+                "urgent": {"fg": _norm_hex(u_fg, use["urgent"]["fg"]), "bg": _norm_hex(u_bg, use["urgent"]["bg"])}
+            })
+            st.rerun()
+    with c_reset:
+        if st.button("デフォルト", use_container_width=True):
+            _reset_session_palette()
+            st.rerun()
+    with c_save:
+        if st.button("保存（basic.yaml）", use_container_width=True):
+            W.emit("settings.palette.save_click", level="INFO", feature="settings", payload={"note": "not_implemented_yet"})
+            st.toast("保存は次のフェーズで実装します（今回はセッション適用のみ）", icon="ℹ️")
+
+    st.markdown("</div>", unsafe_allow_html=True)

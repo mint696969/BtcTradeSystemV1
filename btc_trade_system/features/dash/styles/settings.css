@@ -1,0 +1,40 @@
+/* path: ./btc_trade_system/features/dash/styles/settings.css */
+/* desc: 設定UI（ポップオーバー等）の見た目 */
+
+[data-testid="stPopoverContent"] {
+  width: 560px !important;
+  max-width: 560px !important;
+}
+
+/* path: ./btc_trade_system/features/dash/styles/settings.css */
+/* desc: 設定UI（タブ本体）のスコープと最小の余白調整。ギアのポップオーバー幅もここで管理 */
+
+/* 既存：ギアのポップオーバー幅（dashboardの歯車用） */
+[data-testid="stPopoverContent"] {
+  width: 560px !important;
+  max-width: 560px !important;
+}
+
+/* 設定タブ用のスコープ（必要最小の余白だけ） */
+.settings-tab {
+  padding-top: 0.25rem;
+}
+
+/* --- Settings popover layout fix ----------------------------- */
+#settings-popover {
+  /* 右に変な余白が出るのを防ぎ、中央寄せにする */
+  max-width: 860px; /* 好みで 720–900px の間で調整可 */
+  width: min(92vw, 860px);
+  margin: 0 auto; /* コンテンツを中央に */
+  padding-right: 0; /* 右の空きが出る環境での保険 */
+}
+
+/* 3カラムの縦位置を揃える（色ピッカーの行高差対策） */
+#settings-popover .stColumns {
+  align-items: flex-start;
+}
+
+/* 下部のボタン行の余白をバランス良く */
+#settings-popover .stButton > button {
+  min-width: 9rem;
+}
