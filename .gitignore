@@ -33,3 +33,7 @@ config/ui/health.yaml
 *.ps1 text eol=crlf
 *.py  text eol=lf
 *.yaml text eol=lf
+/btc_trade_system/config/ui/*.yaml
+!/btc_trade_system/config/ui/*_def.yaml
+*.tmp
+/tmp/
