@@ -1,18 +1,13 @@
-# path: ./btc_trade_system/config/ui/tabs.yaml
-# desc: ダッシュボードのタブ設定（並び順・有効/無効・初期表示）
-
-schema_rev: 1
-
-# 表示順（左→右）
-order:
-  - main
-  - health
-  - audit
-
+# path: ./btc_trade_system/config/ui/tabs_def.yaml
+# desc: タブ構成の既定値
+order: [main, health, audit]
 enabled:
   main: true
   health: true
   audit: true
-
-# 起動時に最初に見せたいタブ（存在しないキーや無効は無視）
 initial: main
+
+labels:
+  main: "メイン"
+  health: "健全性"
+  audit: "監査"

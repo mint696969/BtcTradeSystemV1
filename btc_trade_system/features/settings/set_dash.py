@@ -159,17 +159,12 @@ def render():
 
 # ---- ハブ(settings.py)からディスパッチされる公開フック ----
 def supports_default() -> bool:
-    """
-    このタブが「デフォルトに戻す」に対応しているかを返す。
-    dash_def.yaml（将来: main_def.yaml）の存在で判定。無ければ従来の exists/load_yaml でも可。
-    """
-
+    """このタブは『デフォルト』操作に対応するか"""
     try:
-        from btc_trade_system.features.settings import settings_svc
-        # まずは明示パス（DASH_DEF_PATH）があればそれを優先
-        p = getattr(settings_svc, "DASH_DEF_PATH", None)
-        if getattr(p, "exists", lambda: False)():
-            return True
+        from btc_trade_system.features.settings import settings_svc as S
+        return bool(S.has_default("dash"))
+    except Exception:
+        return False
 
         # 後方互換（exists / load_yaml）
         exists = getattr(settings_svc, "exists", None)
@@ -186,24 +181,19 @@ def supports_default() -> bool:
 def on_default() -> None:
     """
     デフォルト（開いているタブのみ適用）：
-      - 定義済みなら _reset_session_palette() を使って配色を既定に戻す
-      - その後 dirty/toast を積んでヘッダーへ即反映
+      - dash_def.yaml を読み、dash.yaml（current）へ原子的保存
+      - セッション上書きをクリアして即時反映
     """
-    import streamlit as st
     try:
-        # set_main.py 内にある既存のヘルパーが優先
-        _reset = globals().get("_reset_session_palette")
-        if callable(_reset):
-            _reset()
-        else:
-            # 最低限のフォールバック：配色ピッカーのセッションキーを消す
-            for k in list(st.session_state.keys()):
-                if str(k).startswith("pick_"):
-                    st.session_state.pop(k, None)
+        from btc_trade_system.features.settings import settings_svc as S
+        data = S.load_def_yaml("dash")
+        S.save_yaml("dash", data)  # def を current へ反映
+        # セッション上書きをクリア（次の描画はファイル値そのまま）
+        st.session_state["_alerts_palette_overrides"] = {}
         st.session_state["__settings_dirty"] = True
-        st.session_state["__toast"] = ("初期設定（配色）を既定に戻しました", None)
+        st.session_state["__toast"] = ("既定値を反映しました（dash.yaml を更新）", None)
     except Exception as e:
-        st.session_state["__toast"] = (f"初期化に失敗しました: {e}", "⚠️")
+        st.session_state["__toast"] = (f"既定値の反映に失敗: {e}", "⚠️")
 
 def on_save() -> None:
     """

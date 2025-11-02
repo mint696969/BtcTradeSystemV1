@@ -16,8 +16,25 @@ from btc_trade_system.features.audit_dev import writer as W
 # 基本設定
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 CONFIG_UI_DIR = REPO_ROOT / "btc_trade_system" / "config" / "ui"
-TABS_CFG_PATH = CONFIG_UI_DIR / "tabs.yaml"  # defaultsはローダ側で結合予定
-TABS_DEF_PATH = CONFIG_UI_DIR / "tabs_def.yaml"  # 既定（*_def.yaml 命名ルール）
+
+# tabs.yaml も settings_svc の外部解決規約（ENV: BTC_TS_CONFIG_DIR / repo data/config/ui）に追従
+def _tabs_paths() -> tuple[pathlib.Path, pathlib.Path]:
+    """
+    returns: (def_path, current_path)
+    - def:   <repo>/btc_trade_system/config/ui/tabs_def.yaml
+    - current: settings_svc._ext_config_dir()/tabs.yaml  （存在しなくてもよい）
+    """
+    def_path = CONFIG_UI_DIR / "tabs_def.yaml"
+    # 内部関数だが規約共有のため利用（dash.yaml 解決と同一ポリシー）
+    try:
+        ext_dir = settings._ext_config_dir()  # type: ignore[attr-defined]
+    except Exception:
+        ext_dir = CONFIG_UI_DIR  # フォールバック
+    cur_path = ext_dir / "tabs.yaml"
+    return def_path, cur_path
+
+# _tabs_paths() の直後に追加
+TABS_DEF_PATH, TABS_CFG_PATH = _tabs_paths()
 
 # ─────────────────────────────────────────────────────────────
 # ユーティリティ
@@ -120,7 +137,7 @@ def _render_tabs() -> None:
     for k in order:
         if enabled.get(k, True):
             keys.append(k)
-            labels.append({"main": "メイン", "health": "コレクターの健全性", "audit": "開発監査"}.get(k, k))
+            labels.append({"main": "メイン", "health": "健全性", "audit": "開発監査"}.get(k, k))
     if not keys:
         st.info("表示可能なタブがありません（tabs.yaml / tabs_def.yaml を確認してください）。")
         return
