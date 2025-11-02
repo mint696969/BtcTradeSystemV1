@@ -15,7 +15,7 @@
 
 - **初期設定タブ**：`btc_trade_system/features/settings/set_main.py`（I/F: `render()`）
 
-  - 配色ピッカー、**今回のみ適用**、**デフォルト復元**、**保存（basic.yaml へ alert_palette）**。
+  - 配色ピッカー、**今回のみ適用**、**デフォルト復元**、**保存（dash.yaml へ alert_palette）**。
   - 監査：`settings.apply_once / settings.restore_default / settings.save_click`。
   - I/O：`settings_svc.load_yaml` / `settings_svc.write_atomic` を必須使用。
 
@@ -57,13 +57,13 @@
 
 ### Appendix A: サンプル・スニペット
 
-- 保存（basic.yaml：`alert_palette`）
+- 保存（dash.yaml：`alert_palette`）
 
 ```python
-basic = settings_svc.load_yaml("basic.yaml") or {}
+basic = settings_svc.load_yaml("dash.yaml") or {}
 basic["alert_palette"] = pal_save
-settings_svc.write_atomic("basic.yaml", yaml.safe_dump(basic, allow_unicode=True))
-W.emit("settings.save_click", level="INFO", feature="settings", payload={"file":"basic.yaml","keys":["alert_palette"]})
+settings_svc.write_atomic("dash.yaml", yaml.safe_dump(basic, allow_unicode=True))
+W.emit("settings.save_click", level="INFO", feature="settings", payload={"file":"dash.yaml","keys":["alert_palette"]})
 ```
 
 ## 追記情報
@@ -84,7 +84,7 @@ set_main.py は on_default()（既定適用）と on_save()（保存）のハン
 
 「デフォルト」ボタンの活性/非活性判定は そのタブの“既定ファイルが存在するか” で決める。
 
-いまは settings_svc.has_default() → config/ui/basic_def.yaml の存在チェック。
+いまは settings_svc.has_default() → config/ui/dash_def.yaml の存在チェック。
 
 モーダルのタブ切替・再入（初期タブ記憶）
 
@@ -102,17 +102,17 @@ UI からの変更で st.session_state["__settings_dirty"] = True を立て、�
 
 UI 編集はセッション上の作業コピーで持ち、
 
-「デフォルト」＝ basic_def.yaml を読んで作業コピーに反映（ファイルは書き換えない）
+「デフォルト」＝ dash_def.yaml を読んで作業コピーに反映（ファイルは書き換えない）
 
-「保存」＝ basic.yaml へ書き出し（safe/atomic）
+「保存」＝ dash.yaml へ書き出し（safe/atomic）
 
 保存処理は features/settings/settings_svc.py の save_palette() で tmp→ 置換のアトミック書込。
 
 YAML の実体
 
-既定：btc_trade_system/config/ui/basic_def.yaml
+既定：btc_trade_system/config/ui/dash_def.yaml
 
-保存先：btc_trade_system/config/ui/basic.yaml
+保存先：btc_trade_system/config/ui/dash.yaml
 
 ※今回は main.yaml への改名は撤回（ロールバック）なので参照は basic 系で統一。
 
@@ -247,3 +247,4 @@ I/O は settings_svc.py に寄せる
 
 1 タブ 1 ファイルを基本に、\*\_def.yaml を用意するかどうかで
 「デフォルト」ボタンの有無（活性/非活性）を決める
+

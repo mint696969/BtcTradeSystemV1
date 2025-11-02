@@ -18,7 +18,7 @@
 |------|------|
 | **タブ制御** | `config/ui/tabs.yaml` / `tabs_def.yaml` により順序・初期タブ・有効化を制御 |
 | **CSS適用** | `_inject_tokens()` と `_load_css()` により styles/*.css を順序読み込み |
-| **配色同期** | `_inject_alert_palette_vars(settings.get_alert_palette())` により `basic.yaml` の色を :root に反映 |
+| **配色同期** | `_inject_alert_palette_vars(settings.get_alert_palette())` により `dash.yaml` の色を :root に反映 |
 | **デモアラート制御** | `_demo_alerts_changed()` および `_sync_demo_alerts_with_flag()` により Gear UI とヘッダーのチップを同期 |
 | **モーダル起動** | `from btc_trade_system.features.settings.modal_ui import settings_gear` により統合 |
 
@@ -37,7 +37,7 @@
 
 ### 2.3 動作仕様
 - モーダルの開閉状態は `_SETTINGS_FLAG` により `st.session_state` で一時保持。
-- 配色ピッカーの編集 → `basic.yaml` に即時保存／デフォルト復元は `basic_def.yaml` 読込。
+- 配色ピッカーの編集 → `dash.yaml` に即時保存／デフォルト復元は `dash_def.yaml` 読込。
 - 監査ログ (`audit_dev/writer.py`) に保存／開閉イベントを記録。
 - Streamlit バージョン差異により、`st.dialog()` / `st.experimental_dialog()` 両対応。
 
@@ -48,14 +48,14 @@
 | 操作 | 処理内容 |
 |------|-----------|
 | 適用（今回のみ） | :root のCSS変数更新のみ（yaml未保存） |
-| デフォルト | `basic_def.yaml` の初期値を読み出しUIへ反映 |
-| 保存 | `config/ui/basic.yaml` に配色を書込（atomic replace: `.tmp` → `.yaml`） |
+| デフォルト | `dash_def.yaml` の初期値を読み出しUIへ反映 |
+| 保存 | `config/ui/dash.yaml` に配色を書込（atomic replace: `.tmp` → `.yaml`） |
 
 ### 3.2 関連ファイル
 | ファイル | 用途 |
 |----------|------|
-| `config/ui/basic.yaml` | 現行配色定義（ユーザ保存用） |
-| `config/ui/basic_def.yaml` | 既定配色定義（デフォルト復元用） |
+| `config/ui/dash.yaml` | 現行配色定義（ユーザ保存用） |
+| `config/ui/dash_def.yaml` | 既定配色定義（デフォルト復元用） |
 
 ---
 
@@ -76,8 +76,8 @@ B --> C{タブ選択};
 C -->|初期設定| D[settings.render() → 配色ピッカー];
 C -->|健全性| E[settings_ui.render()];
 C -->|監査| F[未実装: ログ保持設定];
-D --> G[basic.yaml へ保存];
-D --> H[basic_def.yaml より復元];
+D --> G[dash.yaml へ保存];
+D --> H[dash_def.yaml より復元];
 D --> I[:root CSS変数更新];
 ```
 

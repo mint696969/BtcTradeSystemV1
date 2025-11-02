@@ -156,7 +156,7 @@ settings.tabs.update_order
 5. 設定ファイル構成
    ./btc_trade_system/config/
    ui/
-   basic.yaml / basic.defaults.yaml
+   dash.yaml / basic.defaults.yaml
    tabs.yaml / tabs.defaults.yaml
    network.yaml / network.defaults.yaml
    monitoring.yaml / monitoring.defaults.yaml
@@ -407,3 +407,4 @@ Health/Audit 連携以降は次ロードマップに引き継ぐ。
 
 ✅ これをもって設定モーダル完成までの短期開発計画（v1.0）とする。
 すべての仕様変更は docs/spec_dashboard_settings.md に追記・履歴管理を行う。
+

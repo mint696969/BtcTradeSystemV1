@@ -84,3 +84,4 @@ alerts = st.session_state.get("\_alerts", [])
 alerts.append({"level": "warn", "label": "しきい値超え", "fg": "#000", "bg": "#FFF2CC"})
 st.session_state["_alerts"] = alerts
 st.session_state["__settings_dirty"] = True
+

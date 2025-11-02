@@ -362,3 +362,4 @@ Start-Collector.ps1
 - `core/exchanges/profiles/`（bitflyer/binance/bybit/okx）
 - `apps/boards/dashboard/tabs/health.py`（API 行の表示/配色）
 - `apps/lib/heartbeat.py` / `scripts/guardian.ps1` / `scripts/dev.ps1`（任意運用）
+

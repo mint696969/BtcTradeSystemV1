@@ -256,7 +256,7 @@ BtcTradeSystem V1 — ダッシュボード／アラート／設定 仕様書（
 並び/有効/初期タブ: tabs.yaml を唯一の正とする（UI で並び替えはしない）
 
 3. 設定ファイル（YAML）
-3.1 basic.yaml
+3.1 dash.yaml
 schema_rev: 1
 language: "ja"
 time: { format: "24h", display: "HH:MM:SS" }
@@ -305,9 +305,9 @@ underline_active: true   # 選択タブの下線
 
 1 行のままアラートチップを描画（+N ポップオーバー対応）
 
-色は basic.yaml の alerts.chip.* を参照
+色は dash.yaml の alerts.chip.* を参照
 
-タブ配色は背景白固定、文字色の切替は basic.yaml colors.tab_text.* を参照
+タブ配色は背景白固定、文字色の切替は dash.yaml colors.tab_text.* を参照
 
 既読処理: 各タブの UI から未確認件数/時刻を st.session_state["__alerts"] に集約・更新
 
@@ -336,6 +336,6 @@ CSS はスコープ付きで注入し、他 UI へ副作用を出さない
 
 歯車バッジ: 重大未確認時のみ微小赤ドット表示（視認性アップ／ノイズ最小）
 
-トークン化の拡張: 余白・角丸・下線の太さなども basic.yaml に寄せて一括管理
+トークン化の拡張: 余白・角丸・下線の太さなども dash.yaml に寄せて一括管理
 
 テーマ注入ヘルパ: ui_theme.py を追加して CSS 変数を 1 箇所で生成・注入（保守性アップ）
