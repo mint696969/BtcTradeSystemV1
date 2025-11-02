@@ -161,22 +161,23 @@ def render():
 def supports_default() -> bool:
     """
     このタブが「デフォルトに戻す」に対応しているかを返す。
-    basic_def.yaml（将来: main_def.yaml）の存在で判定。無ければ従来の exists/load_yaml でも可。
+    dash_def.yaml（将来: main_def.yaml）の存在で判定。無ければ従来の exists/load_yaml でも可。
     """
+
     try:
         from btc_trade_system.features.settings import settings_svc
-        # まずは明示パス（BASIC_DEF_PATH）があればそれを優先
-        p = getattr(settings_svc, "BASIC_DEF_PATH", None)
+        # まずは明示パス（DASH_DEF_PATH）があればそれを優先
+        p = getattr(settings_svc, "DASH_DEF_PATH", None)
         if getattr(p, "exists", lambda: False)():
             return True
 
         # 後方互換（exists / load_yaml）
         exists = getattr(settings_svc, "exists", None)
-        if callable(exists) and (exists("basic_def.yaml") or exists("main_def.yaml")):
+        if callable(exists) and (exists("dash_def.yaml") or exists("main_def.yaml")):
             return True
 
         load = getattr(settings_svc, "load_yaml", None)
-        if callable(load) and (load("basic_def.yaml") or load("main_def.yaml")):
+        if callable(load) and (load("dash_def.yaml") or load("main_def.yaml")):
             return True
     except Exception:
         pass
@@ -207,9 +208,10 @@ def on_default() -> None:
 def on_save() -> None:
     """
     保存（開いているタブのみ適用）：
-      - 現在のピッカー値を basic.yaml に永続化（サービスI/F経由）
+      - 現在のピッカー値を dash.yaml に永続化（サービスI/F経由）
       - 保存後 dirty/toast を積んでヘッダーへ即反映
     """
+
     import streamlit as st
     try:
         from btc_trade_system.features.settings import settings_svc
@@ -252,11 +254,12 @@ def on_save() -> None:
             try:
                 from btc_trade_system.features.audit_dev import writer as W
                 W.emit("settings.save_click", level="INFO", feature="settings",
-                       payload={"file": "basic.yaml", "keys": ["alert_palette"], "source": "modal-top"})
+                       payload={"file": "dash.yaml", "keys": ["alert_palette"], "source": "modal-top"})
             except Exception:
                 pass
             st.session_state["__settings_dirty"] = True
-            st.session_state["__toast"] = ("保存しました（basic.yaml に反映）", None)
+            st.session_state["__toast"] = ("保存しました（dash.yaml に反映）", None)
+
         else:
             st.session_state["__toast"] = ("保存に失敗しました（save_palette が未提供）", None)
 

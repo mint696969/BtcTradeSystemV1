@@ -48,3 +48,39 @@
 
 - 左スロット Dev バッジ + `_jump_audit()` 実装。
 - `tabs.yaml` に `module` 指定を許容し、`dashboard.py` で動的 import（登録不要化）。
+
+### 追記情報
+
+ダッシュボードのアラートチップへ“信号を出す”方法
+
+完成状態のコードでは以下の契約で動いています（今回の zip で確認）：
+
+表示側（ダッシュボード・ヘッダ）
+dashboard.py のヘッダ描画で
+\_\_render_alert_chips(alerts) のように alerts 配列を読み込んで表示。
+
+設定側（set_main.py）
+デモアラートのチェック ON/OFF や色変更など、
+UI 操作時に st.session_state["_alerts"] を組み立てて格納しています。
+その後 st.session_state["__settings_dirty"] = True を付けて、必要時に st.rerun()。
+
+チップデータの形（概形）
+
+st.session_state["_alerts"] = [
+{"level": "urgent", "label": "緊急 Y", "fg": "#000000", "bg": "#FF6666"},
+{"level": "critical", "label": "重大 X", "fg": "#000000", "bg": "#FFCCCC"},
+{"level": "warn", "label": "注意 A", "fg": "#000000", "bg": "#FFF2CC"},
+# 省略…
+]
+
+※ level/label/fg/bg は既存 UI に合わせる。カウントなどを足す場合は
+{"count": 3} のように属性追加しても良い（描画側に反映が必要）。
+
+新タブからアラートを出したいときは、
+同じく st.session_state["_alerts"] を置き換えまたは追記してください。
+（例：監視タブで閾値を超えたときに warn を追加…など）
+
+alerts = st.session_state.get("\_alerts", [])
+alerts.append({"level": "warn", "label": "しきい値超え", "fg": "#000", "bg": "#FFF2CC"})
+st.session_state["_alerts"] = alerts
+st.session_state["__settings_dirty"] = True

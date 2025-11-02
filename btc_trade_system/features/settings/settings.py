@@ -13,7 +13,7 @@ _SETTINGS_FLAG = "__settings_open"
 # 健全性タブ（説明・監視系UI）
 from btc_trade_system.features.settings import set_health as settings_tab
 # 初期設定タブ（配色・デモアラート・保存/既定/今回のみ適用）
-from btc_trade_system.features.settings import set_main
+from btc_trade_system.features.settings import set_dash
 
 # Streamlit の dialog API（正式 or experimental）を吸収
 _DLG = getattr(st, "dialog", None) or getattr(st, "experimental_dialog", None)
@@ -43,7 +43,7 @@ if _DLG is None:
             st.sidebar.header("設定")
             tabs = st.sidebar.tabs(["初期設定", "健全性", "監査"])
             with tabs[0]:
-                set_main.render()
+                set_dash.render()
             with tabs[1]:
                 settings_tab.render()
             with tabs[2]:
@@ -67,7 +67,7 @@ else:
         # --- 初期設定：配色ピッカー ---
         with tabs[0]:
             st.session_state["__settings_active_tab"] = "初期設定"
-            set_main.render()
+            set_dash.render()
 
         # --- 健全性（説明・監視系UI） ---
         with tabs[1]:
@@ -84,8 +84,9 @@ else:
         def _supports_default(tab_key: str) -> bool:
             # タブごとに“デフォルト対応”を問い合わせ（未実装なら False）
             if tab_key == "初期設定":
-                from btc_trade_system.features.settings import set_main as _m
+                from btc_trade_system.features.settings import set_dash as _m
                 fn = getattr(_m, "supports_default", None)
+
                 try:
                     return bool(fn()) if callable(fn) else False
                 except Exception:
@@ -118,8 +119,9 @@ else:
                     help=("このタブはデフォルト未対応です" if disabled else None),
                 ):
                     if active_key == "初期設定":
-                        from btc_trade_system.features.settings import set_main as _m
+                        from btc_trade_system.features.settings import set_dash as _m
                         getattr(_m, "on_default", lambda: None)()
+
                     elif active_key == "健全性":
                         from btc_trade_system.features.settings import set_health as _h
                         getattr(_h, "on_default", lambda: None)()
@@ -129,8 +131,9 @@ else:
             with col_c:
                 if st.button("保存", key="dlg_top_save", use_container_width=True):
                     if active_key == "初期設定":
-                        from btc_trade_system.features.settings import set_main as _m
+                        from btc_trade_system.features.settings import set_dash as _m
                         getattr(_m, "on_save", lambda: None)()
+
                     elif active_key == "健全性":
                         from btc_trade_system.features.settings import set_health as _h
                         getattr(_h, "on_save", lambda: None)()

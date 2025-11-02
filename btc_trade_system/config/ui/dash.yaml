@@ -12,13 +12,13 @@ colors:
   alert_chip:
     warn:
       fg: '#000000'
-      bg: '#FFEB00'
+      bg: '#FFF2CC'
     crit:
-      fg: '#FFFFFF'
-      bg: '#E500FF'
+      fg: '#000000'
+      bg: '#FFCCCC'
     urgent:
-      fg: '#FFFFFF'
-      bg: '#F10005'
+      fg: '#000000'
+      bg: '#FF6666'
 appearance:
   theme: system
   table:
