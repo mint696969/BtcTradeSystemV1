@@ -1,4 +1,4 @@
-# path: btc_trade_system/features/settings/set_main.py
+# path: btc_trade_system/features/settings/set_dash.py
 # desc: 「初期設定」タブのメインUI（配色・デモアラート・保存/既定/今回のみ適用・監査出力）
 
 from __future__ import annotations
