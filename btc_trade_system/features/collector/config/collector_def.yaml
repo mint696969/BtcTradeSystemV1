@@ -1,0 +1,9 @@
+# path: ./btc_trade_system/features/collector/config/collector_def.yaml
+# desc: Collector 既定設定（status.json 出力先・更新間隔など）。UI保存値とマージされる前提の def 側。
+
+# 追記（status の下に追加）
+status:
+  path: "${BTC_TS_DATA_DIR}/collector/status.json"
+  update_interval: 2.0
+  stale_warn_sec: 3 # 3秒超で WARN 判定に備える（Health側で色分け）
+  stale_crit_sec: 10 # 10秒超は CRIT 相当の古さ
