@@ -1,13 +1,12 @@
-# 改行の既定
 * text=auto
 
-# 改行ポリシー
+# 改行方針
 *.py    text eol=lf
+*.ps1   text eol=crlf
 *.sh    text eol=lf
 *.md    text eol=lf
 *.yaml  text eol=lf
 *.yml   text eol=lf
-*.ps1   text eol=crlf   # PowerShellはCRLF推奨（LFにしたいならここをlfに）
 
 # バイナリ
 *.png   binary
