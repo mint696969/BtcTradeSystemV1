@@ -1,0 +1,17 @@
+# 改行の既定
+* text=auto
+
+# 改行ポリシー
+*.py    text eol=lf
+*.sh    text eol=lf
+*.md    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.ps1   text eol=crlf   # PowerShellはCRLF推奨（LFにしたいならここをlfに）
+
+# バイナリ
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.zip   binary
+*.gz    binary

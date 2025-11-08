@@ -1,39 +1,16 @@
-# path: ./.gitattributes
-# desc: 改行コードの統一（Windowsでも警告が出ないように）
-* text=auto
-
-# ソースコードは LF 固定
-*.py   text eol=lf
-*.ps1  text eol=lf
-*.sh   text eol=lf
-*.md   text eol=lf
-*.yaml text eol=lf
-*.yml  text eol=lf
-
-# そのほかバイナリ
-*.png  binary
-*.jpg  binary
-*.jpeg binary
-*.zip  binary
-*.gz   binary
-
+# 生成物／環境依存
 data/
 logs/
 .vscode/
-*.zip
 secrets/
-
+tmp/
+*.tmp
+*.zip
 __pycache__/
 *.pyc
 
+# UIの実効ファイルは除外（defだけ追跡）
 config/ui/monitoring.yaml
 config/ui/health.yaml
-
-* text=auto eol=lf
-*.ps1 text eol=crlf
-*.py  text eol=lf
-*.yaml text eol=lf
 /btc_trade_system/config/ui/*.yaml
 !/btc_trade_system/config/ui/*_def.yaml
-*.tmp
-/tmp/
