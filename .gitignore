@@ -7,12 +7,28 @@
 /secrets/
 /.vscode/
 
-# アーカイブ類（どこでも）
+# venv（これが未指定だと4k超えが出ます）
+/.venv/
+/venv/
+
+# Python キャッシュ
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+pip-wheel-metadata/
+build/
+dist/
+
+# handoff の成果物は除外（TXT/MDのみ残す）
+/docs/handoff/*.zip
+/docs/handoff/CTX-*/
+/docs/handoff/**/
+!docs/handoff/*.md
+!docs/handoff/*.txt
+
+# アーカイブ類
 *.zip
 *.7z
 *.rar
-
-# handoff の成果物だけ除外（TXT/MDは残す運用）
-/docs/handoff/*.zip
-/docs/handoff/CTX-*/
-/docs/handoff/** 
