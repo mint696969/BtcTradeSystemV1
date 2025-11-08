@@ -305,3 +305,4 @@ def render():
 
     # 開始時に開いた div をここで閉じる（※関数外に出さない）
     st.markdown("</div>", unsafe_allow_html=True)
+

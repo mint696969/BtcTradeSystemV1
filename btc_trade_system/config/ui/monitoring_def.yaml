@@ -2,15 +2,28 @@
 # desc: ダッシュボード「コレクター健全性」タブの初期しきい値設定（UIモーダルのデフォルト）
 
 health:
-  age_sec:   { ok: 10, warn: 20, crit: 30 }
+  age_sec: { ok: 10, warn: 20, crit: 30 }
   latency_ms: { warn: 400, crit: 1200 }
-  gap_rate:  { warn: 0.05, crit: 0.15 }
+  gap_rate: { warn: 0.05, crit: 0.15 }
   window_min: 5
   require_all_ok: true
 audit:
   success_sample_n: 50
 slo:
-  trades:    { exp_intv_s: 1.0,  max_stale_s: 5 }
-  ticker:    { exp_intv_s: 1.0,  max_stale_s: 5 }
-  orderbook: { exp_intv_s: 2.0,  max_stale_s: 6 }
-
+  trades: { exp_intv_s: 1.0, max_stale_s: 5 }
+  ticker: { exp_intv_s: 1.0, max_stale_s: 5 }
+  orderbook: { exp_intv_s: 2.0, max_stale_s: 6 }
+# --- add: palette defaults (health tab UI) ---
+palette:
+  card_border: # カード枠の色
+    ok: "#10b981"
+    warn: "#f59e0b"
+    crit: "#ef4444"
+  card_fill: # カード内側の薄い塗り
+    ok: "#ecfdf5"
+    warn: "#fffbeb"
+    crit: "#fef2f2"
+  bar_fill: # タイムラインの塗り
+    ok: "#d1fae5"
+    warn: "#fef3c7"
+    crit: "#fee2e2"

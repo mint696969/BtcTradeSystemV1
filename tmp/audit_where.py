@@ -28,3 +28,4 @@ except Exception as e:
     print("write failed:", e)
 
 print("exists after write:", dst.exists(), " size:", (dst.stat().st_size if dst.exists() else 0))
+

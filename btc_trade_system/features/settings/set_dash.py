@@ -2,11 +2,10 @@
 # desc: 「初期設定」タブのメインUI（配色・デモアラート・保存/既定/今回のみ適用・監査出力）
 
 from __future__ import annotations
-import json
-import os
-from typing import Any, Callable, Tuple
+from typing import Any
 from btc_trade_system.features.settings import settings_svc
-from pathlib import Path
+from btc_trade_system.features.settings import ui_common as UI
+
 # dev_audit 記録
 from btc_trade_system.features.audit_dev import writer as W
 
@@ -73,45 +72,34 @@ def _toggle_demo_alerts():
     # UI表示はせず、dirtyフラグだけ立てて settings.py に rerun を任せる
     st.session_state["__settings_dirty"] = True
 
-# --- yaml は任意（無ければ JSON で代替） ---
-try:
-    import yaml  # type: ignore
-    def _to_text(obj: Any) -> str:
-        return yaml.safe_dump(obj, sort_keys=False, allow_unicode=True)
-    def _from_text(text: str) -> Any:
-        return yaml.safe_load(text) if text.strip() else {}
-except Exception:  # pragma: no cover
-    def _to_text(obj: Any) -> str:
-        return json.dumps(obj, ensure_ascii=False, indent=2)
-    def _from_text(text: str) -> Any:
-        return json.loads(text) if text.strip() else {}
+def _exec_default():
+    settings_svc.reset_to_default("dash")
+    st.session_state["_alerts_palette_overrides"] = {}
 
-# --- svc_settings の API を多段で解決（settings 配下の svc を参照） ---
-def _resolve_api() -> Tuple[Callable[[], Any], Callable[[Any], None]]:
-    from importlib import import_module
-    svc = import_module("btc_trade_system.features.settings.settings_svc")
-
-    load_candidates = ["load_for_ui", "load", "load_monitoring", "read", "read_monitoring", "get_monitoring"]
-    save_candidates = ["save_from_ui", "save", "save_monitoring", "write", "write_monitoring", "put_monitoring"]
-
-    load_fn = next((getattr(svc, n) for n in load_candidates if callable(getattr(svc, n, None))), None)
-    if load_fn is None:
-        def _load_stub(): return {}
-        load_fn = _load_stub
-
-    save_fn = next((getattr(svc, n) for n in save_candidates if callable(getattr(svc, n, None))), None)
-    if save_fn is None:
-        def _save_stub(_obj: Any) -> None:
-            raise RuntimeError("settings_svc に保存用APIが見つかりません")
-        save_fn = _save_stub
-
-    return load_fn, save_fn
+def _exec_save():
+    pal_save = {
+        "urgent": {
+            "fg": _norm_hex(st.session_state.get("set.basic.pick.urgent.fg", "#FFFFFF"), "#FFFFFF"),
+            "bg": _norm_hex(st.session_state.get("set.basic.pick.urgent.bg", "#FF6B6B"), "#FF6B6B"),
+        },
+        "crit": {
+            "fg": _norm_hex(st.session_state.get("set.basic.pick.crit.fg", "#FFFFFF"), "#FFFFFF"),
+            "bg": _norm_hex(st.session_state.get("set.basic.pick.crit.bg", "#F9C8C8"), "#F9C8C8"),
+        },
+        "warn": {
+            "fg": _norm_hex(st.session_state.get("set.basic.pick.warn.fg", "#000000"), "#000000"),
+            "bg": _norm_hex(st.session_state.get("set.basic.pick.warn.bg", "#FDE8C8"), "#FDE8C8"),
+        },
+    }
+    ok = bool(getattr(settings_svc, "save_palette")(pal_save))
+    if not ok:
+        st.error("保存に失敗しました（save_palette が未提供）")
 
 def render():
     st.markdown("<div class='settings-tab'>", unsafe_allow_html=True)
     st.session_state["__settings_active_tab"] = "初期設定"
 
-    st.subheader("設定（monitoring.yaml）")
+    st.subheader("初期設定（dash.yaml）")
 
     # ---- デモアラート投入（ヘッダーの表示確認用） ----
     st.divider()
@@ -141,117 +129,28 @@ def render():
     c_urgent, c_crit, c_warn = st.columns(3)
     with c_urgent:
         st.caption("緊急")
-        u_fg = st.color_picker("文字", use["urgent"]["fg"], key="pick_urgent_fg", label_visibility="collapsed")
-        u_bg = st.color_picker("背景", use["urgent"]["bg"], key="pick_urgent_bg", label_visibility="collapsed")
+        u_fg = st.color_picker("文字", use["urgent"]["fg"], key="set.basic.pick.urgent.fg", label_visibility="collapsed")
+        u_bg = st.color_picker("背景", use["urgent"]["bg"], key="set.basic.pick.urgent.bg", label_visibility="collapsed")
     with c_crit:
         st.caption("重大")
-        c_fg = st.color_picker("文字", use["crit"]["fg"], key="pick_crit_fg", label_visibility="collapsed")
-        c_bg = st.color_picker("背景", use["crit"]["bg"], key="pick_crit_bg", label_visibility="collapsed")
+        c_fg = st.color_picker("文字", use["crit"]["fg"], key="set.basic.pick.crit.fg", label_visibility="collapsed")
+        c_bg = st.color_picker("背景", use["crit"]["bg"], key="set.basic.pick.crit.bg", label_visibility="collapsed")
     with c_warn:
         st.caption("注意")
-        w_fg = st.color_picker("文字", use["warn"]["fg"], key="pick_warn_fg", label_visibility="collapsed")
-        w_bg = st.color_picker("背景", use["warn"]["bg"], key="pick_warn_bg", label_visibility="collapsed")
+        w_fg = st.color_picker("文字", use["warn"]["fg"], key="set.basic.pick.warn.fg", label_visibility="collapsed")
+        w_bg = st.color_picker("背景", use["warn"]["bg"], key="set.basic.pick.warn.bg", label_visibility="collapsed")
 
     # ボタン操作は上部（ハブ）に集約しました
-    st.caption("操作は上部の『デフォルト／保存』ボタンをご利用ください。")
+    st.caption("操作は下部の『デフォルト／保存／閉じる』ボタンをご利用ください。")
+
+    # === セクション専用ボタン（閉じる／デフォルト／保存） ===
+    UI.render_section_controls(
+        prefix="set.basic",
+        on_default=_exec_default,
+        on_save=_exec_save,
+        key_base="set.basic.btn",
+        labels=("閉じる","デフォルト","保存"),
+        confirm_message="初期設定を更新します。よろしいですか？"
+    )
 
     st.markdown("</div>", unsafe_allow_html=True)
-
-# ---- ハブ(settings.py)からディスパッチされる公開フック ----
-def supports_default() -> bool:
-    """このタブは『デフォルト』操作に対応するか"""
-    try:
-        from btc_trade_system.features.settings import settings_svc as S
-        return bool(S.has_default("dash"))
-    except Exception:
-        return False
-
-        # 後方互換（exists / load_yaml）
-        exists = getattr(settings_svc, "exists", None)
-        if callable(exists) and (exists("dash_def.yaml") or exists("main_def.yaml")):
-            return True
-
-        load = getattr(settings_svc, "load_yaml", None)
-        if callable(load) and (load("dash_def.yaml") or load("main_def.yaml")):
-            return True
-    except Exception:
-        pass
-    return False
-
-def on_default() -> None:
-    """
-    デフォルト（開いているタブのみ適用）：
-      - dash_def.yaml を読み、dash.yaml（current）へ原子的保存
-      - セッション上書きをクリアして即時反映
-    """
-    try:
-        from btc_trade_system.features.settings import settings_svc as S
-        data = S.load_def_yaml("dash")
-        S.save_yaml("dash", data)  # def を current へ反映
-        # セッション上書きをクリア（次の描画はファイル値そのまま）
-        st.session_state["_alerts_palette_overrides"] = {}
-        st.session_state["__settings_dirty"] = True
-        st.session_state["__toast"] = ("既定値を反映しました（dash.yaml を更新）", None)
-    except Exception as e:
-        st.session_state["__toast"] = (f"既定値の反映に失敗: {e}", "⚠️")
-
-def on_save() -> None:
-    """
-    保存（開いているタブのみ適用）：
-      - 現在のピッカー値を dash.yaml に永続化（サービスI/F経由）
-      - 保存後 dirty/toast を積んでヘッダーへ即反映
-    """
-
-    import streamlit as st
-    try:
-        from btc_trade_system.features.settings import settings_svc
-
-        # ピッカーの現在値（キー名は現状の set_main.py に合わせる）
-        def _norm_hex(s: str, default: str) -> str:
-            if not isinstance(s, str) or not s.startswith("#") or len(s) not in (4, 7):
-                return default
-            return s.upper()
-
-        pal_save = {
-            "urgent": {
-                "fg": _norm_hex(st.session_state.get("pick_urgent_fg", "#FFFFFF"), "#FFFFFF"),
-                "bg": _norm_hex(st.session_state.get("pick_urgent_bg", "#FF6B6B"), "#FF6B6B"),
-            },
-            "crit": {
-                "fg": _norm_hex(st.session_state.get("pick_crit_fg", "#FFFFFF"), "#FFFFFF"),
-                "bg": _norm_hex(st.session_state.get("pick_crit_bg", "#F9C8C8"), "#F9C8C8"),
-            },
-            "warn": {
-                "fg": _norm_hex(st.session_state.get("pick_warn_fg", "#000000"), "#000000"),
-                "bg": _norm_hex(st.session_state.get("pick_warn_bg", "#FDE8C8"), "#FDE8C8"),
-            },
-        }
-
-        # 公開I/Fで保存（原子的置換は settings_svc 側に委譲）
-        ok = False
-        save = getattr(settings_svc, "save_palette", None)
-        if callable(save):
-            ok = bool(save(pal_save))
-        else:
-            # 後方互換フォールバック（もし別名が用意されている場合だけ呼ぶ）
-            write = getattr(settings_svc, "write_palette", None)
-            if callable(write):
-                ok = bool(write(pal_save))
-
-        if ok:
-            # 一時上書きをクリアし、次描画でファイル値をそのまま反映
-            st.session_state["_alerts_palette_overrides"] = {}
-            try:
-                from btc_trade_system.features.audit_dev import writer as W
-                W.emit("settings.save_click", level="INFO", feature="settings",
-                       payload={"file": "dash.yaml", "keys": ["alert_palette"], "source": "modal-top"})
-            except Exception:
-                pass
-            st.session_state["__settings_dirty"] = True
-            st.session_state["__toast"] = ("保存しました（dash.yaml に反映）", None)
-
-        else:
-            st.session_state["__toast"] = ("保存に失敗しました（save_palette が未提供）", None)
-
-    except Exception as e:
-        st.session_state["__toast"] = (f"保存に失敗しました: {e}", None)

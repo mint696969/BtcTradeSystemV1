@@ -77,3 +77,4 @@ def sha256_file(p: Path) -> str | None:
         return h.hexdigest()
     except Exception:
         return None
+

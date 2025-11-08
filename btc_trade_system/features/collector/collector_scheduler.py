@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/collector/collector_scheduler.py
+# path: btc_trade_system/features/collector/collector_scheduler.py
 # desc: RateController に基づいて各 endpoint runner を呼び出す薄いスケジューラ。429/Retry-After を扱い、監査に記録。
 
 from __future__ import annotations
@@ -38,6 +38,11 @@ class Endpoint:
     runner: Runner
 
 class Scheduler:
+
+    def set_exchange_policy(self, exchange: str, *, max_rps: float, burst: int = 1) -> None:
+        """取引所レベルのレート（トークンバケット）を設定。"""
+        self.rc.set_exchange_policy(exchange, max_rps=max_rps, burst=burst)
+
     """RateController で許可されたタイミングで runner を実行する最小スケジューラ。"""
 
     def __init__(self, rc: Optional[RateController] = None):
@@ -48,10 +53,12 @@ class Scheduler:
         key = (exchange, endpoint)
         self.table[key] = Endpoint(exchange, endpoint, priority, target_interval, runner)
         self.rc.set_policy(exchange, endpoint, priority=priority, target_interval=target_interval)
+        # 優先度の昇順（0=最優先）で巡回するようソート済みキーを持つ
+        self._keys = sorted(self.table.keys(), key=lambda k: self.table[k].priority)
 
     def run_forever(self, tick_sleep: float = 0.05) -> None:
-        """非常に単純なラウンド：全 endpoint を順周回し、許可されたものだけ実行。"""
-        keys = list(self.table.keys())
+        """非常に単純なラウンド：全 endpoint を優先度順に巡回し、許可されたものだけ実行。"""
+        keys = getattr(self, "_keys", sorted(self.table.keys(), key=lambda k: self.table[k].priority))
         while True:
             any_run = False
             for key in keys:
@@ -99,3 +106,4 @@ if __name__ == "__main__":
     sch.register_endpoint("bitflyer", "trades",   priority=1, target_interval=0.5, runner=dummy_ob)
 
     sch.run_forever()
+

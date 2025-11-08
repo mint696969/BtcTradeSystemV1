@@ -32,3 +32,4 @@ def load_status_with_leader() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         return items, leader
     except Exception:
         return [], {}
+

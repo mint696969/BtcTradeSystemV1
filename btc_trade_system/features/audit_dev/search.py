@@ -74,3 +74,4 @@ def errors_only_tail(path: Path, limit: int = 200) -> List[str]:
     except Exception:
         return []
     return out
+

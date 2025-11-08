@@ -18,3 +18,4 @@ print("RET_HAS_EONLY =", has(r'^## audit_tail \(errors-only', text))
 print("FILE_PATH     =", out)
 print("FILE_HAS_SUM  =", has(r'^## errors_summary', body))
 print("FILE_HAS_EONLY=", has(r'^## audit_tail \(errors-only', body))
+

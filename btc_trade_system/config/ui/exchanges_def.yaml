@@ -1,0 +1,22 @@
+# path: btc_trade_system/config/ui/exchanges_def.yaml
+# desc: 取引所登録の既定値（只読）。current(exchanges.yaml)へ後勝ちマージ。
+
+exchanges:
+  - key: bitflyer
+    enabled: true
+    label: "bitFlyer"
+    rate:
+      max_rps: 8 # 取引所レベルの最大RPS
+      burst: 2 # バースト許容量
+    endpoints:
+      - key: orderbook
+        priority: 0
+        target_interval: 0.20
+      - key: trades
+        priority: 1
+        target_interval: 0.50
+secrets:
+  # secrets.ini 等を参照する場合のキー名。保存先は別管理（VCS外）
+  bitflyer:
+    api_key: ""
+    api_secret: ""

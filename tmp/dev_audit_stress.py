@@ -15,3 +15,4 @@ for i in range(N):
 logp = Path(os.environ.get("BTC_TS_LOGS_DIR", "logs")) / "dev_audit.jsonl"
 print("SIZE(MB)=", logp.stat().st_size / (1024 * 1024))
 print("DONE")
+

@@ -38,3 +38,4 @@ def get_levels_order() -> List[str]:
 
 def level_color(level: str) -> str:
     return LEVEL_COLORS.get(level.upper(), "#808080")
+

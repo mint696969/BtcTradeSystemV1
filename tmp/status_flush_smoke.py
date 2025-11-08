@@ -5,3 +5,4 @@ sw.set_storage(logs_root="LROOT", data_root="DROOT", primary_ok=True)
 sw.update("bitflyer","board", ok=True, last_iso="2025-10-15T00:00:00Z")
 p = sw.flush()
 print("ok:", p)
+

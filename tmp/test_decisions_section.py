@@ -10,3 +10,4 @@ def has_decisions(s): return bool(re.search(r'^## Decisions \(last \d+\)', s, fl
 print("RET_HAS_DECISIONS =", has_decisions(t))
 print("FILE_HAS_DECISIONS=", has_decisions(body))
 print("SNAP_PATH         =", p)
+

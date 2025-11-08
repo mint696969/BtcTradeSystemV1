@@ -1,13 +1,15 @@
-# path: ./btc_trade_system/config/ui/tabs_def.yaml
-# desc: タブ構成の既定値
-order: [main, health, audit]
-enabled:
-  main: true
-  health: true
-  audit: true
+# path: ./btc_trade_system/config/ui/tabs.yaml
+# desc: ダッシュボードタブの「現在値」。defaults（tabs_def.yaml）に対する上書き。
+
+# 表示順（左→右）
+order: [main, collector, health, audit]
+
+# 初期表示タブ
 initial: main
 
+# 表示ラベル
 labels:
   main: "メイン"
+  collector: "コレクター"
   health: "健全性"
   audit: "監査"

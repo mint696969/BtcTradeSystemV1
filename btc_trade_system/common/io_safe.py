@@ -32,3 +32,4 @@ def append_jsonl(path: str | os.PathLike, obj: dict) -> None:
     with open(path, "a", encoding="utf-8") as fh:
         fh.write(s + "\n")
         _fsync(fh)
+

@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/collector/bitflyer_public.py
+# path: btc_trade_system/features/collector/bitflyer_public.py
 # desc: bitFlyer 公開RESTの最小ランナー。成功時はハートビートを刻み、429時は RateLimited を投げる。
 
 from __future__ import annotations
@@ -26,15 +26,41 @@ except Exception:
             super().__init__(message)
             self.retry_after_sec = retry_after_sec
 
-# 置換書き（小型版）。将来は core/io_atomic を使う。
+# 置換書き（Windows耐性つき）。将来は core/io_atomic を使う。
 def _atomic_write_text(path: Path, text: str) -> None:
+    """
+    Windows の一時的ロック（WinError 32）に耐える原子的置換。
+    一時ファイルは衝突しにくいユニーク名を用い、PermissionError 時は短いバックオフで数回再試行する。
+    """
+    import uuid
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
+
+    # ユニークな tmp（with_suffix だと置換になるので name を直接拡張）
+    tmp = path.parent / f"{path.name}.{uuid.uuid4().hex}.tmp"
+
+    # 先にフル書込み・クローズ（ディスクへ確実に押し出す）
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
         f.flush()
         os.fsync(f.fileno())
-    os.replace(tmp, path)
+
+    # 置換（短いバックオフでリトライ）
+    max_retry = 6
+    delay = 0.02  # 20ms から開始
+    for i in range(max_retry):
+        try:
+            os.replace(tmp, path)
+            break
+        except PermissionError:
+            if i == max_retry - 1:
+                # 最終リトライでもダメならそのまま投げる
+                raise
+            time.sleep(delay)
+            delay *= 1.8  # ~200ms まで漸増
+        except Exception:
+            # それ以外は即座に伝播（想定外の異常）
+            raise
+
     # ディレクトリ fsync（best-effort）
     try:
         dir_fd = os.open(path.parent, os.O_DIRECTORY)
@@ -100,3 +126,4 @@ def run_trades() -> None:
     _write_heartbeat("bitflyer", "trades")
     dev_audit_emit(event="collector.heartbeat", level="INFO", feature="collector",
                    payload={"exchange": "bitflyer", "endpoint": "trades"})
+

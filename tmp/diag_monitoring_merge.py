@@ -10,3 +10,4 @@ def deep_merge(a, b):
     return a if a is not None else b
 effective = deep_merge(cur, default)
 print(json.dumps(effective, ensure_ascii=False, indent=2))
+

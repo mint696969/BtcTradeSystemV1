@@ -580,3 +580,4 @@ def render():
         # --- 開発監査ログ（最下部）: 10行固定・最大50行（JST表示）、DLはJST付き最大500行 ---
         from btc_trade_system.features.audit_dev.log_ui import render_log_panel
         render_log_panel(eff_mode)  # eff_mode はこの関数内で定義済みの実効モード
+

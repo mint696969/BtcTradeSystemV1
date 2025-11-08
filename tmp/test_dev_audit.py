@@ -11,3 +11,4 @@ if p.exists():
     tail = p.read_text(encoding="utf-8").splitlines()[-3:]
     print("TAIL:")
     for line in tail: print(line)
+

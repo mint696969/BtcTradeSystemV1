@@ -39,3 +39,4 @@ for s in lines:
 for m in ["OFF","DEBUG","BOOST"]:
     keep = [r for r in recs if LEVEL.get(str(r.get("level","")).upper(),999) >= min_rank(m)]
     print(m, "visible=", len(keep))
+

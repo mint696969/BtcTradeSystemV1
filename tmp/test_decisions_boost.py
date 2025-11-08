@@ -8,3 +8,4 @@ body = (paths.logs_dir() / "handover_gpt.txt").read_text(encoding="utf-8", error
 print("BOOST_RET_HAS_DECISIONS =", bool(re.search(r'^## Decisions \(last \d+\)', t, flags=re.M)))
 print("BOOST_FILE_HAS_DECISIONS=", bool(re.search(r'^## Decisions \(last \d+\)', body, flags=re.M)))
 print("SNAP_PATH               =", p)
+

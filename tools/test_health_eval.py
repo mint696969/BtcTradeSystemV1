@@ -10,3 +10,4 @@ print("updated_at:", summary["updated_at"])
 print("all_ok:", summary["all_ok"])
 for it in summary["items"]:
     print(f"{it['exchange']}/{it['topic']}: {it['status']}  age={it['age_sec']:.1f}s  notes={it['notes']}")
+

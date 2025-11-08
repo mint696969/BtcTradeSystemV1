@@ -120,3 +120,4 @@ def evaluate(status_json: Path, cfg_root: Path) -> dict:
 
     all_ok = all(i["status"]=="OK" for i in items) if require_all else (all(i["status"]!="CRIT" for i in items) and any(i["status"]=="OK" for i in items))
     return {"items": items, "updated_at": dt.datetime.utcnow().isoformat() + "Z", "all_ok": all_ok}
+

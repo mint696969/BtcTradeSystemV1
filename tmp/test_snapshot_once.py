@@ -33,3 +33,4 @@ print("MissingSections:", ",".join(missing_sections) if missing_sections else "<
 # Exit code
 ok = (not miss) and recent_len>0 and (not missing_sections)
 sys.exit(0 if ok else 2)
+

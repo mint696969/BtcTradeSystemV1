@@ -17,3 +17,4 @@ t2 = LOG.stat().st_mtime
 print("t1=", t1, " t2=", t2, " delta=", t2 - t1)
 # 10秒未満なら変わらないのが期待
 print("rate_limit_ok=", (t2 == t1))
+

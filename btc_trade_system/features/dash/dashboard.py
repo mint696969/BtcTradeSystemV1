@@ -6,7 +6,6 @@ import importlib
 import pathlib
 from pathlib import Path
 from typing import Dict, List, Optional
-import os
 import yaml
 import streamlit as st
 from btc_trade_system.features.settings import settings_svc as settings
@@ -47,12 +46,28 @@ def _load_yaml(path: pathlib.Path) -> Dict:
 def _load_tabs_cfg() -> Dict:
     base = _load_yaml(TABS_DEF_PATH)
     cur  = _load_yaml(TABS_CFG_PATH)
+
     order = (cur.get("order") or base.get("order") or ["main", "health", "audit"])
+
     enabled = {k: True for k in order}
     enabled.update(base.get("enabled", {}))
     enabled.update(cur.get("enabled", {}))
+
+    # ← 追加：labels を defaults→current でマージ
+    labels = {}
+    labels.update(base.get("labels", {}))
+    labels.update(cur.get("labels", {}))
+
     initial = cur.get("initial") or base.get("initial") or (order[0] if order else None)
-    return {"order": order, "enabled": enabled, "initial": initial}
+
+    return {"order": order, "enabled": enabled, "initial": initial, "labels": labels}
+
+def _clamp_dashboard_order(order: List[str]) -> List[str]:
+    """ダッシュボードに不要なキーを除外し、main を常に最左に固定"""
+    seq = [k for k in order if k not in ("collector", "basic")]
+    if "main" in seq:
+        seq = ["main"] + [k for k in seq if k != "main"]
+    return seq
 
 def _inject_tokens(toolbar_h_px: int = 32, header_h_px: int = 44,
                    tab_text_normal: str = "#000000",
@@ -129,15 +144,17 @@ def _resolve_tab_module(tab_key: str) -> Optional[str]:
 
 def _render_tabs() -> None:
     cfg = _load_tabs_cfg()
-    order = cfg["order"]
+    order = _clamp_dashboard_order(cfg["order"])
     initial = cfg["initial"]
     preferred = st.session_state.get("active_tab") or initial
+    if preferred not in order:
+        preferred = "main" if "main" in order else (order[0] if order else None)
     enabled = cfg["enabled"]
     keys, labels = [], []
     for k in order:
         if enabled.get(k, True):
             keys.append(k)
-            labels.append({"main": "メイン", "health": "健全性", "audit": "開発監査"}.get(k, k))
+            labels.append(cfg.get("labels", {}).get(k, k))
     if not keys:
         st.info("表示可能なタブがありません（tabs.yaml / tabs_def.yaml を確認してください）。")
         return
@@ -186,3 +203,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

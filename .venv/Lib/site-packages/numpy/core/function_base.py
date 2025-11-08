@@ -7,3 +7,4 @@ def __getattr__(attr_name):
             f"module 'numpy.core.function_base' has no attribute {attr_name}")
     _raise_warning(attr_name, "function_base")
     return ret
+

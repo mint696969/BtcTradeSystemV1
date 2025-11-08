@@ -37,3 +37,4 @@ for m in ["OFF","DEBUG","BOOST"]:
     rs = pick_rows()
     lvls = [r.get("level") for r in rs]
     print(m, "rows=", len(rs), "levels=", lvls[-5:])  # 直近5つだけ表示
+

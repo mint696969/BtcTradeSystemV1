@@ -7,3 +7,4 @@ for i in range(5):
     w.emit("dev.diag.ping", level="INFO", feature="audit_dev", note=f"ping {i}")
     time.sleep(0.05)
 print("done")
+

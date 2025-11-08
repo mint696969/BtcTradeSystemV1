@@ -30,265 +30,297 @@
 - “意味のある粒度”で書く（誰でも追従できるように）。
 - 決定事項は `docs/` の該当ファイル（計画/ADR 等）へ\*\*要約のみ\*\*反映。
 
-##### タスクとして扱われたが完了したか不明なタスク
-
-UI: 検索・期間プリセット・CSV ダウンロード、長文折りたたみ。
-しきい値設定の統一
-monitoring.yaml を本番値へ戻し、UI 設定から保存/読込を正式化。
-色分けや閾値を動的変更可能に。
-カード ⇄ グラフ並びリンク（保存対応）
-並び順を config/ui/health.yaml: order へ保存/復元。
-各取引所アダプタのループ（stub 実装）を用意し、status.json 定期更新まで実現。
-例外処理・リトライ・監査書き込みを組み込み。
-providers.audit で audit.tail.jsonl を読み込み、期間・feature・level でフィルタリング。
-
-A) 監査プロバイダ（providers.audit）プリセット一元化対応
-providers.audit で presets モジュールの LOOKBACKS と is_valid_lookback() を参照。
-期間選択値が None または不正の場合、既定（"1h"）へフォールバックする \_resolve_lookback() を追加。
-各関数（load_for_ui / export_csv / export_csv_compact / export_csv_compact_localtime）の 引数を lookback=None 化。
-スモークテストで None / "3h" 入力時も正常動作確認。
-
-B) Bybit 公開 API アダプタ作成（bybit_public.py）
-/v5/market/trades を標準ライブラリで叩く最小実装（依存ゼロ）。
-BitflyerPublic と同一インターフェース（executions() 返却型 List[Execution]）。
-worker.fetch() へ exchange=="bybit" 分岐を追加。
-
-C) ダッシュボード統合試験
-JST 変換済み status 表示確認。
-board/trades 両トピックの色分け・更新間隔・監査 CSV 連携チェック。
-
-D) Phase 1B 最終仕上げ
-監査タブ（期間プリセット、CSV、長文折り畳み）を UI 統合。
-各種 export 機能を UI 側ボタンから呼び出す連携コードを追加。
-
-- B1: leader_lock（単一アクティブ収集のロックと心拍）
-- B2: worker 側からのロック利用（多重起動ガードの実効化）
-- B3: storage_router スケルトン（primary=NAS/secondary=local ルーティング下地）
-- B4: status に leader/storage/sync フィールド拡張（28.2）
-- B5: Health 表示の注釈（leader.host / storage.primary / sync.pending）
-- B6: diag/sync スケルトン（ops/sync/sync_to_nas.ps1 の雛形）
-
-- [P0] `collector/adapters/` 配下に bitFlyer 以外（Binance / Bybit / OKX）のアダプタを順次追加。
-- [P1] `api_bf.py` の board/trades 取得における rate-limit 時の再試行制御・リトライバックオフを追加。
-- [P2] board データの `rows` 精密化を他取引所アダプタでも統一化（count_bids/count_asks を標準化）。
-- [P3] 監査 UI の保存ボタンを不要化し、操作即時反映型に改善（要 Streamlit 側再構成）。
-
 ---
 
 ##### 以下直近の作業報告
 
 ---
 
-🧾 本日の日報（2025-10-27）
-✅ 完了した作業
+🧭 BtcTradeSystem V1 — 情報収集ドメイン 開発引き継ぎ書（Collector / Health 現行）
 
-アラート設定ポップオーバー機能を完成
+最終更新：2025-11-07
 
-歯車ボタン（右上）からアクセスできる設定画面を st.popover() ベースに再構築
+🎯 現在の開発段階
+フェーズ 名称 状況 備考
+Phase 1 Collector 基盤構築 ✅ 完了（基礎レイヤ） heartbeat → status 連携・レート制御の足場整備済み
+Phase 2 Health システム ⚙️ 進行中（UI まで完了） 健全性 UI・設定 UI・status 反映は実装済、制御命令部分未実装
+Phase 3 Ops-Audit 構築 ⏸ 未着手 Collector/Health の監査イベントを蓄積開始予定
+✅ 完了済み項目（ロードマップ対照）
+🧱 Collector 基盤構築（Phase 1）
 
-アラート色（注意／重大／緊急）を basic.yaml に保存・一時適用できるよう統合
+collector_status.py：status.json の原子的更新／fsync 対応済み。
 
-Streamlit 1.50 の仕様制約に合わせ、key 引数を除外して安定化
+collector_rate.py：取引所ごと rate 制御（bucket 制御／burst 制限）導入。
 
-ヘッダー構成の最適化
+collector_scheduler.py：周期制御・優先度スケジュール稼働確認。
 
-タイトル・アラートチップ・設定ボタンを 1 行に圧縮
+collector_entry.py / ops/collector/entry.py：
 
-余白・文字サイズを微調整して縦幅を最小化
+start / status CLI 実装。
 
-Streamlit バージョン検証と互換確認
+PID ロック／多重起動防止（--force 対応）。
 
-現在の開発環境で 1.50.0 が安定稼働
+endpoints_def.yaml：
 
-popover・dialog は使用可能だが modal は未実装を確認
+唯一の正として collector endpoints を集中管理。
 
-🔜 次のタスク
+atomic 書込・defaults/current の混在禁止。
 
-アラート設定の永続化
+set_collector.py：
 
-現在はセッション中のみ反映。basic.yaml 保存時に即時反映と再読込を統合。
+Streamlit 設定 UI（取引所・endpoint・rate 編集）。
 
-タブごとの UI 整理（main / health / audit）
+commit() による安全保存＋監査出力実装。
 
-UI 要素を新仕様に合わせて統一（特に health/audit の見た目）
+UI 統合：
 
-テーマ共通化
+ダッシュボードタブなし設計（Collector はバックグラウンド専用）。
 
-basic.yaml の colors を各 UI へ展開し、配色テーマを全体で統一。
+設定 UI から Collector 制御可能（後述拡張予定）。
 
-💡 気づき・所感
+動作確認：
 
-Streamlit 1.50 系の popover() は key パラメータ非対応 のため、バージョン依存の UI 機能は慎重に扱う必要がある。
+heartbeat / status 両方が数秒単位で更新されることを確認済。
 
-UI 構造が安定したため、今後は 細部 CSS よりも構造設計・設定統合フェーズ にシフト可能。
+🩺 Health システム構築（Phase 2）
 
-開発ルール通りの 1 ファイル 1 責務構造が効いており、再修正も迅速に行える状態。
+ui_health.py：
+
+健全性カード／タイムライン表示／自動更新切替／閾値スロット UI 実装。
+
+get_status() でヘッダー色を反映（normal/warn/crit）。
+
+health_svc.py：status.json 読込・整形ロジック確立。
+
+設定連携：
+
+tabs.yaml + set_health.py 設計ルールにより、dashboard.py/settings.py 改変不要 で UI 追加完了。
+
+UI 登録ルール仕様書作成済み（GPT 混乱防止仕様）。
+
+⚙️ 進行中タスク
+項目 内容 状況
+bitFlyer 実 API 化 ダミー → 実ランナーへ差替（orderbook/trades） 着手前
+RateController 拡張 各 exchange 毎に動的 burst 調整 設計検討中
+Health⇄Collector 連携 Health による Collector 停止/slow_down 制御 未実装
+set_collector の検証 UI 保存 →endpoints_def.yaml の diff 追跡 動作検証済（軽度）
+dev_audit 監査 設定・heartbeat イベント出力 一部出力済み（粒度調整必要）
+📋 次に行うこと（Phase 2〜3 ブリッジ）
+
+bitflyer_public.py 実 API 化
+
+REST/WS どちらでも heartbeat 更新を継続。
+
+API キー認証・例外捕捉・再試行・429 抑制を collector_rate と統合。
+
+Health→Collector 制御連携
+
+health_actions.py に slow_down() / restart() / disable() 実装。
+
+Health UI の閾値超過で collector 停止命令を発行。
+
+Ops-Audit 導入
+
+collector / health / settings のイベントを監査ファイル（dev_audit.jsonl）に一元出力。
+
+ops_audit_writer.py と ui_ops_audit.py のプロトタイプ開始。
+
+UI 拡張
+
+health タブ下に “Collector 起動/停止” トグル + 稼働中プロセス数表示（開発モードのみ）。
+
+ドキュメント整備
+
+docs/ui_addition_spec.md 追加済仕様書をドキュメント化。
+
+Collector/Health の Phase2 完了報告をハンドオフ仕様書に反映。
+
+⚠️ 課題・注意点
+区分 内容 対応予定
+Windows ファイルロック heartbeat 原子的書込で一部タイミング競合発生 \_atomic_write_text() に retry/backoff 導入予定
+typing 警告 Streamlit 型ヒントで pylance 警告 cast() 方式に統一で解消済み
+PYTHONPATH 問題 PowerShell タブを分けると path 無効 起動時 Set-Location + PYTHONPATH を明示
+Collector 停止 UI Health タブ下で開発中のみ有効化予定 st.toggle() 実装で制御
+dev_audit 出力過多 minor イベントが多くノイズ化 イベントレベルで抑制機構を導入予定
+🧾 今後の必須拡張（Phase3 以降見据え）
+
+Ops-Audit 統合
+→ 監査ログを Health/Collector/Settings に統合
+→ DQ/Resource/Timeline レポート出力
+
+学習連携前処理
+→ status.json と trade 履歴を統合フォーマット化（AI 学習基盤用）
+
+長時間運転テスト
+→ 8〜12h 連続稼働＋ status 整合性検証
+
+NAS 同期対応
+→ Leader/Secondary 構成テストへ移行（Phase7 準備）
+
+📚 ファイル改変禁止リスト
+ファイル 理由
+features/dash/dashboard.py タブ自動登録制。手動追加禁止。
+features/settings/settings.py 設定セクション自動検出。手動編集禁止。
+config/ui/tabs_def.yaml defaults 専用（ユーザー編集禁止）。
+✅ 引き継ぎメモ（次 GPT 向け）
+
+本プロジェクトは「Collector と Health の安定連携フェーズ」中。
+既に UI 自動登録・設定反映・heartbeat/status 更新は安定稼働済。
+次セッションでは bitFlyer API の実ランナー置換と、Health 制御連携から開始すること。
+dashboard.py/settings.py の改変は禁止。
+tabs.yaml と set\_\*.py のみでタブ追加可能。
 
 ---
 
-## 🗓 作業日報（2025-10-30）
+# BtcTradeSystemV1 — 引き継ぎメモ（2025-11-08）
 
-### 📂 作業概要
+## 今日の作業
 
-- **対象**: `btc_trade_system/features/dash/dashboard.py` および関連 CSS
-- **目的**: Streamlit ヘッダー構造から余分な余白を除去し、タイトル／チップ／歯車アイコンを完全な横一線に中央揃え。
-- **成果**:
-  - ヘッダーの縦方向レイアウトをフレックス化し、中央揃えを安定化。
-  - Streamlit の自動余白を抑制（`margin`／`padding` 全削除、`line-height` 最適化）。
-  - 余分な空 DIV／ラッパーを整理し、無駄なスペースを完全排除。
-  - チップ要素を `.chip-row` に統一し、CSS 分離管理を徹底化。
-  - 色バリエーション（緊急／重大／注意／＋ 1）を定義して、確実に反映。
-  - 余白再増加を防ぐため、ヘッダー高さ固定化（`padding-top: 0.6rem`）。
+- **健全性タブ（features/settings/set_health.py）** の保存不具合を調査。
+- 保存ボタン押下時の `apply_pending()` 呼び出し・dev_audit 出力・mtime 変化を確認。
+- Streamlit のセッション管理 (`st.session_state`) を用いた dirty フラグ、pending データ構築ロジックを検証。
+- 結果、保存処理が動作しているものの、UI 閉じ操作でも保存が走る、保存ボタン無反応、デフォルト復元不全といった複合バグを確認。
+- 問題の根本が `features/settings/settings.py` のハンドラ実装にある可能性を特定。
 
-### 🎨 デザイン改善点
+## 次のタスク
 
-- チップ背景／文字色を明示し、ダークモード対応の余地を残す。
-- 余白をミニマムに保ちながら視認性を向上。
-- ギアアイコンをフレックス右寄せにして高さ整合を確保。
+1. **features/settings/settings.py の検証・修正**
+   - 「保存」ボタン押下時のみ各タブの `on_save()` を呼ぶように明確化。
+   - 「閉じる」「外部クリック」で保存されないよう、pending 破棄処理を追加。
+   - `on_default()` 実行時の UI 再反映ロジックを統一。
+2. **保存フロー統一テスト**
+   - health / dash / audit / collector 全設定で `on_save()` → `settings_svc.save_yaml()` の動作確認。
+   - dev_audit.jsonl に `"settings.*.update"` ログが正しく出るかを再確認。
+3. **UI 動作確認**
+   - 保存ボタンの活性化条件が正しいか（dirty フラグと連動）。
+   - 外側クリックで保存されないこと。
+   - デフォルト復元時に正しい初期値が表示されること。
 
-### 🧩 技術的補足
+## 気づいたこと・改善案
 
-- CSS ファイル完全分離完了。
-  - `styles/dashboard_header.css` をヘッダー専用として独立化。
-  - 他 UI モジュールも同様に `styles/tab_*.css` へ分離済み。
-- 既存 `.block-container` の `padding-top` のみで Deploy バーとの間隔調整。
-
-### ✅ 検証結果
-
-- ヘッダー要素（タイトル／チップ／歯車）すべて横揃えを維持。
-- Streamlit 側 margin/padding 挙動の差異にも安定。
-- CSS 読み込み確認済み（`!important` により後勝ち制御有効）。
-
-### 📘 次回タスク
-
-1. ダッシュボードヘッダーの中央揃え最終微調整（タイトル文字とチップのベースライン一致）。
-2. 他タブ（Health／Audit／Settings）のヘッダーも同スタイル化。
-3. UI テーマ変数の共通化 (`var(--chip-*)` の設定を global.css に昇格予定)。
+- 設定保存処理は個別タブごとに `on_save()` が存在するが、settings ハブ側が全タブ共通で管理しているため、**pending キー名の統一と破棄処理の共通化**が必要。
+- `on_default()` が即書き込みを行う現仕様は UX 的に混乱を生む。→ UI 値のみ復元・保存で確定する方式に統一すべき。
+- Streamlit のセッションがタブを跨いで dirty 状態を保持しているため、設定ハブでセッションキー初期化を明示的に行う必要あり。
+- 今後の機能追加（collector, health, monitor など）でも同じ保存制御が再利用できるよう、**settings ハブを共通 I/F に整理**すべき。
 
 ---
 
-# 📅 開発日報（2025-10-31）
+本日の作業記録
 
-## 作業概要
+設定 UI の統一化を完了
 
-本日は、ダッシュボードと設定モーダルの統合実装を完了し、UI および内部処理を安定化させた。歯車ボタンから開く設定ダイアログに配色ピッカー機能を移設し、保存・デフォルト・即時適用までのフローを確立。加えて、不要となった旧 UI 呼び出し（popover 設定）を削除し、モーダル構成に一本化。
+ui_common.py 新規作成（閉じる／デフォルト／保存＋確認ダイアログ＋即時反映、dirty 管理、未保存破棄を共通提供）。
 
----
+set_dash.py / set_health.py / set_collector.py を共通フッターに統一。
 
-## 実施内容
+「閉じる」で確実にモーダル終了（破棄＋ rerun）。「保存／デフォルト」は確認 → 実行 → 即時反映に統一。
 
-- `dashboard.py`：
-  - 設定ポップオーバー削除。
-  - モーダル呼び出し (`settings_gear()`) を正式採用。
-  - `_inject_alert_palette_vars` 呼び出しを `settings.get_alert_palette()` に変更。
-- `modal_ui.py`：
-  - タブ制御を整備し、初期設定タブに `settings.render()` を割当。
-  - `st.dialog` / `experimental_dialog` 両対応を実装。
-- `settings.py`：
-  - 配色ピッカー（緊急・重大・注意）UI 復元。
-  - デフォルト復元（`basic_def.yaml`読込）・即時保存（atomic replace）対応。
-  - JSONL 監査ログ出力を実装。
-- `tabs.yaml` / `tabs_def.yaml`：タブ順序と初期タブ `main` 設定確認済み。
+保存挙動の是正
 
----
+set_collector.py の commit() を修正。UI の順序を正としてそのまま保存し、削除も正しく反映。
 
-## 検証結果
+表示と実体の整合
 
-- ✅ 歯車クリックで設定モーダルが正しく起動。
-- ✅ 初期タブに配色ピッカーが表示。
-- ✅ デフォルト復元および保存操作が正常完了。
-- ✅ dashboard 側に設定タブが不要に出現していた問題を解消。
+set_health.py 冒頭キャプションを settings_svc.get_paths() に揃え、**適用先（外部 CONFIG）／既定（def）**を明示。
 
----
+各所の微修正（未使用 import 削除、重複関数除去、軽バリデーション）。
 
-## 次回タスク
+ダッシュボード側の安全化
 
-1. 設定モーダル内「監査」タブを実装（監査ログ保持日数・ローテーション設定）。
-2. 健全性タブを `ui_health.py` と統合し、状態をリアルタイム表示に対応。
-3. 「再読込」ボタン実装（配色変更を即時反映）。
+dashboard.py：\_clamp_dashboard_order() で main 最左固定／collector・basic を Dash から非表示、initial 不整合の自動補正。
 
----
+運用支援
 
-🗓 2025-11-02（日）開発日報
-📍 作業概要
+監査ログの静音フィルタ（PowerShell 3 種）提示。
 
-設定モジュール (features/settings/) 一式のロールバック確認と精査を実施。
+明日のタスク（不具合と修正方針・テスト）
+P1: Collector 設定タブで初期化エラー
 
-basic.yaml / basic_def.yaml を使用していた安定段階の正常稼働を再確認。
+症状: st.session_state has no key "set.collector.add_names" エラー。
+原因想定:
 
-UI 動作（初期設定タブ・デモアラート反映・保存／デフォルト切替）を再テストし、
-保存・即時反映・トップバー動作すべて正常。
+set_collector.py の初期描画で set.collector.add_names を setdefault していない。
 
-ui_settings.py（ダッシュボード導線）のコード状態も最終版として確定。
+あるいは settings.py（ハブ）でタブ切替時の初期化順より先に参照している箇所がある。
 
-settings.zip 内ファイルを解析し、仕様差分および新規タブ追加手順を文書化。
-→ 「タブ追加・保存・アラート信号」までを包括的に整理済み。
+修正案（方針）:
 
-✅ 成果・確認点
+render() の先頭で st.session_state.setdefault("set.collector.add_names", []) を一括初期化。
 
-⚙️ 設定モーダルの構造／動作ルールを再整理（閉じる／デフォルト／保存の統一 I/F）
+追加ポップオーバーや一時保持で参照する他のキーも同様に setdefault をそろえる（例：set.collector.pending）。
 
-各タブは 3 関数（render, on_default, on_save）を持つ標準構成を再確認。
+依存が複数箇所にある場合は、ui_common.py に「prefix キー群の初期化ヘルパ」を追加し、set_collector.py 冒頭で 1 行呼び出しに統一。
 
-settings_svc.py によるアトミック保存（tmp→replace）方式が安全に動作している。
+テスト:
 
-デフォルトボタン活性判定 (basic_def.yaml 有無) も正常。
+Dashboard 起動 → 設定 →「コレクター」タブを開く。
 
-デモアラートの“1 回ズレ”挙動はロールバック版では再現せず。
+エラーが出ないこと。新規追加ポップオーバーが開くこと。
 
-現行構成は「basic 系ファイルを前提」として完全安定していることを確認。
+取引所追加 → 保存 →endpoints_def.yaml に反映（順序／削除も）。
 
-⚠️ 気づき・改善点
+P1: 健全性ビューで「Health 情報の取得に失敗」
 
-複数ファイルを一括で修正する作業は危険
+症状: ヘルス画面冒頭に失敗トースト。
+原因想定（優先順）:
 
-インデントや依存関係の整合性が崩れやすく、
-\_topbar 未定義などの潜在エラーを誘発する。
+config/ui/health.yaml / monitoring.yaml の欠落または形式不整合（デフォルト反映不足）。
 
-今後は 1 ファイル単位でキャンバス管理＋段階適用 を徹底する。
+health_svc.py のロード時パス分解が settings_svc.get_paths() と不整合。
 
-ファイル名変更（basic→main）には段階的マイグレーションが必須
+収集側のデータが未生成／参照パス不一致で eval() が空／例外。
 
-互換維持を保ったままのリネームでは中途半端な状態になりやすく、
-“グレーアウト”“保存無効化”などの副作用を生む。
+修正案（方針）:
 
-一時的に 2 系統を共存させるより、**完全換装（後方互換廃止）**の方が安全。
+settings_svc.reset_to_default("health") / ("monitoring") を一度実行して正準ファイルを外部 CONFIG へ強制展開。
 
-トーストやアイコン絵文字の扱いに注意
+health_svc.py で参照する既定パスを def/current 一本化（settings_svc.get_paths() を使う）。
 
-Streamlit の仕様で emoji が不正扱いされることがある。
-→ 文字列 "✅" や "ℹ️" の直接指定は避け、テキストのみを使用する方針へ。
+依存データ（例：data/collector/status.json 等）必須の場合、空でも動作するフォールバックロジック（空時は“データなし”扱いで落とさない）。
 
-検証プロセスの重要性再確認
+テスト:
 
-UI 挙動・セッション再描画・ファイル I/O すべてを
-実ブラウザ検証で 1 段階ずつ確認する運用が最も安定。
+設定 → 健全性 →「デフォルト」実行 → 反映後にダッシュへ戻り、エラーが消えること。
 
-🎯 次回タスク
+閾値変更 → 保存 → カード／タイムラインの見た目が更新。
 
-設定ファイルの正式換装
+ログに settings.write.health / settings.write.monitoring が出る。
 
-basic.yaml → dash.yaml
+P2: 保存直後に視覚反映が遅れるケース
 
-basic_def.yaml → dash_def.yaml
+症状: 「閉じる」で反映されず、再度設定を開くと反映している。
+原因想定:
 
-全参照箇所 (settings_svc.py, settings.py, set_main.py など) を更新。
+_exec_\* 実行内の例外で UI.render_section_controls() の mark_dirty()+rerun が到達しない。
 
-後方互換コードを完全削除してシンプルな構成へ。
+ハブ(settings.py)の \_\_settings_dirty 監視が、特定条件で早期 return。
 
-設定機能の細部修正
+修正案（方針）:
 
-デフォルトボタンの状態判定ロジックを統一。
+\_exec_save/\_exec_default に try/except を入れて必ず UI 側の処理完了まで到達させる。
 
-保存・反映処理を st.rerun() 含めて明確化。
+settings.py の dirty 検知 →st.rerun() のブロックを一番最後に残し、先に別の rerun/return が走らないよう整序。
 
-エラートースト（保存失敗時）のメッセージ統一。
+テスト:
 
-UI 全体のボタンレイアウト最終調整。
+各タブで保存／デフォルト後、即ヘッダやタブ構成が変わること。
 
-🕒 所感
+例外を意図的に発生させた場合でも（色値に不正入力等）、UI が固まらないこと。
 
-設定系は一見小規模でも、タブ構造とセッションの橋渡しが複雑なため、
-段階的な適用・テストを怠ると崩壊しやすい。
-本日のロールバックで安定状態を確実に取り戻せたことが最大の成果。
-次はファイル換装を“1 点集中で安全に”行うフェーズへ移行する。
+気づき・課題
+
+初期化と参照の順序
+
+st.session_state は参照前に必ず初期化（setdefault）を徹底。今回の collector のように、追加 UI のポップオーバーで未初期化キーを即参照しがち。
+
+def/current の一本化
+
+settings_svc.get_paths(area) を単一ソースとし、\*\_svc.py 側のハードコードを徐々に排除。
+
+監査の静音運用
+
+本番運用を見据え、今日の PowerShell フィルタを tools/audit_tail_settings.ps1 として常設すると便利。
+
+UI ガイド文
+
+collector のカードに追加した一文（削除の確定方法）、効果的。各タブでも誤操作ポイントに 1 行説明を置くと事故が減る。

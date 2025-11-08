@@ -22,3 +22,4 @@ def daily_log_path(prefix: str) -> pathlib.Path:
     d = logs_dir(); d.mkdir(parents=True, exist_ok=True)
     today = dt.datetime.utcnow().strftime("%Y%m%d")
     return d / f"{prefix}.{today}.log"
+

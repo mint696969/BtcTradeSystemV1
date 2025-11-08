@@ -122,3 +122,4 @@ class StorageRouter:
     def current_root(self, domain: Domain) -> Path:
         """現在の書き込み先ベース（probe結果）を返す。"""
         return self._resolve_base(domain)
+

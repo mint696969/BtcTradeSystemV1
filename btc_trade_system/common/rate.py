@@ -91,3 +91,4 @@ class RateRegistry:
                     capacity: float = 10.0, refill_per_sec: float = 5.0) -> bool:
         bk = self.ensure(name, capacity=capacity, refill_per_sec=refill_per_sec)
         return bk.try_acquire(cost=cost)
+

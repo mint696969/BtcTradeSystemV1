@@ -105,3 +105,4 @@ def disk_free_of(p: _Path) -> list[str]:
         ]
     except Exception as e:
         return [f"- (disk_usage error: {e!r})"]
+

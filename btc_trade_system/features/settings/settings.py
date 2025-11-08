@@ -1,36 +1,36 @@
 # path: btc_trade_system/features/settings/settings.py
-# desc: 右上の歯車から開く設定モーダルの“ハブ”（タブ配列：初期設定/健全性/監査）
+# desc: 設定ハブUI（v2）— タブUIを採用。束ねタブ内のみ各 set_* 側でアコーディオン（排他展開）を実装。保存/デフォルト/閉じるは各セクション専用ボタン。
 
 from __future__ import annotations
 import streamlit as st
 import importlib
-from btc_trade_system.features.dash import dashboard as dash  # _load_tabs_cfg を使用
+from typing import List
 
-# dev_audit へ設定操作を記録
+# tabs.yaml（order / enabled / labels 等）の読込（ダッシュ側の薄い入口を再利用）
+from btc_trade_system.features.dash import dashboard as dash
+
+# dev_audit（操作ログはハブ、実保存は SVC 側で emit）
 from btc_trade_system.features.audit_dev import writer as W
 
-# 設定ダイアログの開閉状態（セッション専用・永続化なし）
-_SETTINGS_FLAG = "__settings_open"
-
-# 健全性タブ（説明・監視系UI）
-from btc_trade_system.features.settings import set_health as settings_tab
-# 初期設定タブ（配色・デモアラート・保存/既定/今回のみ適用）
+# 初期設定（basic）は set_dash が受け持つ
 from btc_trade_system.features.settings import set_dash
 
-# Streamlit の dialog API（正式 or experimental）を吸収
+# 設定ダイアログの開閉フラグ
+_SETTINGS_FLAG = "__settings_open"
+# 現在アクティブな設定タブ key（"basic"=初期設定）
+_ACTIVE_KEY = "__settings_active_key"
+
+# Dialog API 吸収
 _DLG = getattr(st, "dialog", None) or getattr(st, "experimental_dialog", None)
 
-# tabs.yaml の key → 日本語ラベル
-_LABELS = {"main": "メイン", "health": "健全性", "audit": "開発監査"}
+# ラベルのフォールバック
+_LABELS = {"main": "メイン", "health": "健全性", "audit": "開発監査", "collector": "コレクター", "basic": "初期設定", "exchanges": "取引所"}
 
+# --- モジュール解決（規約に従って探索） ---
 def _resolve_settings_module(key: str) -> str | None:
-    """
-    設定UIのモジュールを命名規約で探索して最初に見つかったものを返す。
-      1) features/settings/set_{key}.py  …推奨（render()/on_save()/on_default()）
-      2) features/{key}/settings_ui.py   …機能内に持たせる代替
-      3) features/{key}/config/settings_ui.py …将来用
-    無ければ None を返す。
-    """
+    """設定セクションのモジュールを規約順で探索。未実装なら None を返す。"""
+    if key == "basic":  # 初期設定は set_dash 固定
+        return "btc_trade_system.features.settings.set_dash"
     candidates = [
         f"btc_trade_system.features.settings.set_{key}",
         f"btc_trade_system.features.{key}.settings_ui",
@@ -44,150 +44,106 @@ def _resolve_settings_module(key: str) -> str | None:
             pass
     return None
 
-def _safe_toast(msg: str, icon):
-    """Streamlit の絵文字検証に引っかからないように常に安全表示"""
-    try:
-        # 1文字の絵文字以外は icon を使わない
-        if isinstance(icon, str) and len(icon) == 1:
-            st.toast(msg, icon=icon)
-        else:
-            st.toast(msg)
-    except Exception:
-        # 保険（まれに icon 判定をすり抜けた場合でも落とさない）
-        try:
-            st.toast(msg)
-        except Exception:
-            pass
+def _get_label(cfg_labels: dict, key: str) -> str:
+    return (cfg_labels.get(key) or _LABELS.get(key) or key)
 
+def _load_settings_keys() -> List[str]:
+    """tabs.yaml を読み、設定セクションとして有効な key を order 順に返す（末尾に basic を固定）。"""
+    cfg = dash._load_tabs_cfg()  # {order, enabled, labels?}
+    keys = []
+    for k in cfg["order"]:
+        if not cfg["enabled"].get(k, True):
+            continue
+        # 設定セクションを持つものだけ（モジュール解決できたら対象）
+        if _resolve_settings_module(k):
+            keys.append(k)
+    # 初期設定（basic）は常に最後（最右）に固定（order=200 想定）
+    if "basic" not in keys:
+        keys.append("basic")
+    else:
+        # 念のため末尾へ移動
+        keys = [k for k in keys if k != "basic"] + ["basic"]
+    return keys
+
+def _discard_unsaved_for(key: str):
+    """タブ切替時に key の未保存 UI 値を破棄（規約：set.<key>.* をクリア）。"""
+    if not key:
+        return
+    dead = [k for k in st.session_state.keys() if k.startswith(f"set.{key}.")]
+    for k in dead:
+        st.session_state.pop(k, None)
+
+# ===== UI: 設定ダイアログ本体（タブUI） =====
 if _DLG is None:
-    # 古いStreamlitの場合のフォールバック（サイドバー）
+    # Dialog 非対応ストリーム：簡易サイドバー版
     def settings_gear():
-        # 単独ボタン。列を作らない
         if st.button("⚙️", use_container_width=False, key="gear_fallback"):
-            st.session_state[_SETTINGS_FLAG] = True
             W.emit("settings.open", level="INFO", feature="settings", payload={"source": "gear_fallback"})
-            st.sidebar.header("設定")
-            tabs = st.sidebar.tabs(["初期設定", "健全性", "監査"])
-            with tabs[0]:
-                set_dash.render()
-            with tabs[1]:
-                settings_tab.render()
-            with tabs[2]:
-                st.subheader("監査（将来）")
-                st.write("・監査ログの保存期間、サイズ上限、サンプリング等")
-            if st.sidebar.button("保存", key="settings_save_fallback"):
-                W.emit("settings.save_click", level="INFO", feature="settings", payload={"source": "sidebar"})
-                st.sidebar.success("設定を保存しました")
-
+            st.session_state[_SETTINGS_FLAG] = True
+            st.session_state.setdefault(_ACTIVE_KEY, "basic")
+            with st.sidebar:
+                st.header("設定")
+                _render_settings_body()
+        elif st.session_state.get(_SETTINGS_FLAG):
+            with st.sidebar:
+                st.header("設定")
+                _render_settings_body()
 else:
-    # ダイアログ本体
     @_DLG("設定")
     def _open_settings_dialog():
-        # --- 上部ボタン（あとで“最新タブ”を見て描画するためのプレースホルダ） ---
-        _topbar = st.container()
-        st.session_state.setdefault("__settings_active_key", "init")  # keyで持つ（"init" が 200）
+        st.session_state.setdefault(_ACTIVE_KEY, "basic")
+        _render_settings_body()
 
-        # tabs.yaml を読み、ダッシュボードと同じ順序/有効化を採用＋末尾に "init" を追加
-        cfg = dash._load_tabs_cfg()  # {order, enabled, initial}
-        tab_keys = [k for k in cfg["order"] if cfg["enabled"].get(k, True)]
-        tab_keys.append("init")  # 200: 初期設定（設定だけに出す）
+    def settings_gear():
+        if st.button("⚙️", use_container_width=False, key="gear_dialog"):
+            W.emit("settings.open", level="INFO", feature="settings", payload={"source": "gear"})
+            st.session_state[_SETTINGS_FLAG] = True
+            _open_settings_dialog()
+        elif st.session_state.get(_SETTINGS_FLAG):
+            _open_settings_dialog()
 
-        labels = [("初期設定" if k == "init" else _LABELS.get(k, k)) for k in tab_keys]
-        tabs = st.tabs(labels)
+# ===== 共通本体：タブ＋アクティブ検知（切替＝未保存破棄） =====
+def _render_settings_body():
+    cfg = dash._load_tabs_cfg()
+    cfg_labels = (cfg.get("labels") or {})
+    keys = _load_settings_keys()
 
-        # 各タブを描画（描画されたタブがアクティブ＝ここで key を記録）
-        for i, key in enumerate(tab_keys):
-            with tabs[i]:
-                st.session_state["__settings_active_key"] = key
-                if key == "init":
-                    # 初期設定 (= set_dash)
-                    set_dash.render()
-                    continue
-                modname = _resolve_settings_module(key)
-                if not modname:
-                    st.info("この機能に設定はありません。")
-                    continue
+    # タブラベル作成
+    labels = [_get_label(cfg_labels, k) for k in keys]
+    tabs = st.tabs(labels)
+
+    # 直前のアクティブキー
+    prev = st.session_state.get(_ACTIVE_KEY, "basic")
+
+    # 各タブの描画（選択されたタブのみUIが効く仕様。切替検知→他キーの未保存破棄）
+    for key, tab in zip(keys, tabs):
+        with tab:
+            # タブ切替時（=前回と異なるタブへ入ったタイミング）に、前タブの未保存を破棄
+            if key != prev and st.session_state.get(_ACTIVE_KEY) != key:
+                _discard_unsaved_for(prev if prev != "basic" else "basic")
+                st.session_state[_ACTIVE_KEY] = key
+
+            # --- アクティブタブの内容 ---
+            if key == "basic":
+                # 初期設定セクション（set_dash 側にセクション専用ボタンを実装）
+                set_dash.render()
+                continue
+
+            modname = _resolve_settings_module(key)
+            if not modname:
+                st.info("この機能に設定はありません。")
+                continue
+
+            try:
                 mod = importlib.import_module(modname)
                 render = getattr(mod, "render", None)
                 if callable(render):
+                    # ※ 複数機能を束ねる場合のアコーディオンは set_*.py 側で実装（ここではタブのみ）
                     render()
                 else:
                     st.info(f"{modname}.render() が見つかりません。")
-
-        # === ここで最新のアクティブタブを確定させてから、上部ボタンを描画する ===
-        # === ここで最新のアクティブタブを確定させてから、上部ボタンを描画する ===
-        def _supports_default(key: str) -> bool:
-            try:
-                if key == "init":
-                    fn = getattr(set_dash, "supports_default", None)
-                    return bool(fn()) if callable(fn) else False
-                if key == "health":
-                    from btc_trade_system.features.settings import set_health as _h
-                    fn = getattr(_h, "supports_default", None)
-                    return bool(fn()) if callable(fn) else False
-                # それ以外は未対応
-                return False
-            except Exception:
-                return False
-
-        active_key = st.session_state.get("__settings_active_key", "init")
-
-        with _topbar:
-            col_a, col_b, col_c = st.columns([1, 1, 1])
-
-            with col_a:
-                if st.button("閉じる", key="dlg_top_close", use_container_width=True):
-                    W.emit("settings.close", level="INFO", feature="settings", payload={"source": "modal-top"})
-                    st.session_state[_SETTINGS_FLAG] = False
-                    st.rerun()
-
-            with col_b:
-                disabled = not _supports_default(active_key)
-                if st.button("デフォルト", key="dlg_top_default",
-                            use_container_width=True, disabled=disabled,
-                            help=("このタブはデフォルト未対応です" if disabled else None)):
-                    try:
-                        if active_key == "init":
-                            getattr(set_dash, "on_default", lambda: None)()
-                        elif active_key == "health":
-                            from btc_trade_system.features.settings import set_health as _h
-                            getattr(_h, "on_default", lambda: None)()
-                    finally:
-                        st.session_state["__settings_dirty"] = True
-                        st.rerun()
-
-        with col_c:
-            if st.button("保存", key="dlg_top_save", use_container_width=True):
-                try:
-                    if active_key == "init":
-                        getattr(set_dash, "on_save", lambda: None)()
-                    elif active_key == "health":
-                        from btc_trade_system.features.settings import set_health as _h
-                        getattr(_h, "on_save", lambda: None)()
-                finally:
-                    # ログ出し
-                    W.emit("settings.save_click", level="INFO", feature="settings", payload={"source": "modal-top"})
-                    # 可能ならその場でトースト（表示後に閉じる）
-                    try:
-                        st.toast("設定を保存しました", icon="✅")
-                    except Exception:
-                        pass
-                    # モーダルを閉じてリラン
-                    st.session_state["__settings_dirty"] = False   # 再オープン抑止
-                    st.session_state[_SETTINGS_FLAG] = False       # モーダル閉じる
-                    st.rerun()
-
-        # 設定UIで変更があったら即反映（ダイアログを開いたまま rerun）
-        if st.session_state.get("__settings_dirty"):
-            st.session_state[_SETTINGS_FLAG] = True
-            st.session_state["__settings_dirty"] = False
-            st.rerun()
-
-        # on_change コールバックで積んだ遅延toastを通常レンダで表示
-        t = st.session_state.pop("__toast", None)
-        if t:
-            msg, icon = t
-            _safe_toast(msg, icon)
+            except Exception as e:
+                st.error(f"設定モジュールの読み込みに失敗しました: {key}\n{e}")
 
 def settings_gear():
     # ギアは単独ボタンとして描画（列を作らない＝無駄な空白を出さない）

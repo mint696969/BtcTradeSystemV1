@@ -1,0 +1,11 @@
+# path: ./btc_trade_system/features/health/config/health_def.yaml
+# desc: Health 判定の既定閾値と表示順。UI/通知/ヘッダーアラートの共通設定。
+
+age_thresholds_sec:
+  warn: 3.0     # age_sec が 3秒超で WARN
+  crit: 10.0    # age_sec が 10秒超で CRIT
+
+# ダッシュボード表示順（任意）
+order:
+  - bitflyer/orderbook
+  - bitflyer/trades

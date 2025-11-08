@@ -4,7 +4,7 @@
 from __future__ import annotations
 from pathlib import Path
 from ...common import paths
-from .health_svc import evaluate
+from ..health.health_svc import evaluate  # 互換shimでOK
 from collections import deque
 import json
 
@@ -132,3 +132,4 @@ def get_audit_rows(limit: int = 500) -> list[dict]:
 
     # buf は古い→新しいの順で詰まっている想定。新しい順で返すために逆順に。
     return list(reversed(buf))
+

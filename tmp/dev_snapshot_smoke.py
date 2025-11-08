@@ -22,3 +22,4 @@ def main(mode: str = "DEBUG") -> int:
 if __name__ == "__main__":
     mode = (sys.argv[1] if len(sys.argv) > 1 else "DEBUG").upper()
     sys.exit(main(mode))
+

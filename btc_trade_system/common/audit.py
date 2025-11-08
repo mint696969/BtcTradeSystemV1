@@ -281,3 +281,4 @@ def audit_warn(event: str, *, feature: str = "core", payload: dict | None = None
 
 def audit_err(event: str, *, feature: str = "core", payload: dict | None = None, **fields) -> None:
     audit(event, feature=feature, level=_norm_level("ERROR"), payload=payload, **fields)
+

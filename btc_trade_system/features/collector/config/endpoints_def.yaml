@@ -1,0 +1,29 @@
+# path: ./btc_trade_system/features/collector/config/endpoints_def.yaml
+# desc: Collector のエンドポイント定義 + レート制御設定。ops.entry がこれを読み取り Scheduler に登録する。
+
+exchanges:
+  - name: bitflyer
+    rate:
+      max_rps: 5          # 1秒あたり最大5リクエスト
+      burst: 2            # 短期的なバースト許容量
+    endpoints:
+      - key: orderbook
+        priority: 0
+        target_interval: 0.30
+        runner: "btc_trade_system.features.collector.bitflyer_public:run_orderbook"
+
+      - key: trades
+        priority: 1
+        target_interval: 0.60
+        runner: "btc_trade_system.features.collector.bitflyer_public:run_trades"
+
+  # 例: 他の取引所を追加したい場合
+  # - name: binance
+  #   rate:
+  #     max_rps: 10
+  #     burst: 4
+  #   endpoints:
+  #     - key: ticker
+  #       priority: 0
+  #       target_interval: 1.0
+  #       runner: "btc_trade_system.features.collector.binance_public:run_ticker"

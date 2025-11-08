@@ -100,3 +100,4 @@ def render_snapshot_code(text: str) -> None:
     # 空だと DOM が簡略化され高さが潰れるケースに備えて“不可視の1文字＋改行”を入れておく
     content = text if (text and len(text) > 0) else "\u200b\n"
     st.code(content, language="text")
+

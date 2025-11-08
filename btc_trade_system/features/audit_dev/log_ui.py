@@ -224,3 +224,4 @@ def render_log_panel(mode: str) -> None:
                 for i in range(20):
                     _w.emit("dev.ui.test.bulk", level="DEBUG", feature="audit_dev", i=i, note="ui test bulk")
                 st.success("wrote 20 lines")
+

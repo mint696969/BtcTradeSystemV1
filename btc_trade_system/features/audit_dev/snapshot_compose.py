@@ -216,3 +216,4 @@ def build_decisions_block(log_path: Path, last_n: int = 50) -> str:
             f"policy={p.get('policy','-')} score={p.get('score')}"
         )
     return "\n".join(out)
+

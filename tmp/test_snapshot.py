@@ -9,3 +9,4 @@ hand = boost_svc.export_handover_text(force=True)  # logs/handover_gpt.txt ã‚’åŽ
 print("LOGS_DIR =", logs)
 print("SNAPSHOT =", snap, "exists=", Path(snap).exists(), "size=", Path(snap).stat().st_size if Path(snap).exists() else 0)
 print("HANDOVER =", hand, "exists=", Path(hand).exists(), "size=", Path(hand).stat().st_size if Path(hand).exists() else 0)
+

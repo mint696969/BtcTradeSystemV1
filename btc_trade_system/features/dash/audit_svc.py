@@ -277,3 +277,4 @@ def export_csv_compact_localtime(
             ts_local = _ts_to_local_iso(x["ts"], tz_name=tz_name)
             w.writerow([x["ts"], ts_local, x["mode"], x["feature"], x["level"], x["event"], x["summary"]])
     return out
+

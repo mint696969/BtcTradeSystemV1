@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/collector/collector_status.py
+# path: btc_trade_system/features/collector/collector_status.py
 # desc: Collector 全体の稼働情報を最終形 status.json に 1–3 秒周期で“原子的置換”で書き出すモジュール
 
 from __future__ import annotations
@@ -15,8 +15,6 @@ from datetime import datetime, timezone
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 設定ロード（def.yaml のみ。current は後続で settings_svc へ差替予定）
-
-from pathlib import Path
 
 _DEF_REL_PATH = Path(__file__).resolve().parent / "config" / "collector_def.yaml"
 
@@ -361,3 +359,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     update_loop(args.interval, once=args.once)
+

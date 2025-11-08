@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/collector/config/collector_def.yaml
+# path: btc_trade_system/features/collector/config/collector_def.yaml
 # desc: Collector 既定設定（status.json 出力先・更新間隔など）。UI保存値とマージされる前提の def 側。
 
 # 追記（status の下に追加）

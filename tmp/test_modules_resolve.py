@@ -9,3 +9,4 @@ print("has build_tail_block              =", "build_tail_block" in names)
 if "build_tail_block" in names:
     head = (sc.build_tail_block(mode="DEBUG", last_n=20) or "").splitlines()[:1]
     print("tail_block_preview =", head[0] if head else "<empty>")
+

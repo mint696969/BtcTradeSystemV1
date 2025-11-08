@@ -29,3 +29,4 @@ components.html(f"""
 </body></html>
 """, height=180)
 st.info("結果が OK ならブラウザ権限は問題なし。NGなら UI 実装ではなく環境/権限起因の可能性。")
+

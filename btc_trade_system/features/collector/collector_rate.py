@@ -1,20 +1,22 @@
-# path: ./btc_trade_system/features/collector/collector_rate.py
-# desc: 取引所ごとの優先度キュー + SLA 駆動のレート制御（方式C）。429/Retry-After を最優先し、安全側へ降格・復帰を管理。
+# path: btc_trade_system/features/collector/collector_rate.py
+# desc: 取引所ごとの優先度キュー + SLA 駆動のレート制御（方式C）に、取引所レベルのトークンバケット(max_rps, burst)を追加。
 
 from __future__ import annotations
 
 import time
-import math
-import heapq
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, Optional, Tuple
 
-# 設計方針（方式C）
-# - exchange ごとの優先度キュー（endpoint 優先度 + age による飢餓防止）
-# - トークンバケット風に次回許可時刻 next_at を管理
-# - 429/Retry-After を受けたら exchange 単位でクールダウン降格（指数バックオフ + ヒステリシス）
-# - SLA: endpoint ごとの target_interval を与え、最小待機を保証
-# - I/F は極小: request_permit(exchange, endpoint) -> (allowed, wait_ms)
+# 設計方針（方式C 拡張）
+# - exchange ごとの「全体レート制御」＝トークンバケット（max_rps / burst）
+# - endpoint ごとの SLA = target_interval を保証（最小インターバル）
+# - 429/Retry-After を受けたら exchange 単位でペナルティ降格（指数バックオフ + クールダウン）
+# - I/F:
+#     set_policy(exchange, endpoint, priority, target_interval) ・・・従来どおり
+#     set_exchange_policy(exchange, max_rps, burst) ・・・新規（YAML の rate.* を反映）
+#     request_permit(exchange, endpoint) -> (allowed: bool, wait_ms: int)
+#     on_rate_limited(exchange, retry_after_sec?)
+#     on_success(exchange)
 
 @dataclass
 class EndpointPolicy:
@@ -22,27 +24,85 @@ class EndpointPolicy:
     target_interval: float   # 目安の最小間隔（秒）
 
 @dataclass
+class ExchangePolicy:
+    max_rps: float = 0.0     # 0 または未設定ならバケット無効（endpoint SLA のみ）
+    burst: int = 1           # バースト許容量（>=1）
+
+@dataclass
 class ExState:
+    # レート制御（429系）
     cooldown_until: float = 0.0
     penalty: int = 0  # 429 ペナルティ段数（指数バックオフ）
+
+    # endpoint ごとの直近発行時刻
     last_at: Dict[str, float] = field(default_factory=dict)  # endpoint -> last issued
 
+    # exchange レベルのトークンバケット
+    tokens: float = 0.0
+    last_refill: float = 0.0  # 最終リフィル時刻（monotonic 秒）
+
 class RateController:
-    """交換所ごとの優先度キュー + SLA 最小 I/F。方式C。"""
+    """交換所ごとの優先度キュー + SLA + トークンバケット。"""
 
     def __init__(self, now_fn=time.monotonic):
         self.now = now_fn
         self.policies: Dict[str, Dict[str, EndpointPolicy]] = {}
+        self.ex_policy: Dict[str, ExchangePolicy] = {}
         self.state: Dict[str, ExState] = {}
 
-    # 設定投入（例示）
+    # == 設定投入 ==
+
     def set_policy(self, exchange: str, endpoint: str, *, priority: int, target_interval: float) -> None:
         self.policies.setdefault(exchange, {})[endpoint] = EndpointPolicy(priority, target_interval)
         self.state.setdefault(exchange, ExState())
 
+    def set_exchange_policy(self, exchange: str, *, max_rps: float, burst: int = 1) -> None:
+        """取引所レベル（全エンドポイント合算）のレート制御を設定。"""
+        if max_rps < 0:
+            max_rps = 0.0
+        if burst < 1:
+            burst = 1
+        self.ex_policy[exchange] = ExchangePolicy(max_rps=max_rps, burst=burst)
+        st = self.state.setdefault(exchange, ExState())
+        # 初期トークンは満タン（安定起動）
+        st.tokens = float(burst)
+        st.last_refill = self.now()
+
+    # == 内部計算 ==
+
     def _cooldown_wait(self, ex: str) -> float:
         s = self.state.setdefault(ex, ExState())
         return max(0.0, s.cooldown_until - self.now())
+
+    def _refill_tokens(self, ex: str) -> None:
+        """トークンを max_rps に従いリフィル。"""
+        pol = self.ex_policy.get(ex)
+        if not pol or pol.max_rps <= 0.0:
+            return  # バケット無効
+        s = self.state.setdefault(ex, ExState())
+        now = self.now()
+        if s.last_refill == 0.0:
+            s.last_refill = now
+            return
+        dt = max(0.0, now - s.last_refill)
+        if dt <= 0:
+            return
+        # max_rps token/sec
+        s.tokens = min(float(pol.burst), s.tokens + pol.max_rps * dt)
+        s.last_refill = now
+
+    def _bucket_wait(self, ex: str) -> float:
+        """トークン不足時に必要な待機秒を返す。"""
+        pol = self.ex_policy.get(ex)
+        if not pol or pol.max_rps <= 0.0:
+            return 0.0
+        s = self.state.setdefault(ex, ExState())
+        self._refill_tokens(ex)
+        if s.tokens >= 1.0:
+            return 0.0
+        # 1 トークン貯まるまでの時間 = (1 - tokens) / max_rps
+        need = 1.0 - s.tokens
+        return need / pol.max_rps if pol.max_rps > 0 else 0.0
 
     def _next_allowed_at(self, ex: str, ep: str) -> float:
         pol = self.policies.get(ex, {}).get(ep)
@@ -57,21 +117,39 @@ class RateController:
             base = s.cooldown_until
         return base
 
+    # == パブリック I/F ==
+
     def request_permit(self, exchange: str, endpoint: str) -> Tuple[bool, int]:
         """実行許可の可否と待機ミリ秒を返す。"""
-        t = self.now()
-        wait = self._cooldown_wait(exchange)
-        if wait > 0:
-            return False, int(wait * 1000)
-        next_at = self._next_allowed_at(exchange, endpoint)
-        if t >= next_at:
-            self.state[exchange].last_at[endpoint] = t
-            return True, 0
-        else:
-            return False, int((next_at - t) * 1000)
+        now = self.now()
 
-    # 429/Retry-After 等のシグナルを受けたときに呼ぶ
+        # 429系クールダウン
+        cd = self._cooldown_wait(exchange)
+        if cd > 0:
+            return False, int(cd * 1000)
+
+        # endpoint SLA（最小インターバル）
+        next_ep = self._next_allowed_at(exchange, endpoint)
+        if now < next_ep:
+            return False, int((next_ep - now) * 1000)
+
+        # exchange バケット
+        bw = self._bucket_wait(exchange)
+        if bw > 0:
+            return False, int(bw * 1000)
+
+        # 許可：時刻更新 + トークン消費
+        s = self.state.setdefault(exchange, ExState())
+        s.last_at[endpoint] = now
+        pol = self.ex_policy.get(exchange)
+        if pol and pol.max_rps > 0.0:
+            self._refill_tokens(exchange)
+            # 十分にあるはずだが、念のため 0 未満にならないように
+            s.tokens = max(0.0, s.tokens - 1.0)
+        return True, 0
+
     def on_rate_limited(self, exchange: str, *, retry_after_sec: Optional[float] = None) -> None:
+        """429/Retry-After 等のシグナルを受けたときに呼ぶ。"""
         s = self.state.setdefault(exchange, ExState())
         s.penalty = min(s.penalty + 1, 6)
         if retry_after_sec and retry_after_sec > 0:
@@ -80,22 +158,25 @@ class RateController:
             # 明示が無いときは指数バックオフ相当を反映
             s.cooldown_until = max(s.cooldown_until, self.now() + (1.6 ** s.penalty))
 
-    # 成功が続いたら段階的に回復
     def on_success(self, exchange: str) -> None:
+        """成功が続いたら段階的に回復。"""
         s = self.state.setdefault(exchange, ExState())
         if s.penalty > 0 and (self.now() >= s.cooldown_until):
             s.penalty -= 1
 
-# 簡易テスト（後で専用テストへ）
+# 簡易セルフテスト（手動）
 if __name__ == "__main__":
     rc = RateController()
+    # exchange レベルのレート（5 rps, burst=2）
+    rc.set_exchange_policy("bitflyer", max_rps=5, burst=2)
+    # endpoint SLA
     rc.set_policy("bitflyer", "orderbook", priority=0, target_interval=0.2)
     rc.set_policy("bitflyer", "trades", priority=1, target_interval=0.5)
 
-    for i in range(5):
+    import time as _t
+    for i in range(6):
         ok, wait = rc.request_permit("bitflyer", "orderbook")
         print("OB", i, ok, wait)
-        time.sleep(0.05)
-    rc.on_rate_limited("bitflyer", retry_after_sec=1.2)
-    ok, wait = rc.request_permit("bitflyer", "orderbook")
-    print("after429", ok, wait)
+        if not ok:
+            _t.sleep(wait / 1000)
+

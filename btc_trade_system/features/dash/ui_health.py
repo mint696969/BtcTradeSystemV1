@@ -1,83 +1,234 @@
 # path: ./btc_trade_system/features/dash/ui_health.py
-# desc: コレクターの健全性タブ（UI表示専用）— providers/leader の集計を描画
+# desc: Health タブ（収集健全性のサマリ表示＋タイムライン）。状態色は get_status() が返す4段階でヘッダーに連携。
 
 from __future__ import annotations
 
-from __future__ import annotations
 import time
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-# --- streamlit ---
-try:
-    import streamlit as st  # type: ignore
-except ImportError:
-    import types as _t
-    st = _t.SimpleNamespace(
-        markdown=print,
-        subheader=print,
-        columns=lambda *a, **k: [None],
-        divider=lambda: None,
-        write=print,
-        dataframe=print,
-        info=print,
-        caption=print,
-        selectbox=lambda *a, **k: "10分",
-        toggle=lambda *a, **k: False,
-        experimental_rerun=lambda: None,
-        pyplot=lambda *a, **k: None,
-    )
+import streamlit as st
+import matplotlib.pyplot as plt
 
-# --- matplotlib ---
-try:
-    import matplotlib.pyplot as plt  # type: ignore
-except ImportError:
-    class _DummyPlot:
-        def subplots(self, *a, **k): return (None, None)
-        def close(self, *a, **k): pass
-    plt = _DummyPlot()
+from btc_trade_system.features.audit_dev import writer as W
+from btc_trade_system.features.health.health_svc import read_health
+from btc_trade_system.features.health import health_order
+from btc_trade_system.features.settings import settings_svc  # 追加
 
-# --- services（features 平置きの正式ルート） ---
-from btc_trade_system.features.dash.providers import (
-    get_health_summary,
-    get_health_table,
-)
+# --- add: CSS (every render) & card html builder ------------------------------------
+def _inject_health_css():
+    st.markdown("""
+<style>
+.health-card{border-radius:12px;padding:12px;margin-bottom:10px}
+.health-hd{font-weight:700;margin-bottom:6px}
+.health-grid{display:flex;gap:24px;flex-wrap:wrap}
+.health-kv{min-width:86px}
+.health-kv .k{font-size:12px;color:#6b7280;margin-bottom:2px}
+.health-kv .v{font-size:20px;line-height:1.0}
+.health-cap{font-size:12px;color:#6b7280;margin-top:4px}
+</style>
+""", unsafe_allow_html=True)
 
-from btc_trade_system.features.dash.leader_annotations import load_status_with_leader  # noqa: E402
+def _card_html(*, endpoint:str, level:str, age_txt:str,
+               retries:int, cause:str, notes:str,
+               border_color:str, fill_color:str, placeholder:bool)->str:
+    # placeholder は値をダッシュ表示
+    if placeholder:
+        level_txt = "—"
+        age_txt   = "—"
+        retries   = 0
+        cause     = "未収集"
+        # 既定の薄灰を背景に
+        fill_color = "#f3f4f6"
+    else:
+        level_txt = level or "OK"
+    return f"""
+<div class="health-card" style="border:2px solid {border_color}; background:{fill_color}; border-radius:12px;">
+  <div class="health-hd">{endpoint}</div>
+  <div class="health-grid">
+    <div class="health-kv"><div class="k">状態</div><div class="v">{level_txt}</div></div>
+    <div class="health-kv"><div class="k">遅延</div><div class="v">{age_txt}</div></div>
+    <div class="health-kv"><div class="k">再試行</div><div class="v">{int(retries)}</div></div>
+  </div>
+  <div class="health-cap">原因: {cause or '-'}</div>
+  {f'<div class="health-cap">メモ: {notes}</div>' if (notes and notes != '-') else ''}
+</div>
+"""
 
-def _timeline(ax, status:str, age_sec:float|None, window_s:int):
+# ---------- ユーティリティ ----------
+
+def _get_counts(h) -> Dict[str, int]:
+    # h.counts を想定（dict）。無ければフォールバック。
+    counts = getattr(h, "counts", None) or {}
+    if counts:
+        return {k: int(counts.get(k, 0)) for k in ("OK", "WARN", "CRIT")}
+    # items から集計（念のため）
+    items = getattr(h, "items", None) or []
+    agg = {"OK": 0, "WARN": 0, "CRIT": 0}
+    for iv in items:
+        level = getattr(iv, "level", None) or (isinstance(iv, dict) and iv.get("level"))
+        if level in agg:
+            agg[level] += 1
+    return agg
+
+def _items_iter(h) -> Iterable[Dict[str, Any]]:
+    """dataclass/obj or dict の両対応で items を辞書化して返す。"""
+    items = getattr(h, "items", None) or []
+    for iv in items:
+        if isinstance(iv, dict):
+            yield iv
+        else:
+            yield {
+                "exchange": getattr(iv, "exchange", None),
+                "topic": getattr(iv, "topic", None),
+                "last_ok": getattr(iv, "last_ok", None),
+                "age_sec": getattr(iv, "age_sec", None),
+                "retries": getattr(iv, "retries", 0),
+                "cause": getattr(iv, "cause", None),
+                "notes": getattr(iv, "notes", None),
+                "source": getattr(iv, "source", None),
+                "level": getattr(iv, "level", None) or "OK",
+            }
+
+def _fmt_age(sec: Optional[float]) -> str:
+    if sec is None:
+        return "—"
+    try:
+        s = float(sec)
+    except Exception:
+        return "—"
+    if s < 120:
+        return f"{int(s)}s"
+    if s < 3600:
+        return f"{int(s // 60)}m"
+    return f"{s / 3600:.1f}h"
+
+def _timeline(ax, status: str, age_sec: Optional[float], window_s: int, palette: dict) -> None:
+    """右端=現在。未更新区間（age）を右側に塗る。"""
+    if ax is None:
+        return
     age = max(0.0, float(age_sec or 0.0))
     age = min(age, float(window_s))
     ok_len = max(0.0, window_s - age)
 
-    ok_color = "#e7f7ee"
-    miss_color = {"OK":"#d9f5e3", "WARN":"#fff4d6", "CRIT":"#ffe4e6"}.get(status, "#eee")
+    # パレット連動
+    ok_color = palette["bar_fill"].get("ok", "#d1fae5")
+    miss_color = palette["bar_fill"].get((status or "OK").lower(), "#d1fae5")
 
-    if ax is None: return
     ax.barh([0], [ok_len], color=ok_color, height=0.5)
     ax.barh([0], [age], left=[ok_len], color=miss_color, height=0.5)
+    ax.set_xlim(0, window_s)
+    ax.set_ylim(-0.6, 0.6)
+    ax.set_yticks([])
+    ax.set_xticks([])
+    for s in ax.spines.values():
+        s.set_visible(False)
 
-    ax.set_xlim(0, window_s); ax.set_ylim(-0.6, 0.6)
-    ax.set_yticks([]); ax.set_xticks([])
-    for s in ax.spines.values(): s.set_visible(False)
+def _order_and_fill(items: list[dict]) -> tuple[list[dict], list[str]]:
+    """
+    health.yaml の order に合わせて items を並べ替え、
+    order に載っているが items に存在しない exchange は
+    プレースホルダ（__placeholder__=True）を追加する。
+    戻り値: (ordered_items, order)
+    """
+    # items から実在する取引所集合
+    present = []
+    seen = set()
+    for iv in items:
+        ex = iv.get("exchange")
+        if not ex:
+            continue
+        present.append(iv)
+        seen.add(ex)
 
-def _fmt_age(sec) -> str:
-    """age秒を見やすい文字列に整形（例: 75s, 12m, 1.5h）。Noneはダッシュ。"""
-    if sec is None:
-        return "—"
+    # order の取得（失敗時は items 側の exchange をアルファベット順）
     try:
-        s = int(float(sec))
+        order = health_order.load_order()
+        # load_order() が list[str] を返す前提（無ければ例外）
+        if not isinstance(order, (list, tuple)) or not order:
+            raise ValueError("empty order")
+        order = list(order)
     except Exception:
-        return "—"
-    if s < 120:
-        return f"{s}s"
-    if s < 3600:
-        return f"{s // 60}m"
-    return f"{s / 3600:.1f}h"
+        order = sorted(list(seen))
 
-def render():
-    # CSSは外部 styles/tab_health.css に集約。タブ内スコープ用のラッパーを張る
-    st.markdown("<div class='health-tab'>", unsafe_allow_html=True)
-    st.subheader("コレクターの健全性")
+    # 既存 item を order 順に並べる（同一 exchange 内は既存順）
+    by_ex = {}
+    for iv in present:
+        by_ex.setdefault(iv.get("exchange"), []).append(iv)
 
+    ordered: list[dict] = []
+    for ex in order:
+        if ex in by_ex:
+            ordered.extend(by_ex[ex])
+        else:
+            # プレースホルダを 1 枚だけ入れる（カード/タイムライン共通で扱える最小構造）
+            ordered.append({
+                "exchange": ex,
+                "topic": "-",
+                "last_ok": None,
+                "age_sec": None,
+                "retries": 0,
+                "cause": "未収集",
+                "notes": None,
+                "source": "placeholder",
+                "level": "OK",         # 見た目の崩れ回避のため OK とする（枠色は後で調整可）
+                "__placeholder__": True,
+            })
+
+    # order に載っていない余剰 exchange（もしあれば）は末尾へ（現状維持）
+    for ex, rows in by_ex.items():
+        if ex not in order:
+            ordered.extend(rows)
+
+    return ordered, order
+
+# ---------- タブ状態（ヘッダー色） ----------
+
+def get_status() -> str:
+    """
+    "normal" | "warn" | "crit" | "urgent"
+    - urgent は将来拡張（長時間 CRIT 継続や致命的障害で昇格）
+    """
+    try:
+        h = read_health()
+        counts = _get_counts(h)
+    except Exception as e:
+        W.emit("tab.health.status_error", level="WARN", feature="health", payload={"err": str(e)})
+        return "warn"
+
+    if counts.get("CRIT", 0) > 0:
+        return "crit"
+    if counts.get("WARN", 0) > 0:
+        return "warn"
+    return "normal"
+
+def _get_palette():
+    """
+    monitoring.yaml → palette を取得。無ければ既定色を返す。
+    """
+    try:
+        mon = settings_svc.load_yaml("monitoring") or {}
+    except Exception:
+        mon = {}
+
+    pal = mon.get("palette") or {}
+    # 既定色（UIの見えを大きく変えないニュートラル寄り）
+    defaults = {
+        "card_border": {"ok": "#10b981", "warn": "#f59e0b", "crit": "#ef4444"},
+        "bar_fill":    {"ok": "#d1fae5", "warn": "#fef3c7", "crit": "#fee2e2"},
+        "card_fill":   {"ok": "#ecfdf5", "warn": "#fffbeb", "crit": "#fef2f2"},  # 追加
+    }
+    # マージ対象キーにも card_fill を追加
+    for k in ("card_border", "bar_fill", "card_fill"):
+        pal[k] = {**defaults[k], **(pal.get(k) or {})}
+    return pal
+
+# ---------- UI（薄い入口＋カード＋タイムライン） ----------
+
+def render() -> None:
+    st.subheader("ヘルス（収集健全性）")
+    _inject_health_css()
+
+    # 自動更新とウィンドウ
     c1, c2, _ = st.columns([1, 1, 6])
     with c1:
         auto = st.toggle("自動更新（このタブ）", value=False)
@@ -88,160 +239,96 @@ def render():
     if auto:
         st.caption("自動更新: 5秒ごと")
         time.sleep(5)
-        st.experimental_rerun()
+        _rerun = getattr(st, "experimental_rerun", None) or getattr(st, "rerun", None)
+        if _rerun:
+            _rerun()
 
-    s = get_health_summary()
-    st.caption(f"更新: {s['updated_at']} / all_ok={s['all_ok']}")
-
-    # storage メタはデバッグ時のみキャプション表示（通常は非表示）
+    # データ取得
     try:
-        import json as _json, os as _os
-        from pathlib import Path as _P
-        _sp = _P(_os.environ.get("BTC_TS_DATA_DIR", "data")) / "collector" / "status.json"
-        _raw = _json.loads(_sp.read_text(encoding="utf-8"))
-        _stg = _raw.get("storage") or {}
-        if _stg and _os.environ.get("BTC_TS_DEBUG_UI") == "1":
-            st.caption(
-                "storage: "
-                f"primary_ok={_stg.get('primary_ok')} / "
-                f"logs_root={_stg.get('logs_root')} / "
-                f"data_root={_stg.get('data_root')}"
-            )
-    except Exception:
-        pass
+        h = read_health()
+    except Exception as e:
+        st.warning("Health 情報の取得に失敗しました。設定を確認してください。")
+        W.emit("tab.health.read_error", level="WARN", feature="health", payload={"err": str(e)})
+        return
 
-    cols = st.columns(max(1, len(s.get("cards", []))))
-    for i, c in enumerate(s.get("cards", [])):
-        ex = c.get("exchange", "?")
-        status = c.get("status", "-")
-        age_val = c.get("age_sec", None)
-        notes = c.get("notes", "")
+    updated_at = getattr(h, "updated_at", None)
+    counts = _get_counts(h)
+    st.caption(f"updated_at: {updated_at or '-'} / OK={counts.get('OK',0)} WARN={counts.get('WARN',0)} CRIT={counts.get('CRIT',0)}")
+    palette = _get_palette()
 
-        # 表示用に整形（CSS分離後は見た目はクラスで制御）
-        age_display = _fmt_age(age_val)
-        note_html = f"<div class='h-muted'>{notes}</div>" if notes else ""
+    items = list(_items_iter(h))
+    if not items:
+        st.info("status.json が見つからないか、対象エンドポイントが未登録です。")
+        return
 
-        # クラスで配色を当てる（tab_health.css 側に定義）
-        status_cls = f"status-{status}"
-        chip = f"<span class='h-chip h-chip--{status}'>{status}</span>"
-        card_html = f"""
-        <div class='h-card {status_cls}'>
-          <div class='h-title'>{ex} {chip}</div>
+    # ★ 追加：並び替え＋プレースホルダ生成
+    items, _order = _order_and_fill(items)
 
-          <div class='h-muted'>更新遅延</div>
-          <div class='h-kv'>{age_display}</div>
-          {note_html}
-        """
+    # ---- カード（行×3列） ----
+    per_row = 3
+    for i in range(0, len(items), per_row):
+        row = items[i : i + per_row]
+        cols = st.columns(len(row))
+        for c, iv in zip(cols, row):
+            ex = f"{iv.get('exchange','?')}/{iv.get('topic','?')}"
+            level = iv.get("level", "OK")
+            age = iv.get("age_sec", None)
+            retries = iv.get("retries", 0)
+            cause = iv.get("cause") or "-"
+            notes = iv.get("notes") or "-"
 
-                # 追加注記（source / cause / retries）
-        src = c.get("source")
-        cause = c.get("cause")
-        retries = c.get("retries")
-        extra_bits = []
-        if src:      extra_bits.append(f"source={src}")
-        if cause:    extra_bits.append(f"cause={cause}")
-        if isinstance(retries, (int, float)): extra_bits.append(f"retries={int(retries)}")
-        if extra_bits:
-            st.caption(" / ".join(extra_bits))
+            placeholder = bool(iv.get("__placeholder__"))
+            tone = (level or "OK").lower()
+            border = palette["card_border"].get(tone, palette["card_border"]["ok"])
+            fill   = palette["card_fill"].get(tone,  palette["card_fill"]["ok"])   # ← 追加
 
-        if cols[i]:
-            st.markdown(card_html, unsafe_allow_html=True)
+            with c:
+                html = _card_html(
+                    endpoint=ex,
+                    level=level,
+                    age_txt=_fmt_age(age),
+                    retries=int(retries or 0),
+                    cause=cause,
+                    notes=notes,
+                    border_color=border,
+                    fill_color=fill,
+                    placeholder=placeholder,
+                )
+                st.markdown(html, unsafe_allow_html=True)
 
     st.divider()
-    st.write("タイムライン（右端=現在／塗り=未更新区間・淡色）")
-    for c in s.get("cards", []):
-        st.markdown(f"**{c.get('exchange','?')}**")
-        fig, ax = (plt.subplots(figsize=(8, 0.35), dpi=150) if hasattr(plt, 'subplots') else (None, None))
-        _timeline(ax, c.get("status"), c.get("age_sec"), window_s)
-        if hasattr(st, 'pyplot') and fig is not None:
-            st.pyplot(fig)
-        if hasattr(plt, 'close'):
-            plt.close(fig)
+
+    # ---- タイムライン（1エンドポイント=1行の小さなバー）----
+    st.write("タイムライン（右端=現在／右側の塗り＝未更新区間）")
+    for iv in items:
+        ex = f"{iv.get('exchange','?')}/{iv.get('topic','?')}"
+        level = iv.get("level", "OK")
+        age = iv.get("age_sec", None)
+        st.markdown(f"**{ex}**")
+        if iv.get("__placeholder__"):
+            st.caption("未収集中")
+            continue
+        fig, ax = plt.subplots(figsize=(8, 0.35), dpi=150)
+        _timeline(ax, level, age, window_s, palette)
+        st.pyplot(fig)
+        plt.close(fig)
 
     st.divider()
-    st.write("詳細")
-    table = get_health_table()
-    st.caption("source=status: status.json 由来 / mtime: data/latest/raw の更新日時から推定")
 
-    # source 列が無い場合は補助（summary.cards を参照できるときのみ）
-    try:
-        if table:
-            have_source = (hasattr(table, "columns") and "source" in getattr(table, "columns", []))
-            if not have_source and isinstance(s.get("cards"), list):
-                card_sources = {c.get("exchange"): c.get("source") for c in s["cards"] if c.get("exchange")}
-                if hasattr(table, "columns"):
-                    if "exchange" in table.columns:
-                        table["source"] = table["exchange"].map(card_sources).fillna(table.get("source"))
-                elif isinstance(table, list):
-                    for row in table:
-                        if "source" not in row:
-                            row["source"] = card_sources.get(row.get("exchange"))
-    except Exception:
-        pass
+    # ---- 詳細テーブル（簡易）----
+    # DataFrame 依存を避け、Streamlitの自動テーブル化に任せる
+    tbl: List[Dict[str, Any]] = []
+    for iv in items:
+        tbl.append({
+            "endpoint": f"{iv.get('exchange','?')}/{iv.get('topic','?')}",
+            "level": iv.get("level", "OK"),
+            "age_sec": round(float(iv.get("age_sec") or 0.0), 3),
+            "last_ok": iv.get("last_ok") or "-",
+            "retries": int(iv.get("retries") or 0),
+            "cause": iv.get("cause") or "-",
+            "notes": iv.get("notes") or "-",
+            "source": iv.get("source") or "-",
+        })
+    st.write(tbl)
 
-    try:
-        # leader メタのみ利用（items は UI 側で既に整形済みのため未使用）
-        _leader = load_status_with_leader()[1]
-        host = _leader.get("host") if _leader else None
-        hb_ms = int(_leader.get("heartbeat_ms", 0) or 0) if _leader else 0
-        import time as _t
-        age_sec = int(max(0, (_t.time() * 1000 - hb_ms)) / 1000) if hb_ms else None
-
-        if table:
-            if hasattr(table, "columns"):
-                if "leader.host" not in getattr(table, "columns", []):
-                    table["leader.host"] = host
-                if "leader_age_sec" not in getattr(table, "columns", []):
-                    table["leader_age_sec"] = age_sec
-            elif isinstance(table, list):
-                for row in table:
-                    row["leader.host"] = host
-                    row["leader_age_sec"] = age_sec
-
-    except Exception:
-        pass
-
-    # storage 注釈（status.json の storage ブロックを読んで付与）
-    try:
-        import json as _json, os as _os
-        from pathlib import Path as _P
-        _sp = _P(_os.environ.get("BTC_TS_DATA_DIR", "data")) / "collector" / "status.json"
-        _raw = _json.loads(_sp.read_text(encoding="utf-8"))
-        _stg = _raw.get("storage") or {}
-        s_primary = _stg.get("primary_ok")
-        s_logs = _stg.get("logs_root")
-        s_data = _stg.get("data_root")
-
-        if table:
-            if hasattr(table, "columns"):
-                if "storage.primary_ok" not in getattr(table, "columns", []):
-                    table["storage.primary_ok"] = s_primary
-                if "storage.logs_root" not in getattr(table, "columns", []):
-                    table["storage.logs_root"] = s_logs
-                if "storage.data_root" not in getattr(table, "columns", []):
-                    table["storage.data_root"] = s_data
-            elif isinstance(table, list):
-                for row in table:
-                    row["storage.primary_ok"] = s_primary
-                    row["storage.logs_root"] = s_logs
-                    row["storage.data_root"] = s_data
-    except Exception:
-        pass
-
-    # 並び替え（DataFrame のときのみ／list[dict] はそのまま）
-    try:
-        if hasattr(table, "sort_values") and "leader_age_sec" in getattr(table, "columns", []):
-            table = table.sort_values(
-                ["leader_age_sec", "exchange", "topic"],
-                ascending=[True, True, True],
-                na_position="last",
-            )
-    except Exception:
-        pass
-
-    if table:
-        st.dataframe(table, width="stretch")
-    else:
-        st.info("status.json が見つかりません")
-
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.caption("※ 閾値や表示順は設定モーダル（⚙️）で調整。defaults→current の設計に準拠。")

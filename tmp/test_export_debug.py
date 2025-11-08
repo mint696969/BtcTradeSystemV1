@@ -24,3 +24,4 @@ for line in text.splitlines():
     if line.startswith("## audit_tail"):
         print("RET_TAIL_HEAD =", line)
         break
+

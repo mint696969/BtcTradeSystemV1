@@ -74,3 +74,4 @@ def render_orders_timeline(log_path: Path):
         tid=(r.get("trace_id") or (r.get("payload") or {}).get("trace_id") or "-")
         sym=(r.get("payload") or {}).get("symbol") or "-"
         st.code(f"[{lvl}] {ev:8s}  feature={f}  symbol={sym}  trace_id={tid}", language="text")
+
