@@ -7,10 +7,11 @@
 /secrets/
 /.vscode/
 
-# Python
-__pycache__/
-/*.pyc
+# アーカイブ類（どこでも）
+*.zip
+*.7z
+*.rar
 
-# UI 実効ファイルは無視、*_def.yaml は追跡
-/btc_trade_system/config/ui/*.yaml
-!/btc_trade_system/config/ui/*_def.yaml
+# handoff の成果物だけ除外（TXT/MDは残す運用）
+/docs/handoff/*.zip
+/docs/handoff/CTX-*/
