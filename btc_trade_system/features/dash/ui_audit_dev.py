@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/features/dash/ui_audit.py
+# path: ./btc_trade_system/features/dash/ui_audit_dev.py
 # desc: 開発監査タブのUI（dev_auditログの要約・パネル表示）
 
 import streamlit as st
