@@ -6,51 +6,45 @@ from __future__ import annotations
 from pathlib import Path
 import os, time
 import yaml
-import streamlit as st
+# NOTE: UI依存を避けるため、Streamlitは遅延参照に変更（必要時に取得）
+st = None  # lazy import in functions
 
 # 監査（実保存/既定適用の記録はSVCで一元emit）
 from btc_trade_system.features.audit_dev import writer as W
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-INTERNAL_UI_DIR = REPO_ROOT / "btc_trade_system" / "config" / "ui"
+CONFIG_DIR = REPO_ROOT / "btc_trade_system" / "config"  # current を一元管理
 
-# ===== 外部CONFIGディレクトリの解決（常に外部currentを採用。無ければ自動生成） =====
-def _ext_config_dir() -> Path:
+def _config_dir() -> Path:
     """
-    外部設定ルートの解決：
-      1) ENV: BTC_TS_CONFIG_DIR（最優先） → 無ければ作成
-      2) <repo>/data/config/ui → 無ければ作成
-    ※ INTERNAL_UI_DIR は def 読み取り専用。書き込みには使用しない。
+    設定の current を保存/読込するディレクトリ。
+    - ENV: BTC_TS_CONFIG_DIR があれば最優先（複数PC運用・同期用）
+    - それ以外はリポ内 CONFIG_DIR を使用
     """
     env = os.environ.get("BTC_TS_CONFIG_DIR")
     if env:
         p = Path(env)
         p.mkdir(parents=True, exist_ok=True)
         return p
-    p = REPO_ROOT / "data" / "config" / "ui"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    return CONFIG_DIR
 
 def _locks_dir() -> Path:
-    d = _ext_config_dir().parent / ".locks"
+    d = _config_dir() / ".locks"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 # ===== def/current パス解決 =====
 def _feature_def_path(feature: str) -> Path:
     """
-    機能内デフォルト優先：
+    機能内デフォルトのみ：
       <repo>/btc_trade_system/features/<feature>/config/<feature>_def.yaml
-      無ければ <repo>/btc_trade_system/config/ui/<feature>_def.yaml
     """
-    local = REPO_ROOT / "btc_trade_system" / "features" / feature / "config" / f"{feature}_def.yaml"
-    if local.exists():
-        return local
-    return INTERNAL_UI_DIR / f"{feature}_def.yaml"
+    return REPO_ROOT / "btc_trade_system" / "features" / feature / "config" / f"{feature}_def.yaml"
 
 def _feature_active_path(feature: str) -> Path:
-    """外部currentは外部設定ディレクトリ直下（存在しなくても良い。保存時に自動生成）"""
-    return _ext_config_dir() / f"{feature}.yaml"
+    """current はリポ内 CONFIG_DIR に保存/読込する"""
+    return _config_dir() / f"{feature}.yaml"
 
 def get_paths(feature: str = "dash") -> tuple[Path, Path]:
     """(def_path, active_path) を返す"""
@@ -103,13 +97,34 @@ class _KeyLock:
 
 # ===== 合成／差分 =====
 def _shallow_merge(base: dict, override: dict) -> dict:
-    merged = dict(base or {})
+    """深い後勝ちマージに置き換え（互換のため関数名は維持）。"""
+    if not isinstance(base, dict):
+        return override if isinstance(override, dict) else {}
+    out = dict(base)
     for k, v in (override or {}).items():
-        if isinstance(v, dict) and isinstance(merged.get(k), dict):
-            merged[k] = {**merged[k], **v}
+        bv = out.get(k)
+        if isinstance(bv, dict) and isinstance(v, dict):
+            out[k] = _shallow_merge(bv, v)
         else:
-            merged[k] = v
-    return merged
+            out[k] = v
+    return out
+
+def _filter_by_schema(data: dict, schema: dict) -> dict:
+    """def(=schema)に存在しないキーは破棄（再帰）。"""
+    if not isinstance(data, dict) or not isinstance(schema, dict):
+        return {}
+    out = {}
+    for k, v in data.items():
+        if k not in schema:
+            continue
+        sv = schema[k]
+        if isinstance(v, dict) and isinstance(sv, dict):
+            sub = _filter_by_schema(v, sv)
+            if sub:
+                out[k] = sub
+        else:
+            out[k] = v
+    return out
 
 def _diff_from_def(cur_merged: dict, d_def: dict) -> dict:
     """
@@ -136,14 +151,13 @@ def load_def_yaml(feature: str = "dash") -> dict:
     return d if isinstance(d, dict) else {}
 
 def load_yaml(feature: str = "dash") -> dict:
-    """
-    def＋active（active優先の浅いマージ）を返す。
-    """
+    """def＋current（currentはdefに存在するキーのみ）を深い後勝ちで返す。"""
     def_path, active_path = get_paths(feature)
     d_def = _load_yaml(def_path)
     d_cur = _load_yaml(active_path)
     if not isinstance(d_def, dict): d_def = {}
     if not isinstance(d_cur, dict): d_cur = {}
+    d_cur = _filter_by_schema(d_cur, d_def)  # 未知キーは破棄
     return _shallow_merge(d_def, d_cur)
 
 def has_default(feature: str = "dash") -> bool:
@@ -171,13 +185,10 @@ def save_yaml(feature: str, new_merged: dict) -> None:
         pass
 
 def reset_to_default(feature: str) -> None:
-    """
-    デフォルトに戻して保存（= def を current へ丸ごと書き出し）。
-    """
-    d_def = load_def_yaml(feature)
+    """デフォルトに戻す＝current を空辞書にする（差分ゼロ）。"""
     _, active_path = get_paths(feature)
     with _KeyLock(feature):
-        _write_yaml_atomic(active_path, d_def if isinstance(d_def, dict) else {})
+        _write_yaml_atomic(active_path, {})
 
     try:
         W.emit(f"settings.default.apply.{feature}", level="INFO", feature=feature,
@@ -188,11 +199,26 @@ def reset_to_default(feature: str) -> None:
 # ===== 既存ユーティリティ（UIタイトル／配色） =====
 def get_ui_title(default: str = "BtcTradeSystem V1") -> str:
     d = load_yaml("dash")
-    t = d.get("title") if isinstance(d, dict) else None
+    t = None
+    if isinstance(d, dict):
+        t = d.get("title")
+        if not (isinstance(t, str) and t.strip()):
+            t = (d.get("ui") or {}).get("title")
     return t.strip() if isinstance(t, str) and t.strip() else default
 
+def _session_state() -> dict:
+    """Streamlit未ロード時でも例外にしない薄い取得。"""
+    global st
+    try:
+        if st is None:
+            import streamlit as st  # type: ignore
+            globals()['st'] = st
+        return st.session_state  # type: ignore[attr-defined]
+    except Exception:
+        return {}
+
 def get_alert_palette() -> dict:
-    """def → current → session override の優先で配色（alert_chip）を返す"""
+    """def → current → session override の優先で配色（alert_chip）を返す。UI依存は任意化。"""
     base = (load_def_yaml("dash").get("colors") or {}).get("alert_chip") or {}
     cur  = (load_yaml("dash").get("colors") or {}).get("alert_chip") or {}
 
@@ -205,30 +231,33 @@ def get_alert_palette() -> dict:
                    "bg": (cur.get("urgent")or {}).get("bg", (base.get("urgent")or {}).get("bg", "#FF6666"))},
     }
 
-    ov = st.session_state.get("_alerts_palette_overrides", {}) or {}
+    ss = _session_state()
+    ov = ss.get("_alerts_palette_overrides", {}) if isinstance(ss, dict) else {}
     for lv in ("warn", "crit", "urgent"):
         if lv in ov:
-            if "fg" in ov[lv]:
-                pal[lv]["fg"] = ov[lv]["fg"]
-            if "bg" in ov[lv]:
-                pal[lv]["bg"] = ov[lv]["bg"]
+            if "fg" in ov[lv]: pal[lv]["fg"] = ov[lv]["fg"]
+            if "bg" in ov[lv]: pal[lv]["bg"] = ov[lv]["bg"]
     return pal
 
 def apply_palette_once(picks: dict) -> None:
-    """今回のみ適用（セッションオーバーライドへ格納）"""
-    st.session_state["_alerts_palette_overrides"] = picks
+    """今回のみ適用（セッションオーバーライドへ格納）。Streamlit非依存化。"""
+    ss = _session_state()
+    if isinstance(ss, dict):
+        ss["_alerts_palette_overrides"] = picks
 
 def reset_palette_to_default() -> None:
-    """既定（dash_def.yaml）に戻す（セッション内だけ）"""
+    """既定（dash_def.yaml）へ戻す（セッション内だけ）。"""
     base = (load_def_yaml("dash").get("colors") or {}).get("alert_chip") or {}
     def pick(sec, dfg, dbg):
         b = base.get(sec, {})
         return {"fg": b.get("fg", dfg), "bg": b.get("bg", dbg)}
-    st.session_state["_alerts_palette_overrides"] = {
-        "urgent": pick("urgent", "#FFFFFF", "#FF6666"),
-        "crit":   pick("crit",   "#000000", "#FFCCCC"),
-        "warn":   pick("warn",   "#000000", "#FFF2CC"),
-    }
+    ss = _session_state()
+    if isinstance(ss, dict):
+        ss["_alerts_palette_overrides"] = {
+            "urgent": pick("urgent", "#FFFFFF", "#FF6666"),
+            "crit":   pick("crit",   "#000000", "#FFCCCC"),
+            "warn":   pick("warn",   "#000000", "#FFF2CC"),
+        }
 
 def save_palette(picks: dict) -> bool:
     """dash.yaml（外部current）へ原子的保存（差分抽出は colors.alert_chip に限定）"""
@@ -248,9 +277,7 @@ def save_palette(picks: dict) -> bool:
         return True
     except Exception as e:
         try:
-            W.emit("settings.write.error.dash", level="ERROR", feature="dash",
-                   payload={"error": str(e)})
+            W.emit("settings.write.error.dash", level="ERROR", feature="dash", payload={"error": str(e)})
         except Exception:
             pass
-        st.warning(f"配色の保存に失敗しました: {e}")
         return False

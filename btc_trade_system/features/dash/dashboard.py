@@ -5,65 +5,76 @@ from __future__ import annotations
 import importlib
 import pathlib
 from pathlib import Path
+import os
 from typing import Dict, List, Optional
 import yaml
 import streamlit as st
 from btc_trade_system.features.settings import settings_svc as settings
 from btc_trade_system.features.settings import settings as settings_hub
 from btc_trade_system.features.audit_dev import writer as W
+from btc_trade_system.features.settings import settings_svc as _S  # demo_alerts設定反映用
 
 # 基本設定
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
-CONFIG_UI_DIR = REPO_ROOT / "btc_trade_system" / "config" / "ui"
 
-# tabs.yaml も settings_svc の外部解決規約（ENV: BTC_TS_CONFIG_DIR / repo data/config/ui）に追従
-def _tabs_paths() -> tuple[pathlib.Path, pathlib.Path]:
-    """
-    returns: (def_path, current_path)
-    - def:   <repo>/btc_trade_system/config/ui/tabs_def.yaml
-    - current: settings_svc._ext_config_dir()/tabs.yaml  （存在しなくてもよい）
-    """
-    def_path = CONFIG_UI_DIR / "tabs_def.yaml"
-    # 内部関数だが規約共有のため利用（dash.yaml 解決と同一ポリシー）
-    try:
-        ext_dir = settings._ext_config_dir()  # type: ignore[attr-defined]
-    except Exception:
-        ext_dir = CONFIG_UI_DIR  # フォールバック
-    cur_path = ext_dir / "tabs.yaml"
-    return def_path, cur_path
+def _config_dir() -> pathlib.Path:
+    env = os.environ.get("BTC_TS_CONFIG_DIR")
+    if env:
+        p = pathlib.Path(env)
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+    p = REPO_ROOT / "btc_trade_system" / "config"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
-# _tabs_paths() の直後に追加
-TABS_DEF_PATH, TABS_CFG_PATH = _tabs_paths()
+TABS_DEF_PATH = REPO_ROOT / "btc_trade_system" / "features" / "dash" / "config" / "tabs_def.yaml"
+TABS_CFG_PATH = _config_dir() / "tabs.yaml"
 
-# ─────────────────────────────────────────────────────────────
-# ユーティリティ
 def _load_yaml(path: pathlib.Path) -> Dict:
     if not path.exists():
         return {}
     with path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    if not isinstance(base, dict):
+        return override if isinstance(override, dict) else {}
+    out = dict(base)
+    for k, v in (override or {}).items():
+        bv = out.get(k)
+        if isinstance(bv, dict) and isinstance(v, dict):
+            out[k] = _deep_merge(bv, v)
+        else:
+            out[k] = v
+    return out
+
+def _filter_by_schema(data: dict, schema: dict) -> dict:
+    if not isinstance(data, dict) or not isinstance(schema, dict):
+        return {}
+    out = {}
+    for k, v in (data or {}).items():
+        if k not in schema:
+            continue
+        sv = schema[k]
+        if isinstance(v, dict) and isinstance(sv, dict):
+            sub = _filter_by_schema(v, sv)
+            if sub:
+                out[k] = sub
+        else:
+            out[k] = v
+    return out
+
 def _load_tabs_cfg() -> Dict:
-    base = _load_yaml(TABS_DEF_PATH)
-    cur  = _load_yaml(TABS_CFG_PATH)
-
-    order = (cur.get("order") or base.get("order") or ["main", "health", "audit"])
-
-    enabled = {k: True for k in order}
-    enabled.update(base.get("enabled", {}))
-    enabled.update(cur.get("enabled", {}))
-
-    # ← 追加：labels を defaults→current でマージ
-    labels = {}
-    labels.update(base.get("labels", {}))
-    labels.update(cur.get("labels", {}))
-
-    initial = cur.get("initial") or base.get("initial") or (order[0] if order else None)
-
-    return {"order": order, "enabled": enabled, "initial": initial, "labels": labels}
+    base = _load_yaml(TABS_DEF_PATH) or {}
+    cur  = _load_yaml(TABS_CFG_PATH) or {}
+    cur = _filter_by_schema(cur, base)
+    merged = _deep_merge(base, cur)
+    order = merged.get("order") or []
+    tabs  = merged.get("tabs") or {}
+    initial = order[0] if order else None
+    return {"order": order, "tabs": tabs, "initial": initial}
 
 def _clamp_dashboard_order(order: List[str]) -> List[str]:
-    """ダッシュボードに不要なキーを除外し、main を常に最左に固定"""
     seq = [k for k in order if k not in ("collector", "basic")]
     if "main" in seq:
         seq = ["main"] + [k for k in seq if k != "main"]
@@ -99,6 +110,14 @@ def _inject_alert_palette_vars(pal: Dict[str, Dict[str, str]]) -> None:
         unsafe_allow_html=True,
     )
 
+def _demo_default_items() -> list[dict]:
+    return [
+        {"level": "urgent", "label": "緊急Y"},
+        {"level": "crit",   "label": "重大X"},
+        {"level": "warn",   "label": "注意A"},
+        {"level": "more",   "label": "+1"},
+    ]
+
 def _render_alert_chips(alerts: List[Dict]) -> None:
     if not alerts:
         return
@@ -118,24 +137,39 @@ def _render_alert_chips(alerts: List[Dict]) -> None:
 
 def _render_header(title: str = "BtcTradeSystem V1 ダッシュボード") -> None:
     st.markdown("<div id='app-header-row'></div>", unsafe_allow_html=True)
-    alerts: list[dict] = st.session_state.get("_alerts", [])
-    has_chips: bool = bool(alerts)
+
+    cfg_dash = _S.load_yaml("dash")
+    demo = (cfg_dash.get("demo_alerts") or {})
+    if bool(demo.get("enabled", False)):
+        alerts = demo.get("items") if isinstance(demo.get("items"), list) else _demo_default_items()
+    else:
+        alerts = []
+
+    active_key: Optional[str] = st.session_state.get("_active_dash_tab")
     col_title, col_chips, col_gear = st.columns([9, 6, 1], gap="small")
 
     with col_title:
         st.markdown(f"<h3>{title}</h3>", unsafe_allow_html=True)
 
     with col_chips:
-        if has_chips:
+        if alerts:
             _render_alert_chips(alerts)
         else:
             st.markdown("<div class='chip-row chip-row--ghost'></div>", unsafe_allow_html=True)
 
     with col_gear:
+        if active_key:
+            st.session_state["active_tab"] = active_key
+            st.session_state["_gear_target"] = active_key
         settings_hub.settings_gear()
 
-def _resolve_tab_module(tab_key: str) -> Optional[str]:
-    name = f"btc_trade_system.features.dash.ui_{tab_key}"
+def _resolve_tab_module(tab_key: str, dash_field) -> Optional[str]:
+    if dash_field is True:
+        name = f"btc_trade_system.features.dash.ui_{tab_key}"
+    elif isinstance(dash_field, str) and dash_field.strip():
+        name = f"btc_trade_system.features.dash.ui_{dash_field.strip()}"
+    else:
+        return None
     try:
         importlib.import_module(name)
         return name
@@ -145,39 +179,43 @@ def _resolve_tab_module(tab_key: str) -> Optional[str]:
 def _render_tabs() -> None:
     cfg = _load_tabs_cfg()
     order = _clamp_dashboard_order(cfg["order"])
+    tabs_def = cfg["tabs"]
     initial = cfg["initial"]
-    preferred = st.session_state.get("active_tab") or initial
-    if preferred not in order:
-        preferred = "main" if "main" in order else (order[0] if order else None)
-    enabled = cfg["enabled"]
+
     keys, labels = [], []
     for k in order:
-        if enabled.get(k, True):
-            keys.append(k)
-            labels.append(cfg.get("labels", {}).get(k, k))
+        t = tabs_def.get(k, {})
+        if not t or not t.get("enabled", True):
+            continue
+        keys.append(k)
+        labels.append(t.get("title_dash") or k)
+
     if not keys:
         st.info("表示可能なタブがありません（tabs.yaml / tabs_def.yaml を確認してください）。")
         return
-    for i, k in enumerate(keys):
-        try:
-            W.emit("dash.tab.register", level="INFO", feature="dash", payload={"key": k, "title": labels[i] if i < len(labels) else k})
-        except Exception as e:
-            st.caption(f"⚠ dash.tab.register emit failed: {e}")
-    active0 = preferred
-    if active0 in keys and keys[0] != active0:
-        idx = keys.index(active0)
+
+    preferred = st.session_state.get("active_tab") or initial
+    if preferred in keys and keys[0] != preferred:
+        idx = keys.index(preferred)
         keys = [keys[idx]] + keys[:idx] + keys[idx+1:]
         labels = [labels[idx]] + labels[:idx] + labels[idx+1:]
+
+    st.session_state["_active_dash_tab"] = keys[0]
+    if "active_tab" not in st.session_state:
+        st.session_state["active_tab"] = keys[0]
+
     tabs = st.tabs(labels)
     try:
         W.emit("dash.tab.open", level="INFO", feature="dash", payload={"key": keys[0], "title": labels[0] if labels else keys[0]})
-    except Exception as e:
-        st.caption(f"⚠ dash.tab.open emit failed: {e}")
+    except Exception:
+        pass
+
     for i, k in enumerate(keys):
         with tabs[i]:
-            mname = _resolve_tab_module(k)
+            t = tabs_def.get(k, {})
+            mname = _resolve_tab_module(k, t.get("dashboard", True))
             if not mname:
-                st.info(f"「{k}」タブのUIは未実装です。後続フェーズで実装します。")
+                st.info(f"「{k}」タブのUIは未実装です（ui_* を確認）。")
                 continue
             try:
                 mod = importlib.import_module(mname)
@@ -194,13 +232,16 @@ def main() -> None:
     st.set_page_config(page_title=title_base, layout="wide", initial_sidebar_state="collapsed", page_icon="⚙︎")
     _inject_tokens(toolbar_h_px=32, header_h_px=44)
     _inject_alert_palette_vars(settings.get_alert_palette())
+
     styles_dir = Path(__file__).resolve().parent / "styles"
-    for name in ["dashboard_header.css", "tab_main.css", "tab_health.css", "tab_audit.css", "settings.css"]:
+    for name in ["dashboard_header.css", "tab_main.css", "tab_health.css", "tab_audit_dev.css", "settings.css"]:
         _load_css(styles_dir / name)
-    st.session_state.setdefault("_alerts", [])
+
     _render_header(title=f"{title_base} ダッシュボード")
     _render_tabs()
 
+    if st.session_state.pop("_dash_require_rerun", False):
+        st.experimental_rerun()
+
 if __name__ == "__main__":
     main()
-

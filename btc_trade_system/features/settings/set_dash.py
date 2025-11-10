@@ -5,9 +5,6 @@ from __future__ import annotations
 from btc_trade_system.features.settings import settings_svc
 from btc_trade_system.features.settings import ui_common as UI
 
-# dev_audit 記録
-from btc_trade_system.features.audit_dev import writer as W
-
 # --- streamlit（無ければダミーで崩れないように） ---
 try:
     import streamlit as st
@@ -33,45 +30,33 @@ def _norm_hex(c: str, fallback: str) -> str:
                 pass
     return fallback
 
-def _toggle_demo_alerts():
-    """デモアラートの投入/解除（ON/OFFで閉じずに即時反映）"""
-    on = bool(st.session_state.get("set.basic.ui.demo_alerts"))
-    if on:
-        alerts = [
-            {"level": "urgent", "label": "緊急Y"},
-            {"level": "crit",   "label": "重大X"},
-            {"level": "warn",   "label": "注意A"},
-            {"level": "more",   "label": "+1"},
-        ]
-        # ヘッダー互換：旧/新どちらのキーでも拾えるように両方へ書く
-        st.session_state["_alerts"] = alerts
-        st.session_state["__alerts"] = alerts
-        W.emit("settings.demo_alerts.enable", level="INFO", feature="settings", payload={"count": 4})
-        st.session_state["__toast"] = ("デモアラートを表示しました", None)
-    else:
-        # 両方クリア（残像防止）
-        st.session_state["_alerts"] = []
-        st.session_state["__alerts"] = []
-        W.emit("settings.demo_alerts.disable", level="INFO", feature="settings", payload={})
-        st.session_state["__toast"] = ("デモアラートを非表示にしました", None)
-
-    # 入力変更：閉じずに再描画だけ行う
-    st.session_state["__settings_changed"] = True
-    st.rerun()
+def _demo_default_items() -> list[dict]:
+    """デモアラート既定リスト（def に items がない場合のフォールバック）。"""
+    return [
+        {"level": "urgent", "label": "緊急Y"},
+        {"level": "crit",   "label": "重大X"},
+        {"level": "warn",   "label": "注意A"},
+        {"level": "more",   "label": "+1"},
+    ]
 
 def _exec_default():
-    # 1) 既定値を適用（ファイルは SVC が atomic 書込）
+    # 1) 既定値を適用（current を {} に）
     settings_svc.reset_to_default("dash")
+
     # 2) セッション上書きを解除（保存値をマスクしない）
     st.session_state["_alerts_palette_overrides"] = {}
-    # 3) 次回オープンをクリーンに
+
+    # 3) 今回のセクションの作業状態だけクリア（モーダルは閉じない）
     st.session_state.pop("set.basic.pending", None)
     st.session_state.pop("set.basic._last_picks", None)
-    # 4) ハブへ「閉じてよい」合図（保存と同じ）
-    st.session_state["__settings_dirty"] = True
-    st.rerun()  # ui_common 側でも rerun するが、ここでも明示して確実に閉じる
+
+    # 4) ダッシュへ“即時反映”だけ通知（閉じない）
+    st.session_state["_dash_require_rerun"] = True
+    st.session_state["__settings_changed"] = True  # Hubは閉じずに再描画
+    st.rerun()
 
 def _exec_save():
+    # --- 配色（差分保存専用SVCを使用） ---
     pal_save = {
         "urgent": {
             "fg": _norm_hex(st.session_state.get("set.basic.pick.urgent.fg", "#FFFFFF"), "#FFFFFF"),
@@ -91,16 +76,23 @@ def _exec_save():
         st.error("保存に失敗しました（save_palette が未提供）")
         return
 
-    # 1) 保存値をセッション上書きがマスクしないよう、override をクリア
+    # --- デモアラート（enabled と items を dash.yaml に保存） ---
+    merged_dash = settings_svc.load_yaml("dash")  # def+current 合成（安全）
+    merged_dash.setdefault("demo_alerts", {})
+    merged_dash["demo_alerts"]["enabled"] = bool(st.session_state.get("set.basic.ui.demo_alerts"))
+    # items が def に無い環境でも困らないよう、既存 or 既定の雛形を与える
+    if not isinstance(merged_dash["demo_alerts"].get("items"), list):
+        merged_dash["demo_alerts"]["items"] = _demo_default_items()
+
+    settings_svc.save_yaml("dash", merged_dash)
+
+    # --- セッション上書き解除＆再描画（閉じない） ---
     st.session_state["_alerts_palette_overrides"] = {}
-
-    # 2) ハブに「閉じてよい」合図（健全性タブと同じ流儀）
-    st.session_state["__settings_dirty"] = True
-
-    # 3) このセクションの作業状態をクリア（次オープンでクリーンに）
     st.session_state.pop("set.basic.pending", None)
     st.session_state.pop("set.basic._last_picks", None)
-    st.rerun()  # 保存確定後に即 rerun してハブの閉鎖判定を通す
+    st.session_state["_dash_require_rerun"] = True
+    st.session_state["__settings_changed"] = True
+    st.rerun()
 
 def render():
     st.markdown("<div class='settings-tab'>", unsafe_allow_html=True)
@@ -110,22 +102,20 @@ def render():
     # ---- デモアラート投入（ヘッダーの表示確認用） ----
     st.divider()
 
-    # モーダルを開き直すたびに初期値を“その都度”同期させる
-    # ※ ui_common.close_section(prefix="set.basic") がセクション配下キーを掃除するため、
-    #    このキー（set.basic.ui.demo_alerts）は、閉じて再オープン時に必ず未定義→ここで再初期化される
+    # def+current 合成（保存時と同じ視点）を使って初期チェック状態を整える
+    merged_dash = settings_svc.load_yaml("dash")
     if "set.basic.ui.demo_alerts" not in st.session_state:
-        st.session_state["set.basic.ui.demo_alerts"] = bool(st.session_state.get("set.basic.demo_alert_default", False))
+        initial_enabled = bool((merged_dash.get("demo_alerts") or {}).get("enabled", False))
+        st.session_state["set.basic.ui.demo_alerts"] = initial_enabled
 
-    # on_change で即時反映（閉じない）。実処理は _toggle_demo_alerts → __settings_changed + rerun
     st.checkbox(
-        "デモアラートを投入",
+        "デモアラートを表示する（保存で有効化/無効化）",
         key="set.basic.ui.demo_alerts",
-        on_change=_toggle_demo_alerts,
     )
-    st.caption("※ ヘッダー右のチップ表示・配置の確認用途。保存は行いません。")
+    st.caption("※ 表示は保存/既定で反映されます。即時反映は行いません。")
 
     # ---- アラート色（今回のみ適用） ----
-    st.subheader("アラート色（今回のみ適用）")
+    st.subheader("アラート色（保存で適用）")
 
     # サービスから「def → current → session override」を合成した最終配色を取得
     pal_eff = settings_svc.get_alert_palette()

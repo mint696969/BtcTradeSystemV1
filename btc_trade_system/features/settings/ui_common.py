@@ -68,10 +68,6 @@ def render_section_controls(prefix: str,
         st.session_state[f"{key_base}.__last_prefix"] = prefix
 
     # チェック行（横一列・中央寄せ・折返しなし）
-    # 再オープン時：pending が無ければ常に未チェックへ戻す
-    if st.session_state.get(_kprefix(prefix) + "pending") is None:
-        st.session_state[confirm_ok_key] = False
-
     left, mid, right = st.columns([1, 2, 1])
     with mid:
         st.checkbox(
