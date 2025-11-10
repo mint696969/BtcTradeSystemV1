@@ -304,3 +304,184 @@ set.<key>.pending に未保存値が集約される
 タブ切替で未保存入力が破棄される
 
 監査ログ（設定書込・デフォルト適用）が出る
+
+---
+
+アコーディオン式 複数機能設定（1 タブ内）— 追加仕様差分
+
+1. セクションの命名とセッションキー
+
+1 タブ＝ 1 機能キー <key>（例: health）の下に、サブセクションを複数ぶら下げる。
+サブセクション識別子は <sect>（例: net, disk, mem など）。
+
+セッションキー規約（拡張）
+
+変更一時値（未保存）: set.<key>.<sect>.pending
+
+チェック状態: set.<key>.<sect>.btn.confirm_ok（key_base に応じて自動）
+
+セクション専用の作業キー（任意）: set.<key>.<sect>.\_\*
+
+UI 共通フッターの prefix / key_base はセクション単位で固有化する：
+
+prefix="set.<key>.<sect>"
+
+key_base="set.<key>.<sect>.btn"
+
+例: 健全性タブ（<key>=health）の「ネットワーク（net）」セクションなら
+prefix="set.health.net" / key_base="set.health.net.btn"
+
+2. アコーディオンと操作可否（active）
+
+各サブセクションは st.expander("<表示名>", expanded=…) で折りたたむ。
+
+expanded=True（展開中）だけ 操作可。畳まれているセクションは 全操作不可。
+
+実装は UI.render_section_controls(..., active=expanded) を利用（既存 ui_common.py で対応済み）。
+
+「確認チェック」自体も active=False なら無効化され、押下できない。
+
+3. pending の積み方（セクション単位）
+
+入力 UI（st.number_input, st.selectbox, st.color_picker 等）変更時、
+そのセクションの pending に 正準構造で集約する。
+
+典型パターン：
+
+values = {
+"thresholds": {"age_sec": {"warn": w, "crit": c}},
+"palette": {"warn": {"fg": ..., "bg": ...}}, # …セクションの責務に沿った最小単位
+}
+st.session_state["set.<key>.<sect>.pending"] = values
+
+未変更なら pending を作らない（＝現行仕様の「確認チェックが次リランで自動 OFF」を維持）。
+
+4. 保存／デフォルトの適用範囲（セクション限定）
+
+UI.render_section_controls() の on_save / on_default はセクション専用ハンドラを渡す。
+
+ハンドラは そのセクションに関係する部分のみを設定ファイルに反映する。
+
+推奨 I/F（サービス層）：
+
+settings_svc.save_yaml_partial("<key>", patch_dict) … deep-merge で該当部分だけ上書き
+
+settings_svc.reset_to_default_partial("<key>", path_or_keys) … 既定値から部分復元
+
+もし \*\_partial が無い場合は、現在値をロード → セクション分だけ deep-merge→save_yaml を行う。
+
+重要: 「保存／デフォルト」は展開中のセクションにだけ効く。
+畳まれているセクションの設定ファイルには影響しない。
+
+5. モーダル挙動（統一）
+
+保存／デフォルトの確定後は st.session_state["__settings_dirty"]=True を立てる。
+
+ハブ（settings.py）がこれを検知し、モーダル自動クローズ＋即時 rerun（現行実装で OK）。
+
+外側クリック／タブ移動／閉じるは未保存破棄（既存仕様通り）。
+
+再オープン時は ui_common の初期化により、確認チェックは常に未チェックから開始。
+
+6. 監査（セクション単位）
+
+SVC 側で一元発火。イベント名は settings.write.<key>.<sect> / settings.default.apply.<key>.<sect> を推奨。
+例: settings.write.health.net（変更キー配列を payload に）。
+
+7. 実装テンプレート（抜粋：health タブの net / disk の 2 セクション例）
+
+既存ファイルは壊さず、「雛形」の提示のみ。マニュアルへ貼付可。
+
+# path: btc_trade_system/features/settings/set_health.py
+
+# desc: 健全性タブの設定 UI（アコーディオン式：net/disk などセクション単位で保存/既定）
+
+import streamlit as st
+from btc_trade_system.features.settings import ui_common as UI
+from btc_trade_system.features.settings import settings_svc
+
+def \_merge(d, u): # 最小の deep-merge（サービスに save_yaml_partial が無い場合の代替）
+for k, v in u.items():
+if isinstance(v, dict):
+d[k] = \_merge(d.get(k, {}) if isinstance(d.get(k), dict) else {}, v)
+else:
+d[k] = v
+return d
+
+def \_save_partial(key: str, patch: dict):
+cfg = settings_svc.load_yaml(key) or {}
+new_cfg = \_merge(cfg, patch)
+settings_svc.save_yaml(key, new_cfg)
+
+def render():
+st.subheader("健全性（health.yaml）")
+
+    # === net セクション =====================================
+    with st.expander("ネットワーク", expanded=True) as ex_net:
+        # 入力UI … 値は適宜作成
+        warn = st.number_input("遅延 WARN [sec]", min_value=0, step=1, key="set.health.net.warn")
+        crit = st.number_input("遅延 CRIT [sec]", min_value=0, step=1, key="set.health.net.crit")
+        # pending へ集約（ここは一例）
+        st.session_state["set.health.net.pending"] = {
+            "thresholds": {"age_sec": {"warn": warn, "crit": crit}},
+        }
+
+        def _exec_default_net():
+            # 既定の一部のみ復元（サービス側に partial が無ければ手動merge）
+            # 例: def["thresholds"]["age_sec"] を適用
+            def_cfg = settings_svc.load_default("health")
+            patch = {"thresholds": {"age_sec": def_cfg["thresholds"]["age_sec"]}}
+            _save_partial("health", patch)
+            st.session_state["__settings_dirty"] = True
+
+        def _exec_save_net():
+            patch = st.session_state.get("set.health.net.pending")
+            if patch:
+                _save_partial("health", patch)
+                st.session_state["set.health.net.pending"] = None
+                st.session_state["__settings_dirty"] = True
+
+        UI.render_section_controls(
+            prefix="set.health.net",
+            on_default=_exec_default_net,
+            on_save=_exec_save_net,
+            key_base="set.health.net.btn",
+            labels=("閉じる","デフォルト","保存"),
+            active=ex_net.expanded,  # ←展開中のみ操作可
+        )
+
+    # === disk セクション ====================================
+    with st.expander("ディスク", expanded=False) as ex_disk:
+        # 入力UI …
+        limit = st.number_input("空き容量 WARN [%]", min_value=0, max_value=100, key="set.health.disk.warn")
+        st.session_state["set.health.disk.pending"] = {
+            "thresholds": {"disk_free_pct": {"warn": limit}},
+        }
+
+        def _exec_default_disk():
+            def_cfg = settings_svc.load_default("health")
+            patch = {"thresholds": {"disk_free_pct": def_cfg["thresholds"]["disk_free_pct"]}}
+            _save_partial("health", patch)
+            st.session_state["__settings_dirty"] = True
+
+        def _exec_save_disk():
+            patch = st.session_state.get("set.health.disk.pending")
+            if patch:
+                _save_partial("health", patch)
+                st.session_state["set.health.disk.pending"] = None
+                st.session_state["__settings_dirty"] = True
+
+        UI.render_section_controls(
+            prefix="set.health.disk",
+            on_default=_exec_default_disk,
+            on_save=_exec_save_disk,
+            key_base="set.health.disk.btn",
+            labels=("閉じる","デフォルト","保存"),
+            active=ex_disk.expanded,
+        )
+
+8. tabs.yaml・settings.py の変更有無
+
+tabs.yaml … 従来どおり <key>=health の 1 エントリのみ。サブセクションは tabs.yaml に書かない。
+
+settings.py（ハブ） … 変更 不要。set\_<key>.py の内部でアコーディオン化し、各セクション末尾で UI.render_section_controls(..., active=expanded) を呼ぶだけで要件を満たす。

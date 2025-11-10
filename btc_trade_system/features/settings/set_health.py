@@ -25,17 +25,37 @@ def _write_yaml(area: str, data: dict) -> None:
     except Exception as e:
         st.error(f"write failed: {e}")
 
-def _mark_dirty() -> None:
-    st.session_state["__settings_dirty"] = True
+def _mark_changed() -> None:
+    # 入力変更時は「閉じるトリガ」を立てない（保存/既定ボタンのみで閉じる）
+    st.session_state["__settings_changed"] = True  # 任意のフラグ（今は使わないが将来のUI制御に活用可）
 
 def _exec_default():
     settings_svc.reset_to_default("health")
     settings_svc.reset_to_default("monitoring")
+    # 既定適用後は保存と同様に閉じるトリガを立てる（ui_common 側でも mark_dirty 済みだが二重ケア）
+    st.session_state["__settings_dirty"] = True
 
 def _exec_save():
+    # preflight: WARN < CRIT を満たさない場合は保存を中止
+    try:
+        th = (st.session_state.get("set.health.pending", {})
+                              .get("monitoring", {})
+                              .get("thresholds", {})
+                              .get("age_sec", {}))
+        w, c = th.get("warn"), th.get("crit")
+        if isinstance(w, int) and isinstance(c, int) and w >= c:
+            st.error("age_sec: WARN は CRIT より小さくしてください。", icon="⚠️")
+            return
+    except Exception:
+        # 参照できない場合は素通し（pending 無し＝変更無しとして後段へ）
+        pass
+
     n = apply_pending()
-    if n == 0:
-        st.toast("変更はありませんでした", icon="ℹ️")
+
+    # 入力中フラグは掃除しておく（将来のUI制御用）
+    st.session_state.pop("__settings_changed", None)
+    # 念のため閉鎖トリガを明示（ui_common 側でも立つが二重でも無害）
+    st.session_state["__settings_dirty"] = True
 
 def render():
     st.subheader("設定（健全性ビュー）")
@@ -70,7 +90,7 @@ def render():
         value=",".join(default_order),
         placeholder="binance,bybit,okx,bitflyer など",
         key="set.health.order_text",
-        on_change=_mark_dirty,
+        on_change=_mark_changed,
     )
 
     new_order = [x.strip() for x in order_text.split(",") if x.strip()]
@@ -99,7 +119,7 @@ def render():
             min_value=1, max_value=600,
             value=int(age.get("warn", 20)),
             key="set.health.age_warn_s",
-            on_change=_mark_dirty,
+            on_change=_mark_changed,
         )
 
         age_crit = st.number_input(
@@ -107,7 +127,7 @@ def render():
             min_value=1, max_value=600,
             value=int(age.get("crit", 30)),
             key="set.health.age_crit_s",
-            on_change=_mark_dirty,
+            on_change=_mark_changed,
         )
 
     with colB:
@@ -117,14 +137,14 @@ def render():
             min_value=10, max_value=10000,
             value=int(lat.get("warn", 400)),
             key="set.health.lat_warn_ms",
-            on_change=_mark_dirty,
+            on_change=_mark_changed,
         )
         lat_crit = st.number_input(
             "CRIT（ms）",
             min_value=10, max_value=10000,
             value=int(lat.get("crit", 1200)),
             key="set.health.lat_crit_ms",
-            on_change=_mark_dirty,
+            on_change=_mark_changed,
         )
 
     st.markdown("**SLO（最大許容スタレ）**")
@@ -133,19 +153,19 @@ def render():
         slo_ticker_max = st.number_input(
             "ticker.max_stale_s", min_value=1, max_value=3600,
             value=int(slo_ticker.get("max_stale_s", 5)),
-            key="set.health.slo_ticker_max", on_change=_mark_dirty,
+            key="set.health.slo_ticker_max", on_change=_mark_changed,
         )
     with col2:
         slo_ob_max = st.number_input(
             "orderbook.max_stale_s", min_value=1, max_value=3600,
             value=int(slo_orderbook.get("max_stale_s", 6)),
-            key="set.health.slo_ob_max", on_change=_mark_dirty,
+            key="set.health.slo_ob_max", on_change=_mark_changed,
         )
     with col3:
         slo_trades_max = st.number_input(
             "trades.max_stale_s", min_value=1, max_value=3600,
             value=int(slo_trades.get("max_stale_s", 5)),
-            key="set.health.slo_trades_max", on_change=_mark_dirty,
+            key="set.health.slo_trades_max", on_change=_mark_changed,
         )
 
     st.divider()
@@ -168,20 +188,20 @@ def render():
     c1, c2 = st.columns(2)
     with c1:
         st.caption("カード枠（border-color）")
-        cb_ok   = st.color_picker("OK（カード枠）",   _col(card_border, "ok",   "#10b981"), key="set.health.cb_ok",   on_change=_mark_dirty)   # teal-ish
-        cb_warn = st.color_picker("WARN（カード枠）", _col(card_border, "warn", "#f59e0b"),  key="set.health.cb_warn", on_change=_mark_dirty)  # amber
-        cb_crit = st.color_picker("CRIT（カード枠）", _col(card_border, "crit", "#ef4444"),  key="set.health.cb_crit", on_change=_mark_dirty)  # red
+        cb_ok   = st.color_picker("OK（カード枠）",   _col(card_border, "ok",   "#10b981"), key="set.health.cb_ok",   on_change=_mark_changed)   # teal-ish
+        cb_warn = st.color_picker("WARN（カード枠）", _col(card_border, "warn", "#f59e0b"),  key="set.health.cb_warn", on_change=_mark_changed)  # amber
+        cb_crit = st.color_picker("CRIT（カード枠）", _col(card_border, "crit", "#ef4444"),  key="set.health.cb_crit", on_change=_mark_changed)  # red
     with c2:
         st.caption("タイムライン/バー（塗り）")
-        bf_ok   = st.color_picker("OK（バー）",   _col(bar_fill, "ok",   "#d1fae5"), key="set.health.bf_ok",   on_change=_mark_dirty)  # light green
-        bf_warn = st.color_picker("WARN（バー）", _col(bar_fill, "warn", "#fef3c7"), key="set.health.bf_warn", on_change=_mark_dirty)  # light amber
-        bf_crit = st.color_picker("CRIT（バー）", _col(bar_fill, "crit", "#fee2e2"), key="set.health.bf_crit", on_change=_mark_dirty)  # light red
+        bf_ok   = st.color_picker("OK（バー）",   _col(bar_fill, "ok",   "#d1fae5"), key="set.health.bf_ok",   on_change=_mark_changed)  # light green
+        bf_warn = st.color_picker("WARN（バー）", _col(bar_fill, "warn", "#fef3c7"), key="set.health.bf_warn", on_change=_mark_changed)  # light amber
+        bf_crit = st.color_picker("CRIT（バー）", _col(bar_fill, "crit", "#fee2e2"), key="set.health.bf_crit", on_change=_mark_changed)  # light red
         # カード内側（背景）の色
         st.caption("カード内側（背景）")
         cf1, cf2, cf3 = st.columns(3)
-        cf_ok   = cf1.color_picker("OK（背景）",   _col(card_fill, "ok",   "#ecfdf5"), key="set.health.cf_ok",   on_change=_mark_dirty)
-        cf_warn = cf2.color_picker("WARN（背景）", _col(card_fill, "warn", "#fffbeb"), key="set.health.cf_warn", on_change=_mark_dirty)
-        cf_crit = cf3.color_picker("CRIT（背景）", _col(card_fill, "crit", "#fef2f2"), key="set.health.cf_crit", on_change=_mark_dirty)
+        cf_ok   = cf1.color_picker("OK（背景）",   _col(card_fill, "ok",   "#ecfdf5"), key="set.health.cf_ok",   on_change=_mark_changed)
+        cf_warn = cf2.color_picker("WARN（背景）", _col(card_fill, "warn", "#fffbeb"), key="set.health.cf_warn", on_change=_mark_changed)
+        cf_crit = cf3.color_picker("CRIT（背景）", _col(card_fill, "crit", "#fef2f2"), key="set.health.cf_crit", on_change=_mark_changed)
 
     # --- 保存待ち（上部の「保存」で一括反映） ----------------------------
     # health_svc 側の読み取りに合わせ、monitoring.yaml は thresholds.* 配下へ集約
@@ -189,14 +209,12 @@ def render():
         "health": {"order": new_order},
         "monitoring": {
             "thresholds": {
-                "default": {
-                    "age_sec": {
-                        # OK値は計算で決まるため書かない／WARN/CRITのみを保存
-                        "warn": int(age_warn),
-                        "crit": int(age_crit),
-                    },
-                    # latency_ms は現段階で health_svc の参照外なので保存対象から外す
-                }
+                "age_sec": {
+                    # OK値は計算で決まるため書かない／WARN/CRITのみを保存
+                    "warn": int(age_warn),
+                    "crit": int(age_crit),
+                },
+                # latency_ms は現段階で health_svc の参照外なので保存対象から外す
             },
             "slo": {
                 "ticker":     {"max_stale_s": int(slo_ticker_max)},
@@ -248,10 +266,11 @@ def apply_pending() -> int:
     p = st.session_state.get("set.health.pending")
     if not p:
         return 0
-
-    # 1) health.yaml（order のみ）
+    # 1) health.yaml（既存を残しつつ部分上書き）
     try:
-        _write_yaml("health", p["health"])
+        current_h = _read_yaml("health")
+        merged_h  = _deep_merge(current_h or {}, p.get("health", {}))
+        _write_yaml("health", merged_h)
         wrote_health = True
     except Exception:
         wrote_health = False
@@ -259,7 +278,7 @@ def apply_pending() -> int:
     # 2) monitoring.yaml（既存を残しつつマージ保存）
     try:
         current = _read_yaml("monitoring")
-        merged  = _deep_merge(current or {}, p["monitoring"])
+        merged  = _deep_merge(current or {}, p.get("monitoring", {}))
         _write_yaml("monitoring", merged)
         wrote_mon = True
     except Exception:

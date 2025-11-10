@@ -1,4 +1,4 @@
-# path: ./btc_trade_system/config/ui/basic_def.yaml
+# path: ./btc_trade_system/config/ui/dash_def.yaml
 # desc: UI既定値（ユーザー上書き前のデフォルト）。basic.yaml 欠損時のフォールバック。
 
 title: BtcTradeSystem V1

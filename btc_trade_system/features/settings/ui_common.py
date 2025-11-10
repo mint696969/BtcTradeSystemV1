@@ -45,48 +45,60 @@ def render_section_controls(prefix: str,
                             on_save: Callable[[], None] | None,
                             key_base: str,
                             labels: tuple[str, str, str] = ("閉じる","デフォルト","保存"),
-                            confirm_message: str = "この操作を実行します。よろしいですか？") -> None:
+                            confirm_message: str = "この操作を実行します。よろしいですか？",
+                            active: bool = True) -> None:
     """
     3ボタン＋確認UIをまとめて描画する。
-    - prefix: 'set.basic' / 'set.health' / 'set.collector'
-    - key_base: 'set.basic.btn' など（ボタンキーの共通接頭）
+    - active: False の場合は、このセクションが「折りたたみ中」を想定し、
+      確認チェックおよび 3 ボタンをすべて無効化（disabled）する。
     """
+
+    # 誤操作防止の確認チェック（これが ON でないと［デフォルト］［保存］は無効）
+    # 開閉/タブ移動時は毎回 OFF に初期化する（再オープン時にボタンが誤って有効化されないように）
+    confirm_ok_key = f"{key_base}.confirm_ok"
+    open_flag = bool(st.session_state.get("__settings_open"))
+    prev_flag = st.session_state.get(f"{key_base}.__open_flag")
+    if open_flag != prev_flag:
+        if open_flag:
+            st.session_state[confirm_ok_key] = False
+        st.session_state[f"{key_base}.__open_flag"] = open_flag
+    last_prefix = st.session_state.get(f"{key_base}.__last_prefix")
+    if last_prefix != prefix:
+        st.session_state[confirm_ok_key] = False
+        st.session_state[f"{key_base}.__last_prefix"] = prefix
+
+    # チェック行（横一列・中央寄せ・折返しなし）
+    # 再オープン時：pending が無ければ常に未チェックへ戻す
+    if st.session_state.get(_kprefix(prefix) + "pending") is None:
+        st.session_state[confirm_ok_key] = False
+
+    left, mid, right = st.columns([1, 2, 1])
+    with mid:
+        st.checkbox(
+            "変更内容を確認しました",
+            key=confirm_ok_key,
+            disabled=not active,  # 折りたたみ中はチェック自体も無効
+        )
+    ok = bool(st.session_state.get(confirm_ok_key)) and active
+
     col_close, col_default, col_save = st.columns([1,1,1])
 
     with col_close:
-        if st.button(labels[0], key=f"{key_base}.close"):
+        if st.button(labels[0], key=f"{key_base}.close", disabled=not active):
             close_section(prefix)
 
     with col_default:
-        if st.button(labels[1], key=f"{key_base}.default"):
-            request_confirm(prefix, "default")
+        if st.button(labels[1], key=f"{key_base}.default", disabled=not ok):
+            if on_default:
+                on_default()
+            mark_dirty()
+            st.toast("既定値を適用しました", icon="✅")
+            st.rerun()
 
     with col_save:
-        if st.button(labels[2], type="primary", key=f"{key_base}.save"):
-            request_confirm(prefix, "save")
-
-    # 確認UI
-    state_key = _kprefix(prefix) + "confirm"
-    cf = st.session_state.get(state_key)
-    if not isinstance(cf, dict):
-        return
-
-    st.warning(confirm_message, icon="⚠️")
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("実行", key=f"{key_base}.confirm.yes"):
-            try:
-                op = (cf.get("op") or "").lower()
-                if op == "default" and on_default:
-                    on_default()
-                elif op == "save" and on_save:
-                    on_save()
-                mark_dirty()
-                st.toast("操作を完了しました", icon="✅")
-            finally:
-                _pop_confirm(prefix)
-                st.rerun()
-    with c2:
-        if st.button("キャンセル", key=f"{key_base}.confirm.no"):
-            _pop_confirm(prefix)
-            st.toast("操作をキャンセルしました", icon=None)
+        if st.button(labels[2], type="primary", key=f"{key_base}.save", disabled=not ok):
+            if on_save:
+                on_save()
+            mark_dirty()
+            st.toast("設定を保存しました", icon="✅")
+            st.rerun()
