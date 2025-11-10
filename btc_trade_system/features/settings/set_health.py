@@ -30,13 +30,20 @@ def _mark_changed() -> None:
     st.session_state["__settings_changed"] = True  # 任意のフラグ（今は使わないが将来のUI制御に活用可）
 
 def _exec_default():
+    # 1) 既定へ戻す（差分=空）。atomic+fsync/監査は settings_svc 側で実施
     settings_svc.reset_to_default("health")
     settings_svc.reset_to_default("monitoring")
-    # 既定適用後は保存と同様に閉じるトリガを立てる（ui_common 側でも mark_dirty 済みだが二重ケア）
-    st.session_state["__settings_dirty"] = True
+
+    # 2) このセクションの未保存データだけ破棄（モーダルは閉じない）
+    UI.discard_prefix("set.health")
+
+    # 3) ダッシュへ“即時反映”を通知（再描画1回だけ受ける）
+    st.session_state["_dash_require_rerun"] = True
+    st.session_state["__settings_changed"] = True
+    st.rerun()
 
 def _exec_save():
-    # preflight: WARN < CRIT を満たさない場合は保存を中止
+    # 0) しきい値ガード（WARN < CRIT）
     try:
         th = (st.session_state.get("set.health.pending", {})
                               .get("monitoring", {})
@@ -47,15 +54,19 @@ def _exec_save():
             st.error("age_sec: WARN は CRIT より小さくしてください。", icon="⚠️")
             return
     except Exception:
-        # 参照できない場合は素通し（pending 無し＝変更無しとして後段へ）
         pass
 
+    # 1) 保存（health.yaml / monitoring.yaml へ一括適用）
     n = apply_pending()
 
-    # 入力中フラグは掃除しておく（将来のUI制御用）
+    # 2) このセクションの未保存データだけ破棄（次回オープンをクリーンに）
+    UI.discard_prefix("set.health")
+
+    # 3) ダッシュへ“即時反映”を通知（モーダルは閉じない）
     st.session_state.pop("__settings_changed", None)
-    # 念のため閉鎖トリガを明示（ui_common 側でも立つが二重でも無害）
-    st.session_state["__settings_dirty"] = True
+    st.session_state["_dash_require_rerun"] = True
+    st.session_state["__settings_changed"] = True
+    st.rerun()
 
 def render():
     st.subheader("設定（健全性ビュー）")
