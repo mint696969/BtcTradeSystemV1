@@ -24,7 +24,7 @@ _ACTIVE_KEY = "__settings_active_key"
 _DLG = getattr(st, "dialog", None) or getattr(st, "experimental_dialog", None)
 
 # ラベルのフォールバック
-_LABELS = {"main": "メイン", "health": "健全性", "audit": "開発監査", "collector": "コレクター", "basic": "初期設定", "exchanges": "取引所"}
+_LABELS = {"main": "メイン", "health": "健全性", "audit_dev": "開発監査", "collector": "コレクター", "basic": "初期設定", "exchanges": "取引所"}
 
 # --- モジュール解決（規約に従って探索） ---
 def _resolve_settings_module(key: str) -> str | None:
@@ -189,3 +189,4 @@ def _render_settings_body():
     # ---- 入力変更は閉じない（再描画のみ）----
     elif st.session_state.pop("__settings_changed", False):
         st.rerun()
+
