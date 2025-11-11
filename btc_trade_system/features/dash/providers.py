@@ -15,11 +15,11 @@ def _cfg_root() -> Path:
 def _load_order(cfg_root: Path) -> list[str]:
     """
     表示順序（カード順）:
-    - btc_trade_system/config/ui/health.yaml の order を使用
+    - btc_trade_system/config/health.yaml の order を使用
     - 無ければ空配列（呼び出し側で items の出現順を採用）
     """
     from pathlib import Path as _P
-    cfg = _P(cfg_root) / "config" / "ui" / "health.yaml"
+    cfg = _P(cfg_root) / "config" / "health.yaml"
     try:
         import yaml  # type: ignore
         if cfg.exists():
