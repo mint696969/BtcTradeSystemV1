@@ -1,10 +1,1 @@
-# path: btc_trade_system/config/ui/exchanges.yaml
-# desc: 取引所登録の現在値（ユーザー編集対象）。保存は常にこちらへ。
-
-# 例）必要になったら overrides を追加
-# exchanges:
-#   - key: bitflyer
-#     enabled: true
-#     rate: { max_rps: 6, burst: 2 }
-#     endpoints:
-#       - { key: orderbook, target_interval: 0.25 }
+_smoke_ts: 1762823471

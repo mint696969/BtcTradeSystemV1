@@ -5,7 +5,6 @@ from __future__ import annotations
 import streamlit as st
 import importlib
 from typing import List
-from typing import Optional
 
 # tabs.yaml（order / enabled / labels 等）の読込（ダッシュ側の薄い入口を再利用）
 from btc_trade_system.features.dash import dashboard as dash
@@ -27,10 +26,13 @@ _DLG = getattr(st, "dialog", None) or getattr(st, "experimental_dialog", None)
 # ラベルのフォールバック
 _LABELS = {"main": "メイン", "health": "健全性", "audit_dev": "開発監査", "collector": "コレクター", "basic": "初期設定", "exchanges": "取引所"}
 def _has_settings(key: str) -> bool:
-    """当該keyの設定UIが存在するか（basicは常にTrue）。"""
+    """当該ダッシュキーの設定UIが存在するか（basicは常にTrue）。"""
     if key == "basic":
         return True
-    return _resolve_settings_module(key) is not None
+    target = _get_settings_target_key(key)
+    if not target:
+        return False
+    return _resolve_settings_module(target) is not None
 
 def _closed_then_discard_if_needed() -> None:
     """
@@ -62,6 +64,22 @@ def _resolve_settings_module(key: str) -> str | None:
             pass
     return None
 
+def _get_settings_target_key(dash_key: str) -> str | None:
+    """
+    tabs.yaml の定義を尊重して、設定セクションの“実ターゲットkey”を返す。
+      - settings: true       → dash_key（= set_<dash_key>.py）
+      - settings: "<alias>"  → alias    （= set_<alias>.py）
+      - settings: false/未定 → None
+    """
+    cfg = dash._load_tabs_cfg()
+    t = (cfg.get("tabs") or {}).get(dash_key) or {}
+    s = t.get("settings", False)
+    if s is True:
+        return dash_key
+    if isinstance(s, str) and s.strip():
+        return s.strip()
+    return None
+
 def _get_label_from_tabs(tabs_def: dict, key: str) -> str:
     t = tabs_def.get(key) or {}
     # 設定タブの表示名は title_set を優先、なければ title_dash、その次に既定ラベル/キー
@@ -79,9 +97,12 @@ def _load_settings_keys() -> List[str]:
 
     for k in order:
         t = tabs_def.get(k) or {}
+        s = t.get("settings", False)
         # settings: true → set_<k>.py、文字列 → set_<name>.py
-        has_settings_flag = t.get("settings", False)
-        has_module = _resolve_settings_module(k) is not None if has_settings_flag else False
+        target = k if s is True else (s.strip() if isinstance(s, str) and s.strip() else None)
+        if not target:
+            continue
+        has_module = _resolve_settings_module(target) is not None
         if has_module:
             keys.append(k)
 
@@ -124,7 +145,8 @@ if _DLG is None:
         _closed_then_discard_if_needed()
 
         target_key: str = st.session_state.get("_gear_target") or "dash"
-        disabled = not _has_settings(target_key)
+        eff_key = _get_settings_target_key(target_key)
+        disabled = (eff_key is None) or (not _has_settings(target_key))
 
         clicked = st.button("⚙️", use_container_width=False, key="gear_fallback", disabled=disabled)
         if not clicked:
@@ -140,7 +162,8 @@ if _DLG is None:
         W.emit("settings.open", level="INFO", feature="settings", payload={"source": "gear_fallback"})
         st.session_state[_SETTINGS_FLAG] = True
         st.session_state["__settings_open"] = True
-        st.session_state.setdefault(_ACTIVE_KEY, "basic")
+        # eff_key を優先
+        st.session_state.setdefault(_ACTIVE_KEY, eff_key if eff_key else "basic")
 
         with st.sidebar:
             st.header("設定")
@@ -159,34 +182,27 @@ if _DLG is not None:
         _closed_then_discard_if_needed()
 
         target_key: str = st.session_state.get("_gear_target") or "dash"
-        disabled = not _has_settings(target_key)
+        eff_key = _get_settings_target_key(target_key)
+        disabled = (eff_key is None) or (not _has_settings(target_key))
 
-        # 設定が無い場合はグレーアウト（押下しても開かない）
         clicked = st.button("⚙️", use_container_width=False, key="gear_dialog", disabled=disabled)
 
         if not clicked:
             return
         if disabled:
-            # 念のため保険（disabled なら通常押せないが、将来仕様変更に備え二重防御）
             st.toast("このタブには設定がありません", icon="⚠️")
             return
 
-        # 1) 開く前に全未保存を破棄（= 前回「外側クリック閉じ」の残骸も掃除）
         _discard_all_pending()
-
-        # 2) ヘッダーのアラート状態を“デモアラート初期値”に反映
         st.session_state["set.basic.demo_alert_default"] = _get_header_alert_active()
 
-        # 3) ui_common の初期化を確実化：一度 False に落としてから True を立てる
         st.session_state[_SETTINGS_FLAG] = False
         st.session_state["__settings_open"] = False
-
-        # 4) 開く（再オープンは常に未チェック）
         st.session_state[_SETTINGS_FLAG] = True
         st.session_state["__settings_open"] = True
-        st.session_state.setdefault(_ACTIVE_KEY, "basic")
+        # 初期アクティブは解決後 key を優先
+        st.session_state.setdefault(_ACTIVE_KEY, eff_key if eff_key else "basic")
 
-        # 5) 表示
         _open_settings_dialog()
 
 # ===== 共通本体：タブ＋アクティブ検知（切替＝未保存破棄） =====
@@ -212,11 +228,15 @@ def _render_settings_body():
 
             # --- アクティブタブの内容 ---
             if key == "basic":
-                # 初期設定セクション（set_dash 側にセクション専用ボタンを実装）
                 set_dash.render()
                 continue
 
-            modname = _resolve_settings_module(key)
+            eff_key = _get_settings_target_key(key)
+            if not eff_key:
+                st.info("この機能に設定はありません。")
+                continue
+
+            modname = _resolve_settings_module(eff_key)
             if not modname:
                 st.info("この機能に設定はありません。")
                 continue

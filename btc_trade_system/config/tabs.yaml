@@ -1,4 +1,2 @@
-# path: ./btc_trade_system/config/tabs.yaml
-# desc: タブ構成の上書き（空＝全て defaults のまま）
 order: []
 tabs: {}

@@ -1,12 +1,1 @@
-title: BtcTradeSystem V1
-colors:
-  alert_chip:
-    warn:
-      fg: '#000000'
-      bg: '#FFF2CC'
-    crit:
-      fg: '#000000'
-      bg: '#FFCCCC'
-    urgent:
-      fg: '#FFFFFF'
-      bg: '#FF6666'
+{}

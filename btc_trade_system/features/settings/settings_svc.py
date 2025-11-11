@@ -168,10 +168,13 @@ def has_default(feature: str = "dash") -> bool:
 def save_yaml(feature: str, new_merged: dict) -> None:
     """
     差分保存：new_merged（= UI表示値：def+current合成済）から def を引き、差分のみを current に原子的保存。
+    def に存在しないキーは保存対象外（破棄）とする。
     競合はキー単位ロックで fail fast。
     """
     d_def = load_def_yaml(feature)
-    delta = _diff_from_def(new_merged or {}, d_def or {})
+    # ★ 追加：未知キーは保存前に除去
+    filtered = _filter_by_schema(new_merged or {}, d_def or {})
+    delta = _diff_from_def(filtered, d_def or {})
 
     _, active_path = get_paths(feature)
     with _KeyLock(feature):

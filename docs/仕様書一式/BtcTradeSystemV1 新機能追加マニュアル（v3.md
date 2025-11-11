@@ -405,3 +405,138 @@ merged = S.load_yaml(\_FEATURE)
 既定戻しの副作用：reset_to_default() は current を {} にするだけ。既定内容は def 由来なので、def ファイルが正しいことを前提にする。
 
 差分の膨張：UI で def と同じ値に戻した項目は current から自然に消えるため、current は肥大化しない（本仕様のメリット）。
+
+---
+
+追記差分：新項目（パラメータ付き）を追加する標準手順
+ポリシー（前提）
+
+未知キーは保存・読込ともに破棄。したがって 新項目は必ず先に def に追加してから UI/処理を結線する。
+
+current は def との差分のみを原子的保存。肥大化防止・多 PC 同期の再現性重視。
+
+手順（例：health に responders.slack.\* を追加）
+
+1. def スキーマを増やす（必須）
+
+対象: btc_trade_system/features/health/config/health_def.yaml
+
+responders:
+slack:
+enabled: false
+webhook_url: "" # 機微は ENV/別ファイルに退避可
+channel: "#ops"
+min_level: "crit" # "warn" | "crit" | "urgent"
+
+ルール
+
+すべてのキーに「意図が分かる既定値」と「型」を与える（bool/int/str/list/dict）。
+
+列挙は文字列で固定値にする（例: "warn"|"crit"|"urgent"）。
+
+機微値（トークン等）は原則 ENV/外部安全ストアへ（空文字で占位）。
+
+2. UI を結線（set_health.py）
+
+cfg = settings_svc.load_yaml("health") の戻りに対し、上記キーを編集 UI にバインド。
+
+保存は settings_svc.save_yaml("health", cfg_after_edit) を呼ぶだけ（SVC が差分抽出・未知キー破棄を実施）。
+
+「閉じる/保存/デフォルト」ボタンは既定仕様どおり：
+
+閉じる＝変更破棄・モーダル閉
+
+デフォルト＝ reset_to_default("health")（current 空化）→ モーダルは閉じない（即時反映）
+
+保存＝ save_yaml("health", merged_ui_dict) → モーダルは閉じない（即時反映）
+
+3. 参照側（処理・表示）
+
+参照は常に settings_svc.load_yaml("health") から同キーを読む。
+
+既存コードに副作用を作らない範囲で、追加分の条件分岐・送出処理を実装。
+
+4. 監査（自動）
+
+保存成功で settings.write.health が emit（changed_keys, path を payload）。
+
+仕様外キーが UI から来ても SVC が破棄（必要に応じ settings.drop_unknown.health を将来追加可）。
+
+スキーマ設計チェックリスト
+
+命名：lower_snake、短く意味明確に（min_ms, max_retries など）。
+
+型：bool/int/float/str を明示。配列は空配列既定 [] を入れる。
+
+数値範囲：UI 側で最小/最大を検証（保存ボタン活性条件に）。
+
+列挙：UI はセレクト化。無効値は保存不可／既定へフォールバック。
+
+機微：ENV/別ファイルに置き、def には空値で占位。
+
+experimental：試験的パラメータは experimental: 配下に置けば、現行ポリシーでも保存・同期可能（のちに本キーへ昇格）。
+
+よくある失敗と対処
+
+def に入れずに保存 → 値が消える
+→ 仕様どおり破棄。先に def へ追加してから UI を出す。
+
+current が膨らむ
+→ スキーマ外を残さないため基本的に起きない。旧版ファイルを人手で持ち込んだ場合は load_yaml がフィルタ。
+
+型不一致
+→ UI で型検証。不可なら保存ボタンを無効化。
+
+スモーク（最短確認）
+既知キーの保存
+$env:PYTHONPATH = (Get-Location).Path
+$py = ".\.venv\Scripts\python.exe"; if(-not(Test-Path $py)){ $py="python" }
+@"
+from btc_trade_system.features.settings import settings_svc as s
+d = s.load_yaml("health"); orig = d.get("responders",{}).get("slack",{}).get("enabled")
+d.setdefault("responders",{}).setdefault("slack",{})["enabled"] = True
+s.save_yaml("health", d)
+back = s.load_yaml("health")
+print("ok_write:", back.get("responders",{}).get("slack",{}).get("enabled") is True)
+
+# 戻す
+
+d["responders"]["slack"]["enabled"] = bool(orig) if orig is not None else False
+s.save_yaml("health", d)
+"@ | Set-Content tmp/health_save_smoke.py -Encoding UTF8
+& $py tmp/health_save_smoke.py
+
+未知キーが残らない
+@"
+from btc*trade_system.features.settings import settings_svc as s
+import yaml
+d = s.load_yaml("health")
+d["_unknown_param"] = 1
+s.save_yaml("health", d)
+*, path = s.get_paths("health")
+cur = yaml.safe_load(open(path, "r", encoding="utf-8")) or {}
+print("unknown_kept:", "\_unknown_param" in cur) # 期待: False
+"@ | Set-Content tmp/health_unknown_drop.py -Encoding UTF8
+& $py tmp/health_unknown_drop.py
+
+ひな型
+def（追記断片）
+responders:
+slack:
+enabled: false
+webhook_url: ""
+channel: "#ops"
+min_level: "crit" # "warn" | "crit" | "urgent"
+
+UI（set_health.py 抜粋イメージ）
+cfg = settings_svc.load_yaml("health")
+slack = ((cfg.setdefault("responders", {})).setdefault("slack", {}))
+
+enabled = st.checkbox("Slack 通知を有効化", value=bool(slack.get("enabled", False)))
+channel = st.text_input("Slack チャンネル", value=slack.get("channel", "#ops"))
+level = st.selectbox("最小レベル", ["warn","crit","urgent"], index=["warn","crit","urgent"].index(slack.get("min_level","crit")))
+
+# 保存時
+
+cfg["responders"]["slack"].update({"enabled": enabled, "channel": channel, "min_level": level})
+settings_svc.save_yaml("health", cfg)

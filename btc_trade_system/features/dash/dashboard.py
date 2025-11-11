@@ -37,10 +37,26 @@ def _load_yaml(path: pathlib.Path) -> Dict:
         return yaml.safe_load(f) or {}
 
 def _deep_merge(base: dict, override: dict) -> dict:
+    """
+    深いマージ。ただし override が None/空文字/空dict/空list の場合は上書きしない（defaults を保持）。
+    """
     if not isinstance(base, dict):
         return override if isinstance(override, dict) else {}
     out = dict(base)
+    if not isinstance(override, dict):
+        return out
+
+    def _is_empty(v) -> bool:
+        if v is None or v == "":
+            return True
+        if isinstance(v, (dict, list)) and len(v) == 0:
+            return True
+        return False
+
     for k, v in (override or {}).items():
+        # 空値による“消し込み”を無効化
+        if _is_empty(v):
+            continue
         bv = out.get(k)
         if isinstance(bv, dict) and isinstance(v, dict):
             out[k] = _deep_merge(bv, v)
@@ -69,8 +85,16 @@ def _load_tabs_cfg() -> Dict:
     cur  = _load_yaml(TABS_CFG_PATH) or {}
     cur = _filter_by_schema(cur, base)
     merged = _deep_merge(base, cur)
-    order = merged.get("order") or []
-    tabs  = merged.get("tabs") or {}
+
+    # order / tabs が空になった場合は defaults をフォールバック
+    order = merged.get("order")
+    if not order:
+        order = base.get("order", [])
+
+    tabs = merged.get("tabs")
+    if not tabs:
+        tabs = base.get("tabs", {})
+
     initial = order[0] if order else None
     return {"order": order, "tabs": tabs, "initial": initial}
 
@@ -135,6 +159,36 @@ def _render_alert_chips(alerts: List[Dict]) -> None:
         html.append(f'<span class="chip chip--more">+{more}</span>')
     st.markdown('<div class="chip-row">' + " ".join(html) + "</div>", unsafe_allow_html=True)
 
+import importlib.util as _iu  # 先頭の import 群にあれば不要
+
+def _debug_gear_decision(active_key: Optional[str]) -> tuple[bool, str, str]:
+    """
+    歯車の可否とその根拠を返す:
+      (enabled, reason, modname)
+    ルール:
+      tabs.yaml の tabs[active_key].settings が
+        - False/未指定 -> 無効
+        - True        -> set_<active_key>
+        - 文字列      -> set_<その値>
+    さらに importlib.util.find_spec() でモジュール存在を確認。
+    """
+    if not active_key:
+        return (False, "no-active-key", "")
+    cfg = _load_tabs_cfg()
+    t = (cfg.get("tabs") or {}).get(active_key) or {}
+    s = t.get("settings", False)
+    if not s:
+        return (False, "tabs.yaml: settings=false-or-missing", "")
+    if isinstance(s, str) and s.strip():
+        key = s.strip()
+    else:
+        key = active_key
+    mod = f"btc_trade_system.features.settings.set_{key}"
+    spec = _iu.find_spec(mod)
+    if spec is None:
+        return (False, f"module-missing: {mod}", mod)
+    return (True, "ok", mod)
+
 def _render_header(title: str = "BtcTradeSystem V1 ダッシュボード") -> None:
     st.markdown("<div id='app-header-row'></div>", unsafe_allow_html=True)
 
@@ -161,6 +215,12 @@ def _render_header(title: str = "BtcTradeSystem V1 ダッシュボード") -> No
         if active_key:
             st.session_state["active_tab"] = active_key
             st.session_state["_gear_target"] = active_key
+
+        # --- 一時診断表示（必要になくなったら削除可） ---
+        enabled, reason, mod = _debug_gear_decision(active_key)
+        # ここでは描画は settings_gear() に委ねるが、根拠は常に見える形に出す
+        st.caption(f"[gear-debug] active={active_key} enabled={enabled} reason={reason} mod={mod}")
+
         settings_hub.settings_gear()
 
 def _resolve_tab_module(tab_key: str, dash_field) -> Optional[str]:
@@ -175,6 +235,42 @@ def _resolve_tab_module(tab_key: str, dash_field) -> Optional[str]:
         return name
     except Exception:
         return None
+
+def _prime_active_tab() -> None:
+    """
+    ヘッダー描画より前に、tabs.yaml と defaults から“有効タブの並び”と
+    “初期タブ（または前回選択）”を決め、session_state に下記をプライムする。
+      - active_tab
+      - _gear_target
+      - _active_dash_tab
+    """
+    cfg = _load_tabs_cfg()
+    order = _clamp_dashboard_order(cfg["order"])
+    tabs_def = cfg["tabs"]
+    initial = cfg["initial"]
+
+    keys = []
+    for k in order:
+        t = tabs_def.get(k, {})
+        if not t or not t.get("enabled", True):
+            continue
+        keys.append(k)
+
+    if not keys:
+        # 何もない場合はクリアして戻る
+        for k in ("active_tab", "_gear_target", "_active_dash_tab"):
+            st.session_state.pop(k, None)
+        return
+
+    # 既存の選択か initial を優先
+    preferred = st.session_state.get("active_tab") or initial or keys[0]
+    if preferred not in keys:
+        preferred = keys[0]
+
+    # プライム
+    st.session_state["active_tab"] = preferred
+    st.session_state["_gear_target"] = preferred
+    st.session_state["_active_dash_tab"] = preferred
 
 def _render_tabs() -> None:
     cfg = _load_tabs_cfg()
@@ -200,20 +296,29 @@ def _render_tabs() -> None:
         keys = [keys[idx]] + keys[:idx] + keys[idx+1:]
         labels = [labels[idx]] + labels[:idx] + labels[idx+1:]
 
-    st.session_state["_active_dash_tab"] = keys[0]
+    # 置き換え後
     if "active_tab" not in st.session_state:
         st.session_state["active_tab"] = keys[0]
 
     tabs = st.tabs(labels)
-    try:
-        W.emit("dash.tab.open", level="INFO", feature="dash", payload={"key": keys[0], "title": labels[0] if labels else keys[0]})
-    except Exception:
-        pass
 
     for i, k in enumerate(keys):
+        t = tabs_def.get(k, {}) 
         with tabs[i]:
-            t = tabs_def.get(k, {})
+            # --- Active tab 同期（初回タブ評価時にヘッダーへ反映させる） ---
+            if st.session_state.get("_dash_active_committed") is not True:
+                prev = st.session_state.get("_gear_target")
+                st.session_state["_active_dash_tab"] = k
+                st.session_state["active_tab"] = k
+                st.session_state["_gear_target"] = k
+                st.session_state["_dash_active_committed"] = True
+                # ヘッダーはタブより上に描画されるため、選択が変わったら即リランを要求
+                if prev is not None and prev != k:
+                    st.session_state["_dash_require_rerun"] = True
+
+            # ← これが欠落していたため mname 未定義になっていた
             mname = _resolve_tab_module(k, t.get("dashboard", True))
+
             if not mname:
                 st.info(f"「{k}」タブのUIは未実装です（ui_* を確認）。")
                 continue
@@ -235,7 +340,15 @@ def main() -> None:
 
     styles_dir = Path(__file__).resolve().parent / "styles"
     for name in ["dashboard_header.css", "tab_main.css", "tab_health.css", "tab_audit_dev.css", "settings.css"]:
-        _load_css(styles_dir / name)
+        p = styles_dir / name
+        if p.exists():           # ← 存在時のみ読込（未作成CSSで警告しない）
+            _load_css(p)
+
+    # 各リランごとに「どのタブが先に実行されたか」をリセット
+    st.session_state["_dash_active_committed"] = False
+
+    # ヘッダー描画より前に active_tab/_gear_target をプライムして歯車を有効にする
+    _prime_active_tab()
 
     _render_header(title=f"{title_base} ダッシュボード")
     _render_tabs()
