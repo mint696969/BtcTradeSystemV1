@@ -402,6 +402,10 @@ def main() -> None:
         page_icon="⚙︎",
     )
 
+    # ヘッダー専用CSSを注入（chipスタイル含む）
+    css_path = REPO_ROOT / "btc_trade_system" / "features" / "dash" / "styles" / "dashboard_header.css"
+    _load_css(css_path)
+
     # 2) ヘッダー描画（右側のデモアラートやギア活性もここで決まる）
     _render_header(title=f"{header_title} ダッシュボード")
 
