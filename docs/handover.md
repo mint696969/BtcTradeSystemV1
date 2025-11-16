@@ -324,3 +324,242 @@ settings_svc.get_paths(area) を単一ソースとし、\*\_svc.py 側のハー�
 UI ガイド文
 
 collector のカードに追加した一文（削除の確定方法）、効果的。各タブでも誤操作ポイントに 1 行説明を置くと事故が減る。
+
+---
+
+日報（2025-11-12 JST）
+今日やったこと
+
+設定 UI 共通コンポーネントの確定（ui_common.py）
+
+誤操作防止の確認チェック・三ボタン・dirty フラグ・即時反映（rerun）を整理。
+
+折りたたみ時の完全無効化、開閉やタブ切替時のチェック自動リセットを実装。
+
+監査ログ（try/done/error）を追加。
+
+設定 SVC の保存まわりの整備（settings_svc.py）
+
+def スキーマによる未知キー排除、差分保存（def との差分のみ current へ）。
+
+原子的保存、キー単位ロック。
+
+UI 以外からの保存抑止のためのガードとバイパス API（force_save_yaml）を用意。
+
+監査ログ（settings.write._ / settings.default.apply._）を実装。
+
+フォールバック環境での安全動作確認用スモークスクリプトで検証。
+
+旧 config/ui 撤去と参照の整理
+
+旧 current/def を所定の新配置へ移動。
+
+参照取りこぼしの検出 → 修正 → 最終削除。
+
+tabs.yaml は btc_trade_system/config/tabs.yaml を唯一の制御源に。
+
+def ファイルのスキーマ整合
+
+health_def.yaml / collector_def.yaml / exchanges_def.yaml / monitoring_def.yaml / dash_def.yaml などの整合を確認・修正。
+
+YAML 書式エラー（:{→: {）を正規化。
+
+デバッグ用一時実装の撤去
+
+ヘッダーの一時診断関数 \_debug_gear_decision と表示の完全削除、残骸確認済み。
+
+気づいたこと / リスク
+
+保存先の一元化により、環境変数 BTC_TS_CONFIG_DIR が設定されていると current はそちらに出ます。運用で“あるはずの場所”とズレると「保存されていない」と誤認しやすい。運用上は 常にどちらを使うかを統一してください。
+
+settings_svc.load_yaml() は def にないキーを破棄します。つまり「キーを先に保存 → 後で def 追加」という運用は不可。新項目追加は必ず先に def へが原則。
+
+BOM 混入やインデント不整合など YAML エンコード由来の例外が散見されました。保存ファイルは UTF-8（BOM なし）で統一を推奨。
+
+「歯車がアクティブにならない」可能性と切り分け
+
+歯車（設定モーダル）可否の判定は次の 2 条件の AND です。
+
+tabs.yaml の設定有効化
+
+tabs: <key>: の下に settings: true（または文字列で別名キー）になっていること。
+
+例
+
+tabs:
+main:
+enabled: true
+dashboard: true
+settings: true # ← これがない/false だと常にグレー
+
+文字列を与えると set\_<その値>.py を見る運用も可（現状は true 推奨）。
+
+対応する settings ビューの存在
+
+btc*trade_system/features/settings/set*<key>.py が存在し、render(st, key=...) など **tabs.yaml の view 指定（既定は render）**をエクスポートしていること。
+
+例：tabs.yaml 側が view: "render" なら、set\_<key>.py に def render(...): が必要。
+
+さらに、実運ログでのチェックが最短です（DEBUG/BOOST 時）：
+
+dev_audit.jsonl に dev.dash.gear.state が出ている場合
+
+reason="tabs.yaml: settings=false-or-missing" → tabs.yaml 側の設定が不足。
+
+reason="module-missing: btc*trade_system.features.settings.set*<key>" → 対応モジュール欠落 or import 失敗。
+
+enabled=true で出ていれば、UI 側の disable 判定の実装がズレている可能性。
+
+切り分け手順（最小実効）
+
+tabs.yaml を確認：対象キーの settings: true を明示。
+
+set\_<key>.py の存在とエクスポート関数名（view 既定は render）を確認。
+
+起動してタブを切り替え、dev_audit.jsonl の dev.dash.gear.state を確認（理由がそのまま根拠）。
+
+それでも無効なら、ダッシュボード側の「アクティブキー伝播」ロジック（session_state['_active_dash_tab']→settings 呼出）を再点検。
+
+---
+
+📘 BtcTradeSystemV1 — ハンドオーバー引き継ぎ書（2025-11-13）
+✅ 1. 今チャットで完了した主な成果
+1-1. 設定システムの完全再構築（安定版）
+
+settings.py / ui*common.py / settings_svc.py / 各 set*\*.py を総点検し
+保存・デフォルト・UI 再描画すべてが安定動作 するように修正完了。
+
+健全性（health/monitoring）の複合 UI も
+数値 / カード順 / 色パレットの完全反映＋デフォルト復元 が 100%成功。
+
+デフォルト処理は 差分ファイルの物理削除 に統一し、
+UI 表示と実ファイルの整合性を確保。
+
+保存時の外部 CONFIG に
+ヘッダー（path/desc）＋差分 YAML のみ を書く最終仕様に統一。
+
+1-2. 外部 CONFIG 正式ルート確立
+
+外部設定ルートは
+BTC_TS_CONFIG_DIR（例：D:\BtcTS_V1\config）
+を最優先し、存在しなければ repo 内 fallback。
+
+health / monitoring / dash / collector / main 含む全エリアが
+正しく差分書き込み＋デフォルト復元されることを確認済。
+
+1-3. 健全性 UI（set_health）の安定版
+
+monitoring.yaml と health.yaml の 二重配線 を完全に整備。
+
+UI は 3 セクション方式（thresholds/order/palette）。
+
+フルセクション構造で pending を作る「安全方式」へ統一。
+
+デフォルト時に UI 値を即座に初期化 → そのまま保存可能。
+
+1-4. settings_svc.py の完全仕上げ
+
+差分抽出ロジックの安定化
+
+\_deep_merge, \_filter_by_schema の最適化
+
+セッションオーバーライド（palette）動作も正常
+
+この構造により：
+
+今後どの set\_\*.py を追加しても、settings_svc を一切触らずに拡張できる状態
+が完成しています。
+
+1-5. tabs.yaml/tabs_def.yaml の仕様確定
+
+旧 config/ui/ は正式に廃止し、
+btc_trade_system/config/tabs_def.yaml（正準）
+外部 CONFIG/tabs.yaml（差分）
+の２レイヤで確定。
+
+期待どおり、dashboard.py/settings.py は 新機能追加時に一切編集不要 の構造に調整済。
+
+1-6. 総合テストスクリプト test_settings_full.ps1 完成
+
+dev_audit / CONFIG の差分 / BOOST snapshot の異常値検知をまとめてチェック。
+
+成果物：
+tmp/test_settings_full.out.txt にすべての検査結果が出力
+→ GPT が読み取りデバッグ可能。
+
+✅ 2. 今チャットで確定した “最終仕様”
+2-1. 外部 CONFIG 保存仕様（確定版）
+操作 ファイル状態
+保存 <area>.yaml に ヘッダー 2 行＋差分のみ を書く
+デフォルト <area>.yaml を物理削除（空書き込みしない）
+読込 load_yaml = def + current(差分)
+2-2. UI の挙動（統一仕様）
+
+設定モーダルを開いた場合は必ず メイン設定タブに統一（ズレ防止）
+
+モーダル閉じたらダッシュボードヘッダー＋タブまとめて再描画
+
+設定モーダル内部：
+
+閉じる → 変更破棄
+
+保存 → CONFIG 更新＋再描画要求
+
+デフォルト → CONFIG 削除＋再描画要求
+
+2-3. 健全性設定（health/monitoring）の仕様
+
+UI は 3 セクション（thresholds/order/palette）
+
+実ファイルは health.yaml / monitoring.yaml の 2 枚に分離
+
+書き込みは 両方へ差分を書き込む（無矛盾化）
+
+2-4. 新規機能追加マニュアル v4 は最新仕様へ完全追従
+
+headers / settings_svc / tabs.yaml の最新仕様反映済
+
+今後の新機能追加は
+dashboard.py / settings.py / settings_svc.py を絶対に触らなくて良い
+
+✅ 3. 次チャットで引き継ぐべき “重要ポイント”
+3-1. 新規機能追加時の作業順
+
+<feature>\_def.yaml を作る
+
+set\_<feature>.py を作る（テンプレート有）
+
+ui\_<feature>.py を作る（必要であれば）
+
+tabs_def.yaml に登録
+
+（必要なら）providers.py に alert 経路を作る
+
+audit_dev のイベントは自前で emit しない
+
+3-2. 設定タブ追加で注意すること
+
+session_state key は必ず **set.<feature>.\*** 名前空間へ閉じ込める
+
+pending は \_deep_merge で構成
+
+デフォルトは reset_to_default() を必ず呼ぶ
+
+1 UI 内で複数の area を扱う場合は health/monitoring の方式を踏襲
+
+3-3. 開発監査 BOOST スナップショットに注意
+
+BOOST スナップショットには 古い仕様が残る場合あり
+→ 解析前に GPT が settings_svc_deprecated の有無を必ずチェックする想定。
+
+✅ 4. 次回タスク案
+
+collector / health / board 更新間隔の API rate 制御の設計
+
+アラート体系の統合（collector の WARN/CRIT をヘッダー本線へ反映）
+
+メインタブ（main）の情報カード群の実装
+
+boards（板）／trades（約定）の可視化カードの再設計
+
+設定モーダルの UI コンポーネント整理（Accordion → Section 化等）

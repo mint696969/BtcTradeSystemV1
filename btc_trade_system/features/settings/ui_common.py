@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 from typing import Callable, Any, Dict
+# 監査（UI操作ログ）
+from btc_trade_system.features.audit_dev import writer as W
 
 try:
     import streamlit as st
@@ -26,9 +28,16 @@ def mark_dirty() -> None:
     st.session_state["__settings_dirty"] = True
 
 def close_section(prefix: str) -> None:
+    """
+    セクションを閉じる（モーダルClose）。未保存は破棄し、次描画は Main 固定を要求する。
+    モーダルClose→Main固定の最終判断は settings.py 側でも行うが、ここでも明示的に指示して冪等にする。
+    """
     st.session_state["__settings_open"] = False
     discard_prefix(prefix)
     st.session_state.pop(_kprefix(prefix) + "pending", None)
+    # 次描画で Main 固定（ダッシュ側の受け口に渡す）
+    st.session_state["_dash_force_main"] = True
+    st.session_state["_dash_require_rerun"] = True
     st.rerun()
 
 def request_confirm(prefix: str, op: str, payload: Dict[str, Any] | None = None) -> None:
@@ -46,7 +55,10 @@ def render_section_controls(prefix: str,
                             key_base: str,
                             labels: tuple[str, str, str] = ("閉じる","デフォルト","保存"),
                             confirm_message: str = "この操作を実行します。よろしいですか？",
-                            active: bool = True) -> None:
+                            active: bool = True,
+                            audit_tag: str | None = None,
+                            audit_payload: Dict[str, Any] | None = None) -> None:
+
     """
     3ボタン＋確認UIをまとめて描画する。
     - active: False の場合は、このセクションが「折りたたみ中」を想定し、
@@ -69,12 +81,22 @@ def render_section_controls(prefix: str,
 
     # チェック行（横一列・中央寄せ・折返しなし）
     left, mid, right = st.columns([1, 2, 1])
-    with mid:
+
+    # Streamlit 非依存の安全化：フォールバック環境ではコンテキスト未対応
+    def _render_checkbox():
         st.checkbox(
             "変更内容を確認しました",
             key=confirm_ok_key,
             disabled=not active,  # 折りたたみ中はチェック自体も無効
         )
+
+    # mid が with に対応していれば中央に、そうでなければ直書き
+    if hasattr(mid, "__enter__") and hasattr(mid, "__exit__"):
+        with mid:
+            _render_checkbox()
+    else:
+        _render_checkbox()
+
     ok = bool(st.session_state.get(confirm_ok_key)) and active
 
     col_close, col_default, col_save = st.columns([1,1,1])
@@ -85,16 +107,56 @@ def render_section_controls(prefix: str,
 
     with col_default:
         if st.button(labels[1], key=f"{key_base}.default", disabled=not ok):
-            if on_default:
-                on_default()
-            mark_dirty()
-            st.toast("既定値を適用しました", icon="✅")
-            st.rerun()
+            base_payload = {"prefix": prefix, "key_base": key_base}
+            if isinstance(audit_payload, dict):
+                base_payload.update(audit_payload)
+            try:
+                if on_default:
+                    on_default()  # ← ここで書換え実行（SVC側へ委譲）
+                if audit_tag:
+                    try:
+                        W.emit(f"settings.default.apply.{audit_tag}", level="INFO", feature=audit_tag, payload=base_payload)
+                    except Exception:
+                        pass
+                # ここでは“閉じない”。適用フラグのみセット（dashはClose時に再描画）
+                st.session_state["__settings_apply"] = True
+                st.session_state.pop("__settings_close", None)
+                st.session_state.pop("__settings_changed", None)
+                st.toast("既定値を適用しました", icon="✅")
+                # rerunは呼ばない（モーダルを開いたままにする）
+            except Exception as e:
+                try:
+                    W.emit(f"settings.default.error.{audit_tag or 'unknown'}", level="ERROR",
+                        feature=(audit_tag or "unknown"),
+                        payload={**base_payload, "err": repr(e)})
+                except Exception:
+                    pass
+                st.warning("既定値の適用に失敗しました。ログを確認してください。")
 
     with col_save:
         if st.button(labels[2], type="primary", key=f"{key_base}.save", disabled=not ok):
-            if on_save:
-                on_save()
-            mark_dirty()
-            st.toast("設定を保存しました", icon="✅")
-            st.rerun()
+            base_payload = {"prefix": prefix, "key_base": key_base}
+            if isinstance(audit_payload, dict):
+                base_payload.update(audit_payload)
+            try:
+                if on_save:
+                    on_save()  # ← ここで保存実行（SVC側へ委譲）
+                if audit_tag:
+                    try:
+                        W.emit(f"settings.write.{audit_tag}", level="INFO", feature=audit_tag, payload=base_payload)
+                    except Exception:
+                        pass
+                # ここでは“閉じない”。適用フラグのみセット
+                st.session_state["__settings_apply"] = True
+                st.session_state.pop("__settings_close", None)
+                st.session_state.pop("__settings_changed", None)
+                st.toast("設定を保存しました", icon="✅")
+                # rerunは呼ばない（モーダルを開いたままにする）
+            except Exception as e:
+                try:
+                    W.emit(f"settings.write.error.{audit_tag or 'unknown'}", level="ERROR",
+                        feature=(audit_tag or "unknown"),
+                        payload={**base_payload, "err": repr(e)})
+                except Exception:
+                    pass
+                st.warning("保存に失敗しました。ログを確認してください。")

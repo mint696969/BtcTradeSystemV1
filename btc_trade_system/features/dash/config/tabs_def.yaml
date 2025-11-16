@@ -1,19 +1,13 @@
-# path: ./btc_trade_system/features/dash/config/tabs_def.yaml
+# path: btc_trade_system/features/dash/config/tabs_def.yaml
 # desc: タブ構成の既定（順序・表示名・有効/無効）。current は ./btc_trade_system/config/tabs.yaml
 
 order:
   - main
   - health
   - audit_dev
+  - dash
 
 tabs:
-  main:
-    enabled: true
-    dashboard: true # ui_main.py を自動推定（= ui_<key>.py）
-    settings: false # 設定タブを持たない
-    title_dash: "メイン"
-    title_set: ""
-
   health:
     enabled: true
     dashboard: true # ui_health.py
@@ -27,3 +21,17 @@ tabs:
     settings: false
     title_dash: "開発監査"
     title_set: ""
+
+  main:
+    enabled: true
+    dashboard: true # ui_main.py を表示
+    settings: "main" # set_main.py を使用（ギア有効）
+    title_dash: "メイン"
+    title_set: "メイン設定"
+
+  dash:
+    enabled: true
+    dashboard: false # ダッシュボードには出さない
+    settings: "dash" # set_dash.py を設定タブとして使う
+    title_dash: ""
+    title_set: "初期設定"

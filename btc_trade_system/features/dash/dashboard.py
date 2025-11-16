@@ -9,7 +9,6 @@ import os
 from typing import Dict, List, Optional
 import yaml
 import streamlit as st
-from btc_trade_system.features.settings import settings_svc as settings
 from btc_trade_system.features.settings import settings as settings_hub
 from btc_trade_system.features.audit_dev import writer as W
 from btc_trade_system.features.settings import settings_svc as _S  # demo_alerts設定反映用
@@ -99,7 +98,11 @@ def _load_tabs_cfg() -> Dict:
     return {"order": order, "tabs": tabs, "initial": initial}
 
 def _clamp_dashboard_order(order: List[str]) -> List[str]:
-    seq = [k for k in order if k not in ("collector", "basic")]
+    """
+    tabs.yaml 側の定義を尊重し、ハードコード除外は行わない。
+    main が含まれていれば先頭へ寄せる以外の変更はしない。
+    """
+    seq = list(order or [])
     if "main" in seq:
         seq = ["main"] + [k for k in seq if k != "main"]
     return seq
@@ -134,6 +137,44 @@ def _inject_alert_palette_vars(pal: Dict[str, Dict[str, str]]) -> None:
         unsafe_allow_html=True,
     )
 
+def _load_alert_palette_from_cfg(cfg_dash: dict) -> Optional[Dict[str, Dict[str, str]]]:
+    """
+    dash.yaml のアラート色設定から
+      warn / crit / urgent の fg / bg を取り出してパレット dict を返す。
+
+    想定スキーマ（例）:
+      alert_palette:
+        warn:   { fg: "#000000", bg: "#FFE4E4" }
+        crit:   { fg: "#000000", bg: "#FFC0CB" }
+        urgent: { fg: "#000000", bg: "#FFD700" }
+
+    ※ キー名は alert_palette / alert_colors の両方に対応。
+       必須レベル（warn/crit/urgent）が一つでも欠ける場合は None を返し、
+       CSS デフォルトにフォールバックする。
+    """
+    if not isinstance(cfg_dash, dict):
+        return None
+
+    colors = cfg_dash.get("alert_palette") or cfg_dash.get("alert_colors") or {}
+    if not isinstance(colors, dict):
+        return None
+
+    palette: Dict[str, Dict[str, str]] = {}
+    for level in ("warn", "crit", "urgent"):
+        lv = colors.get(level)
+        if not isinstance(lv, dict):
+            return None
+        fg = (lv.get("fg") or lv.get("text") or lv.get("color") or "").strip()
+        bg = (lv.get("bg") or lv.get("background") or lv.get("fill") or "").strip()
+        if not (fg and bg):
+            return None
+        palette[level] = {"fg": fg, "bg": bg}
+
+    # 3レベル揃っているときだけ有効
+    if set(palette.keys()) != {"warn", "crit", "urgent"}:
+        return None
+    return palette
+
 def _demo_default_items() -> list[dict]:
     return [
         {"level": "urgent", "label": "緊急Y"},
@@ -159,36 +200,6 @@ def _render_alert_chips(alerts: List[Dict]) -> None:
         html.append(f'<span class="chip chip--more">+{more}</span>')
     st.markdown('<div class="chip-row">' + " ".join(html) + "</div>", unsafe_allow_html=True)
 
-import importlib.util as _iu  # 先頭の import 群にあれば不要
-
-def _debug_gear_decision(active_key: Optional[str]) -> tuple[bool, str, str]:
-    """
-    歯車の可否とその根拠を返す:
-      (enabled, reason, modname)
-    ルール:
-      tabs.yaml の tabs[active_key].settings が
-        - False/未指定 -> 無効
-        - True        -> set_<active_key>
-        - 文字列      -> set_<その値>
-    さらに importlib.util.find_spec() でモジュール存在を確認。
-    """
-    if not active_key:
-        return (False, "no-active-key", "")
-    cfg = _load_tabs_cfg()
-    t = (cfg.get("tabs") or {}).get(active_key) or {}
-    s = t.get("settings", False)
-    if not s:
-        return (False, "tabs.yaml: settings=false-or-missing", "")
-    if isinstance(s, str) and s.strip():
-        key = s.strip()
-    else:
-        key = active_key
-    mod = f"btc_trade_system.features.settings.set_{key}"
-    spec = _iu.find_spec(mod)
-    if spec is None:
-        return (False, f"module-missing: {mod}", mod)
-    return (True, "ok", mod)
-
 def _render_header(title: str = "BtcTradeSystem V1 ダッシュボード") -> None:
     st.markdown("<div id='app-header-row'></div>", unsafe_allow_html=True)
 
@@ -198,6 +209,10 @@ def _render_header(title: str = "BtcTradeSystem V1 ダッシュボード") -> No
         alerts = demo.get("items") if isinstance(demo.get("items"), list) else _demo_default_items()
     else:
         alerts = []
+
+    # 念のため：初期化漏れに備えて prime（上流呼び出しが外れても安全）
+    if "_active_dash_tab" not in st.session_state:
+        _prime_active_tab()
 
     active_key: Optional[str] = st.session_state.get("_active_dash_tab")
     col_title, col_chips, col_gear = st.columns([9, 6, 1], gap="small")
@@ -215,26 +230,19 @@ def _render_header(title: str = "BtcTradeSystem V1 ダッシュボード") -> No
         if active_key:
             st.session_state["active_tab"] = active_key
             st.session_state["_gear_target"] = active_key
-
-        # --- 一時診断表示（必要になくなったら削除可） ---
-        enabled, reason, mod = _debug_gear_decision(active_key)
-        # ここでは描画は settings_gear() に委ねるが、根拠は常に見える形に出す
-        st.caption(f"[gear-debug] active={active_key} enabled={enabled} reason={reason} mod={mod}")
-
         settings_hub.settings_gear()
 
 def _resolve_tab_module(tab_key: str, dash_field) -> Optional[str]:
+    """
+    ダッシュボード用UIモジュール名を返す。
+    ここでは import を行わず、“名前決定”のみに責務を限定する。
+    実際の import は _render_tabs() 側で1回だけ行う。
+    """
     if dash_field is True:
-        name = f"btc_trade_system.features.dash.ui_{tab_key}"
-    elif isinstance(dash_field, str) and dash_field.strip():
-        name = f"btc_trade_system.features.dash.ui_{dash_field.strip()}"
-    else:
-        return None
-    try:
-        importlib.import_module(name)
-        return name
-    except Exception:
-        return None
+        return f"btc_trade_system.features.dash.ui_{tab_key}"
+    if isinstance(dash_field, str) and dash_field.strip():
+        return f"btc_trade_system.features.dash.ui_{dash_field.strip()}"
+    return None
 
 def _prime_active_tab() -> None:
     """
@@ -243,6 +251,13 @@ def _prime_active_tab() -> None:
       - active_tab
       - _gear_target
       - _active_dash_tab
+
+    追加仕様：
+      settings 側が st.session_state["_dash_force_main"] を True にして Close した場合、
+      次回描画時は main（存在すれば）を優先選択してから通常運用へ戻す。
+
+    注意：
+      tabs.yaml で dashboard: false のタブは“物理的に非表示”とする（候補から除外）。
     """
     cfg = _load_tabs_cfg()
     order = _clamp_dashboard_order(cfg["order"])
@@ -251,28 +266,35 @@ def _prime_active_tab() -> None:
 
     keys = []
     for k in order:
-        t = tabs_def.get(k, {})
-        if not t or not t.get("enabled", True):
+        t = tabs_def.get(k, {}) or {}
+        # 有効・かつ dashboard が False でないもののみタブ候補に採用
+        if not t.get("enabled", True):
+            continue
+        if t.get("dashboard", True) is False:
             continue
         keys.append(k)
 
     if not keys:
-        # 何もない場合はクリアして戻る
         for k in ("active_tab", "_gear_target", "_active_dash_tab"):
             st.session_state.pop(k, None)
         return
 
-    # 既存の選択か initial を優先
-    preferred = st.session_state.get("active_tab") or initial or keys[0]
-    if preferred not in keys:
-        preferred = keys[0]
+    # --- Close→Main固定の指示を一度だけ受け取る ---
+    if st.session_state.pop("_dash_force_main", False):
+        preferred = "main" if "main" in keys else keys[0]
+    else:
+        preferred = st.session_state.get("active_tab") or initial or keys[0]
+        if preferred not in keys:
+            preferred = keys[0]
 
-    # プライム
     st.session_state["active_tab"] = preferred
     st.session_state["_gear_target"] = preferred
     st.session_state["_active_dash_tab"] = preferred
 
 def _render_tabs() -> None:
+    # タブ評価ごとにコミット済みフラグをクリア（切替時に再同期するため）
+    st.session_state.pop("_dash_active_committed", None)
+
     cfg = _load_tabs_cfg()
     order = _clamp_dashboard_order(cfg["order"])
     tabs_def = cfg["tabs"]
@@ -280,8 +302,11 @@ def _render_tabs() -> None:
 
     keys, labels = [], []
     for k in order:
-        t = tabs_def.get(k, {})
-        if not t or not t.get("enabled", True):
+        t = tabs_def.get(k, {}) or {}
+        # dashboard:false は“タブ自体を非表示”
+        if not t.get("enabled", True):
+            continue
+        if t.get("dashboard", True) is False:
             continue
         keys.append(k)
         labels.append(t.get("title_dash") or k)
@@ -296,7 +321,6 @@ def _render_tabs() -> None:
         keys = [keys[idx]] + keys[:idx] + keys[idx+1:]
         labels = [labels[idx]] + labels[:idx] + labels[idx+1:]
 
-    # 置き換え後
     if "active_tab" not in st.session_state:
         st.session_state["active_tab"] = keys[0]
 
@@ -305,20 +329,25 @@ def _render_tabs() -> None:
     for i, k in enumerate(keys):
         t = tabs_def.get(k, {}) 
         with tabs[i]:
-            # --- Active tab 同期（初回タブ評価時にヘッダーへ反映させる） ---
+            # Active tab 同期（初回タブ評価時にヘッダーへ反映）
             if st.session_state.get("_dash_active_committed") is not True:
                 prev = st.session_state.get("_gear_target")
                 st.session_state["_active_dash_tab"] = k
                 st.session_state["active_tab"] = k
                 st.session_state["_gear_target"] = k
                 st.session_state["_dash_active_committed"] = True
-                # ヘッダーはタブより上に描画されるため、選択が変わったら即リランを要求
+
+                try:
+                    W.emit("dash.tab.active", level="DEBUG", feature="dash",
+                           payload={"active": k})
+                except Exception:
+                    pass
+
                 if prev is not None and prev != k:
                     st.session_state["_dash_require_rerun"] = True
 
-            # ← これが欠落していたため mname 未定義になっていた
+            # 名前解決のみ（import はここで1回だけ）
             mname = _resolve_tab_module(k, t.get("dashboard", True))
-
             if not mname:
                 st.info(f"「{k}」タブのUIは未実装です（ui_* を確認）。")
                 continue
@@ -333,28 +362,55 @@ def _render_tabs() -> None:
                 st.error(f"{k} タブの描画に失敗しました: {e}")
 
 def main() -> None:
-    title_base = settings.get_ui_title("BtcTradeSystem V1")
-    st.set_page_config(page_title=title_base, layout="wide", initial_sidebar_state="collapsed", page_icon="⚙︎")
-    _inject_tokens(toolbar_h_px=32, header_h_px=44)
-    _inject_alert_palette_vars(settings.get_alert_palette())
+    title_base = _S.get_ui_title("BtcTradeSystem V1")
 
-    styles_dir = Path(__file__).resolve().parent / "styles"
-    for name in ["dashboard_header.css", "tab_main.css", "tab_health.css", "tab_audit_dev.css", "settings.css"]:
-        p = styles_dir / name
-        if p.exists():           # ← 存在時のみ読込（未作成CSSで警告しない）
-            _load_css(p)
+    # Main設定のタイトルがあればそれを最優先
+    try:
+        _cfg_main = _S.load_yaml("main") or {}
+        _t = (_cfg_main.get("title") or "").strip()
+        header_title = _t or title_base
+    except Exception:
+        header_title = title_base
 
-    # 各リランごとに「どのタブが先に実行されたか」をリセット
-    st.session_state["_dash_active_committed"] = False
+    # dash.yaml の colors.alert_chip からアラートチップ用パレットを注入
+    try:
+        cfg_dash = _S.load_yaml("dash") or {}
+        colors = (cfg_dash.get("colors") or {}).get("alert_chip") or {}
+        palette = {}
+        for level in ("warn", "crit", "urgent"):
+            lv = colors.get(level) or {}
+            if not isinstance(lv, dict):
+                break
+            fg = (lv.get("fg") or "#000000").strip()
+            bg = (lv.get("bg") or "").strip()
+            if not bg:
+                break
+            palette[level] = {"fg": fg, "bg": bg}
 
-    # ヘッダー描画より前に active_tab/_gear_target をプライムして歯車を有効にする
-    _prime_active_tab()
+        # 3レベルすべて揃っているときのみ CSS 変数を上書き
+        if set(palette.keys()) == {"warn", "crit", "urgent"}:
+            _inject_alert_palette_vars(palette)
+    except Exception:
+        # 設定不備や読み込みエラー時はデフォルトCSSにフォールバック
+        pass
 
-    _render_header(title=f"{title_base} ダッシュボード")
+    # 1) ページ設定（ブラウザのタブ題名）
+    st.set_page_config(
+        page_title=header_title,
+        layout="wide",
+        initial_sidebar_state="collapsed",
+        page_icon="⚙︎",
+    )
+
+    # 2) ヘッダー描画（右側のデモアラートやギア活性もここで決まる）
+    _render_header(title=f"{header_title} ダッシュボード")
+
+    # 3) タブ描画
     _render_tabs()
 
+    # 4) 要求時のみ軽リラン
     if st.session_state.pop("_dash_require_rerun", False):
-        st.experimental_rerun()
+        st.rerun()
 
 if __name__ == "__main__":
     main()

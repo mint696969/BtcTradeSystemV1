@@ -1,2 +1,20 @@
-order: []
-tabs: {}
+order:
+  - main
+  - health
+  - audit_dev
+  - dash
+
+tabs:
+  main:
+    enabled: true
+    dashboard: true
+    settings: "main" # set_main.py を使用
+    title_dash: "メイン"
+    title_set: "メイン設定"
+
+  dash:
+    enabled: true
+    dashboard: false # ダッシュボードには出さない
+    settings: "dash" # set_dash.py を設定タブとして使う
+    title_dash: ""
+    title_set: "初期設定"

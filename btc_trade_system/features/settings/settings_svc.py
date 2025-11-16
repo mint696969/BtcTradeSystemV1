@@ -54,17 +54,52 @@ def get_paths(feature: str = "dash") -> tuple[Path, Path]:
 def _load_yaml(p: Path) -> dict:
     if not p.exists():
         return {}
-    with p.open("r", encoding="utf-8") as f:
+    with p.open("r", encoding="utf-8-sig") as f:
         return yaml.safe_load(f) or {}
 
 def _write_yaml_atomic(p: Path, data: dict) -> None:
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_suffix(p.suffix + ".tmp")
-    with tmp.open("w", encoding="utf-8") as f:
+    with tmp.open("w", encoding="utf-8-sig") as f:
         yaml.safe_dump(data, f, allow_unicode=True, sort_keys=False)
         f.flush()
         os.fsync(f.fileno())
     os.replace(tmp, p)
+
+# ---- audit helpers (lightweight) -------------------------------------------
+def _debug_audit_enabled() -> bool:
+    # 既定は“出さない”。必要時のみ環境でON（例: BTC_TS_DEBUG_AUDIT=1）
+    return os.environ.get("BTC_TS_DEBUG_AUDIT") == "1"
+
+def _audit_try(op: str, feature: str, path: Path, payload: dict | None = None) -> None:
+    if not _debug_audit_enabled():
+        return
+    try:
+        W.emit(f"settings.{op}.try.{feature}", level="INFO", feature="settings",
+               payload={"path": str(path), "feature": feature, **(payload or {})})
+    except Exception:
+        pass
+
+def _audit_done(op: str, feature: str, path: Path, payload: dict | None = None) -> None:
+    if not _debug_audit_enabled():
+        return
+    try:
+        W.emit(f"settings.{op}.done.{feature}", level="INFO", feature="settings",
+               payload={"path": str(path), "feature": feature, **(payload or {})})
+    except Exception:
+        pass
+def _audit_err(op: str, feature: str, path: Path, err: Exception, payload: dict | None = None) -> None:
+    """
+    DEBUG監査向けの補助エラー行（常時emitしている settings.*.error.<key> とは別系統）。
+    _debug_audit_enabled() が有効のときのみ出力。
+    """
+    if not _debug_audit_enabled():
+        return
+    try:
+        W.emit(f"settings.{op}.error.{feature}", level="ERROR", feature="settings",
+               payload={"path": str(path), "feature": feature, "err": repr(err), **(payload or {})})
+    except Exception:
+        pass
 
 # ===== ロック（キー単位・簡易） =====
 class _KeyLock:
@@ -168,36 +203,126 @@ def has_default(feature: str = "dash") -> bool:
 def save_yaml(feature: str, new_merged: dict) -> None:
     """
     差分保存：new_merged（= UI表示値：def+current合成済）から def を引き、差分のみを current に原子的保存。
-    def に存在しないキーは保存対象外（破棄）とする。
-    競合はキー単位ロックで fail fast。
+    差分が空のときは“保存も監査も行わない”（無駄な書込みとノイズを避ける）。
     """
+
+    # --- [任意の保護] UI以外の保存を抑止（デフォルト無効） -----------------------
+    if os.environ.get("BTC_TS_SAVE_UI_ONLY") == "1":
+        if os.environ.get("BTC_TS_ALLOW_SCRIPT_WRITE") != "1":
+            ss = _session_state()
+            if not (isinstance(ss, dict) and ss.get("_settings_ui_in_progress") is True):
+                try:
+                    _, _active_path = get_paths(feature)
+                    W.emit(f"settings.write.blocked.{feature}", level="INFO", feature="settings",
+                           payload={"reason": "UI-only guard", "env_save_ui_only": True,
+                                    "path": str(_active_path)})
+                except Exception:
+                    pass
+                return
+
     d_def = load_def_yaml(feature)
-    # ★ 追加：未知キーは保存前に除去
     filtered = _filter_by_schema(new_merged or {}, d_def or {})
     delta = _diff_from_def(filtered, d_def or {})
 
-    _, active_path = get_paths(feature)
-    with _KeyLock(feature):
-        _write_yaml_atomic(active_path, delta)
+    # ★ 差分ゼロ：何もしない
+    if not delta:
+        return
 
+    _, active_path = get_paths(feature)
+    _audit_try("write", feature, active_path, {"changed_keys": sorted(list(delta.keys()))})
     try:
-        changed_keys = sorted(list(delta.keys()))
-        W.emit(f"settings.write.{feature}", level="INFO", feature=feature,
-               payload={"changed_keys": changed_keys, "path": str(active_path)})
-    except Exception:
-        pass
+        with _KeyLock(feature):
+            # ★ ヘッダー生成
+            rel_path = f"./btc_trade_system/config/{feature}.yaml"
+            header = (
+                f"# path: {rel_path}\n"
+                f"# desc: {feature} の外部設定（def との差分のみ保存）\n"
+            )
+
+            # YAML 本体
+            body = yaml.safe_dump(delta, allow_unicode=True, sort_keys=False)
+
+            tmp = active_path.with_suffix(active_path.suffix + ".tmp")
+            with tmp.open("w", encoding="utf-8-sig") as f:
+                f.write(header)
+                f.write(body)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, active_path)
+
+        try:
+            changed_keys = sorted(list(delta.keys()))
+            W.emit(f"settings.write.{feature}", level="INFO", feature=feature,
+                   payload={"changed_keys": changed_keys, "path": str(active_path)})
+        except Exception:
+            pass
+
+        _audit_done("write", feature, active_path, {"changed_keys": sorted(list(delta.keys()))})
+
+    except Exception as e:
+        _audit_err("write", feature, active_path, e, {"changed_keys": sorted(list(delta.keys()))})
+        raise
+
+# 追加: スクリプト/テスト用の強制保存API（UIガードをバイパス）
+def force_save_yaml(area: str, data: dict) -> bool:
+    """
+    UIを介さないテスト/スクリプト用途の保存ルート。
+    - *_def.yaml のスキーマで未知キーを除去
+    - current 側に原子的に書き出し
+    - 監査ログは通常の save と同じ規約で記録（可能なら）
+    """
+    try:
+        def_path, active_path = get_paths(area)
+        schema = _load_yaml(def_path) or {}
+        filtered = _filter_by_schema(data or {}, schema)
+
+        # ★ 追加: 試行ログ
+        _audit_try("write", area, active_path, {"keys": list(filtered.keys()), "source": "script"})
+
+        _write_yaml_atomic(active_path, filtered)
+
+        try:
+            W.emit(f"settings.write.{area}", level="INFO", feature="settings",
+                   payload={"path": str(active_path), "keys": list(filtered.keys())})
+        except Exception:
+            pass
+
+        # ★ 追加: 完了ログ
+        _audit_done("write", area, active_path, {"keys": list(filtered.keys()), "source": "script"})
+        return True
+
+    except Exception as e:
+        # 既存 error に加え、詳細を統一形で
+        try:
+            W.emit(f"settings.write.error.{area}", level="ERROR", feature="settings",
+                   payload={"err": repr(e)})
+        except Exception:
+            pass
+        _audit_err("write", area, active_path if 'active_path' in locals() else Path(""), e,
+                   {"source": "script"})
+        return False
 
 def reset_to_default(feature: str) -> None:
-    """デフォルトに戻す＝current を空辞書にする（差分ゼロ）。"""
+    """デフォルトに戻す＝current を物理削除（ファイルなし）"""
     _, active_path = get_paths(feature)
-    with _KeyLock(feature):
-        _write_yaml_atomic(active_path, {})
+    _audit_try("default", feature, active_path, {"action": "remove_current"})
 
     try:
-        W.emit(f"settings.default.apply.{feature}", level="INFO", feature=feature,
-               payload={"path": str(active_path)})
-    except Exception:
-        pass
+        with _KeyLock(feature):
+            # ★ 差分なし → ファイル削除（0 バイトや {} ではなく確実に消す）
+            active_path.unlink(missing_ok=True)
+
+        try:
+            W.emit(f"settings.default.apply.{feature}", level="INFO", feature=feature,
+                   payload={"path": str(active_path), "action": "removed"})
+        except Exception:
+            pass
+
+        _audit_done("default", feature, active_path, {"action": "removed"})
+
+    except Exception as e:
+        _audit_err("default", feature, active_path, e, {"action": "remove_current"})
+        raise
 
 # ===== 既存ユーティリティ（UIタイトル／配色） =====
 def get_ui_title(default: str = "BtcTradeSystem V1") -> str:

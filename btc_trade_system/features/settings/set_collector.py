@@ -32,24 +32,41 @@ def _mark_changed() -> None:
 # actions
 # ----------------------------
 def _exec_default() -> None:
-    """current を空差分（= 既定へ）に戻し、閉じずに即反映。"""
+    """current を空差分（= 既定へ）に戻し、閉じずに即反映（モーダルは閉じない）。"""
     settings_svc.reset_to_default(AREA)              # atomic+fsync+監査は SVC 側
-    UI.discard_prefix(PREFIX)                        # セクション内の未保存キーだけ破棄
-    st.session_state["_dash_require_rerun"] = True   # 1回だけ再描画
-    st.session_state["__settings_changed"] = True
-    st.rerun()
+
+    # セクション内の未保存キーだけ破棄（次回オープンをクリーンに）
+    UI.discard_prefix(PREFIX)
+
+    # ダッシュ側への「適用済み」通知（再描画は settings.py 側で一括管理）
+    st.session_state["_dash_require_rerun"] = True
+    st.session_state.pop("__settings_changed", None)
+    st.session_state["__settings_apply"] = True
 
 def _exec_save() -> None:
-    """pending を current へ差分保存し、閉じずに即反映。"""
+    """pending を current へ差分保存し、閉じずに即反映（モーダルは閉じない）。"""
     pending = st.session_state.get(f"{PREFIX}.pending", {}) or {}
     current = settings_svc.load_yaml(AREA) or {}
     merged  = _deep_merge(current, pending)
 
-    settings_svc.save_yaml(AREA, merged)             # atomic+fsync+監査は SVC 側
-    UI.discard_prefix(PREFIX)                        # 次回オープンをクリーンに
+    # 差分が無ければ何もしない
+    if merged == current:
+        return
+
+    # 保存（atomic+fsync+監査は SVC 側）
+    force = getattr(settings_svc, "force_save_yaml", None)
+    if callable(force):
+        force(AREA, merged)
+    else:
+        settings_svc.save_yaml(AREA, merged)
+
+    # 次回オープンをクリーンに
+    UI.discard_prefix(PREFIX)
+
+    # ダッシュ側への「適用済み」通知（再描画は settings.py 側で一括管理）
     st.session_state["_dash_require_rerun"] = True
-    st.session_state["__settings_changed"] = True
-    st.rerun()
+    st.session_state.pop("__settings_changed", None)
+    st.session_state["__settings_apply"] = True
 
 # ----------------------------
 # UI (minimal)
@@ -58,8 +75,11 @@ def render() -> None:
     st.markdown("<div class='settings-tab'>", unsafe_allow_html=True)
     st.subheader("コレクタ設定（collector.yaml）")
 
+    def_path, act_path = settings_svc.get_paths(AREA)
+    st.caption(f"適用対象（外部CONFIG）: {act_path.name} ／ 既定: {def_path.name}")
+
     # def+current 合成（SVC が def→current の順で解決）
-    merged: Dict[str, Any] = settings_svc.load_yaml(AREA)
+    merged: Dict[str, Any] = settings_svc.load_yaml(AREA) or {}
 
     gen = (merged.get("general") or {})
     enabled: List[str] = list(gen.get("enabled_exchanges") or [])

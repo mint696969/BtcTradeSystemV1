@@ -36,11 +36,13 @@ def _exec_default():
 
     # 2) このセクションの未保存データだけ破棄（モーダルは閉じない）
     UI.discard_prefix("set.health")
+    # ★ pending もクリアして、前回の変更を持ち越さない
+    st.session_state.pop("set.health.pending", None)
 
-    # 3) ダッシュへ“即時反映”を通知（再描画1回だけ受ける）
+    # 3) ダッシュ側に「設定適用」を通知（再描画は settings/settings.py 側に任せる）
     st.session_state["_dash_require_rerun"] = True
-    st.session_state["__settings_changed"] = True
-    st.rerun()
+    st.session_state.pop("__settings_changed", None)
+    st.session_state["__settings_apply"] = True
 
 def _exec_save():
     # 0) しきい値ガード（WARN < CRIT）
@@ -64,9 +66,11 @@ def _exec_save():
 
     # 3) ダッシュへ“即時反映”を通知（モーダルは閉じない）
     st.session_state.pop("__settings_changed", None)
-    st.session_state["_dash_require_rerun"] = True
-    st.session_state["__settings_changed"] = True
-    st.rerun()
+
+    if n > 0:
+        # 実際に何かしら書き込みがあった場合だけ、再描画＋適用フラグを立てる
+        st.session_state["_dash_require_rerun"] = True
+        st.session_state["__settings_apply"] = True
 
 def render():
     st.subheader("設定（健全性ビュー）")
@@ -88,107 +92,175 @@ def render():
         f"適用対象（外部CONFIG）: {act_h.name}, {act_m.name} ／ 既定: {def_h.name}, {def_m.name}"
     )
 
+    # --- セクション切替（常にどれか1つだけ開く） ---
+    section_options = ("thresholds", "order", "palette")
+    section_labels = {
+        "order": "カード順",
+        "thresholds": "しきい値",
+        "palette": "色パレット",
+    }
+
+    # st.radio 自身の state を単一ソースとして利用
+    section = st.radio(
+        "編集セクション",
+        section_options,
+        index=section_options.index("thresholds"),  # 初期は「しきい値」
+        key="set.health.section",
+        format_func=lambda k: section_labels.get(k, k),
+        horizontal=True,
+    )
+    st.divider()
+
     # --- カード順の編集 ---
-    st.markdown("### カード順（左→右）")
-    # order の既存値が無い場合のフォールバック（表示を空にしないため）
     DEFAULT_EXCH_ORDER: list[str] = ["bitflyer", "binance", "bybit", "okx"]
     current_order: list[str] = list(y_health.get("order") or [])
     default_order: list[str] = current_order or DEFAULT_EXCH_ORDER
+    new_order = current_order or DEFAULT_EXCH_ORDER
 
-    # 簡易UI：テキストで順序編集（カンマ区切り）
-    order_text = st.text_input(
-        "順序（カンマ区切り・例: binance,bybit,okx）",
-        value=",".join(default_order),
-        placeholder="binance,bybit,okx,bitflyer など",
-        key="set.health.order_text",
-        on_change=_mark_changed,
-    )
+    if section == "order":
+        st.markdown("### カード順（左→右）")
 
-    new_order = [x.strip() for x in order_text.split(",") if x.strip()]
+        order_text = st.text_input(
+            "順序（カンマ区切り・例: binance,bybit,okx）",
+            value=",".join(default_order),
+            placeholder="binance,bybit,okx,bitflyer など",
+            key="set.health.order_text",
+            on_change=_mark_changed,
+        )
 
-    if not new_order:
-        new_order = DEFAULT_EXCH_ORDER
+        new_order = [x.strip() for x in order_text.split(",") if x.strip()]
+        if not new_order:
+            new_order = DEFAULT_EXCH_ORDER
 
-    st.divider()
+        st.divider()
 
     # --- しきい値（monitoring.yaml） ---
-    st.markdown("### しきい値")
-    # health.age_sec
-    h = (y_mon.get("health") or {})
-    age = h.get("age_sec") or {}
-    lat = h.get("latency_ms") or {}
-    slo = (y_mon.get("slo") or {})
-    slo_ticker = (slo.get("ticker") or {})
-    slo_orderbook = (slo.get("orderbook") or {})
-    slo_trades = (slo.get("trades") or {})
+    if section == "thresholds":
+        st.markdown("### しきい値")
 
-    colA, colB = st.columns(2)
-    with colA:
-        st.markdown("**データ鮮度（age_sec）**")
-        age_warn = st.number_input(
-            "WARN（秒）",
-            min_value=1, max_value=600,
-            value=int(age.get("warn", 20)),
-            key="set.health.age_warn_s",
-            on_change=_mark_changed,
-        )
+        thresholds = (y_mon.get("thresholds") or {})
 
-        age_crit = st.number_input(
-            "CRIT（秒）",
-            min_value=1, max_value=600,
-            value=int(age.get("crit", 30)),
-            key="set.health.age_crit_s",
-            on_change=_mark_changed,
-        )
+        # ① monitoring.thresholds.age_sec.* を優先
+        age = thresholds.get("age_sec")
+        # ② 無ければ health.age_thresholds_sec.* を見る
+        if not isinstance(age, dict) or not age:
+            age = y_health.get("age_thresholds_sec") or {}
 
-    with colB:
-        st.markdown("**レイテンシ（latency_ms）**")
-        lat_warn = st.number_input(
-            "WARN（ms）",
-            min_value=10, max_value=10000,
-            value=int(lat.get("warn", 400)),
-            key="set.health.lat_warn_ms",
-            on_change=_mark_changed,
-        )
-        lat_crit = st.number_input(
-            "CRIT（ms）",
-            min_value=10, max_value=10000,
-            value=int(lat.get("crit", 1200)),
-            key="set.health.lat_crit_ms",
-            on_change=_mark_changed,
-        )
+        # レイテンシ：monitoring → health.latency_ms の順で参照
+        lat = thresholds.get("latency_ms")
+        if not isinstance(lat, dict) or not lat:
+            lat = y_health.get("latency_ms") or {}
 
-    st.markdown("**SLO（最大許容スタレ）**")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        slo_ticker_max = st.number_input(
-            "ticker.max_stale_s", min_value=1, max_value=3600,
-            value=int(slo_ticker.get("max_stale_s", 5)),
-            key="set.health.slo_ticker_max", on_change=_mark_changed,
-        )
-    with col2:
-        slo_ob_max = st.number_input(
-            "orderbook.max_stale_s", min_value=1, max_value=3600,
-            value=int(slo_orderbook.get("max_stale_s", 6)),
-            key="set.health.slo_ob_max", on_change=_mark_changed,
-        )
-    with col3:
-        slo_trades_max = st.number_input(
-            "trades.max_stale_s", min_value=1, max_value=3600,
-            value=int(slo_trades.get("max_stale_s", 5)),
-            key="set.health.slo_trades_max", on_change=_mark_changed,
-        )
+        # SLO：monitoring.slo → health.slo の順で参照
+        slo = (y_mon.get("slo") or {})
+        if not isinstance(slo, dict) or not slo:
+            slo = (y_health.get("slo") or {})
 
-    st.divider()
+        slo_ticker = (slo.get("ticker") or {})
+        slo_orderbook = (slo.get("orderbook") or {})
+        slo_trades = (slo.get("trades") or {})
+
+        colA, colB = st.columns(2)
+        with colA:
+            st.markdown("**データ鮮度（age_sec）**")
+            age_warn = st.number_input(
+                "WARN（秒）",
+                min_value=1, max_value=600,
+                value=int(age.get("warn", 20)),
+                key="set.health.age_warn_s",
+                on_change=_mark_changed,
+            )
+
+            age_crit = st.number_input(
+                "CRIT（秒）",
+                min_value=1, max_value=600,
+                value=int(age.get("crit", 30)),
+                key="set.health.age_crit_s",
+                on_change=_mark_changed,
+            )
+
+        with colB:
+            st.markdown("**レイテンシ（latency_ms）**")
+            lat_warn = st.number_input(
+                "WARN（ms）",
+                min_value=10, max_value=10000,
+                value=int(lat.get("warn", 400)),
+                key="set.health.lat_warn_ms",
+                on_change=_mark_changed,
+            )
+            lat_crit = st.number_input(
+                "CRIT（ms）",
+                min_value=10, max_value=10000,
+                value=int(lat.get("crit", 1200)),
+                key="set.health.lat_crit_ms",
+                on_change=_mark_changed,
+            )
+
+        st.markdown("**SLO（最大許容スタレ）**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            slo_ticker_max = st.number_input(
+                "ticker.max_stale_s", min_value=1, max_value=3600,
+                value=int(slo_ticker.get("max_stale_s", 5)),
+                key="set.health.slo_ticker_max", on_change=_mark_changed,
+            )
+        with col2:
+            slo_ob_max = st.number_input(
+                "orderbook.max_stale_s", min_value=1, max_value=3600,
+                value=int(slo_orderbook.get("max_stale_s", 6)),
+                key="set.health.slo_ob_max", on_change=_mark_changed,
+            )
+        with col3:
+            slo_trades_max = st.number_input(
+                "trades.max_stale_s", min_value=1, max_value=3600,
+                value=int(slo_trades.get("max_stale_s", 5)),
+                key="set.health.slo_trades_max", on_change=_mark_changed,
+            )
+
+        st.divider()
+    else:
+        # セクション外でも pending を組み立てるための既定値
+        thresholds = (y_mon.get("thresholds") or {})
+
+        # age しきい値
+        age = thresholds.get("age_sec")
+        if not isinstance(age, dict) or not age:
+            age = y_health.get("age_thresholds_sec") or {}
+
+        # レイテンシ：monitoring → health.latency_ms の順で参照
+        lat = thresholds.get("latency_ms")
+        if not isinstance(lat, dict) or not lat:
+            lat = y_health.get("latency_ms") or {}
+
+        # SLO：monitoring.slo → health.slo の順で参照
+        slo = (y_mon.get("slo") or {})
+        if not isinstance(slo, dict) or not slo:
+            slo = (y_health.get("slo") or {})
+
+        slo_ticker    = (slo.get("ticker") or {})
+        slo_orderbook = (slo.get("orderbook") or {})
+        slo_trades    = (slo.get("trades") or {})
+
+        # ここで UI 非表示時用の値をすべて決めておく
+        age_warn = int(age.get("warn", 20))
+        age_crit = int(age.get("crit", 30))
+
+        lat_warn = int(lat.get("warn", 400))
+        lat_crit = int(lat.get("crit", 1200))
+
+        slo_ticker_max = int(slo_ticker.get("max_stale_s", 5))
+        slo_ob_max     = int(slo_orderbook.get("max_stale_s", 6))
+        slo_trades_max = int(slo_trades.get("max_stale_s", 5))
 
     # --- 色パレット（OK/WARN/CRIT） ---
-    st.markdown("### 色パレット（ヘルス表示用）")
-
     # 既存値（なければ既定）
     pal = (y_mon.get("palette") or {})
+    if not isinstance(pal, dict) or not pal:
+        pal = (y_health.get("palette") or {})
+
     card_border = (pal.get("card_border") or {})
     bar_fill    = (pal.get("bar_fill") or {})
-    card_fill   = (pal.get("card_fill") or {})   # ← add
+    card_fill   = (pal.get("card_fill") or {})
 
     def _col(d: dict, k: str, default: str) -> str:
         v = d.get(k)
@@ -196,28 +268,114 @@ def render():
             return v
         return default
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.caption("カード枠（border-color）")
-        cb_ok   = st.color_picker("OK（カード枠）",   _col(card_border, "ok",   "#10b981"), key="set.health.cb_ok",   on_change=_mark_changed)   # teal-ish
-        cb_warn = st.color_picker("WARN（カード枠）", _col(card_border, "warn", "#f59e0b"),  key="set.health.cb_warn", on_change=_mark_changed)  # amber
-        cb_crit = st.color_picker("CRIT（カード枠）", _col(card_border, "crit", "#ef4444"),  key="set.health.cb_crit", on_change=_mark_changed)  # red
-    with c2:
-        st.caption("タイムライン/バー（塗り）")
-        bf_ok   = st.color_picker("OK（バー）",   _col(bar_fill, "ok",   "#d1fae5"), key="set.health.bf_ok",   on_change=_mark_changed)  # light green
-        bf_warn = st.color_picker("WARN（バー）", _col(bar_fill, "warn", "#fef3c7"), key="set.health.bf_warn", on_change=_mark_changed)  # light amber
-        bf_crit = st.color_picker("CRIT（バー）", _col(bar_fill, "crit", "#fee2e2"), key="set.health.bf_crit", on_change=_mark_changed)  # light red
-        # カード内側（背景）の色
-        st.caption("カード内側（背景）")
-        cf1, cf2, cf3 = st.columns(3)
-        cf_ok   = cf1.color_picker("OK（背景）",   _col(card_fill, "ok",   "#ecfdf5"), key="set.health.cf_ok",   on_change=_mark_changed)
-        cf_warn = cf2.color_picker("WARN（背景）", _col(card_fill, "warn", "#fffbeb"), key="set.health.cf_warn", on_change=_mark_changed)
-        cf_crit = cf3.color_picker("CRIT（背景）", _col(card_fill, "crit", "#fef2f2"), key="set.health.cf_crit", on_change=_mark_changed)
+    if section == "palette":
+        st.markdown("### 色パレット（ヘルス表示用）")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            st.caption("カード枠（border-color）")
+            cb_ok   = st.color_picker(
+                "OK（カード枠）",
+                _col(card_border, "ok", "#10b981"),
+                key="set.health.cb_ok",
+                on_change=_mark_changed,
+            )
+            cb_warn = st.color_picker(
+                "WARN（カード枠）",
+                _col(card_border, "warn", "#f59e0b"),
+                key="set.health.cb_warn",
+                on_change=_mark_changed,
+            )
+            cb_crit = st.color_picker(
+                "CRIT（カード枠）",
+                _col(card_border, "crit", "#ef4444"),
+                key="set.health.cb_crit",
+                on_change=_mark_changed,
+            )
+
+        with c2:
+            st.caption("タイムライン/バー（塗り）")
+            bf_ok   = st.color_picker(
+                "OK（バー）",
+                _col(bar_fill, "ok", "#d1fae5"),
+                key="set.health.bf_ok",
+                on_change=_mark_changed,
+            )
+            bf_warn = st.color_picker(
+                "WARN（バー）",
+                _col(bar_fill, "warn", "#fef3c7"),
+                key="set.health.bf_warn",
+                on_change=_mark_changed,
+            )
+            bf_crit = st.color_picker(
+                "CRIT（バー）",
+                _col(bar_fill, "crit", "#fee2e2"),
+                key="set.health.bf_crit",
+                on_change=_mark_changed,
+            )
+
+            st.caption("カード内側（背景）")
+            cf1, cf2, cf3 = st.columns(3)
+            cf_ok   = cf1.color_picker(
+                "OK（背景）",
+                _col(card_fill, "ok", "#ecfdf5"),
+                key="set.health.cf_ok",
+                on_change=_mark_changed,
+            )
+            cf_warn = cf2.color_picker(
+                "WARN（背景）",
+                _col(card_fill, "warn", "#fffbeb"),
+                key="set.health.cf_warn",
+                on_change=_mark_changed,
+            )
+            cf_crit = cf3.color_picker(
+                "CRIT（背景）",
+                _col(card_fill, "crit", "#fef2f2"),
+                key="set.health.cf_crit",
+                on_change=_mark_changed,
+            )
+    else:
+        # セクションが「色パレット」以外のときは、UIは出さずに値だけ決めておく
+        cb_ok   = _col(card_border, "ok",   "#10b981")
+        cb_warn = _col(card_border, "warn", "#f59e0b")
+        cb_crit = _col(card_border, "crit", "#ef4444")
+
+        bf_ok   = _col(bar_fill, "ok",   "#d1fae5")
+        bf_warn = _col(bar_fill, "warn", "#fef3c7")
+        bf_crit = _col(bar_fill, "crit", "#fee2e2")
+
+        cf_ok   = _col(card_fill, "ok",   "#ecfdf5")
+        cf_warn = _col(card_fill, "warn", "#fffbeb")
+        cf_crit = _col(card_fill, "crit", "#fef2f2")
 
     # --- 保存待ち（上部の「保存」で一括反映） ----------------------------
     # health_svc 側の読み取りに合わせ、monitoring.yaml は thresholds.* 配下へ集約
     pending = {
-        "health": {"order": new_order},
+        "health": {
+            "order": new_order,
+            # health_svc 互換：既存の age_thresholds_sec.* も更新する
+            "age_thresholds_sec": {
+                "warn": float(age_warn),
+                "crit": float(age_crit),
+            },
+            # レイテンシもしきい値として health 側に保持
+            "latency_ms": {
+                "warn": int(lat_warn),
+                "crit": int(lat_crit),
+            },
+            # SLO もしっかり health.yaml 側に持たせる
+            "slo": {
+                "ticker":    {"max_stale_s": int(slo_ticker_max)},
+                "orderbook": {"max_stale_s": int(slo_ob_max)},
+                "trades":    {"max_stale_s": int(slo_trades_max)},
+            },
+            # 色パレットも health 側にミラー（UI 再表示用）
+            "palette": {
+                "card_border": {"ok": cb_ok, "warn": cb_warn, "crit": cb_crit},
+                "bar_fill":    {"ok": bf_ok, "warn": bf_warn, "crit": bf_crit},
+                "card_fill":   {"ok": cf_ok, "warn": cf_warn, "crit": cf_crit},
+            },
+        },
         "monitoring": {
             "thresholds": {
                 "age_sec": {
@@ -225,7 +383,11 @@ def render():
                     "warn": int(age_warn),
                     "crit": int(age_crit),
                 },
-                # latency_ms は現段階で health_svc の参照外なので保存対象から外す
+                # monitoring 側にも latency_ms を持たせておく（将来の拡張用）
+                "latency_ms": {
+                    "warn": int(lat_warn),
+                    "crit": int(lat_crit),
+                },
             },
             "slo": {
                 "ticker":     {"max_stale_s": int(slo_ticker_max)},
@@ -255,7 +417,8 @@ def render():
         on_save=_exec_save,
         key_base="set.health.btn",
         labels=("閉じる","デフォルト","保存"),
-        confirm_message="健全性設定を更新します。よろしいですか？"
+        confirm_message="健全性設定を更新します。よろしいですか？",
+        audit_tag=None  # success 監査は settings_svc 側のみ（最小監査）
     )
 
 def _deep_merge(dst: dict, src: dict) -> dict:
@@ -269,33 +432,52 @@ def _deep_merge(dst: dict, src: dict) -> dict:
     return dst
 
 def apply_pending() -> int:
-
     """
-    上部「保存」で呼ばれる想定。セッションに保管した pending を health.yaml / monitoring.yaml へ一括保存。
-    戻り値: 書き込んだファイル数（0/1/2）
+    上部「保存」で呼ばれる想定。
+    セッションに保管した pending を
+      - health:      health.yaml
+      - monitoring:  monitoring.yaml
+    へ一括保存する。
+    戻り値: 書き込みに成功したファイル数（0 / 1 / 2）
     """
-    p = st.session_state.get("set.health.pending")
+    p = st.session_state.get("set.health.pending") or {}
     if not p:
         return 0
-    # 1) health.yaml（既存を残しつつ部分上書き）
+
+    wrote_health = False
+    wrote_mon = False
+
+    # 1) health.yaml（def+current をベースに pending.health をマージして保存）
     try:
-        current_h = _read_yaml("health")
-        merged_h  = _deep_merge(current_h or {}, p.get("health", {}))
-        _write_yaml("health", merged_h)
-        wrote_health = True
-    except Exception:
+        base_h = settings_svc.load_yaml("health") or {}
+        merged_h = _deep_merge(base_h, p.get("health", {}) or {})
+        # def との差分計算は settings_svc.force_save_yaml 側に任せる
+        ok_h = getattr(settings_svc, "force_save_yaml", None)
+        if callable(ok_h):
+            wrote_health = bool(ok_h("health", merged_h))
+        else:
+            # フォールバック：旧 save_yaml を直接使う（差分ロジックに委譲）
+            _write_yaml("health", merged_h)
+            wrote_health = True
+    except Exception as e:
+        st.error(f"health.yaml の保存に失敗しました: {e}", icon="⚠️")
         wrote_health = False
 
-    # 2) monitoring.yaml（既存を残しつつマージ保存）
+    # 2) monitoring.yaml（def+current をベースに pending.monitoring をマージして保存）
     try:
-        current = _read_yaml("monitoring")
-        merged  = _deep_merge(current or {}, p.get("monitoring", {}))
-        _write_yaml("monitoring", merged)
-        wrote_mon = True
-    except Exception:
+        base_m = settings_svc.load_yaml("monitoring") or {}
+        merged_m = _deep_merge(base_m, p.get("monitoring", {}) or {})
+        ok_f = getattr(settings_svc, "force_save_yaml", None)
+        if callable(ok_f):
+            wrote_mon = bool(ok_f("monitoring", merged_m))
+        else:
+            _write_yaml("monitoring", merged_m)
+            wrote_mon = True
+    except Exception as e:
+        st.error(f"monitoring.yaml の保存に失敗しました: {e}", icon="⚠️")
         wrote_mon = False
 
-    # 保存に成功したら pending をクリア（次保存に持ち越さない）
+    # 保存に成功したら pending をクリア（次回オープンに持ち越さない）
     try:
         if (wrote_health or wrote_mon) and "set.health.pending" in st.session_state:
             del st.session_state["set.health.pending"]
