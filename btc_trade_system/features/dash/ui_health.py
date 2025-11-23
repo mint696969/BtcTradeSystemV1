@@ -10,7 +10,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 
 from btc_trade_system.features.audit_dev import writer as W
-from btc_trade_system.features.health.health_svc import read_health
+from btc_trade_system.features.health.health_svc import read_health, read_health_timeline
 from btc_trade_system.features.health import health_order
 from btc_trade_system.features.settings import settings_svc  # 追加
 
@@ -89,6 +89,39 @@ def _items_iter(h) -> Iterable[Dict[str, Any]]:
                 "level": getattr(iv, "level", None) or "OK",
             }
 
+def _build_rate_state(items: List[Dict[str, Any]]) -> Dict[str, str]:
+    """
+    exchange ごとのレート状態を集約する。
+    戻り値: {exchange: "none" | "soft" | "hard"}
+
+    - topic=="rate" の item を対象とし、cause / level から判定する。
+      cause: "rate_soft" / "rate_hard"（health_svc 側の仕様）
+    - hard が一つでもあれば "hard"
+    - hard が無く soft が一つでもあれば "soft"
+    - それ以外は "none"
+    """
+    state: Dict[str, str] = {}
+    for iv in items:
+        if iv.get("topic") != "rate":
+            continue
+        ex = iv.get("exchange")
+        if not ex:
+            continue
+        cause = (iv.get("cause") or "").lower()
+        level = (iv.get("level") or "").upper()
+
+        # 判定優先度: hard > soft
+        if "rate_hard" in cause or level == "CRIT":
+            state[ex] = "hard"
+        elif "rate_soft" in cause or level == "WARN":
+            # 既に hard が立っている場合は上書きしない
+            if state.get(ex) != "hard":
+                state[ex] = "soft"
+        else:
+            # 何も立てない（none 扱い）
+            state.setdefault(ex, "none")
+    return state
+
 def _fmt_age(sec: Optional[float]) -> str:
     if sec is None:
         return "—"
@@ -101,27 +134,6 @@ def _fmt_age(sec: Optional[float]) -> str:
     if s < 3600:
         return f"{int(s // 60)}m"
     return f"{s / 3600:.1f}h"
-
-def _timeline(ax, status: str, age_sec: Optional[float], window_s: int, palette: dict) -> None:
-    """右端=現在。未更新区間（age）を右側に塗る。"""
-    if ax is None:
-        return
-    age = max(0.0, float(age_sec or 0.0))
-    age = min(age, float(window_s))
-    ok_len = max(0.0, window_s - age)
-
-    # パレット連動
-    ok_color = palette["bar_fill"].get("ok", "#d1fae5")
-    miss_color = palette["bar_fill"].get((status or "OK").lower(), "#d1fae5")
-
-    ax.barh([0], [ok_len], color=ok_color, height=0.5)
-    ax.barh([0], [age], left=[ok_len], color=miss_color, height=0.5)
-    ax.set_xlim(0, window_s)
-    ax.set_ylim(-0.6, 0.6)
-    ax.set_yticks([])
-    ax.set_xticks([])
-    for s in ax.spines.values():
-        s.set_visible(False)
 
 def _order_and_fill(items: list[dict]) -> tuple[list[dict], list[str]]:
     """
@@ -233,8 +245,14 @@ def render() -> None:
     with c1:
         auto = st.toggle("自動更新（このタブ）", value=False)
     with c2:
-        win_label = st.selectbox("期間", ["5分", "10分", "30分", "60分"], index=1)
-    window_s = {"5分": 300, "10分": 600, "30分": 1800, "60分": 3600}[win_label]
+        # 1時間 / 24時間 / 10日 の 3択（デフォルトは 24時間）
+        win_label = st.selectbox("期間", ["1時間", "24時間", "10日"], index=1)
+
+    window_s = {
+        "1時間": 3600,          # 1h  =  1 * 3600
+        "24時間": 86400,        # 24h = 24 * 3600
+        "10日":  864000,        # 10d = 10 * 24 * 3600
+    }[win_label]
 
     if auto:
         st.caption("自動更新: 5秒ごと")
@@ -261,7 +279,10 @@ def render() -> None:
         st.info("status.json が見つからないか、対象エンドポイントが未登録です。")
         return
 
-    # ★ 追加：並び替え＋プレースホルダ生成
+    # 取引所ごとのレート状態（none / soft / hard）を事前に集約
+    rate_state = _build_rate_state(items)
+
+    # 並び替え＋プレースホルダ生成
     items, _order = _order_and_fill(items)
 
     # ---- カード（行×3列） ----
@@ -270,7 +291,9 @@ def render() -> None:
         row = items[i : i + per_row]
         cols = st.columns(len(row))
         for c, iv in zip(cols, row):
-            ex = f"{iv.get('exchange','?')}/{iv.get('topic','?')}"
+            ex_name = iv.get("exchange", "?")
+            topic = iv.get("topic", "?")
+            ex = f"{ex_name}/{topic}"
             level = iv.get("level", "OK")
             age = iv.get("age_sec", None)
             retries = iv.get("retries", 0)
@@ -278,9 +301,21 @@ def render() -> None:
             notes = iv.get("notes") or "-"
 
             placeholder = bool(iv.get("__placeholder__"))
-            tone = (level or "OK").lower()
-            border = palette["card_border"].get(tone, palette["card_border"]["ok"])
-            fill   = palette["card_fill"].get(tone,  palette["card_fill"]["ok"])   # ← 追加
+
+            # 塗り（背景色）は「ヘルスレベル」に従う
+            health_tone = (level or "OK").lower()
+            fill = palette["card_fill"].get(health_tone, palette["card_fill"]["ok"])
+
+            # 枠線は「レート状態」に従う（hard > soft > health）
+            rs = rate_state.get(ex_name, "none")
+            if rs == "hard":
+                border_tone = "crit"
+            elif rs == "soft":
+                border_tone = "warn"
+            else:
+                border_tone = health_tone  # レート問題なし時はヘルスと揃える
+
+            border = palette["card_border"].get(border_tone, palette["card_border"]["ok"])
 
             with c:
                 html = _card_html(
@@ -298,20 +333,92 @@ def render() -> None:
 
     st.divider()
 
-    # ---- タイムライン（1エンドポイント=1行の小さなバー）----
-    st.write("タイムライン（右端=現在／右側の塗り＝未更新区間）")
-    for iv in items:
-        ex = f"{iv.get('exchange','?')}/{iv.get('topic','?')}"
-        level = iv.get("level", "OK")
-        age = iv.get("age_sec", None)
-        st.markdown(f"**{ex}**")
-        if iv.get("__placeholder__"):
-            st.caption("未収集中")
-            continue
-        fig, ax = plt.subplots(figsize=(8, 0.35), dpi=150)
-        _timeline(ax, level, age, window_s, palette)
-        st.pyplot(fig)
-        plt.close(fig)
+    # ---- タイムライン（履歴ベース）----
+    st.write(f"タイムライン（右端=現在／{win_label} の履歴）")
+
+    try:
+        timeline = read_health_timeline(window_s)
+    except Exception as e:
+        st.caption("タイムライン履歴の読み込みに失敗しました。")
+        W.emit("tab.health.timeline_error", level="WARN", feature="health", payload={"err": str(e)})
+        timeline = {}
+
+    if not timeline:
+        st.caption("履歴がありません（起動直後や collector 停止中など）。")
+    else:
+        for iv in items:
+            ex_name = iv.get("exchange", "?")
+            topic = iv.get("topic", "?")
+            key = f"{ex_name}/{topic}"
+
+            label = f"{ex_name}/{topic}"
+            st.markdown(f"**{label}**")
+
+            if iv.get("__placeholder__"):
+                st.caption("未収集中")
+                continue
+
+            seq = timeline.get(key) or []
+            if not seq:
+                st.caption("この期間の履歴はありません。")
+                continue
+
+            # ポイント数が多すぎる場合は間引き（描画負荷の抑制）
+            max_points = 200
+            step = max(1, len(seq) // max_points)
+            seq_s = seq[::step]
+
+            xs_health: List[float] = []
+            ys_health: List[float] = []
+            colors_health: List[str] = []
+
+            xs_rate: List[float] = []
+            ys_rate: List[float] = []
+            colors_rate: List[str] = []
+
+            n = len(seq_s)
+            if n == 1:
+                # サンプルが1つだけなら、中央付近に1点だけ打つ
+                xs_base = [window_s]
+            else:
+                xs_base = [window_s * i / (n - 1) for i in range(n)]
+
+            for x, entry in zip(xs_base, seq_s):
+                level = (entry.get("level") or "OK").lower()
+                rate = entry.get("rate") or "none"
+
+                # ヘルスレベル側（ベースの点）
+                xs_health.append(x)
+                ys_health.append(0.0)
+                colors_health.append(palette["bar_fill"].get(level, palette["bar_fill"]["ok"]))
+
+                # レート状態側（必要なら上書きの輪郭点）
+                if rate and rate != "none":
+                    xs_rate.append(x)
+                    ys_rate.append(0.0)
+                    if rate == "hard":
+                        tone = "crit"
+                    elif rate == "soft":
+                        tone = "warn"
+                    else:
+                        tone = level
+                    colors_rate.append(palette["card_border"].get(tone, palette["card_border"]["ok"]))
+
+            fig, ax = plt.subplots(figsize=(8, 0.35), dpi=150)
+            if xs_health:
+                ax.scatter(xs_health, ys_health, s=10, c=colors_health)
+            if xs_rate:
+                # レート制御中のポイントは、輪郭付きの点として重ねる
+                ax.scatter(xs_rate, ys_rate, s=30, facecolors="none", edgecolors=colors_rate, linewidths=0.8)
+
+            ax.set_xlim(0, window_s)
+            ax.set_yticks([])
+            ax.set_xticks([])
+            for s in ax.spines.values():
+                s.set_visible(False)
+
+            st.pyplot(fig)
+            plt.close(fig)
 
     st.divider()
 

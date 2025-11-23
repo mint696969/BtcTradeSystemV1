@@ -55,10 +55,20 @@ if (Test-Path $RpRoot) {
 $rpItems = @()
 foreach ($t in $tags) {
   if (-not $t) { continue }
-  $iso  = (& git -C $repo log -1 --format='%cI' $t) 2>$null
+  # タグとして明示的に解決し、refname の曖昧さを避ける
+  $ref  = "refs/tags/$t"
+
+  $iso  = (& git -C $repo log -1 --format='%cI' $ref) 2>$null
   $date = if ($iso) { [datetime]::Parse($iso) } else { Get-Date 0 }
-  $shaS = (& git -C $repo rev-parse --short $t).Trim()
-  $subj = (& git -C $repo log -1 --format='%s' $t).Trim()
+
+  $shaS = (& git -C $repo rev-parse --short $ref) 2>$null
+  if ($shaS) {
+    $shaS = $shaS.Trim()
+  } else {
+    $shaS = '--------'
+  }
+
+  $subj = (& git -C $repo log -1 --format='%s' $ref).Trim()
 
   $memo = $subj
   $z = $zipIndex[$t]

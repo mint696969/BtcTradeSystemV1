@@ -12,6 +12,7 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 設定ロード（def.yaml のみ。current は後続で settings_svc へ差替予定）
@@ -159,6 +160,9 @@ class Item:
 # 公開 I/F
 
 DEFAULT_UPDATE_INTERVAL = 2.0  # seconds（def.yaml が無い環境でも動く既定）
+HISTORY_INTERVAL = 10.0  # health_history.jsonl へのサンプリング間隔（秒）
+HISTORY_MAX_DAYS = 10    # 最大保持日数
+_last_history_ts: float = 0.0  # 直近で履歴を書いた時刻（epoch秒）
 
 
 def iso_now() -> str:
@@ -172,6 +176,21 @@ def default_status_template() -> Dict[str, Any]:
         "storage": StorageInfo().to_dict(),
         "sync": SyncInfo().to_dict(),
         "items": [],
+        # 取引所ごとのレート制御状態（あれば後段で上書き）
+        # 例:
+        #   "rate": {
+        #       "bitflyer": {
+        #           "soft_limit": true,
+        #           "hard_limit": false,
+        #           "penalty": 2,
+        #           "cooldown_until": "...",
+        #           "last_rate_limited_at": "...",
+        #           "tokens": 0.0,
+        #           "burst": 2
+        #       },
+        #       ...
+        #   }
+        "rate": {},
     }
 
 
@@ -221,6 +240,126 @@ def _read_heartbeat(exchange: str, endpoint: str) -> Optional[float]:
         logger.debug("heartbeat read err on %s/%s: %s", exchange, endpoint, e)
     return None
 
+# RateController 側が書き出す rate_state.json の読み取り
+def _rate_state_path() -> Path:
+    data_dir = os.environ.get("BTC_TS_DATA_DIR") or os.environ.get("DATA")
+    if not data_dir:
+        data_dir = str(Path(__file__).resolve().parents[3] / "data")
+    return Path(data_dir) / "collector" / "rate_state.json"
+
+
+def _read_rate_state() -> Optional[Dict[str, Any]]:
+    """
+    RateController からのレート制御状態スナップショットを読む。
+    フォーマットは以下のような dict を想定（キーは取引所）:
+
+      {
+        "bitflyer": {
+          "soft_limit": true,
+          "hard_limit": false,
+          "penalty": 2,
+          "cooldown_until": "...",
+          "last_rate_limited_at": "...",
+          "tokens": 0.0,
+          "burst": 2
+        },
+        ...
+      }
+
+    形式チェックは最小限に留め、読み取れなければ None を返す。
+    """
+    p = _rate_state_path()
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            obj = json.load(f)
+        if isinstance(obj, dict):
+            return obj
+    except FileNotFoundError:
+        return None
+    except Exception as e:
+        logger.debug("rate_state read err: %s", e)
+    return None
+
+def _health_history_path() -> Path:
+    """
+    health タイムライン用の履歴ファイルパスを返す。
+    status.json と同じ data/collector ディレクトリ配下に health_history.jsonl を置く。
+    """
+    # status.json と同じルート（DATA/BTC_TS_DATA_DIR）を流用
+    status_path = resolve_status_path()
+    return status_path.with_name("health_history.jsonl")
+
+
+def _append_health_history(status: Dict[str, Any]) -> None:
+    """
+    status スナップショットから 10秒粒度で health_history.jsonl へ追記する。
+
+    - HISTORY_INTERVAL 未満の間隔では何もしない（高頻度ループから負荷を切り離す）
+    - 1日1回程度（UTC 00:00）で 10日より古い行を削除する
+    """
+    global _last_history_ts
+
+    now = time.time()
+    if (now - _last_history_ts) < HISTORY_INTERVAL:
+        return
+    _last_history_ts = now
+
+    path = _health_history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 1行 = {ts, items, rate}
+    try:
+        row = {
+            "ts": status.get("updated_at") or iso_now(),
+            "items": status.get("items", []),
+            "rate": status.get("rate", {}),
+        }
+        line = json.dumps(row, ensure_ascii=False) + "\n"
+        with path.open("a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception as e:
+        logger.debug("health_history append skipped: %s", e)
+        return
+
+    # ---- 保持期間のローテーション（1日1回程度）----
+    try:
+        # UTCの現在日時から cutoff を計算
+        now_utc = datetime.now(timezone.utc)
+        # 毎日 00:05 頃にだけローテーションを試みるイメージ（負荷を抑える）
+        if not (now_utc.hour == 0 and now_utc.minute < 10):
+            return
+
+        cutoff = now_utc - timedelta(days=HISTORY_MAX_DAYS)
+        cutoff_iso = cutoff.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+        # 既存ファイルを読み込み、cutoff 以降の行だけ残す
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                lines = f.readlines()
+        except FileNotFoundError:
+            return
+
+        kept: List[str] = []
+        for ln in lines:
+            try:
+                obj = json.loads(ln)
+                ts = obj.get("ts")
+                if not isinstance(ts, str):
+                    continue
+                # 文字列比較でも ISO8601Z なら時間順に並ぶので十分
+                if ts >= cutoff_iso:
+                    kept.append(ln)
+            except Exception:
+                # 壊れた行は破棄
+                continue
+
+        # ローテーション結果を書き戻し
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            f.writelines(kept)
+        os.replace(tmp, path)
+    except Exception as e:
+        logger.debug("health_history rotate skipped: %s", e)
 
 def build_status_snapshot(prev: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
@@ -233,6 +372,11 @@ def build_status_snapshot(prev: Optional[Dict[str, Any]] = None) -> Dict[str, An
     # 既定テンプレート
     base = default_status_template()
     base["updated_at"] = now_iso
+
+    # RateController からのレート制御状態（あれば上書き）
+    rate_state = _read_rate_state()
+    if isinstance(rate_state, dict):
+        base["rate"] = rate_state
 
     # 閾値（def.yaml から取得）
     cfg = load_collector_config()
@@ -332,6 +476,8 @@ def update_loop(interval: float = DEFAULT_UPDATE_INTERVAL, *, once: bool = False
         status = build_status_snapshot(prev)
         try:
             write_status_file(status, path)
+            # health タイムライン用の履歴を 10秒粒度で追記
+            _append_health_history(status)
         except Exception as e:
             logger.exception("failed to write status.json: %s", e)
             # WRITE_ERR を self-status にも刻む（次周回で可視化）

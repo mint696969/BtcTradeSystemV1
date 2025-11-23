@@ -1,0 +1,42 @@
+# path: ./btc_trade_system/features/settings/config/exchanges_def.yaml
+# desc: 取引所登録(exchanges)の実データ用デフォルト定義。各取引所の公式APIレートなどのスキーマ。
+
+yaml_version: 1
+
+# exchanges.yaml（外部設定）の正準構造:
+#   exchanges:
+#     <exchange_key>:
+#       enabled: bool
+#       display_name: str | null
+#       official_max_rps: float   # 公式毎秒上限
+#       burst_base_sec: float     # バースト基準秒数
+#       notes: str | null
+
+exchanges:
+  bitflyer:
+    enabled: true
+    display_name: "bitFlyer"
+    official_max_rps: 0.0
+    burst_base_sec: 2.0
+    notes: ""
+
+  binance:
+    enabled: true
+    display_name: "Binance"
+    official_max_rps: 0.0
+    burst_base_sec: 1.0
+    notes: ""
+
+  bybit:
+    enabled: true
+    display_name: "Bybit"
+    official_max_rps: 0.0
+    burst_base_sec: 1.5
+    notes: ""
+
+  okx:
+    enabled: false
+    display_name: "OKX"
+    official_max_rps: 0.0
+    burst_base_sec: 1.0
+    notes: ""

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, Any
 
 # 設計方針（方式C 拡張）
 # - exchange ごとの「全体レート制御」＝トークンバケット（max_rps / burst）
@@ -33,6 +33,7 @@ class ExState:
     # レート制御（429系）
     cooldown_until: float = 0.0
     penalty: int = 0  # 429 ペナルティ段数（指数バックオフ）
+    last_rate_limited_ts: float = 0.0  # 直近で 429/Retry-After を受けた時刻（monotonic 秒）
 
     # endpoint ごとの直近発行時刻
     last_at: Dict[str, float] = field(default_factory=dict)  # endpoint -> last issued
@@ -152,6 +153,7 @@ class RateController:
         """429/Retry-After 等のシグナルを受けたときに呼ぶ。"""
         s = self.state.setdefault(exchange, ExState())
         s.penalty = min(s.penalty + 1, 6)
+        s.last_rate_limited_ts = self.now()
         if retry_after_sec and retry_after_sec > 0:
             s.cooldown_until = max(s.cooldown_until, self.now() + retry_after_sec)
         else:
@@ -163,6 +165,48 @@ class RateController:
         s = self.state.setdefault(exchange, ExState())
         if s.penalty > 0 and (self.now() >= s.cooldown_until):
             s.penalty -= 1
+
+    def get_exchange_state(self, exchange: str) -> Dict[str, Any]:
+        """
+        外部（collector_status / health 等）から参照するための、
+        exchange 単位のレート制御状態スナップショットを返す。
+
+        フィールド例:
+            tokens           : 現在のトークン数（0〜burst）
+            burst            : バースト許容量
+            penalty          : ペナルティ段数（429 回数に応じて増加）
+            cooldown_until   : クールダウン終了予定時刻（monotonic 秒）
+            is_cooldown      : 現在クールダウン中かどうか
+            last_rate_limited_ts : 直近で 429/Retry-After を受けた時刻（monotonic 秒）
+            soft_limit       : 「レート制御中」とみなせるかどうかの簡易フラグ
+                               （クールダウン中 / ペナルティあり / トークン不足のいずれか）
+        """
+        now = self.now()
+        pol = self.ex_policy.get(exchange)
+        s = self.state.setdefault(exchange, ExState())
+
+        # トークンは最新の状態に更新してから参照する
+        if pol and pol.max_rps > 0.0:
+            self._refill_tokens(exchange)
+        tokens = s.tokens
+        burst = pol.burst if pol else 0
+
+        is_cooldown = s.cooldown_until > now
+        has_penalty = s.penalty > 0
+        # max_rps が有効な場合のみ「トークン不足」を soft-limit 判定材料にする
+        token_limited = bool(pol and pol.max_rps > 0.0 and tokens < 1.0)
+
+        soft_limit = is_cooldown or has_penalty or token_limited
+
+        return {
+            "tokens": tokens,
+            "burst": burst,
+            "penalty": s.penalty,
+            "cooldown_until": s.cooldown_until,
+            "is_cooldown": is_cooldown,
+            "last_rate_limited_ts": s.last_rate_limited_ts,
+            "soft_limit": soft_limit,
+        }
 
 # 簡易セルフテスト（手動）
 if __name__ == "__main__":

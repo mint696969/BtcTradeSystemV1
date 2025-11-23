@@ -5,8 +5,11 @@ from __future__ import annotations
 
 import time
 import logging
+import os
+import json
+from pathlib import Path
 from dataclasses import dataclass
-from typing import Callable, Dict, Tuple, Optional
+from typing import Callable, Dict, Tuple, Optional, Iterable, Any
 
 from .collector_rate import RateController
 
@@ -28,6 +31,44 @@ class RateLimited(Exception):
         self.retry_after_sec = retry_after_sec
 
 Runner = Callable[[], None]
+
+def _rate_state_path() -> Path:
+    """
+    RateController の状態スナップショットを書き出す rate_state.json のパスを返す。
+    data/collector/rate_state.json を基本とし、環境変数で上書き可能。
+    """
+    data_dir = os.environ.get("BTC_TS_DATA_DIR") or os.environ.get("DATA")
+    if not data_dir:
+        # リポ直下/data をフォールバック
+        data_dir = str(Path(__file__).resolve().parents[3] / "data")
+    return Path(data_dir) / "collector" / "rate_state.json"
+
+
+def _write_rate_state(rc: RateController, exchanges: Iterable[str]) -> None:
+    """
+    各 exchange について RateController.get_exchange_state() から状態を取得し、
+    rate_state.json として書き出す。
+
+    - soft_limit: RateController 側の判定をそのまま利用
+    - hard_limit: penalty > 0 の間 true（429 由来のペナルティが残っている状態）
+    """
+    snapshot: Dict[str, Any] = {}
+    for ex in exchanges:
+        state = dict(rc.get_exchange_state(ex))
+        # 429/Retry-After で penalty が立っている間は「hard_limit」とみなす
+        state["hard_limit"] = bool(state.get("penalty", 0) > 0)
+        snapshot[ex] = state
+
+    try:
+        p = _rate_state_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(p.suffix + ".tmp")
+        with tmp.open("w", encoding="utf-8") as f:
+            json.dump(snapshot, f, ensure_ascii=False, indent=2)
+        tmp.replace(p)
+    except Exception as e:
+        # health / dashboard 側の観測用なので、失敗しても collector 本体は止めない
+        logger.debug("rate_state write err: %s", e)
 
 @dataclass
 class Endpoint:
@@ -86,6 +127,10 @@ class Scheduler:
                     elapsed = (time.perf_counter() - t0) * 1000.0
                     dev_audit_emit(event="collector.endpoint.elapsed", level="DEBUG", feature="collector",
                                    payload={"exchange": ep.exchange, "endpoint": ep.endpoint, "elapsed_ms": round(elapsed, 3)})
+
+            # ループ 1 周ごとに、登録済み exchange について rate_state.json を更新する
+            _write_rate_state(self.rc, {ep.exchange for ep in self.table.values()})
+
             if not any_run:
                 time.sleep(tick_sleep)
 

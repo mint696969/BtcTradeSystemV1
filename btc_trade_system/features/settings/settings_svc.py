@@ -38,9 +38,27 @@ def _locks_dir() -> Path:
 def _feature_def_path(feature: str) -> Path:
     """
     機能内デフォルトのみ：
-      <repo>/btc_trade_system/features/<feature>/config/<feature>_def.yaml
+      通常:
+        <repo>/btc_trade_system/features/<feature>/config/<feature>_def.yaml
+      取引所登録(exchanges)だけは settings 配下に定義:
+        <repo>/btc_trade_system/features/settings/config/exchanges_def.yaml
     """
-    return REPO_ROOT / "btc_trade_system" / "features" / feature / "config" / f"{feature}_def.yaml"
+    # 特例: 取引所登録タブ（settings 配下）
+    if feature == "exchanges":
+        owner = "settings"
+        name = "exchanges"
+    else:
+        owner = feature
+        name = feature
+
+    return (
+        REPO_ROOT
+        / "btc_trade_system"
+        / "features"
+        / owner
+        / "config"
+        / f"{name}_def.yaml"
+    )
 
 def _feature_active_path(feature: str) -> Path:
     """current はリポ内 CONFIG_DIR に保存/読込する"""
@@ -232,8 +250,9 @@ def save_yaml(feature: str, new_merged: dict) -> None:
     _audit_try("write", feature, active_path, {"changed_keys": sorted(list(delta.keys()))})
     try:
         with _KeyLock(feature):
-            # ★ ヘッダー生成
-            rel_path = f"./btc_trade_system/config/{feature}.yaml"
+            # ★ ヘッダー生成（外部CONFIG: BTC_TS_CONFIG_DIR 配下 / config/ui 想定）
+            #   実ファイルは例として D:\\BtcTS_V1\\config\\ui\\{feature}.yaml
+            rel_path = f"./config/ui/{feature}.yaml"
             header = (
                 f"# path: {rel_path}\n"
                 f"# desc: {feature} の外部設定（def との差分のみ保存）\n"
