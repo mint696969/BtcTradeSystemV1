@@ -3,12 +3,9 @@
 
 from __future__ import annotations
 import time
-from pathlib import Path
-
 from .collector_scheduler import Scheduler
 from .collector_rate import RateController
 from btc_trade_system.features.settings import set_exchanges
-from btc_trade_system.features.settings.settings_svc import load_yaml
 
 # 各 endpoint runner（仮）
 from btc_trade_system.features.collector import bitflyer_public
@@ -21,13 +18,24 @@ def build_scheduler():
     # 1) 取引所ごとのレート設定を投入
     ex_cfg = set_exchanges.load_exchanges().get("exchanges", {})
     for ex, cfg in ex_cfg.items():
+        # 無効な取引所はスキップ
         if not cfg.get("enabled", False):
             continue
-        max_rps  = float(cfg.get("official_max_rps", 0.0))
-        safety   = 0.8 if ex == "bitflyer" else 0.9   # 現状の固定値
-        eff_rps  = max_rps * safety
-        burst    = int(max_rps * cfg.get("burst_base_sec", 1))
-        rc.set_exchange_policy(ex, max_rps=eff_rps, burst=burst)
+
+        # 既定の安全係数（bitflyer は 0.8、それ以外は 0.9）
+        default_safety = 0.8 if ex == "bitflyer" else 0.9
+
+        # exchanges.yaml ＋ health 側の safety 設定をマージした実効ポリシー
+        policy = set_exchanges.get_exchange_policy(ex, default_safety)
+        if not policy:
+            # 定義不足などの場合はいったんスキップ（将来 dev_audit で警告しても良い）
+            continue
+
+        rc.set_exchange_policy(
+            ex,
+            max_rps=policy["effective_max_rps"],
+            burst=int(policy["burst"]),
+        )
 
     # 2) endpoint の登録（最低限のデモ）
     sch.register_endpoint(

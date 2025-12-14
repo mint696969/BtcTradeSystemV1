@@ -14,6 +14,12 @@ from btc_trade_system.features.health.health_svc import read_health, read_health
 from btc_trade_system.features.health import health_order
 from btc_trade_system.features.settings import settings_svc  # 追加
 
+from btc_trade_system.features.collector.collector_control import (
+    get_state,
+    start_collector,
+    stop_collector,
+)
+
 # --- add: CSS (every render) & card html builder ------------------------------------
 def _inject_health_css():
     st.markdown("""
@@ -234,19 +240,106 @@ def _get_palette():
         pal[k] = {**defaults[k], **(pal.get(k) or {})}
     return pal
 
+def render_collector_control() -> None:
+    """
+    Collector 状態表示＋起動/停止ボタン
+    - ダッシュボードとは独立した collector_main.py を直接起動/kill
+    - 設定ファイルには触れない
+    """
+    state = get_state()
+
+    if state.state == "RUNNING":
+        badge_text = f"Collector RUNNING (pid={state.pid})"
+        badge_color = "#2e7d32"
+        button_label = "Collector 停止"
+        will_start = False
+    elif state.state == "STOPPED":
+        badge_text = "Collector STOPPED"
+        badge_color = "#616161"
+        button_label = "Collector 起動"
+        will_start = True
+    else:
+        badge_text = "Collector UNKNOWN"
+        badge_color = "#f9a825"
+        button_label = "Collector 起動"
+        will_start = True
+
+    # UI
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        st.markdown(
+            f"""
+            <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.9rem;">
+              <span style="display:inline-block;width:0.6rem;height:0.6rem;border-radius:999px;background:{badge_color};"></span>
+              <span>{badge_text}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # 連打防止・実行中ガード（このタブ内だけ）
+    _busy_key = "health.collector_toggle_busy"
+    is_busy = bool(st.session_state.get(_busy_key))
+
+    with col2:
+        if st.button(
+            button_label,
+            key="collector_toggle",
+            use_container_width=True,
+            disabled=is_busy,
+        ):
+            st.session_state[_busy_key] = True
+            try:
+                if will_start:
+                    with st.spinner("Collector を起動しています…"):
+                        start_collector()
+                    st.toast("Collector を起動しました。", icon="✅")
+                    W.emit("ui.health.collector.start", level="INFO", feature="health", payload={})
+                else:
+                    with st.spinner("Collector を停止しています…"):
+                        stop_collector()
+                    st.toast("Collector を停止しました。", icon="🛑")
+                    W.emit("ui.health.collector.stop", level="INFO", feature="health", payload={})
+
+            except Exception as e:
+                st.toast(f"Collector 操作に失敗: {e}", icon="⚠️")
+                W.emit(
+                    "ui.health.collector.toggle_error",
+                    level="WARN",
+                    feature="health",
+                    payload={"err": str(e), "will_start": bool(will_start), "state": getattr(state, "state", None)},
+                )
+            finally:
+                st.session_state[_busy_key] = False
+
+            # 操作直後に表示を確実に更新
+            _rerun = getattr(st, "experimental_rerun", None) or getattr(st, "rerun", None)
+            if _rerun:
+                _rerun()
+
 # ---------- UI（薄い入口＋カード＋タイムライン） ----------
 
 def render() -> None:
     st.subheader("ヘルス（収集健全性）")
     _inject_health_css()
 
-    # 自動更新とウィンドウ
-    c1, c2, _ = st.columns([1, 1, 6])
-    with c1:
-        auto = st.toggle("自動更新（このタブ）", value=False)
-    with c2:
-        # 1時間 / 24時間 / 10日 の 3択（デフォルトは 24時間）
-        win_label = st.selectbox("期間", ["1時間", "24時間", "10日"], index=1)
+    # 自動更新＋期間（左）と Collector 制御（右）を同じ行に配置
+    left, right = st.columns([3, 2])
+
+    with left:
+        c1, c2 = st.columns([1.5, 1.0])
+        with c1:
+            auto = st.toggle("自動更新（このタブ）", value=False)
+        with c2:
+            # 1時間 / 24時間 / 10日 の 3択（デフォルトは 24時間）
+            win_label = st.selectbox("期間", ["1時間", "24時間", "10日"], index=1)
+
+    with right:
+        # 既存の Collector 状態＋起動/停止ボタンを右側にまとめて表示
+        render_collector_control()
+
+    st.divider()
 
     window_s = {
         "1時間": 3600,          # 1h  =  1 * 3600

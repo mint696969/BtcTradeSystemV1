@@ -79,60 +79,118 @@ class Endpoint:
     runner: Runner
 
 class Scheduler:
-
-    def set_exchange_policy(self, exchange: str, *, max_rps: float, burst: int = 1) -> None:
-        """取引所レベルのレート（トークンバケット）を設定。"""
-        self.rc.set_exchange_policy(exchange, max_rps=max_rps, burst=burst)
-
     """RateController で許可されたタイミングで runner を実行する最小スケジューラ。"""
 
     def __init__(self, rc: Optional[RateController] = None):
         self.rc = rc or RateController()
         self.table: Dict[Tuple[str, str], Endpoint] = {}
+        self._keys: list[Tuple[str, str]] = []
 
-    def register_endpoint(self, exchange: str, endpoint: str, *, priority: int, target_interval: float, runner: Runner) -> None:
+    def set_exchange_policy(self, exchange: str, *, max_rps: float, burst: int = 1) -> None:
+        """取引所レベルのレート（トークンバケット）を設定。"""
+        self.rc.set_exchange_policy(exchange, max_rps=max_rps, burst=burst)
+
+    def register_endpoint(
+        self,
+        exchange: str,
+        endpoint: str,
+        *,
+        priority: int,
+        target_interval: float,
+        runner: Runner,
+    ) -> None:
         key = (exchange, endpoint)
         self.table[key] = Endpoint(exchange, endpoint, priority, target_interval, runner)
         self.rc.set_policy(exchange, endpoint, priority=priority, target_interval=target_interval)
         # 優先度の昇順（0=最優先）で巡回するようソート済みキーを持つ
         self._keys = sorted(self.table.keys(), key=lambda k: self.table[k].priority)
 
-    def run_forever(self, tick_sleep: float = 0.05) -> None:
-        """非常に単純なラウンド：全 endpoint を優先度順に巡回し、許可されたものだけ実行。"""
-        keys = getattr(self, "_keys", sorted(self.table.keys(), key=lambda k: self.table[k].priority))
+    def run_forever(self, tick_sleep: float = 0.05, *, rate_state_interval_s: float = 0.5) -> None:
+        """
+        全 endpoint を優先度順に巡回し、許可されたものだけ実行。
+
+        改善点:
+        - request_permit() が返す wait_ms を利用し、次の permit までの最短待ちを sleep する（無駄な busy loop を抑制）
+        - rate_state.json の書き出しは一定間隔に間引く（観測用I/Oを抑え、runner実行を優先）
+        """
+        last_rate_state_ts = 0.0
+
         while True:
+            keys = self._keys or sorted(self.table.keys(), key=lambda k: self.table[k].priority)
+
             any_run = False
+            min_wait_ms: Optional[float] = None
+
             for key in keys:
                 ep = self.table[key]
                 allowed, wait_ms = self.rc.request_permit(ep.exchange, ep.endpoint)
+
                 if not allowed:
+                    # 次にpermitが降りそうな最短待ちを集める（CPUを回しすぎない）
+                    if wait_ms is not None:
+                        if min_wait_ms is None:
+                            min_wait_ms = float(wait_ms)
+                        else:
+                            min_wait_ms = min(min_wait_ms, float(wait_ms))
                     continue
+
                 any_run = True
                 t0 = time.perf_counter()
                 try:
-                    dev_audit_emit(event="collector.endpoint.run", level="INFO", feature="collector",
-                                   payload={"exchange": ep.exchange, "endpoint": ep.endpoint})
+                    dev_audit_emit(
+                        event="collector.endpoint.run",
+                        level="INFO",
+                        feature="collector",
+                        payload={"exchange": ep.exchange, "endpoint": ep.endpoint},
+                    )
                     ep.runner()
                     self.rc.on_success(ep.exchange)
+
                 except RateLimited as rl:
                     self.rc.on_rate_limited(ep.exchange, retry_after_sec=rl.retry_after_sec)
-                    dev_audit_emit(event="collector.rate.limit", level="WARN", feature="collector",
-                                   payload={"exchange": ep.exchange, "endpoint": ep.endpoint, "retry_after_sec": rl.retry_after_sec})
+                    dev_audit_emit(
+                        event="collector.rate.limit",
+                        level="WARN",
+                        feature="collector",
+                        payload={
+                            "exchange": ep.exchange,
+                            "endpoint": ep.endpoint,
+                            "retry_after_sec": rl.retry_after_sec,
+                        },
+                    )
+
                 except Exception as e:
-                    # ランナー内部の例外（ネット障害など）：監査しつつ継続
-                    dev_audit_emit(event="collector.endpoint.error", level="ERROR", feature="collector",
-                                   payload={"exchange": ep.exchange, "endpoint": ep.endpoint, "error": str(e)})
+                    dev_audit_emit(
+                        event="collector.endpoint.error",
+                        level="ERROR",
+                        feature="collector",
+                        payload={"exchange": ep.exchange, "endpoint": ep.endpoint, "error": str(e)},
+                    )
                     logger.exception("runner error on %s/%s", ep.exchange, ep.endpoint)
+
                 finally:
                     elapsed = (time.perf_counter() - t0) * 1000.0
-                    dev_audit_emit(event="collector.endpoint.elapsed", level="DEBUG", feature="collector",
-                                   payload={"exchange": ep.exchange, "endpoint": ep.endpoint, "elapsed_ms": round(elapsed, 3)})
+                    dev_audit_emit(
+                        event="collector.endpoint.elapsed",
+                        level="DEBUG",
+                        feature="collector",
+                        payload={"exchange": ep.exchange, "endpoint": ep.endpoint, "elapsed_ms": round(elapsed, 3)},
+                    )
 
-            # ループ 1 周ごとに、登録済み exchange について rate_state.json を更新する
-            _write_rate_state(self.rc, {ep.exchange for ep in self.table.values()})
+            # rate_state.json は観測用。一定間隔で十分なので間引く（I/O削減）
+            now = time.monotonic()
+            if (now - last_rate_state_ts) >= float(rate_state_interval_s):
+                _write_rate_state(self.rc, {ep.exchange for ep in self.table.values()})
+                last_rate_state_ts = now
 
+            # 待機戦略：
+            # - 何も走らなかった場合は tick_sleep（最低限のスリープ）
+            # - 何か走った場合でも、次のpermitまでの最短待ちが分かるならそれだけ待つ（無駄なループを抑制）
             if not any_run:
                 time.sleep(tick_sleep)
+            else:
+                if min_wait_ms is not None and min_wait_ms > 0:
+                    time.sleep(min_wait_ms / 1000.0)
 
 # 簡易デモ（ダミー runner）
 if __name__ == "__main__":
