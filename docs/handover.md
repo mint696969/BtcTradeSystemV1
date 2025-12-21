@@ -36,220 +36,208 @@
 
 ---
 
-作業引き継ぎ書（最新）
-■ 1. 現在のロードマップ（収集器まわり）
+btcts_next 移植作業 引き継ぎ指示書（2025-12-21 / JST）
+0. 今回の結論（直近の確認結果）
 
-進行順として確定しているロードマップ：
+コマンド出力より build_scheduler() は動作し Scheduler インスタンス生成まで正常。
 
-RateController（APIレート制御）設計
+type Scheduler
 
-取引所登録（exchanges）UI／設定体系の統一
+ただし、sch.endpoints/_endpoints/items/_items/_tasks/tasks などの **リスト属性は見つからない（None）**ため、Scheduler 実装は「辞書／内部構造／プロパティ名」が別名の可能性が高い。
 
-RateController 設計の collector_scheduler への本組み込み
+つまり現段階は「Scheduler が作れた」が「何本 endpoints が登録されているかを確実に観測する仕組みは未整備」。
 
-Health（健全性）タブの正常化・UI完成
+1. 現時点の完了範囲（btcts_next 側：現物がある）
 
-Collector の起動管理（外部プロセス）統合
+キャンバス上の最新状態（= 次チャットで参照すべき“真”）は以下。
 
-タイムライン履歴（1h/24h/10d）設計／実装
+btcts_next（新構成）
 
-Collector 本番実装 → Health/status.json 更新制御
+btcts_next/src/btcts/collector/main.py
 
-最終テスト（実APIキー投入前の全体テスト）
+build_scheduler() 実装済み
 
-■ 2. 本日までに完了したタスク
-✔ 2-1. 設定体系の統一
+exchanges/endpoints/monitoring/collector を btcts.settings.load_yaml() で読み
 
-D:\BtcTS_V1\config\ui を UIと運用設定の唯一のディレクトリ として明確化
+RatePolicy を構成して sch.set_policy() → endpoints を sch.add(Endpoint(...))
 
-exchanges.yaml / health.yaml / monitoring.yaml など UI 設定をまとめる構成へ統一
+bitFlyer の orderbook / trades runner を最低限実装（保存は jsonl）
 
-ENV の BTC_TS_CONFIG_DIR を D:\BtcTS_V1\config\ui に正式決定
+重大な既知バグあり：return sch の後に audit.emit("collector.scheduler.built"... ) が残っており 到達不能コード（ログが出ない）
 
-settings_svc の読み込み参照先も全て修正済み
+btcts_next/src/btcts/collector/rate.py
 
-✔ 2-2. 取引所登録（exchanges）仕様の構築
+RatePolicy / RateState / RateController 実装済み（429/Retry-After 対応あり）
 
-exchanges_def.yaml を正しいパスに配置
+btcts_next/src/btcts/core/env.py / paths.py / io.py / audit.py / __init__.py
 
-exchanges.yaml の初期構造を整備
+ENV 正準名（BTC_TS_*）確定、パス解決・原子的I/O・監査 emit あり
 
-set_exchanges.py の get_exchange_policy() の本番ロジック実装
+btcts_next/src/btcts/settings/svc.py / __init__.py
 
-safety factor（bitFlyer=0.8、他=0.9）反映済み
+schema + current(diff only) の設計で読み書き実装済み（差分ゼロなら current 削除）
 
-→ policy(bitflyer, 0.8) が正しく
+btcts_next（UI）
 
-official_max_rps:100, effective_max_rps:80
-burst_base_sec:2.0 → burst=160
+btcts_next/src/btcts/ui/app.py
 
+Collector/Health の2タブ構成
 
-を返していることを確認済み。
+btcts_next/src/btcts/ui/pages/collector.py
 
-✔ 2-3. RateController の動作テスト（dummy）
+start/stop/status を btcts.collector.control に遅延 import して操作
 
-バースト動作テストで binance/bybit の制御挙動を確認済み
+status.json のパスと ENV 不整合を “原因が分かる形” で表示
 
-wait_ms の正常発生を確認済み
+V1 側（参照・接続点として変更済み）
 
-okx（無効扱い）の扱いも仕様通り
+btc_trade_system/features/dash/ui_health.py
 
-✔ 2-4. Health タブ全体の再構築
+btcts_next を遅延 import して Collector 制御を Health タブ右側に表示する実装あり
 
-カード正常表示（health level / rate border）
+btc_trade_system/features/health/health_svc.py
 
-タイムライン（1h/24h/10day）の切り替え正常
+rate セクション由来の WARN/CRIT アイテム生成、履歴 timeline 読み込み等が追加済み
 
-プレースホルダ対応済み
+btc_trade_system/features/audit_dev/writer.py
 
-パレット（card_fill / card_border / bar_fill）統合
+監査出力の基盤（既存）＋（任意の）軽量レート制御の骨格が入っている
 
-timeline の間引きロジック・描画成功
+btc_trade_system/features/settings/settings_svc.py
 
-header アラート（normal/warn/crit）も正常
+def→current 合成、差分保存、差分ゼロなら何もしない 等の仕様が入っている
 
-✔ 2-5. Collector 起動制御の独立化
+2. 未完了（＝次工程で必ずやること）
+A) Scheduler の観測性が不足
 
-collector_control.py の
+今の検証は「Scheduler が作れた」止まり。
+次は 「登録された endpoints 数・キー・優先度・interval」を確実に見える化する必要がある。
 
-RUNNING/STＯPPED 判定
+B) btcts_next collector/main.py に 到達不能コード
 
-pid ファイル管理
+build_scheduler() の最後に return sch があり、その後の audit.emit(...) が死んでいる。
+→ endpoints 登録数などのログが取れない。
 
-taskkill /PID 成功確認
-をすべてクリア
+C) btcts.collector.control の実装状態が不明
 
-ui_health へ Collector 起動停止ボタンを統合
+UI は from btcts.collector.control import start, status, stop を前提にしている。
+未実装/未移植なら、UI は import で落ちる（今後の不具合源）。
 
-ダッシュボード independent（閉じても collector は動く）
+D) 設定 schema ファイル（btcts_next/config/schema/*_def.yaml）の整備が未確認
 
-✔ 2-6. Collector の dummy 実行成功
-python -m btc_trade_system.features.collector.collector_main
+settings/svc.py は schema を正としているので、schema が無いと全体が成立しない。
+少なくとも exchanges_def / endpoints_def / monitoring_def / collector_def / health_def / dash_def / tabs_def が必要。
 
+3. 次チャットでやる作業ロードマップ（手順固定）
+Phase 1: まず「Scheduler の中身が見える」状態にする（最優先）
 
-正常起動
-→ scheduler がなくても起動できる状態
+目的：build_scheduler が“何を登録したか”を確実に出力できるようにする。
 
-■ 3. 現在の状態・進捗の正確な把握
-項目	状態
-Health UI	ほぼ完成（カード・タイムライン・collector制御 完了）
-RateController（核）	設計・dummyテスト完了 / 本番統合前
-exchanges 設定	読み込み・policy計算まで完成
-collector_main 起動管理	完全動作
-scheduler 本体	まだ本番実装前（ここが次の核心タスク）
-status.json の本番更新	scheduler 統合後に仕上げ
-実APIキーの投入前段階	Ready（構造固まった）
-■ 4. 次回タスク（優先順）
+btcts_next/src/btcts/collector/main.py
 
-次に着手すべき順はこれです。
+return sch を関数末尾に移動し、audit.emit("collector.scheduler.built"... ) を return 前に実行する。
 
-🟦 1) collector_scheduler への RateController の本組み込み
+その payload に以下を入れる：
 
-RateController.check(exchange, endpoint) を scheduler の各 call 前に統合
+endpoints_added
 
-soft/hard の状態を health_svc へ反映
+endpoints の一覧（上位20件でも良い）：[(ex, endpoint, prio, target_interval)]
 
-429 のハード検知 → rate_hard → status.json
+endpoints_cfg のフォーマット判定（items vs map）
 
-soft 時 → warn → status.json
+さらに Scheduler オブジェクトの内部構造に依存しない形で、登録時にローカル配列へ積む（これが安全）。
 
-collector 健全性（health）の最重要ロジック
+その後、PowerShell で再チェック
 
-➡ これが収集器の「本体の頭脳」になる。
+& $py -c "from btcts.collector.main import build_scheduler; sch=build_scheduler(); print('ok')"
 
-🟦 2) scheduler の構造最適化とログ入出力確立
+logs に audit が出ること or 例外なく動くこと確認。
 
-公式エンドポイント（board, ticker, execution の各 fetch）に対し
-RateController → fetch → status 更新 → timeline 更新
+Phase 2: btcts.collector.control を確定させる（UIが落ちる根本原因潰し）
 
-処理単位を固定（1sごと / endpointごと）
+目的：UI（btcts_next 側 / V1 側 ui_health 側）が同じ start/stop/status を呼べること。
 
-🟦 3) collector 起動時のバックグラウンド化
+btcts_next/src/btcts/collector/control.py（無ければ作る）で提供する I/F を固定：
 
-現在：外部ウィンドウが開く
-対応：
+start() -> CollectorStatus
 
-subprocess.CREATE_NO_WINDOW（Windows）
+stop() -> CollectorStatus
 
-または DETACHED_PROCESS で非表示起動
+status() -> CollectorStatus
 
-UI 側には pid だけ出す
+実装方針は2択（どちらかに統一）：
 
-🟦 4) 健全性タブの UI 調整（要望対応）
+A案（推奨・軽い）：status.json の状態＋pidfile などで「RUNNING/STOPPED」を判断（プロセス制御は後回し）
 
-Collector ボタンを「自動更新（このタブ）」と同じ行右側に配置
+B案（運用想定）：subprocess で collector を別プロセス起動し pid を管理
 
-行折り返し回避
+※ 現時点は UI を成立させるために A案で十分。B案は後で。
 
-横一列でレイアウト調整
-（コードは既に90%完了。細部調整だけ。）
+Phase 3: settings schema の最低限整備（btcts_next を“単独で動く”状態へ）
 
-🟦 5) 本番API投入前の preflight validation
+目的：settings/svc の設計に沿って、最低限の schema を置く。
 
-各取引所の official_max_rps のデフォルト値レビュー
+btcts_next/config/schema/ に以下を配置（存在確認→無ければ作成）
 
-未入力がある場合の表示チェック
+exchanges_def.yaml
 
-secret/exchange.ini の読取り状態
+endpoints_def.yaml
 
-collector_main → scheduler → health → UI の統合テスト
+monitoring_def.yaml
 
-■ 5. 気が付いた点（重要）
-● A）設定体系の統一が非常にうまく行っている
+collector_def.yaml
 
-BTC_TS_CONFIG_DIR = D:\BtcTS_V1\config\ui
-で collector / health / settings / monitoring が全て同じ root を参照できる状態。
+health_def.yaml
 
-これは
-「3台運用（開発機 / メイン機 / NAS）」
-の構成において
-設定ファイルの同期だけで全デバイスの挙動を統一できる
-という設計的に理想状態。
+dash_def.yaml
 
-● B）健康状態のレート境界も設計が整った
+tabs_def.yaml
 
-WARN＝soft_limit
-CRIT＝hard_limit（429またはそれに準ずる状態）
-→ health_svc 側とカード表示の整合性が完璧。
+中身は「defaults を持つ」ことだけ守れば良い（最初は最小でOK）
 
-● C）collector_control（UI）は完全に独立化成功
+svc は {defaults: {...}} or {default: {...}} を読める
 
-UI 側で collector の起動／停止
+Phase 4: 実動確認（collector → status.json → health が更新される）
 
-ダッシュボードを閉じても collector は落ちない
+目的：最短の運用ループが成立すること。
 
-メイン機／開発機の使い分けに必須の仕組みが完成
+collector を起動（control.start でも、直接 main でも良い）
 
-■ 6. 残る問題点と注意点
-⚠ 1. scheduler がまだ空で collector は「動いているだけ」
+BTC_TS_DATA_DIR\collector\status.json が更新される
 
-現在は collector_main が起動しているだけで
-本番の収集サイクルはまだ動いていない
-（status.json は dummy または空のまま）
+V1 側 Health タブのカードが更新される（read_health が読める）
 
-次回はここを埋めるのが最重要。
+429 を食らったら rate セクション（hard/soft）が health に反映される
 
-⚠ 2. RateController（本体）は dummy テストのみ
+4. 既知の危険ポイント（ここ踏むと迷子・破壊する）
 
-まだ実 API のレスポンスや429挙動と結びついていない。
+Scheduler の内部属性名（endpoints/items/tasks 等）に 依存して観測しようとしない
+→ 実装差で即死するので、登録時にローカル配列で追跡してログへ出すのが正解。
 
-⚠ 3. health_timeline の書き込みは最小限
+btcts_next と btc_trade_system を混ぜて import 地獄にしない
+→ V1 側から next を呼ぶのは ui_health.py のように 遅延 import で限定する。
 
-本番では収集のたびに timeline に追記する必要がある。
-→ scheduler で要実装。
+パスは BTC_TS_DATA_DIR / BTC_TS_CONFIG_DIR / BTC_TS_LOGS_DIR を“正”として統一
+→ どちらの世界でもこの ENV で揃える。フォールバックは最後の手段。
 
-⚠ 4. ダッシュボードと collector が独立したことで
+5. 次チャット開始時に貼ると早い「状況確認コマンド」
+5.1 build_scheduler の観測（最低限）
+& $py -c "from btcts.collector.main import build_scheduler; sch=build_scheduler(); print('built', type(sch).__name__)"
 
-「どちらが status.json を書くのか」が明確に collector 側になった。
-→ UI 側では書かない設計でOK。
+5.2 status.json の更新確認
+Get-Content "$env:BTC_TS_DATA_DIR\collector\status.json" -ErrorAction SilentlyContinue
 
-■ 7. 最後に
+5.3 logs の監査確認（btcts_next）
+Get-Content "$env:BTC_TS_LOGS_DIR\audit.jsonl" -Tail 50 -ErrorAction SilentlyContinue
 
-いまの状態は 「本番収集器を組み込み始められる直前」 です。
-ここまでの土台作りは完璧と言えます。
+6. 次に着手すべき「具体タスク（短期ToDo）」
 
-次は本格的な
+btcts_next/src/btcts/collector/main.py の到達不能コード修正（return の位置、ログ出し）
 
-collector_scheduler の実装 → collector の本稼働化
+Scheduler 登録一覧を build_scheduler 内でローカル追跡し、audit に出す
 
-これが収集器の中核で、いよいよ“実働系”の段階に入ります。
+btcts_next/src/btcts/collector/control.py の有無確認 → 無ければ作成（A案でOK）
+
+btcts_next/config/schema の存在確認 → 無ければ最小で作成
+
+UI（btcts_next）で Collector タブが落ちないことを確認

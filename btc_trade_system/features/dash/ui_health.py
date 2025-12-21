@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import time
+import os
+import sys
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import streamlit as st
@@ -14,11 +17,39 @@ from btc_trade_system.features.health.health_svc import read_health, read_health
 from btc_trade_system.features.health import health_order
 from btc_trade_system.features.settings import settings_svc  # 追加
 
-from btc_trade_system.features.collector.collector_control import (
-    get_state,
-    start_collector,
-    stop_collector,
-)
+# --- btcts_next(新構成) への接続（遅延import） ----------------------------
+
+def _btcts_src_dir() -> Path:
+    # repo_root/btcts_next/src を想定
+    # ui_health.py -> .../btc_trade_system/features/dash/ui_health.py
+    # repo_root は 4つ上: dash -> features -> btc_trade_system -> repo_root
+    here = Path(__file__).resolve()
+    repo = here.parents[3]
+    return repo / "btcts_next" / "src"
+
+def _import_btcts_control():
+    """
+    btcts.collector.control を返す。
+    import 失敗時は btcts_next/src を sys.path に追加して再試行する。
+    """
+    try:
+        from btcts.collector import control as C  # type: ignore
+        return C
+    except Exception:
+        p = _btcts_src_dir()
+        if p.exists():
+            sp = str(p)
+            if sp not in sys.path:
+                sys.path.insert(0, sp)
+        from btcts.collector import control as C  # type: ignore
+        return C
+
+def _env_dirs_text() -> str:
+    # 実運用で迷子になりやすいので、Healthタブに常に表示する
+    data = os.environ.get("BTC_TS_DATA_DIR", "")
+    logs = os.environ.get("BTC_TS_LOGS_DIR", "")
+    cfg  = os.environ.get("BTC_TS_CONFIG_DIR", "")
+    return f"DATA_DIR={data or '-'} / LOGS_DIR={logs or '-'} / CONFIG_DIR={cfg or '-'}"
 
 # --- add: CSS (every render) & card html builder ------------------------------------
 def _inject_health_css():
@@ -242,29 +273,48 @@ def _get_palette():
 
 def render_collector_control() -> None:
     """
-    Collector 状態表示＋起動/停止ボタン
-    - ダッシュボードとは独立した collector_main.py を直接起動/kill
-    - 設定ファイルには触れない
+    Collector 状態表示＋起動/停止ボタン（btcts_next へ接続）
+    - btcts.collector.control を使用
+    - 出力先(DATA_DIR等)も併記して「今どこを見ているか」を固定表示
     """
-    state = get_state()
+    # まずENV表示（迷子防止）
+    st.caption(_env_dirs_text())
 
-    if state.state == "RUNNING":
-        badge_text = f"Collector RUNNING (pid={state.pid})"
+    # btcts_next control を取得
+    try:
+        C = _import_btcts_control()
+    except Exception as e:
+        st.warning(f"btcts_next(control) の import に失敗: {e}")
+        W.emit("ui.health.collector.import_fail", level="WARN", feature="health", payload={"err": str(e)})
+        return
+
+    # 状態取得（btcts.collector.control.status() を想定）
+    try:
+        stt = C.status()
+        st_mode = getattr(stt, "mode", None) or "UNKNOWN"
+        st_msg  = getattr(stt, "message", "") or ""
+    except Exception as e:
+        st.warning(f"collector status 読み取り失敗: {e}")
+        W.emit("ui.health.collector.status_fail", level="WARN", feature="health", payload={"err": str(e)})
+        st_mode = "UNKNOWN"
+        st_msg = str(e)
+
+    if str(st_mode).upper() == "RUNNING":
+        badge_text = f"Collector RUNNING ({st_msg})"
         badge_color = "#2e7d32"
         button_label = "Collector 停止"
         will_start = False
-    elif state.state == "STOPPED":
+    elif str(st_mode).upper() == "STOPPED":
         badge_text = "Collector STOPPED"
         badge_color = "#616161"
         button_label = "Collector 起動"
         will_start = True
     else:
-        badge_text = "Collector UNKNOWN"
+        badge_text = f"Collector {st_mode}"
         badge_color = "#f9a825"
         button_label = "Collector 起動"
         will_start = True
 
-    # UI
     col1, col2 = st.columns([3, 1])
 
     with col1:
@@ -278,7 +328,6 @@ def render_collector_control() -> None:
             unsafe_allow_html=True,
         )
 
-    # 連打防止・実行中ガード（このタブ内だけ）
     _busy_key = "health.collector_toggle_busy"
     is_busy = bool(st.session_state.get(_busy_key))
 
@@ -293,14 +342,14 @@ def render_collector_control() -> None:
             try:
                 if will_start:
                     with st.spinner("Collector を起動しています…"):
-                        start_collector()
+                        st2 = C.start()
                     st.toast("Collector を起動しました。", icon="✅")
-                    W.emit("ui.health.collector.start", level="INFO", feature="health", payload={})
+                    W.emit("ui.health.collector.start", level="INFO", feature="health", payload={"result": repr(st2)})
                 else:
                     with st.spinner("Collector を停止しています…"):
-                        stop_collector()
+                        st2 = C.stop()
                     st.toast("Collector を停止しました。", icon="🛑")
-                    W.emit("ui.health.collector.stop", level="INFO", feature="health", payload={})
+                    W.emit("ui.health.collector.stop", level="INFO", feature="health", payload={"result": repr(st2)})
 
             except Exception as e:
                 st.toast(f"Collector 操作に失敗: {e}", icon="⚠️")
@@ -308,12 +357,11 @@ def render_collector_control() -> None:
                     "ui.health.collector.toggle_error",
                     level="WARN",
                     feature="health",
-                    payload={"err": str(e), "will_start": bool(will_start), "state": getattr(state, "state", None)},
+                    payload={"err": str(e), "will_start": bool(will_start), "mode": str(st_mode)},
                 )
             finally:
                 st.session_state[_busy_key] = False
 
-            # 操作直後に表示を確実に更新
             _rerun = getattr(st, "experimental_rerun", None) or getattr(st, "rerun", None)
             if _rerun:
                 _rerun()

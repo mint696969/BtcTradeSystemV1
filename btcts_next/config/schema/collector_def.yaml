@@ -1,0 +1,19 @@
+# path: ./btc_trade_system/features/collector/config/collector_def.yaml
+# desc: Collector 既定設定（UI保存値とマージ前提）
+
+status:
+  path: "${BTC_TS_DATA_DIR}/collector/status.json"
+  update_interval: 2.0
+  stale_warn_sec: 3
+  stale_crit_sec: 10
+
+# UI 側が参照・保存する既定（保存時は settings_svc が未知キーを破棄）
+enabled_exchanges:
+  - bitflyer
+
+# feeds は endpoints_def.yaml を参照して各 endpoint の on/off を与える層
+# ここは「既定の有効/無効」のみを持ち、詳細（URL等）は endpoints_def 側に置く
+feeds:
+  bitflyer:
+    orderbook: { enabled: true, priority: 0, target_interval: 0.20 }
+    trades: { enabled: true, priority: 1, target_interval: 0.50 }

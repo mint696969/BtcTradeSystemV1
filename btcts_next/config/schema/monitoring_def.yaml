@@ -1,0 +1,31 @@
+# path: ./btc_trade_system/features/health/config/monitoring_def.yaml
+# desc: 監視しきい値とプリセット（UI設定タブの既定）
+
+thresholds:
+  age_sec: { warn: 20, crit: 30 }
+  latency_ms: { warn: 400, crit: 1200 }
+  gap_rate: { warn: 0.05, crit: 0.15 }
+  window_min: 5
+  require_all_ok: true
+
+presets:
+  default:
+    thresholds:
+      age_sec: { warn: 20, crit: 30 }
+      latency_ms: { warn: 400, crit: 1200 }
+      gap_rate: { warn: 0.05, crit: 0.15 }
+      window_min: 5
+      require_all_ok: true
+
+slo:
+  ticker:
+    max_stale_s: 5
+  orderbook:
+    max_stale_s: 6
+  trades:
+    max_stale_s: 5
+
+palette:
+  card_border: { ok: "#10b981", warn: "#f59e0b", crit: "#ef4444" }
+  card_fill: { ok: "#ecfdf5", warn: "#fffbeb", crit: "#fef2f2" }
+  bar_fill: { ok: "#d1fae5", warn: "#fef3c7", crit: "#fee2e2" }

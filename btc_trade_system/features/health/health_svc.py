@@ -274,7 +274,8 @@ def read_health_timeline(window_sec: int) -> Dict[str, List[Dict[str, Any]]]:
 
         rate_state = _build_rate_state_from_row(row, enable_rate_soft_warn)
 
-        for it in row.get("items", []):
+        row_items = row.get("items") or []
+        for it in row_items:
             if not isinstance(it, dict):
                 continue
             ex = str(it.get("exchange"))
@@ -290,9 +291,9 @@ def read_health_timeline(window_sec: int) -> Dict[str, List[Dict[str, Any]]]:
                 "ts": ts,
                 "exchange": ex,
                 "topic": topic,
-                "level": level,               # "OK" | "WARN" | "CRIT"
+                "level": level,                    # "OK" | "WARN" | "CRIT"
                 "age_sec": age,
-                "rate": rate_state.get(ex, "none"),  # "none" | "soft" | "hard"
+                "rate": rate_state.get(ex, "none") # "none" | "soft" | "hard"
             }
             timeline.setdefault(key, []).append(entry)
 
@@ -309,12 +310,13 @@ def read_health() -> HealthSummary:
     if not p.exists():
         return HealthSummary(updated_at=None, items=[], counts={"OK": 0, "WARN": 0, "CRIT": 0})
 
-    raw = json.loads(p.read_text(encoding="utf-8"))
+    raw = json.loads(p.read_text(encoding="utf-8-sig"))
     warn, crit, order, enable_rate_soft_warn = _load_thresholds()
 
     items: List[ItemView] = []
     # 1) collector の items セクション（従来どおり age_sec ベースの評価）
-    for it in raw.get("items", []):
+    raw_items = raw.get("items") or []
+    for it in raw_items:
         age = float(it.get("age_sec", 0.0))
         items.append(ItemView(
             exchange=str(it.get("exchange")),

@@ -1,0 +1,16 @@
+# path: ./btc_trade_system/features/collector/config/exchanges_def.yaml
+# desc: 取引所登録の既定（辞書型）。current(exchanges.yaml)へ後勝ちマージ。
+
+exchanges:
+  bitflyer:
+    enabled: true
+    label: "bitFlyer"
+    rate:
+      max_rps: 8
+      burst: 2
+
+secrets:
+  # secrets.ini 等のキー名定義のみ（値は別管理）
+  bitflyer:
+    api_key: ""
+    api_secret: ""
