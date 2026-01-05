@@ -16,4 +16,3 @@ class TestToSeries:
         result = idx.to_series(index=[0, 1])
         assert expected.dtype == idx.dtype
         tm.assert_series_equal(result, expected)
-

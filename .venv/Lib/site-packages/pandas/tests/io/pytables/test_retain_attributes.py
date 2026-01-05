@@ -90,4 +90,3 @@ def test_retain_index_attributes2(tmp_path, setup_path):
         df2.to_hdf(path, key="data", append=True)
 
     assert read_hdf(path, "data").index.name is None
-

@@ -412,4 +412,3 @@ def test_index_ops_defer_to_unknown_subclasses(other):
     result = other + a
     assert isinstance(result, MyIndex)
     assert a._calls == 1
-

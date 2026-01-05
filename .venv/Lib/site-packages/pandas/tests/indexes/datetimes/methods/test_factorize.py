@@ -123,4 +123,3 @@ class TestDatetimeIndexFactorize:
         res_codes, res_uniques = idx.as_unit("s").to_series().factorize(sort=sort)
         tm.assert_numpy_array_equal(res_codes, exp_codes)
         tm.assert_index_equal(res_uniques, exp_uniques.as_unit("s"))
-

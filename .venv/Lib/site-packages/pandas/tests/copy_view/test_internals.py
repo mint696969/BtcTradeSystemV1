@@ -152,4 +152,3 @@ def test_exponential_backoff():
 
     # Reduce since there are less than 500 objects alive
     assert df._mgr.blocks[0].refs.clear_counter == 500
-

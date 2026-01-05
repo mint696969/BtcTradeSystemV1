@@ -56,4 +56,3 @@ def test_federal_holiday_inconsistent_returntype():
     # ranges generate expected results as per GH49075 submission
     tm.assert_index_equal(results_2018, expected_results)
     tm.assert_index_equal(results_2019, expected_results)
-

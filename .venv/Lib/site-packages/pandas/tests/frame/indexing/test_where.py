@@ -1102,4 +1102,3 @@ def test_where_inplace_no_other():
     df.where(cond, inplace=True)
     expected = DataFrame({"a": [1, np.nan], "b": [np.nan, "y"]})
     tm.assert_frame_equal(df, expected)
-

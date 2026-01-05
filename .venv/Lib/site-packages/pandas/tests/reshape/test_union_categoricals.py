@@ -367,4 +367,3 @@ class TestUnionCategoricals:
         msg = "all components to combine must be Categorical"
         with pytest.raises(TypeError, match=msg):
             union_categoricals([c1, ["a", "b", "c"]])
-

@@ -2682,4 +2682,3 @@ def test_stack_preserves_na(dtype, na_value, test_multiindex):
         )
     expected = Series(1, index=expected_index)
     tm.assert_series_equal(result, expected)
-

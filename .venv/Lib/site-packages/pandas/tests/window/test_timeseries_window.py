@@ -713,4 +713,3 @@ def test_arrow_datetime_axis():
     )
     result = expected.rolling("1D").sum()
     tm.assert_series_equal(result, expected)
-

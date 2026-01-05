@@ -233,4 +233,3 @@ class TestMultiIndexBasic:
             [("a", "b", "c"), (np.nan, np.nan, np.nan), ("d", "", "")]
         )
         tm.assert_index_equal(result, expected)
-

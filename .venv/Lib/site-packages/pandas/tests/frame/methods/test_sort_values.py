@@ -938,4 +938,3 @@ class TestSortValuesLevelAsStr:
         expected = df.loc[df.index[indexer]]
         result = df.sort_values(by="D", ascending=ascending)
         tm.assert_frame_equal(result, expected)
-

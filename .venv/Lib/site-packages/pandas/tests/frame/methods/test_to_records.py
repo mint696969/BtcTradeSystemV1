@@ -521,4 +521,3 @@ class TestDataFrameToRecords:
 
         # both converted to UTC, so they are equal
         tm.assert_numpy_array_equal(result, expected)
-

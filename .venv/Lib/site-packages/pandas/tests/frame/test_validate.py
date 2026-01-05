@@ -39,4 +39,3 @@ class TestDataFrameValidate:
 
         with pytest.raises(ValueError, match=msg):
             getattr(dataframe, func)(**kwargs)
-

@@ -104,4 +104,3 @@ def test_markdown_pos_args_deprecatation():
     with tm.assert_produces_warning(FutureWarning, match=msg):
         buffer = BytesIO()
         df.to_markdown(buffer, "grid")
-

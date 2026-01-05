@@ -12,4 +12,3 @@ def test_pytables_raises():
     with pytest.raises(ImportError, match="tables"):
         with tm.ensure_clean("foo.h5") as path:
             df.to_hdf(path, key="df")
-

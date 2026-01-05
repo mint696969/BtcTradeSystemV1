@@ -694,4 +694,3 @@ def test_categorical_transform():
     result = gb.transform(lambda x: x.sum())
     expected = gb.transform("sum")
     tm.assert_frame_equal(result, expected)
-

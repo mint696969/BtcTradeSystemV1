@@ -317,4 +317,3 @@ def test_assert_multi_index_dtype_check_categorical(check_categorical):
             tm.assert_index_equal(idx1, idx2, check_categorical=check_categorical)
     else:
         tm.assert_index_equal(idx1, idx2, check_categorical=check_categorical)
-

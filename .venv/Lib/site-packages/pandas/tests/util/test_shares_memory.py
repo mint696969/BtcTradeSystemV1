@@ -30,4 +30,3 @@ def test_shares_memory_string():
 
     obj = pd.array(["a", "b"], dtype=pd.ArrowDtype(pa.string()))
     assert tm.shares_memory(obj, obj)
-

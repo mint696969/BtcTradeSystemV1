@@ -44,4 +44,3 @@ class TestLexsortDepth:
             levels=levels, codes=[[0, 0, 1, 0, 1, 1], [0, 1, 0, 2, 2, 1]], sortorder=0
         )
         assert index._lexsort_depth == 0
-

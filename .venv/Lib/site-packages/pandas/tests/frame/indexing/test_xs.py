@@ -442,4 +442,3 @@ class TestXSWithMultiIndex:
         df = DataFrame([[1, 2, 3], [4, 5, 6]], columns=mi)
         with pytest.raises(KeyError, match="y"):
             df.xs(("x", "y"), drop_level=False, axis=1)
-

@@ -31,4 +31,3 @@ def test_concat_with_all_na():
     ).set_index("key")
     tm.assert_frame_equal(result, expected)
     assert result["col"].array.attr == "test"
-

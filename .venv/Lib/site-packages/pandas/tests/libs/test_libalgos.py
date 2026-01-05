@@ -160,4 +160,3 @@ class TestInfinity:
         assert not NegInf <= np.nan
         assert not NegInf == np.nan
         assert NegInf != np.nan
-

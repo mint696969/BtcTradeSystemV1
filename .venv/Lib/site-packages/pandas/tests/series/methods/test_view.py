@@ -59,4 +59,3 @@ class TestView:
         res = obj.view(second)
         assert res.dtype == second
         tm.assert_numpy_array_equal(np.asarray(obj.view("i8")), dti.asi8)
-

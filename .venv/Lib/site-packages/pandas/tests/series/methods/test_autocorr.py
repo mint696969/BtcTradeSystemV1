@@ -28,4 +28,3 @@ class TestAutoCorr:
             assert np.isnan(corr2)
         else:
             assert corr1 == corr2
-

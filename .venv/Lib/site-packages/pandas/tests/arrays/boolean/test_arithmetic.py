@@ -132,4 +132,3 @@ def test_error_invalid_values(data, all_arithmetic_operators):
         )
         with pytest.raises(TypeError, match=msg):
             ops(pd.Series("foo", index=s.index))
-

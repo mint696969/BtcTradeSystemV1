@@ -482,4 +482,3 @@ class TestDataFrameAlign:
         tm.assert_series_equal(result2, ser)
         assert df is not result
         assert ser is not result2
-

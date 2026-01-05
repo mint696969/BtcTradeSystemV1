@@ -47,4 +47,3 @@ def test_add_prefix_suffix_invalid_axis(float_frame):
 
     with pytest.raises(ValueError, match="No axis named 2 for object type DataFrame"):
         float_frame.add_suffix("foo#", axis=2)
-

@@ -109,4 +109,3 @@ def test_rolling_aggregation_with_unused_elements(rolling_aggregation):
     )
     assert np.isfinite(expected.values).all(), "Not all expected values are finite"
     tm.assert_equal(expected, result)
-

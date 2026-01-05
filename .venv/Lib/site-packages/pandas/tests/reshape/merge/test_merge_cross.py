@@ -109,4 +109,3 @@ def test_merge_cross_series():
 
     expected = merge(ls.to_frame(), rs.to_frame(), how="cross")
     tm.assert_frame_equal(res, expected)
-

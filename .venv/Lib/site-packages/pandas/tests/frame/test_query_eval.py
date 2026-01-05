@@ -1435,4 +1435,3 @@ class TestDataFrameQueryBacktickQuoting:
         result = df.query("a > @now")
         expected = DataFrame({"a": []}, dtype=object)
         tm.assert_frame_equal(result, expected)
-

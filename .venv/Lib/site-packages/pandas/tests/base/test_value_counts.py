@@ -354,4 +354,3 @@ def test_value_counts_object_inference_deprecated():
 
     exp = dti.value_counts()
     tm.assert_series_equal(res, exp)
-

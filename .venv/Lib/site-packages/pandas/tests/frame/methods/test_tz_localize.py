@@ -66,4 +66,3 @@ class TestTZLocalize:
         tm.assert_equal(obj, orig)
         assert result.index is not obj.index
         assert result is not obj
-

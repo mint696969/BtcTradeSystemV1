@@ -227,4 +227,3 @@ def test_repeating_interval_index_with_infs(intervals):
     result = interval_index.get_indexer_for([intervals[1]])
 
     tm.assert_equal(result, expected)
-

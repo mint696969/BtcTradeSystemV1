@@ -70,4 +70,3 @@ class TestToTime:
         res = to_time(np.array(arg))
         assert isinstance(res, list)
         assert res == expected_arr
-

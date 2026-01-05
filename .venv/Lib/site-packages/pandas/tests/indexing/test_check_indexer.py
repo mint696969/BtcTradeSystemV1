@@ -103,4 +103,3 @@ def test_pass_through_non_array_likes(indexer):
 
     result = check_array_indexer(arr, indexer)
     assert result == indexer
-

@@ -6,8 +6,12 @@
 /tmp/
 /secrets/
 /.vscode/
+tmp/
+data/
+logs/
 
 # venv（これが未指定だと4k超えが出ます）
+.venv/
 /.venv/
 /venv/
 

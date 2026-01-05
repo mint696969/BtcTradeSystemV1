@@ -173,4 +173,3 @@ def test_interval_dtype_with_categorical(dtype):
 
     result = find_common_type([dtype, cat.dtype])
     assert result == dtype
-

@@ -25,4 +25,3 @@ class TestUnaryOps:
         result = abs(arr)
 
         tm.assert_extension_array_equal(result, arr)
-

@@ -367,4 +367,3 @@ class TestIntervalRange:
         result = interval_range(0, 1, freq=0.6)
         expected = IntervalIndex.from_breaks([0, 0.6])
         tm.assert_index_equal(result, expected)
-

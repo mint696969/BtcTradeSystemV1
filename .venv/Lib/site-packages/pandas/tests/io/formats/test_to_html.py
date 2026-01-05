@@ -1175,4 +1175,3 @@ def test_to_html_pos_args_deprecation():
     )
     with tm.assert_produces_warning(FutureWarning, match=msg):
         df.to_html(None, None)
-

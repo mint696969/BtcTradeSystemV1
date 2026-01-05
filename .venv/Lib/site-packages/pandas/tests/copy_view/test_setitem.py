@@ -154,4 +154,3 @@ def test_set_column_with_inplace_operator(using_copy_on_write, warn_copy_on_writ
     ser = df["a"]
     with tm.assert_cow_warning(warn_copy_on_write):
         ser += 1
-

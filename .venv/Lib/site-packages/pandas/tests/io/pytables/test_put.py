@@ -417,4 +417,3 @@ def test_store_periodindex(tmp_path, setup_path, format):
     df.to_hdf(path, key="df", mode="w", format=format)
     expected = pd.read_hdf(path, "df")
     tm.assert_frame_equal(df, expected)
-

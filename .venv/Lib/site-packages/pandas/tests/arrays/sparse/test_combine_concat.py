@@ -60,4 +60,3 @@ def test_concat_with_non_sparse(other, expected_dtype):
     result = pd.concat([other, s_sparse], ignore_index=True)
     expected = pd.Series(list(other) + list(s_sparse)).astype(expected_dtype)
     tm.assert_series_equal(result, expected)
-

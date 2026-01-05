@@ -42,4 +42,3 @@ class TestAccumulator:
         )._with_freq("infer")
         with pytest.raises(TypeError, match=f"Accumulation {func}"):
             arr._accumulate(func)
-

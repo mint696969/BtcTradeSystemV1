@@ -40,4 +40,3 @@ class TestInferObjects:
         # reconstruct frame to verify inference is same
         result = df.reset_index(drop=True)
         tm.assert_frame_equal(result, expected)
-

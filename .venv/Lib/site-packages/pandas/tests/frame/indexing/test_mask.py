@@ -150,4 +150,3 @@ def test_mask_inplace_no_other():
     df.mask(cond, inplace=True)
     expected = DataFrame({"a": [np.nan, 2], "b": ["x", np.nan]})
     tm.assert_frame_equal(df, expected)
-

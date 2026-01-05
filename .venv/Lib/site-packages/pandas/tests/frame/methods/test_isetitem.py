@@ -48,4 +48,3 @@ class TestDataFrameSetItem:
         value = df.copy()
         with pytest.raises(ValueError, match="Got 2 positions but value has 1 columns"):
             df.isetitem([1, 2], value[["a"]])
-

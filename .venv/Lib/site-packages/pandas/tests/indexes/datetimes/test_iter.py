@@ -74,4 +74,3 @@ class TestDatetimeIndexIteration:
                 assert index[num] == stamp
                 num += 1
         assert num == len(index)
-

@@ -335,4 +335,3 @@ def test_datetime_subclass(data, expected):
 
     expected = np.array(expected, dtype="M8[ns]")
     tm.assert_numpy_array_equal(result, expected)
-

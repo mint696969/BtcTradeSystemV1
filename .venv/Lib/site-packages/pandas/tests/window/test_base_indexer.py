@@ -517,4 +517,3 @@ def test_unequal_bounds_to_object():
 
     with pytest.raises(ValueError, match=match):
         roll.cov(pairwise=True)
-

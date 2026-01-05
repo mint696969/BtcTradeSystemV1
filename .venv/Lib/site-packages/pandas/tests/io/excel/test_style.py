@@ -296,4 +296,3 @@ def test_styler_to_s3(s3_public_bucket, s3so):
             f"s3://{mock_bucket_name}/{target_file}", index_col=0, storage_options=s3so
         )
         tm.assert_frame_equal(result, df)
-

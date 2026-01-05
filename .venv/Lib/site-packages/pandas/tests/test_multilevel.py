@@ -353,4 +353,3 @@ class TestSorted:
         )
         result = sorted.loc[pd.IndexSlice["B":"C", "a":"c"], :]
         tm.assert_frame_equal(result, expected)
-

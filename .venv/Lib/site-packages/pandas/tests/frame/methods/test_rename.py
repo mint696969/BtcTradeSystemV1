@@ -413,4 +413,3 @@ class TestRename:
             index=["foo", "bar", "bah"],
         )
         tm.assert_frame_equal(res, exp)
-

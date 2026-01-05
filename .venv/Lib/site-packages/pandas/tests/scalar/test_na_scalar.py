@@ -314,4 +314,3 @@ def test_pickle_roundtrip_containers(as_frame, values, dtype):
         s = s.to_frame(name="A")
     result = tm.round_trip_pickle(s)
     tm.assert_equal(result, s)
-

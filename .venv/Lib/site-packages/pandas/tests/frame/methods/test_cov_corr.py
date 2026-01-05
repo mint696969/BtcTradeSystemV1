@@ -468,4 +468,3 @@ class TestDataFrameCorrWith:
         result = df_bool.corrwith(ser_bool)
         expected = Series([0.57735, 0.57735], index=["A", "B"])
         tm.assert_series_equal(result, expected)
-

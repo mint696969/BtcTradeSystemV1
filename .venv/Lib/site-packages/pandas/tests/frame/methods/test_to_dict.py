@@ -533,4 +533,3 @@ def test_to_dict_list_pd_scalars(val):
     result = df.to_dict(orient="list")
     expected = {"a": [val]}
     assert result == expected
-

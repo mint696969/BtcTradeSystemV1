@@ -24,4 +24,3 @@ class TestCategoricalSubclassing:
         assert isinstance(res, SubclassedCategorical)
         exp = Categorical(["A", "B", "C"])
         tm.assert_categorical_equal(res, exp)
-

@@ -530,4 +530,3 @@ def test_moment_functions_zero_length(f):
 
     df2_result = f(df2)
     tm.assert_frame_equal(df2_result, df2_expected)
-

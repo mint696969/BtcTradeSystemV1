@@ -70,4 +70,3 @@ def test_tseries_indices_frame(setup_path):
         tm.assert_frame_equal(result, df)
         assert result.index.freq == df.index.freq
         tm.assert_class_equal(result.index, df.index, obj="dataframe index")
-

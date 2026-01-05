@@ -78,4 +78,3 @@ class TestSearchsorted:
 
         with pytest.raises(TypeError, match=msg):
             pidx.searchsorted(np.datetime64("NaT", "ns"))
-

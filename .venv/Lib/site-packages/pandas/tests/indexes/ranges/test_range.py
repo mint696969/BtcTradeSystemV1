@@ -620,4 +620,3 @@ class TestRangeIndex:
         result = 3 - RangeIndex(0, 4, 1)
         expected = RangeIndex(3, -1, -1)
         tm.assert_index_equal(result, expected)
-

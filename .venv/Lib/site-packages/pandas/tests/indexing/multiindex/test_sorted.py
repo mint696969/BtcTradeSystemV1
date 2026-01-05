@@ -151,4 +151,3 @@ class TestMultiIndexSorted:
         expected.index = expected.index.droplevel(0)
         tm.assert_series_equal(result, expected)
         tm.assert_series_equal(result2, expected)
-

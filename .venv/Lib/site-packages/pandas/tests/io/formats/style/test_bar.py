@@ -357,4 +357,3 @@ def test_style_bar_with_pyarrow_NA_values():
     expected_substring = "style type="
     html_output = df.style.bar(subset="test1").to_html()
     assert expected_substring in html_output
-

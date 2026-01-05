@@ -324,4 +324,3 @@ def test_transform_method_name(method):
     result = df.transform(method)
     expected = operator.methodcaller(method)(df)
     tm.assert_frame_equal(result, expected)
-

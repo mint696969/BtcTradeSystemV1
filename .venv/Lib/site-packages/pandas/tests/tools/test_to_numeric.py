@@ -976,4 +976,3 @@ def test_coerce_pyarrow_backend():
     result = to_numeric(ser, errors="coerce", dtype_backend="pyarrow")
     expected = Series([1, 2, None], dtype=ArrowDtype(pa.int64()))
     tm.assert_series_equal(result, expected)
-

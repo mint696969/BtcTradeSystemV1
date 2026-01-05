@@ -1272,4 +1272,3 @@ def test_returned_dtype(disable_bottleneck, dtype, method):
         assert result.dtype == np.float64
     else:
         assert result.dtype == dtype
-

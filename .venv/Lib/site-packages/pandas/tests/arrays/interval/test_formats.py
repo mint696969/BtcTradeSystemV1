@@ -11,4 +11,3 @@ def test_repr():
         "Length: 2, dtype: interval[int64, right]"
     )
     assert result == expected
-

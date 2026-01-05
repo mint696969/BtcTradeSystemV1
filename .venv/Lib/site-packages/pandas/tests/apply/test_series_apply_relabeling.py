@@ -37,4 +37,3 @@ def test_relabel_duplicated_method():
         result = df["B"].agg(foo=min, bar="min")
     expected = pd.Series([1, 1], index=["foo", "bar"], name="B")
     tm.assert_series_equal(result, expected)
-

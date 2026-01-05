@@ -225,4 +225,3 @@ class TestBetweenTime:
         msg = "Inclusive has to be either 'both', 'neither', 'left' or 'right'"
         with pytest.raises(ValueError, match=msg):
             ts.between_time(stime, etime, inclusive=inclusive)
-

@@ -38,4 +38,3 @@ def test_is_unique_class_ne(capsys):
     ser.is_unique
     captured = capsys.readouterr()
     assert len(captured.err) == 0
-

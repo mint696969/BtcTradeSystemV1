@@ -614,4 +614,3 @@ def test_from_dataframe_list_dtype():
     result = from_dataframe(tbl)
     expected = pd.DataFrame(data)
     tm.assert_frame_equal(result, expected)
-

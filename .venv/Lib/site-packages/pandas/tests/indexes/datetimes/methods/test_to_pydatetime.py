@@ -49,4 +49,3 @@ class TestToPyDatetime:
 
         result = dti._mpl_repr()
         tm.assert_numpy_array_equal(dates, result)
-

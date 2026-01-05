@@ -82,4 +82,3 @@ def test_transform_dictlike_mixed():
         columns=MultiIndex([("b", "c"), ("sqrt", "abs")], [(0, 0, 1), (0, 1, 0)]),
     )
     tm.assert_frame_equal(result, expected)
-

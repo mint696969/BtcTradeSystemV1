@@ -158,4 +158,3 @@ class TestIteration:
 
         for c, col in df.items():
             str(col)
-

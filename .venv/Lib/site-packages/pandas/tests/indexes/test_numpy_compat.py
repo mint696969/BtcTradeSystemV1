@@ -187,4 +187,3 @@ def test_numpy_ufuncs_bitwise(func):
 
     expected = Index(func(idx1.values, idx2.values))
     tm.assert_index_equal(result, expected)
-

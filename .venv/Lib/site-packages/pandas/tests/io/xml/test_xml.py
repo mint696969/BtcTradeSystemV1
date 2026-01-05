@@ -2077,4 +2077,3 @@ def test_invalid_dtype_backend():
     )
     with pytest.raises(ValueError, match=msg):
         read_xml("test", dtype_backend="numpy")
-

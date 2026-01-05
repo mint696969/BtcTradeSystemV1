@@ -58,4 +58,3 @@ def test_fillna_null(null_obj, index_or_series_obj):
 
     # check shallow_copied
     assert obj is not result
-

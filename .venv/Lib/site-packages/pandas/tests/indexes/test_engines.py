@@ -190,4 +190,3 @@ class TestObjectEngine:
         expected = np.array([False, True, False] * num, dtype=bool)
         result = engine.get_loc("b")
         assert (result == expected).all()
-

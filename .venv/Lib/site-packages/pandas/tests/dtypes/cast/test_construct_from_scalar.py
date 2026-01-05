@@ -53,4 +53,3 @@ def test_cast_1d_array_like_mismatched_datetimelike():
 
     with pytest.raises(TypeError, match="Cannot cast"):
         construct_1d_arraylike_from_scalar(np.datetime64(4, "ns"), 2, td.dtype)
-

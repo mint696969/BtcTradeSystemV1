@@ -2186,4 +2186,3 @@ def test_read_json_lines_rangeindex():
     result = read_json(StringIO(data), lines=True).index
     expected = RangeIndex(2)
     tm.assert_index_equal(result, expected, exact=True)
-

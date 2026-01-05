@@ -530,4 +530,3 @@ def test_deprecate_numeric_only_series(dtype, groupby_func, request):
         result = method(*args, numeric_only=True)
         expected = method(*args, numeric_only=False)
         tm.assert_series_equal(result, expected)
-

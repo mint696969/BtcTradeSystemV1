@@ -28,4 +28,3 @@ def test_timedeltaindex(using_copy_on_write, cons):
     ser.iloc[0] = Timedelta("5 days")
     if using_copy_on_write:
         tm.assert_index_equal(idx, expected)
-

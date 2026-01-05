@@ -130,4 +130,3 @@ def test_to_numpy_copy():
     result = arr.to_numpy(dtype="float64", copy=True)
     result[0] = 10
     tm.assert_extension_array_equal(arr, pd.array([0.1, 0.2, 0.3], dtype="Float64"))
-

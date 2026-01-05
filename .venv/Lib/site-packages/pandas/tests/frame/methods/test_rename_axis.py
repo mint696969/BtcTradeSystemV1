@@ -109,4 +109,3 @@ class TestDataFrameRenameAxis:
         expected_columns = columns.rename(None) if rename_columns else columns
         expected = DataFrame(data, expected_index, expected_columns)
         tm.assert_frame_equal(result, expected)
-

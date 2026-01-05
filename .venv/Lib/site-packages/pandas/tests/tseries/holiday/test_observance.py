@@ -103,4 +103,3 @@ def test_before_nearest_workday(day, expected):
 )
 def test_after_nearest_workday(day, expected):
     assert after_nearest_workday(day) == expected
-

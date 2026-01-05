@@ -1358,4 +1358,3 @@ def test_from_pandas_array(dtype):
     result = idx_cls(arr)
     expected = idx_cls(data)
     tm.assert_index_equal(result, expected)
-

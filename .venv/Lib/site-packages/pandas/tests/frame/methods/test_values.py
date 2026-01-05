@@ -278,4 +278,3 @@ class TestPrivateValues:
         result = df._values
         expected = dta.reshape(2, 4).T
         tm.assert_equal(result, expected)
-

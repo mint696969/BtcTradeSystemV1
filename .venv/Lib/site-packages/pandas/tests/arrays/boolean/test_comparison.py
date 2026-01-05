@@ -58,4 +58,3 @@ class TestComparisonOps(ComparisonOps):
         tm.assert_extension_array_equal(
             b, pd.array([True, False, None] * 3, dtype="boolean")
         )
-

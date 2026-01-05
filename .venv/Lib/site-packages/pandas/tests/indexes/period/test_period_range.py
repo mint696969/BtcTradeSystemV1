@@ -239,4 +239,3 @@ class TestPeriodRangeDisallowedFreqs:
 
         with tm.assert_produces_warning(FutureWarning, match=msg):
             period_range(freq=freq_depr, start="1/1/2001", end="12/1/2009")
-

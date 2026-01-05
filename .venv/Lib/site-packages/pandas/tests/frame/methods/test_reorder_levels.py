@@ -72,4 +72,3 @@ class TestReorderLevels:
 
         with pytest.raises(IndexError, match="Too many levels"):
             ymd.index.reorder_levels([1, 2, 3])
-

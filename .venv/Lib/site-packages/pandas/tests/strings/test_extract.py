@@ -722,4 +722,3 @@ def test_extractall_preserves_dtype():
 
     result = Series(["abc", "ab"], dtype=ArrowDtype(pa.string())).str.extractall("(ab)")
     assert result.dtypes[0] == "string[pyarrow]"
-

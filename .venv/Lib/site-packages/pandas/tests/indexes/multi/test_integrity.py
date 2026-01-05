@@ -287,4 +287,3 @@ def test_memory_usage(idx):
 
 def test_nlevels(idx):
     assert idx.nlevels == 2
-

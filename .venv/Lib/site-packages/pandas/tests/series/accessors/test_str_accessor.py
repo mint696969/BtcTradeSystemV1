@@ -23,4 +23,3 @@ class TestStrAccessor:
         return_value = ser.drop([0], inplace=True)
         assert return_value is None
         assert len(ser.str.lower()) == 2
-

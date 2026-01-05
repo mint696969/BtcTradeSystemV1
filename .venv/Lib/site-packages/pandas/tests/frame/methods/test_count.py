@@ -37,4 +37,3 @@ class TestDataFrameCount:
 
         tm.assert_series_equal(dm.count(), df.count())
         tm.assert_series_equal(dm.count(1), df.count(1))
-

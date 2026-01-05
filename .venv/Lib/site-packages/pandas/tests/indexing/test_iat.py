@@ -51,4 +51,3 @@ def test_iat_setitem_item_cache_cleared(
     if not using_copy_on_write:
         assert ser.iloc[-1] == 1234
     assert df.iloc[-1, -1] == 1234
-

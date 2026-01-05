@@ -443,4 +443,3 @@ class TestPairwise:
             columns=columns,
         )
         tm.assert_frame_equal(result, expected)
-

@@ -75,4 +75,3 @@ def test_read_cell_annotation():
     result = pd.read_excel("test_cell_annotation.ods")
 
     tm.assert_frame_equal(result, expected)
-

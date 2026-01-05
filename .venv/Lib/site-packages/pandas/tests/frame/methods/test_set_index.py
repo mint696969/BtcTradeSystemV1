@@ -732,4 +732,3 @@ class TestSetIndexCustomLabelType:
         tm.assert_index_equal(df.index, idx1)
         df = df.set_index(idx2)
         tm.assert_index_equal(df.index, idx2)
-

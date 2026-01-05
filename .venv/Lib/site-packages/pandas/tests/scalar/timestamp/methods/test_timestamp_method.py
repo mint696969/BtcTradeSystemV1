@@ -29,4 +29,3 @@ class TestTimestampMethod:
             # should agree with datetime.timestamp method
             dt = ts.to_pydatetime()
             assert dt.timestamp() == ts.timestamp()
-

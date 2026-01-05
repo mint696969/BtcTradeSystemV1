@@ -151,4 +151,3 @@ class TestDataFrameFilter:
         result = df.filter(items=["B", "A"])
         expected = df[[]]
         tm.assert_frame_equal(result, expected)
-

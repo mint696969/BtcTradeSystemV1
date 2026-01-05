@@ -161,4 +161,3 @@ def test_apply_mutate_columns_multiindex():
         ),
     )
     tm.assert_frame_equal(result, expected)
-

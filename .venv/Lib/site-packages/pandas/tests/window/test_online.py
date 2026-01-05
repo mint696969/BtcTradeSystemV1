@@ -110,4 +110,3 @@ class TestEWM:
 
         with pytest.raises(NotImplementedError, match=".* is not implemented."):
             getattr(ser.ewm(1).online(), method)(**kwargs)
-

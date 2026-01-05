@@ -70,4 +70,3 @@ def test_detect_console_encoding_fallback_to_default(monkeypatch, std, locale):
         context.setattr("sys.stdout", MockEncoding(std))
         context.setattr("sys.getdefaultencoding", lambda: "sysDefaultEncoding")
         assert detect_console_encoding() == "sysDefaultEncoding"
-

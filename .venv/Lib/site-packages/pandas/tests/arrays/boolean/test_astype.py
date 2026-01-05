@@ -57,4 +57,3 @@ def test_astype_to_integer_array():
     result = arr.astype("Int64")
     expected = pd.array([1, 0, None], dtype="Int64")
     tm.assert_extension_array_equal(result, expected)
-

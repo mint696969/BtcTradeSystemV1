@@ -501,4 +501,3 @@ class TestFromRecords:
 
         alt = DataFrame(arr)
         tm.assert_frame_equal(alt, expected)
-

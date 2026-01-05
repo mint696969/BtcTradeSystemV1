@@ -794,4 +794,3 @@ class TestMultiIndexSlicers:
         tm.assert_frame_equal(result_get_loc, expected)
         tm.assert_frame_equal(result_get_locs_level_0, expected)
         tm.assert_frame_equal(result_get_locs_level_1, expected)
-

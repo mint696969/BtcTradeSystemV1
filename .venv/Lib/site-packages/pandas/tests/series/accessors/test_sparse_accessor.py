@@ -7,4 +7,3 @@ class TestSparseAccessor:
         return_value = ser.drop([0, 1], inplace=True)
         assert return_value is None
         assert ser.sparse.density == 1.0
-

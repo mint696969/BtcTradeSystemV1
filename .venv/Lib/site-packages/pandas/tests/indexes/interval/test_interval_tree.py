@@ -206,4 +206,3 @@ class TestIntervalTree:
 
         result = tree.root.pivot
         assert result == expected
-

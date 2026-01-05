@@ -309,4 +309,3 @@ def test_str_dtype():
     result = df.explode(column="a")
     assert result is not df
     tm.assert_frame_equal(result, df)
-

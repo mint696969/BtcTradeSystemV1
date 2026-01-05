@@ -171,4 +171,3 @@ class TestTimedeltas:
             expected_values, dtype="timedelta64[ns]", freq=expected_freq
         )
         tm.assert_index_equal(result, expected)
-

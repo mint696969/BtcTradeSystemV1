@@ -303,4 +303,3 @@ def test_compare_nullable_int64_dtype(df1_val, df2_val, diff_self, diff_other):
     )
     result = df1.compare(df2, keep_shape=True)
     tm.assert_frame_equal(result, expected)
-

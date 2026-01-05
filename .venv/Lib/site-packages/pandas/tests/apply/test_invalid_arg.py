@@ -361,4 +361,3 @@ def test_transform_reducer_raises(all_reductions, frame_or_series, op_wrapper):
     msg = "Function did not transform"
     with pytest.raises(ValueError, match=msg):
         obj.transform(op)
-

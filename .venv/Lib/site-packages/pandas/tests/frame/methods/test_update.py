@@ -202,4 +202,3 @@ class TestDataFrameUpdate:
             {"A": [1.0, 3.0], "B": [pd.NaT, pd.to_datetime("2016-01-01")]}
         )
         tm.assert_frame_equal(df, expected)
-

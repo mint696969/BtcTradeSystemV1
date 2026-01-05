@@ -1127,4 +1127,3 @@ def test_store_bool_index(tmp_path, setup_path):
     df.to_hdf(path, key="a")
     result = read_hdf(path, "a")
     tm.assert_frame_equal(expected, result)
-

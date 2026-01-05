@@ -11,4 +11,3 @@ def test_repr():
 
     expected = "<BooleanArray>\n[True, False, <NA>]\nLength: 3, dtype: boolean"
     assert repr(df.A.array) == expected
-

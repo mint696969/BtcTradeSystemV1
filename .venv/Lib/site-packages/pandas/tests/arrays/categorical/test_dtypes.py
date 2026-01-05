@@ -137,4 +137,3 @@ class TestCategoricalDtypes:
             [0, 1], [1, 2], dtype="interval[uint64, right]"
         )
         tm.assert_index_equal(result, expected)
-

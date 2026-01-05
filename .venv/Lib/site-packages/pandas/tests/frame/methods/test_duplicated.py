@@ -115,4 +115,3 @@ def test_frame_datetime64_duplicated():
     tst = DataFrame({"date": dates})
     result = tst.date.duplicated()
     assert (-result).all()
-

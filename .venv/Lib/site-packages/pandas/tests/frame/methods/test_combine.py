@@ -45,4 +45,3 @@ class TestCombine:
         )
         tm.assert_frame_equal(chunk, exp)
         tm.assert_frame_equal(chunk2, exp)
-

@@ -282,4 +282,3 @@ def test_equals_ea_int_regular_int():
     mi2 = MultiIndex.from_arrays([[1, 2], [3, 4]])
     assert not mi1.equals(mi2)
     assert not mi2.equals(mi1)
-

@@ -34,4 +34,3 @@ def test_concatenate_chunks_pyarrow_strings():
         [np.array([1.5, 2.5], dtype=object), np.array(["a", "b"])]
     )
     tm.assert_numpy_array_equal(result[0], expected)
-

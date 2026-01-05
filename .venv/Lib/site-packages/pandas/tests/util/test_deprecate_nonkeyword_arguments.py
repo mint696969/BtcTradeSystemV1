@@ -139,4 +139,3 @@ def test_class():
     )
     with tm.assert_produces_warning(FutureWarning, match=msg):
         Foo().baz("qux", "quox")
-

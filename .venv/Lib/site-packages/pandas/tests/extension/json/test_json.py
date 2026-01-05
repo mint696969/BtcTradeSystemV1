@@ -488,4 +488,3 @@ def test_custom_asserts():
 
     with pytest.raises(AssertionError, match=msg):
         custom_assert_frame_equal(a.to_frame(), b.to_frame())
-

@@ -733,4 +733,3 @@ def test_groupby_resample_kind(kind):
     )
     expected = Series([1, 3, 2, 4], index=expected_index, name="value")
     tm.assert_series_equal(result, expected)
-

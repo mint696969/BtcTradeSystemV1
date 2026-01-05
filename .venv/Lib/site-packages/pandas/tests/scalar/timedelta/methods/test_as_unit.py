@@ -78,4 +78,3 @@ class TestAsUnit:
         assert res._d == 1
         assert res._h == 0
         assert res.total_seconds() == 86400
-

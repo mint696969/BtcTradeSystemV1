@@ -304,4 +304,3 @@ class TestComparison:
         s = Series([Interval(0, 1), Interval(1, 2)], dtype="interval")
         result = s == scalars
         tm.assert_series_equal(result, expected)
-

@@ -153,4 +153,3 @@ def test_arrow_dtype(dtype, exp_dtype):
     expected = DataFrame([[1, 2], [3, 4], [5, 6]], dtype=exp_dtype)
 
     tm.assert_frame_equal(result, expected)
-

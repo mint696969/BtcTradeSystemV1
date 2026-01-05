@@ -181,4 +181,3 @@ class TestReductions:
 
         result = arr2d.mean(axis=None, skipna=skipna)
         assert result is NaT
-

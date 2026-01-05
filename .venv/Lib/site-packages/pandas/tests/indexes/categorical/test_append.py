@@ -60,4 +60,3 @@ class TestAppend:
         result = fst.append(snd)
         expected = Index(["a", "b", "d", "e"])
         tm.assert_index_equal(result, expected)
-

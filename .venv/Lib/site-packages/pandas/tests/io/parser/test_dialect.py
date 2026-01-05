@@ -193,4 +193,3 @@ def test_dialect_conflict_delimiter(all_parsers, custom_dialect, kwargs, warning
             **kwargs,
         )
         tm.assert_frame_equal(result, expected)
-

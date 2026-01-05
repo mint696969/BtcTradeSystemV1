@@ -323,4 +323,3 @@ def test_to_numpy_copy():
     result = arr.to_numpy(dtype=bool, copy=True)
     result[0] = False
     tm.assert_extension_array_equal(arr, pd.array([True, False, True], dtype="boolean"))
-

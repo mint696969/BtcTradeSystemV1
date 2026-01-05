@@ -541,4 +541,3 @@ def test_to_json_append_output_different_columns_reordered():
         # Read path file
         result = read_json(path, lines=True)
         tm.assert_frame_equal(result, expected)
-

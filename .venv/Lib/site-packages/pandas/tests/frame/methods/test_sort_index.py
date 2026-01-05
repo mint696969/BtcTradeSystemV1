@@ -1026,4 +1026,3 @@ def test_sort_index_stable_sort():
         columns=["dt", "value"],
     ).set_index(["dt"])
     tm.assert_frame_equal(result, expected)
-

@@ -694,4 +694,3 @@ class TestStringSlicing:
         # e.g. 2012-01-03 is rounded up to 2012-01-04 - 1ns
         result = df["2012-01-01":"2012-01-03 00:00:00.000000000"]
         tm.assert_frame_equal(result, expected)
-

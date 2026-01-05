@@ -2177,4 +2177,3 @@ def test_add_timestamp_to_timedelta():
         ]
     )
     tm.assert_index_equal(result, expected)
-

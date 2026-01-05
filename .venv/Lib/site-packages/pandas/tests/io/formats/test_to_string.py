@@ -1214,4 +1214,3 @@ class TestSeriesToString:
         # nat in summary
         result = str(s2.index)
         assert "NaT" in result
-

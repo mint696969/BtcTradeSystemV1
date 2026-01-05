@@ -45,4 +45,3 @@ def test_dti_snap(name, tz, unit):
     assert result.tz == expected.tz
     assert result.freq is None
     assert expected.freq is None
-

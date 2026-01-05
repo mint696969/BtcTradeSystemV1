@@ -128,4 +128,3 @@ def test_setattr_warnings():
         #  warn when setting column to nonexistent name
         df.four = df.two + 2
         assert df.four.sum() > df.two.sum()
-

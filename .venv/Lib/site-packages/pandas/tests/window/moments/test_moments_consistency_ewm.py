@@ -241,4 +241,3 @@ def test_ewm_consistency_series_cov_corr(
             .mean()
         )
         tm.assert_equal(cov_x_y, mean_x_times_y - (mean_x * mean_y))
-

@@ -152,4 +152,3 @@ class TestDataFrameTruncate:
         truncated = obj.truncate("2021-06-28", "2021-07-01")
 
         tm.assert_equal(truncated, obj)
-

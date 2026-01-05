@@ -920,4 +920,3 @@ def test_groupby_nth_int_like_precision(data):
     expected = DataFrame({"a": 1, "b": [data[0]]})
 
     tm.assert_frame_equal(result, expected)
-

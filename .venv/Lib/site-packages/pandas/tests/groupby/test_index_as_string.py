@@ -83,4 +83,3 @@ def test_grouper_index_level_as_string_series(series, levels):
     # Compute and check result
     result = series.groupby(levels).mean()
     tm.assert_series_equal(result, expected)
-

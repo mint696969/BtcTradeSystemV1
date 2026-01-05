@@ -77,4 +77,3 @@ def test_can_hold_element_int8_int():
     assert not can_hold_element(arr, np.uint32(element))
     assert not can_hold_element(arr, np.int64(element))
     assert not can_hold_element(arr, np.uint64(element))
-

@@ -790,4 +790,3 @@ def test_cut_with_nullable_int64():
     result = cut(series, bins=bins)
 
     tm.assert_series_equal(result, expected)
-

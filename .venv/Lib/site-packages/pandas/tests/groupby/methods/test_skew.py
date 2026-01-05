@@ -25,4 +25,3 @@ def test_groupby_skew_equivalence():
     expected = pd.concat(grpwise, axis=0)
     expected.index = expected.index.astype(result.index.dtype)  # 32bit builds
     tm.assert_frame_equal(result, expected)
-

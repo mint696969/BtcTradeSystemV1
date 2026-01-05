@@ -111,4 +111,3 @@ def test_reconstruct_func():
     result = pd.core.apply.reconstruct_func("min")
     expected = (False, "min", None, None)
     tm.assert_equal(result, expected)
-

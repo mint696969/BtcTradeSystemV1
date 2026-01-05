@@ -93,4 +93,3 @@ class TestNormalize:
 
             assert result.is_normalized
             assert not rng.is_normalized
-

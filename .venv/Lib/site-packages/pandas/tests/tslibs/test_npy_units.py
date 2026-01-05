@@ -25,4 +25,3 @@ class TestIsDateArrayNormalized:
         arr[0] += np.timedelta64(1, abbrev)
         result2 = is_date_array_normalized(arr.view("i8"), None, unit)
         assert result2 is False
-

@@ -62,4 +62,3 @@ class TestCopy:
         assert len(df._mgr.blocks) == 11
         result = df.copy()
         assert len(result._mgr.blocks) == 1
-

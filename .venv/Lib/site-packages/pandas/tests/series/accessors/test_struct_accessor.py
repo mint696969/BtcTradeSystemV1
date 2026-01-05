@@ -194,4 +194,3 @@ def test_struct_accessor_field_expanded(indices, name):
     result = ser.struct.field(indices)
     tm.assert_equal(result.array._pa_array.combine_chunks(), expected)
     assert result.name == name
-

@@ -1673,4 +1673,3 @@ class TestPeriodIndexSeriesMethods:
         exp = TimedeltaIndex([np.nan, np.nan, np.nan, np.nan], name="idx")
         tm.assert_index_equal(idx - Period("NaT", freq="M"), exp)
         tm.assert_index_equal(Period("NaT", freq="M") - idx, exp)
-

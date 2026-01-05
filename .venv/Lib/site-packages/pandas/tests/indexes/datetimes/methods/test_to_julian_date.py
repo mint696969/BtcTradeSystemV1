@@ -43,4 +43,3 @@ class TestDateTimeIndexToJulianDate:
         r2 = dr.to_julian_date()
         assert isinstance(r2, Index) and r2.dtype == np.float64
         tm.assert_index_equal(r1, r2)
-

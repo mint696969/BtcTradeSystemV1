@@ -686,4 +686,3 @@ def test_rolling_center_axis_1():
     )
 
     tm.assert_frame_equal(result, expected, check_dtype=True)
-

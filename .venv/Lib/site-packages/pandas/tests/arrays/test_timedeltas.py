@@ -311,4 +311,3 @@ class TestUnaryOps:
 
         result2 = np.negative(arr)
         tm.assert_timedelta_array_equal(result2, expected)
-

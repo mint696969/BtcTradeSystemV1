@@ -207,4 +207,3 @@ class TestDataFrame2:
 
         with pytest.raises(TypeError, match=msg):
             ts.fillna(0, in_place=True)
-

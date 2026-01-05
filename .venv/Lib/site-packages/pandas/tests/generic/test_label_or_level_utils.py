@@ -334,4 +334,3 @@ def test_drop_labels_or_levels_series(df):
 
     with pytest.raises(ValueError, match="not valid labels or levels"):
         s._drop_labels_or_levels("L4", axis=0)
-

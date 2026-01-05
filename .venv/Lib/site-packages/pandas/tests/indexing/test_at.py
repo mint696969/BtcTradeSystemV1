@@ -250,4 +250,3 @@ class TestAtErrors:
             match=f"You can only assign a scalar value not a \\{type(new_row)}",
         ):
             df.at["a"] = new_row
-

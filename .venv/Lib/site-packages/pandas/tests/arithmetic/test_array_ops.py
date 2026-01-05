@@ -37,4 +37,3 @@ def test_object_comparison_2d():
     right.flags.writeable = False
     result = comparison_op(left, right, operator.ne)
     tm.assert_numpy_array_equal(result, ~expected)
-

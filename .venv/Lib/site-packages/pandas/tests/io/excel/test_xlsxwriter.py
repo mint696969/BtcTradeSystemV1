@@ -84,4 +84,3 @@ def test_book_and_sheets_consistent(ext):
             assert writer.sheets == {}
             sheet = writer.book.add_worksheet("test_name")
             assert writer.sheets == {"test_name": sheet}
-

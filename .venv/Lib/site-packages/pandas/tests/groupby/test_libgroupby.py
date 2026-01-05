@@ -329,4 +329,3 @@ def test_cython_group_sum_Inf_at_begining_and_end(values, out):
         actual,
         expected,
     )
-

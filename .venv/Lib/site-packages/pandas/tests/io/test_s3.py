@@ -41,4 +41,3 @@ def test_read_with_creds_from_pub_bucket(s3_public_bucket_with_data, s3so):
         storage_options=s3so,
     )
     assert len(df) == 5
-

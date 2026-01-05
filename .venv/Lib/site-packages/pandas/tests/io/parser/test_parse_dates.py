@@ -2338,4 +2338,3 @@ def test_from_csv_with_mixed_offsets(all_parsers):
         index=[0, 1],
     )
     tm.assert_series_equal(result, expected)
-

@@ -101,4 +101,3 @@ def test_raises_attribute_error():
 
         with pytest.raises(AttributeError, match="whoops"):
             pd.Series([], dtype=object).bad
-

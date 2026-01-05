@@ -165,4 +165,3 @@ class TestXport:
         msg = "Header record indicates a CPORT file, which is not readable."
         with pytest.raises(ValueError, match=msg):
             read_sas(file05, format="xport")
-

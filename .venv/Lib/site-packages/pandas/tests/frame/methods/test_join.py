@@ -574,4 +574,3 @@ class TestDataFrameJoin:
 
         tm.assert_index_equal(result.index, expected)
         assert result.index.tz.zone == "US/Central"
-

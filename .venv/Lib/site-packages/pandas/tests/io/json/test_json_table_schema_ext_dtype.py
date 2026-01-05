@@ -315,4 +315,3 @@ class TestTableOrient:
         result = read_json(StringIO(data_json), orient="table")
         expected = DataFrame({"a": Series([2, NA], dtype="Int64")})
         tm.assert_frame_equal(result, expected)
-

@@ -225,4 +225,3 @@ class TestDataFrameIsIn:
         result = df.isin([val])
         expected = DataFrame({"a": [True], "b": [False]})
         tm.assert_frame_equal(result, expected)
-

@@ -108,4 +108,3 @@ class TestArrayStrptimeResolutionInference:
         fmt2 = "%b %d, %Y"
         res2, _ = array_strptime(vals2, fmt=fmt2, creso=creso_infer)
         tm.assert_numpy_array_equal(res2, expected2)
-

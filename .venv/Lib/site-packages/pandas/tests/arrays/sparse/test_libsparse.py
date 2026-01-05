@@ -549,4 +549,3 @@ class TestSparseOperators:
 
         tm.assert_numpy_array_equal(result_block_vals, series_result.values)
         tm.assert_numpy_array_equal(result_int_vals, series_result.values)
-

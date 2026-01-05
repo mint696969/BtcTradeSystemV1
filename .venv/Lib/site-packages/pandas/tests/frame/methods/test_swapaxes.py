@@ -35,4 +35,3 @@ class TestSwapAxes:
             result = df.swapaxes("index", "index")
         tm.assert_frame_equal(df, result)
         assert df is not result
-

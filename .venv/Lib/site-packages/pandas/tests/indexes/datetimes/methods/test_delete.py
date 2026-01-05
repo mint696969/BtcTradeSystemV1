@@ -139,4 +139,3 @@ class TestDelete:
         assert result.name == expected.name
         assert result.freq == expected.freq
         assert result.tz == expected.tz
-

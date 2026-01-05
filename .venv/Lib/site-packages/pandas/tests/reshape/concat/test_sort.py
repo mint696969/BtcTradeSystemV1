@@ -116,4 +116,3 @@ class TestConcatSort:
         msg = "The 'sort' keyword only accepts boolean values; None was passed."
         with pytest.raises(ValueError, match=msg):
             pd.concat([df, df], sort=None)
-

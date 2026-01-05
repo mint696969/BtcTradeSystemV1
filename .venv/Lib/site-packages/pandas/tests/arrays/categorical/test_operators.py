@@ -412,4 +412,3 @@ class TestCategoricalOps:
         msg = "Object with dtype category cannot perform the numpy op log"
         with pytest.raises(TypeError, match=msg):
             np.log(s)
-

@@ -96,4 +96,3 @@ class TestMatMul:
             a @ df
         with pytest.raises(ValueError, match=msg):
             a.tolist() @ df
-

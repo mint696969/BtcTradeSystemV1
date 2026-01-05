@@ -88,4 +88,3 @@ def test_inherit_doc_template():
         """
     )
     assert cummin.__doc__ == docstr
-

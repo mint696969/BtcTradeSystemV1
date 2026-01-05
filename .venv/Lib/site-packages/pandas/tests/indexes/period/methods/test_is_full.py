@@ -21,4 +21,3 @@ def test_is_full():
         index.is_full
 
     assert index[:0].is_full
-

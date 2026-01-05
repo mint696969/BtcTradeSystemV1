@@ -327,4 +327,3 @@ class TestDatetimeIndexOps:
         msg = "Custom business days is not supported by is_month_start"
         with pytest.raises(ValueError, match=msg):
             dti.is_month_start
-

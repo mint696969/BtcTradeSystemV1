@@ -77,4 +77,3 @@ def test_set_change_dtype_slice():
         blocks["float64"], DataFrame([[1.0, 4.0], [4.0, 10.0]], columns=cols[:2])
     )
     tm.assert_frame_equal(blocks["int64"], DataFrame([[3], [6]], columns=cols[2:]))
-

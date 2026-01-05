@@ -333,4 +333,3 @@ def test_pass_colormap_instance(df, plot_method):
     if plot_method == "hexbin":
         kwargs["C"] = kwargs.pop("c")
     getattr(df.plot, plot_method)(**kwargs)
-

@@ -31,4 +31,3 @@ def test_to_csv(data):
     df = pd.DataFrame({"a": data})
     res = df.to_csv()
     assert str(data[0]) in res
-

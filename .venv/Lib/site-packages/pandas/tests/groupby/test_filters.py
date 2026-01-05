@@ -634,4 +634,3 @@ def test_filter_consistent_result_before_after_agg_func():
     grouper.sum()
     result = grouper.filter(lambda x: True)
     tm.assert_frame_equal(result, expected)
-

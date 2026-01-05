@@ -146,4 +146,3 @@ def test_case_when_callable():
     )
     expected = np.piecewise(x, [x < 0, x >= 0], [lambda x: -x, lambda x: x])
     tm.assert_series_equal(result, Series(expected))
-

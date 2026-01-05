@@ -447,4 +447,3 @@ def test_maintain_original_index():
     result = from_dummies(df)
     expected = DataFrame({"": list("abca")}, index=list("abcd"))
     tm.assert_frame_equal(result, expected)
-

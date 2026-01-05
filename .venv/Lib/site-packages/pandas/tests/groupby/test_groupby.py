@@ -3361,4 +3361,3 @@ def test_decimal_na_sort(test_series):
     result = gb._grouper.result_index
     expected = Index([Decimal(1), None], name="key")
     tm.assert_index_equal(result, expected)
-

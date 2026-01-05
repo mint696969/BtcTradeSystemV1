@@ -256,4 +256,3 @@ class TestCatAccessor:
         value = df["bool_cat"].cat.categories.dtype
         expected = np.dtype(np.bool_)
         assert value is expected
-

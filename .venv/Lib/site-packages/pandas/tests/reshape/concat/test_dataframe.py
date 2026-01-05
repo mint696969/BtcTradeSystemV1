@@ -228,4 +228,3 @@ class TestDataFrameConcat:
         result = concat([df1], ignore_index=True, join="inner", sort=True)
         expected = DataFrame({0: [2], "A": [100]})
         tm.assert_frame_equal(result, expected)
-

@@ -79,4 +79,3 @@ def test_json_output_match(capsys, tmpdir):
         result_file = out_fd.read()
 
     assert result_console == result_file
-

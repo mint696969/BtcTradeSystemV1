@@ -83,4 +83,3 @@ class TestEquals:
         df3 = df1.set_index(["floats"], append=True)
         df2 = df1.set_index(["floats"], append=True)
         assert df3.equals(df2)
-

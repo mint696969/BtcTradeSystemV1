@@ -430,4 +430,3 @@ def test_read_multiindex_header_no_index_names(datapath, ext):
         index=pd.MultiIndex.from_tuples([("A", "AA", "AAA"), ("A", "BB", "BBB")]),
     )
     tm.assert_frame_equal(result, expected)
-

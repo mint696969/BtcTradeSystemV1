@@ -221,4 +221,3 @@ numpy array values are different \\(100.0 %\\)
 
     with pytest.raises(AssertionError, match=msg):
         tm.assert_numpy_array_equal(a, b)
-

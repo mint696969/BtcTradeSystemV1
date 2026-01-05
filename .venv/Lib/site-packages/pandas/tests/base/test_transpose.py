@@ -54,4 +54,3 @@ def test_duplicate_labels(data, transposed_data, index, columns, dtype):
     result = df.T
     expected = DataFrame(transposed_data, index=columns, columns=index, dtype=dtype)
     tm.assert_frame_equal(result, expected)
-

@@ -220,4 +220,3 @@ class TestAstypeOverflowSafe:
         result = astype_overflowsafe(arr, dtype, round_ok=True)
         expected = arr.astype(dtype)
         tm.assert_numpy_array_equal(result, expected)
-

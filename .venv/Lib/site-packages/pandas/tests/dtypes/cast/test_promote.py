@@ -528,4 +528,3 @@ def test_maybe_promote_any_numpy_dtype_with_na(any_numpy_dtype, nulls_fixture):
             exp_val_for_scalar = np.nan
 
     _check_promote(dtype, fill_value, expected_dtype, exp_val_for_scalar)
-

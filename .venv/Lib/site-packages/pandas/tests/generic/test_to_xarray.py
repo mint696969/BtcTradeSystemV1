@@ -142,4 +142,3 @@ class TestSeriesToXArray:
         assert isinstance(result, DataArray)
         res = result.to_series()
         tm.assert_series_equal(res, ser)
-

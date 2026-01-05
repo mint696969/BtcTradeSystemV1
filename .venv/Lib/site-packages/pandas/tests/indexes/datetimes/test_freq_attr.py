@@ -59,4 +59,3 @@ class TestFreq:
         # Original was not altered
         assert dti.freq == "D"
         assert dta.freq == "D"
-

@@ -76,4 +76,3 @@ def test_is_monotonic_decreasing(in_vals, out_vals):
     index = Index(list("abcd"), name="B")
     expected = Series(index=index, data=out_vals, name="C")
     tm.assert_series_equal(result, expected)
-

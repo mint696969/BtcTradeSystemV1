@@ -242,4 +242,3 @@ class TestMergeOrdered:
             }
         )
         tm.assert_frame_equal(result, expected)
-

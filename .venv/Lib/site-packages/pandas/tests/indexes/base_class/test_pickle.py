@@ -9,4 +9,3 @@ def test_pickle_preserves_object_dtype():
     result = tm.round_trip_pickle(index)
     assert result.dtype == object
     tm.assert_index_equal(index, result)
-

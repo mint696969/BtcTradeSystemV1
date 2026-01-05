@@ -91,4 +91,3 @@ def test_make_unique(order, expected_reorder):
     result = _make_unique_kwarg_list(order)
 
     assert result == expected_reorder
-

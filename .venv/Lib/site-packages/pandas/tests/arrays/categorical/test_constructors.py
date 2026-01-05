@@ -785,4 +785,3 @@ class TestCategoricalConstructors:
         result = cat.categories.freq
 
         assert expected == result
-

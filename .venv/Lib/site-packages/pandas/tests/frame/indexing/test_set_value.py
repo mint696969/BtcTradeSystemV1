@@ -75,4 +75,3 @@ class TestSetValue:
         df.loc["C", "D"] = 1.0
         assert list(df.index) == list(df_orig.index) + ["C"]
         assert list(df.columns) == list(df_orig.columns) + ["D"]
-

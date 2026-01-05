@@ -645,4 +645,3 @@ class TestChaining:
             df["a"].loc[4] = 40
         tm.assert_frame_equal(df, DataFrame({"a": [10, 20, 30]}))
         tm.assert_series_equal(df["a"], Series([10, 20, 30], name="a"))
-

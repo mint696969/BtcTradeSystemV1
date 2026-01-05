@@ -77,4 +77,3 @@ class TestUnaryMethods:
         res = ~arr
         exp = SparseArray([-1, -2, -1, -3, -4, -1], fill_value=-1, dtype=np.int32)
         tm.assert_sp_array_equal(exp, res)
-

@@ -18,4 +18,3 @@ def test_concat_series(to_concat_dtypes, result_dtype):
         result_dtype
     )
     tm.assert_series_equal(result, expected)
-

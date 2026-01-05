@@ -252,4 +252,3 @@ def test_pivot_df_multiindex_index_none():
         columns=Index(["label1", "label2"], name="label"),
     )
     tm.assert_frame_equal(result, expected)
-

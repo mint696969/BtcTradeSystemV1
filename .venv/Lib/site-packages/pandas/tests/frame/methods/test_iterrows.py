@@ -14,4 +14,3 @@ def test_no_overflow_of_freq_and_time_in_dataframe():
     )
     for _, row in df.iterrows():
         assert row.dtype == "object"
-

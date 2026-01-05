@@ -306,4 +306,3 @@ class TestDataFrameDiff:
         )
         expected = DataFrame([np.nan, 1.0, 1.0, 1.0, 1.0], dtype=expected_dtype)
         tm.assert_frame_equal(result, expected)
-

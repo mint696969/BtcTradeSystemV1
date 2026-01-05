@@ -178,4 +178,3 @@ def test_pct_change_none_beginning_no_warning():
         {0: [np.nan, 1, 0.5, 1 / 3, 0.25], 1: [np.nan, np.nan, 1, 0.5, 1 / 3]}
     )
     tm.assert_frame_equal(result, expected)
-

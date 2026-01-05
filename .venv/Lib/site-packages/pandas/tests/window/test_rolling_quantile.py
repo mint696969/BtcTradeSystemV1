@@ -180,4 +180,3 @@ def test_keyword_quantile_deprecated():
     s = Series([1, 2, 3, 4])
     with tm.assert_produces_warning(FutureWarning):
         s.rolling(2).quantile(quantile=0.4)
-

@@ -1032,4 +1032,3 @@ A         B            C            D
         result = read_fwf(f).columns
 
     tm.assert_index_equal(result, expected)
-

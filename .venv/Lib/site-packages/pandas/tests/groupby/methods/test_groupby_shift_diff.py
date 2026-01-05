@@ -253,4 +253,3 @@ def test_group_shift_with_multiple_periods_and_both_fill_and_freq_deprecated():
     )
     with tm.assert_produces_warning(FutureWarning, match=msg):
         df.groupby("b")[["a"]].shift([1, 2], fill_value=1, freq="h")
-

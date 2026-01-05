@@ -1061,4 +1061,3 @@ class TestNumericBase:
         result = type(simple_index)(["0", "1", "2"], dtype=simple_index.dtype)
         expected = type(simple_index)([0, 1, 2], dtype=simple_index.dtype)
         tm.assert_index_equal(result, expected)
-

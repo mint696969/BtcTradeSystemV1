@@ -116,4 +116,3 @@ def test_multiindex_get_loc(request, lexsort_depth, keys, frame_fixture, cols):
                     tm.assert_series_equal(mi.loc[key[: i + 1]], right)
                 else:  # multi hit
                     tm.assert_frame_equal(mi.loc[key[: i + 1]], right)
-

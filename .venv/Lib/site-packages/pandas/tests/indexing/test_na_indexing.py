@@ -73,4 +73,3 @@ def test_na_treated_as_false(frame_or_series, indexer_sli):
     expected = indexer_sli(obj)[mask.fillna(False)]
 
     tm.assert_equal(result, expected)
-

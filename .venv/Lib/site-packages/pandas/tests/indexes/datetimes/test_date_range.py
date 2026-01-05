@@ -1719,4 +1719,3 @@ class TestDateRangeNonTickFreq:
         idx2 = date_range(start=sdate, end=edate, freq=offset)
         assert len(idx1) == len(idx2)
         assert idx1.freq == idx2.freq
-

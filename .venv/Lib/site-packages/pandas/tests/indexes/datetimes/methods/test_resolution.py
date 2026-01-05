@@ -29,4 +29,3 @@ def test_dti_resolution(request, tz_naive_fixture, freq, expected):
 
     idx = date_range(start="2013-04-01", periods=30, freq=freq, tz=tz)
     assert idx.resolution == expected
-

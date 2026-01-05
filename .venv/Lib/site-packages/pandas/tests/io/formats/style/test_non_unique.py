@@ -138,4 +138,3 @@ def test_latex_non_unique(styler):
         \\end{tabular}
     """
     )
-

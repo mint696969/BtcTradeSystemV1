@@ -594,4 +594,3 @@ class TestAsArray:
         result = np.asarray(ser, dtype="M8[ns]")
 
         tm.assert_numpy_array_equal(result, expected)
-

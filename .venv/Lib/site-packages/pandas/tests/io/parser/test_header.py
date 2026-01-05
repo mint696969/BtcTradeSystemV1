@@ -731,4 +731,3 @@ b,j,y
     )
     expected = DataFrame([["a", "i"], ["b", "j"]], dtype="string[pyarrow]")
     tm.assert_frame_equal(result, expected)
-

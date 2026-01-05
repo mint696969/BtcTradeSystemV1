@@ -127,4 +127,3 @@ def test_list_accessor_not_iterable():
     )
     with pytest.raises(TypeError, match="'ListAccessor' object is not iterable"):
         iter(ser.list)
-

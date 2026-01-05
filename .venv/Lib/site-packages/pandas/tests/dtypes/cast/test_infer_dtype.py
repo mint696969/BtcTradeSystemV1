@@ -214,4 +214,3 @@ def test_infer_dtype_from_scalar_zerodim_datetimelike(cls):
 
     dtype, res = infer_dtype_from(arr)
     assert dtype.type is cls
-

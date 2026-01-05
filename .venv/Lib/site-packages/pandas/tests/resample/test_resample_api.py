@@ -1111,4 +1111,3 @@ def test_resample_empty():
     )
     result = df.resample("8h").mean()
     tm.assert_frame_equal(result, expected)
-

@@ -22,4 +22,3 @@ def test_nunique_categorical():
 
     ser = Series(Categorical([np.nan]))
     assert ser.nunique() == 0
-

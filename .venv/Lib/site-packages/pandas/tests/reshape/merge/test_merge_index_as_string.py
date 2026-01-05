@@ -184,4 +184,3 @@ def test_join_indexes_and_columns_on(df1, df2, left_index, join_type):
     )
 
     tm.assert_frame_equal(result, expected, check_like=True)
-

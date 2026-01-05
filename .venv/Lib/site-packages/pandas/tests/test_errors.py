@@ -110,4 +110,3 @@ def test_AbstractMethodError_classmethod():
     xpr = "This method must be defined in the concrete class Foo"
     with pytest.raises(AbstractMethodError, match=xpr):
         Foo().method()
-

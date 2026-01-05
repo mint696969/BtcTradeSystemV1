@@ -152,4 +152,3 @@ def test_map_na_action_no_default_deprecated():
     )
     with tm.assert_produces_warning(FutureWarning, match=msg):
         cat.map(lambda x: x)
-

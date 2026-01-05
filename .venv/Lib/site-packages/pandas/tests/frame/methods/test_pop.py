@@ -70,4 +70,3 @@ class TestDataFramePop:
         result = df2.pop("top")
         tm.assert_frame_equal(expected, result)
         tm.assert_frame_equal(df1, df2)
-

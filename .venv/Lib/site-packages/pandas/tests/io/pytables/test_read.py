@@ -415,4 +415,3 @@ def test_read_infer_string(tmp_path, setup_path):
         columns=Index(["a"], dtype=pd.StringDtype(na_value=np.nan)),
     )
     tm.assert_frame_equal(result, expected)
-

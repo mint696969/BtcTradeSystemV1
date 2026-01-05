@@ -45,4 +45,3 @@ def test_dataframe_to_arrow(using_infer_string):
     table = pa.RecordBatchReader.from_stream(df, schema=schema).read_all()
     expected = expected.cast(schema)
     assert table.equals(expected)
-

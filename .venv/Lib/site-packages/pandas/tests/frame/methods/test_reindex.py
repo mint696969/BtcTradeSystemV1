@@ -1325,4 +1325,3 @@ class TestDataFrameSelectReindex:
         msg = "Invalid fill method"
         with pytest.raises(ValueError, match=msg):
             df.reindex([1, 0, 2], method="asfreq")
-

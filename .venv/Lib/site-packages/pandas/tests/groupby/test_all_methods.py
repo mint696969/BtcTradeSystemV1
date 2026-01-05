@@ -81,4 +81,3 @@ def test_dup_labels_output_shape(groupby_func, idx):
 
     assert result.shape == (1, 2)
     tm.assert_index_equal(result.columns, idx)
-

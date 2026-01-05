@@ -50,4 +50,3 @@ class TestPeriodIndexConversion:
 
         recon = PeriodIndex(rs)
         tm.assert_index_equal(index, recon)
-

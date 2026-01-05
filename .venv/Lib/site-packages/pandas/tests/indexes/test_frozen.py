@@ -111,4 +111,3 @@ class TestFrozenList:
         msg = "^'str' object cannot be interpreted as an integer$"
         with pytest.raises(TypeError, match=msg):
             bytes(unicode_container)
-

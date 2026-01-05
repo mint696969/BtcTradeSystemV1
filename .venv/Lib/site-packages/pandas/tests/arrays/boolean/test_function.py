@@ -124,4 +124,3 @@ def test_diff():
     result = ser.diff()
     expected = pd.Series(expected)
     tm.assert_series_equal(result, expected)
-

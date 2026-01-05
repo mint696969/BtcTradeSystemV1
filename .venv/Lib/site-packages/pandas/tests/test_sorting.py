@@ -485,4 +485,3 @@ def test_safe_sort_multiindex():
         [Series([1, 2, NA, NA], dtype="Int64"), [1, 2, 3, 3]]
     )
     tm.assert_index_equal(result, expected)
-

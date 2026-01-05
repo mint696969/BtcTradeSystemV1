@@ -37,4 +37,3 @@ def test_rewrite_warning(target_category, target_message, hit, new_category):
             target_message, target_category, new_message, new_category
         ):
             warnings.warn(message="Target message", category=FutureWarning)
-

@@ -34,4 +34,3 @@ def test_construct_1d_ndarray_preserving_na_datetimelike(dtype):
 
     result = sanitize_array(arr, index=None, dtype=np.dtype(object))
     tm.assert_numpy_array_equal(result, expected)
-

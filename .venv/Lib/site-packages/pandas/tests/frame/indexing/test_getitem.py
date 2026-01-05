@@ -470,4 +470,3 @@ class TestGetitemDeprecatedIndexers:
         )
         with pytest.raises(TypeError, match="as an indexer is not supported"):
             df[key]
-

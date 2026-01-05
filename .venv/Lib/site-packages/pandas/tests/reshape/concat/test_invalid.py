@@ -52,4 +52,3 @@ class TestInvalidConcat:
             result = concat(reader, ignore_index=True)
         expected = read_csv(StringIO(data))
         tm.assert_frame_equal(result, expected)
-

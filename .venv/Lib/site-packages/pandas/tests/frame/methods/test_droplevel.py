@@ -34,4 +34,3 @@ class TestDropLevel:
             # test that droplevel raises ValueError on axis != 0
             with pytest.raises(ValueError, match="No axis named columns"):
                 df.droplevel(1, axis="columns")
-

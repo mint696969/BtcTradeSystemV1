@@ -59,4 +59,3 @@ class TestTimedeltaIndex:
         # preserve name (GH15589)
         rng.name = "name"
         assert rng.days.name == "name"
-

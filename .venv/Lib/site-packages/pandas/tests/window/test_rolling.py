@@ -1977,4 +1977,3 @@ def test_rolling_timedelta_window_non_nanoseconds(unit, tz):
     df.index = df.index.as_unit("ns")
 
     tm.assert_frame_equal(ref_df, df)
-

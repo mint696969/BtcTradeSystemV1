@@ -414,4 +414,3 @@ y,2,5.0,,,,,False,"""
         )
         with tm.assert_produces_warning(FutureWarning, match=msg):
             df.to_clipboard(True, None)
-

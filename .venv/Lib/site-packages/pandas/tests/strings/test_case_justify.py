@@ -421,4 +421,3 @@ def test_wrap_unicode(any_string_dtype):
     )
     result = s.str.wrap(6)
     tm.assert_series_equal(result, expected)
-

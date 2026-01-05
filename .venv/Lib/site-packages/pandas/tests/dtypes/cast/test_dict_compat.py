@@ -12,4 +12,3 @@ def test_dict_compat():
     assert dict_compat(data_datetime64) == expected
     assert dict_compat(expected) == expected
     assert dict_compat(data_unchanged) == data_unchanged
-

@@ -23,4 +23,3 @@ class TestCategoricalComparisons:
 
         result = ser.astype("category") == (0, 0)
         tm.assert_series_equal(result, expected)
-

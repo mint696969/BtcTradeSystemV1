@@ -335,4 +335,3 @@ class TestDataFrameNonuniqueIndexes:
         with tm.assert_produces_warning(warn, match=msg):
             df.iloc[:, 0] = 3
         tm.assert_series_equal(df.iloc[:, 1], expected)
-

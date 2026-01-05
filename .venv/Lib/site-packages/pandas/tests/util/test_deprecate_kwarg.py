@@ -88,4 +88,3 @@ def test_deprecate_keyword(key):
 
     with tm.assert_produces_warning(klass):
         assert _f4(**{key: x}) == expected
-

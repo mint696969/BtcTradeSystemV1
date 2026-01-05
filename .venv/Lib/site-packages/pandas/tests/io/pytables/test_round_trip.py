@@ -585,4 +585,3 @@ def test_infer_string_columns(tmp_path, setup_path):
 
         result = read_hdf(path, "df")
         tm.assert_frame_equal(result, expected)
-

@@ -388,4 +388,3 @@ def test_groupby_resample_interpolate():
         index=expected_ind,
     )
     tm.assert_frame_equal(result, expected)
-

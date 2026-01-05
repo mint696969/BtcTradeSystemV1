@@ -79,4 +79,3 @@ IntervalArray.left values are different \\(100.0 %\\)
 
     with pytest.raises(AssertionError, match=msg):
         tm.assert_interval_array_equal(arr1, arr2)
-

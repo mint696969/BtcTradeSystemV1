@@ -98,4 +98,3 @@ def test_no_version_raises(monkeypatch):
 
     with pytest.raises(ImportError, match="Can't determine .* fakemodule"):
         import_optional_dependency(name)
-

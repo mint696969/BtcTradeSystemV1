@@ -28,4 +28,3 @@ def test_periodindex(using_copy_on_write, cons):
     ser.iloc[0] = Period("2020-12-31")
     if using_copy_on_write:
         tm.assert_index_equal(idx, expected)
-

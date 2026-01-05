@@ -124,4 +124,3 @@ def test_assert_extension_array_equal_time_units():
 
     tm.assert_extension_array_equal(naive, utc, check_dtype=False)
     tm.assert_extension_array_equal(utc, naive, check_dtype=False)
-

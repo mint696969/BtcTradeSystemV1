@@ -975,4 +975,3 @@ class TestQuantileExtensionDtype:
             expected_data, name=0.5, index=Index(expected_index), dtype=np.float64
         )
         tm.assert_series_equal(result, expected)
-

@@ -37,4 +37,3 @@ class TestPipe:
 
         with pytest.raises(ValueError, match=msg):
             obj.pipe((f, "y"), x=1, y=0)
-

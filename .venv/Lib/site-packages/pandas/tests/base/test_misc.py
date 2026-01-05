@@ -188,4 +188,3 @@ def test_access_by_position(index_flat):
     msg = "single positional indexer is out-of-bounds"
     with pytest.raises(IndexError, match=msg):
         series.iloc[size]
-

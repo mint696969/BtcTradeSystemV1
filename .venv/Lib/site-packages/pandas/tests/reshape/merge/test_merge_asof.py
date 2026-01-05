@@ -3652,4 +3652,3 @@ def test_merge_asof_multiby_with_categorical():
         }
     )
     tm.assert_frame_equal(result, expected)
-

@@ -81,4 +81,3 @@ class TestRepeat:
         tm.assert_index_equal(np.repeat(rng, reps), expected_rng)
         with pytest.raises(ValueError, match=msg):
             np.repeat(rng, reps, axis=1)
-

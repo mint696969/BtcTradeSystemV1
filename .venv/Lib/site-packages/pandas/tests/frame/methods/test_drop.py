@@ -544,4 +544,3 @@ class TestDataFrameDrop:
         result = df.drop("2000-01-03", axis=0)
         expected = DataFrame({"a": [2], "b": [2]}, index=[Timestamp("2000-01-04")])
         tm.assert_frame_equal(result, expected)
-

@@ -762,4 +762,3 @@ class TestDataFrameShift:
         df = DataFrame()
         result = df.shift(1, axis=1)
         tm.assert_frame_equal(result, df)
-

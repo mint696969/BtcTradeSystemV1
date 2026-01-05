@@ -100,4 +100,3 @@ def test_maybe_upcast_object(val, string_storage):
             exp_val = "c" if val == "c" else None
             expected = ArrowStringArray(pa.array(["a", "b", exp_val]))
         tm.assert_extension_array_equal(result, expected)
-

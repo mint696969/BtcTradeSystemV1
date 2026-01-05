@@ -297,4 +297,3 @@ def test_ensure_string_array_copy():
     assert not np.shares_memory(arr, result)
     assert arr[1] is None
     assert result[1] is np.nan
-

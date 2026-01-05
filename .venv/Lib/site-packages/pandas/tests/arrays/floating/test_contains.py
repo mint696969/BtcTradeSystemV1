@@ -10,4 +10,3 @@ def test_contains_nan():
     assert np.isnan(arr._data[0])
     assert not arr.isna()[0]
     assert np.nan in arr
-

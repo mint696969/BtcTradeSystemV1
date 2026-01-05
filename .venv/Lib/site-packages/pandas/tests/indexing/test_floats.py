@@ -687,4 +687,3 @@ class TestFloatIndexers:
         result = s.value_counts()
         assert result.index.dtype == dtype
         str(result)
-

@@ -261,4 +261,3 @@ class TestAsFreq:
         with tm.assert_produces_warning(FutureWarning, match=depr_msg):
             result = df.asfreq(freq=freq_depr)
         tm.assert_frame_equal(result, expected)
-

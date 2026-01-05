@@ -157,4 +157,3 @@ class TestSeries:
             result = pd.concat([ser, ser2])
             assert result.filename == "foo+bar"
             assert result.name is None
-

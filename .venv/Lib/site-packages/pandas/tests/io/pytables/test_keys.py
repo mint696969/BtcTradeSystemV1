@@ -85,4 +85,3 @@ def test_keys_ignore_hdf_softlink(setup_path):
 
         # Should ignore the softlink
         assert store.keys() == ["/df"]
-

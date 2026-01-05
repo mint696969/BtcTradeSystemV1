@@ -483,4 +483,3 @@ def test_wrong_parse_dates_type(xml_books, parser, iterparse):
         TypeError, match=("Only booleans, lists, and dictionaries are accepted")
     ):
         read_xml(xml_books, parse_dates={"date"}, parser=parser, iterparse=iterparse)
-

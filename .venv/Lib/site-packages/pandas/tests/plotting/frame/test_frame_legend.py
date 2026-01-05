@@ -270,4 +270,3 @@ class TestFrameLegend:
 
         _check_legend_labels(ax, labels=["A", "B", "C"])
         _check_legend_marker(ax, expected_markers=[".", ".", "."])
-

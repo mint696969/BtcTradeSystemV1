@@ -196,4 +196,3 @@ class TestConvertDtypes:
         result = df.convert_dtypes()
         expected = df.astype({"a": "string[python]"})
         tm.assert_frame_equal(result, expected)
-

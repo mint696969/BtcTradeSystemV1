@@ -53,4 +53,3 @@ def _test(number, number_type, read_offset, should_byteswap):
         tm.assert_equal(output_number, number.byteswap())
     else:
         tm.assert_equal(output_number, number)
-

@@ -408,4 +408,3 @@ def test_quarterly_finder(year_span):
     assert np.all(check_minor_years)
     assert np.all(check_major_quarters)
     assert np.all(check_minor_quarters)
-

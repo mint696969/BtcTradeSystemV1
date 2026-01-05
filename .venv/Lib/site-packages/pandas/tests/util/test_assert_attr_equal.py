@@ -31,4 +31,3 @@ def test_assert_attr_equal_different_nulls(nulls_fixture, nulls_fixture2):
     else:
         with pytest.raises(AssertionError, match='"na_value" are different'):
             tm.assert_attr_equal("na_value", obj, obj2)
-

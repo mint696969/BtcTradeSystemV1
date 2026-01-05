@@ -464,4 +464,3 @@ class TestExpressions:
                     pass
                 else:
                     assert scalar_result == expected
-

@@ -221,4 +221,3 @@ class TestFromDict:
             columns=["alpha"],
         )
         tm.assert_frame_equal(result, expected)
-

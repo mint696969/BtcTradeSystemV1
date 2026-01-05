@@ -141,4 +141,3 @@ class TestSeriesSetAxis(SharedSetAxisTests):
     def obj(self):
         ser = Series(np.arange(4), index=[1, 3, 5, 7], dtype="int64")
         return ser
-

@@ -61,4 +61,3 @@ def test_deprecate_wrong_docstring():
         deprecate(
             "depr_func", new_func_wrong_docstring, "1.0", msg="Use new_func instead."
         )
-

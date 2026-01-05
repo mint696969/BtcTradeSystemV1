@@ -60,4 +60,3 @@ def test_reductions_return_types(dropna, data, all_numeric_reductions):
     else:
         # "mean", "std", "var", "median", "kurt", "skew"
         assert isinstance(getattr(s, op)(), np.float64)
-

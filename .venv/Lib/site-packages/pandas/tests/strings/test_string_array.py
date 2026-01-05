@@ -109,4 +109,3 @@ def test_string_array_extract(nullable_string_dtype):
 
     result = result.astype(object)
     tm.assert_equal(result, expected)
-

@@ -1256,4 +1256,3 @@ def test_wide_to_long_string_columns(string_storage):
         ),
     )
     tm.assert_frame_equal(result, expected)
-

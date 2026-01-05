@@ -133,4 +133,3 @@ def test_groupby_resample_preserves_subclass(obj):
     ):
         result = df.groupby("Buyer").resample("5D").sum()
     assert isinstance(result, obj)
-

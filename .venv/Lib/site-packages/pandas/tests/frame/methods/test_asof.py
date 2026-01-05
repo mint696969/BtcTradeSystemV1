@@ -196,4 +196,3 @@ class TestFrameAsof:
 
         expected = Series([True], index=[ts])
         tm.assert_series_equal(res, expected)
-

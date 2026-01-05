@@ -130,4 +130,3 @@ class TestAtTime:
         tm.assert_frame_equal(result, expected)
         tm.assert_frame_equal(result, expected2)
         assert len(result) == 4
-

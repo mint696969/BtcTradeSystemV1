@@ -353,4 +353,3 @@ class TestCategoricalAnalytics:
 
         expected = cat.take([-1, -1], allow_fill=True)
         tm.assert_extension_array_equal(result, expected)
-

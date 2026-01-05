@@ -122,4 +122,3 @@ def test_values_loses_freq_of_underlying_index():
     midx.values
     assert idx.freq is not None
     tm.assert_index_equal(idx, expected)
-

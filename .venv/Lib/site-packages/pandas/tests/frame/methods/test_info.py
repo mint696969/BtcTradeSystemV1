@@ -587,4 +587,3 @@ def test_info_show_counts(row, columns, show_counts, result):
         with StringIO() as buf:
             df.info(buf=buf, show_counts=show_counts)
             assert ("non-null" in buf.getvalue()) is result
-

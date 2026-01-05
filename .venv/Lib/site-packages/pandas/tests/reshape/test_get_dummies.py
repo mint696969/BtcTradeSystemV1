@@ -738,4 +738,3 @@ class TestGetDummies:
         )
         result = get_dummies(df)
         tm.assert_frame_equal(result, expected)
-

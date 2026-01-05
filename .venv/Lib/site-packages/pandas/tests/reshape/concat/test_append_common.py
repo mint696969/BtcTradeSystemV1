@@ -751,4 +751,3 @@ class TestConcatAppendCommon:
 
         res = df._append(df_different_categories, ignore_index=True)
         tm.assert_frame_equal(res, exp)
-

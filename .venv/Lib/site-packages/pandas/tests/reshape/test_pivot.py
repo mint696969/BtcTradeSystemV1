@@ -2724,4 +2724,3 @@ class TestPivot:
             index=Index(["a", "b", "All"], name=0),
         )
         tm.assert_frame_equal(result, expected)
-

@@ -311,4 +311,3 @@ def test_rich_comparison_with_unsupported_type():
         assert left >= right or left <= right
         assert not left == right  # pylint: disable=unneeded-not
         assert left != right
-

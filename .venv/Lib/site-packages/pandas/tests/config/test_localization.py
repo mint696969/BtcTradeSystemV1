@@ -154,4 +154,3 @@ def test_encoding_detected():
         codecs.lookup(pd.options.display.encoding).name
         == codecs.lookup(system_encoding).name
     )
-

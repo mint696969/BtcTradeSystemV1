@@ -46,4 +46,3 @@ class TestFlags:
 
         with pytest.raises(ValueError, match="a"):
             flags["a"] = 10
-

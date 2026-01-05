@@ -217,4 +217,3 @@ def test_to_offset_uppercase_frequency_deprecated(freq_depr):
 
     with pytest.raises(FutureWarning, match=depr_msg):
         to_offset(freq_depr)
-

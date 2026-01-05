@@ -226,4 +226,3 @@ def test_to_parquet_gcs_new_file(monkeypatch, tmpdir):
 def test_gcs_not_present_exception():
     with tm.external_error_raised(ImportError):
         read_csv("gs://test/test.csv")
-

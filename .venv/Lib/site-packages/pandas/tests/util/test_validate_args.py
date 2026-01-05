@@ -68,4 +68,3 @@ def test_validation(_fname):
 
     compat_args = {"axis": 1, "out": None}
     validate_args(_fname, (1, None), 2, compat_args)
-

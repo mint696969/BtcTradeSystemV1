@@ -37,4 +37,3 @@ class TestDataFrameReindexLike:
         result = df.reindex_like(expected)
 
         tm.assert_frame_equal(result, expected)
-

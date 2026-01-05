@@ -67,4 +67,3 @@ def test_index_values(using_copy_on_write):
         assert result.flags.writeable is False
     else:
         assert result.flags.writeable is True
-

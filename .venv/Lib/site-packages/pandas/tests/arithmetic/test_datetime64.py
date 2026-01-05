@@ -2467,4 +2467,3 @@ def test_non_nano_dt64_addsub_np_nat_scalars_unsupported_unit():
     result = ser + np.timedelta64("nat", "D")
     expected = Series([NaT] * 3, dtype="datetime64[s]")
     tm.assert_series_equal(result, expected)
-

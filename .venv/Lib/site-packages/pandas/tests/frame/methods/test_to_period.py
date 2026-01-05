@@ -87,4 +87,3 @@ class TestToPeriod:
             msg = f"unsupported Type {type(index).__name__}"
             with pytest.raises(TypeError, match=msg):
                 obj.to_period()
-

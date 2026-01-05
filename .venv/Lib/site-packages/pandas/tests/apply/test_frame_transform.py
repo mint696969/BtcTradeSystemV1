@@ -262,4 +262,3 @@ def test_transform_empty_dataframe():
 
     result = df["col1"].transform(lambda x: x + 10)
     tm.assert_series_equal(result, df["col1"])
-

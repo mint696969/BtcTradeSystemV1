@@ -216,4 +216,3 @@ def test_all_highlight_dtypes(f, kwargs, df):
     expected = {(1, 0): [("background-color", "yellow")]}
     result = getattr(df.style, f)(**kwargs)._compute().ctx
     assert result == expected
-

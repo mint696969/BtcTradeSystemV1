@@ -167,4 +167,3 @@ def test_unstack_mixed_level_names():
         index=MultiIndex.from_tuples([(1, "red"), (2, "blue")], names=[0, "y"]),
     )
     tm.assert_frame_equal(result, expected)
-

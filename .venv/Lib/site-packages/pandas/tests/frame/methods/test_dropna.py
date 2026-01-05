@@ -283,4 +283,3 @@ class TestDataFrameMissingData:
 
         df.dropna(ignore_index=True, inplace=True)
         tm.assert_frame_equal(df, expected)
-

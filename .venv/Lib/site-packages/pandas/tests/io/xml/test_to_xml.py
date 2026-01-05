@@ -1373,4 +1373,3 @@ def test_s3_permission_output(parser, s3_public_bucket, geom_df):
         geom_df.to_xml(
             f"s3://{s3_public_bucket.name}/geom.xml", compression="zip", parser=parser
         )
-

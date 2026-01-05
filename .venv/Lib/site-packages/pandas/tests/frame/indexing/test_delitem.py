@@ -58,4 +58,3 @@ class TestDataFrameDelItem:
         df = DataFrame(np.random.default_rng(2).standard_normal((3, 4)), columns=index)
         del df[("a", "", "")]
         assert isinstance(df.columns, MultiIndex)
-

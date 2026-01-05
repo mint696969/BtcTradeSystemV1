@@ -26,4 +26,3 @@ class TestToFrame:
         result = idx.rename("foo").to_frame(name=None)
         exp_idx = Index([None], dtype=object)
         tm.assert_index_equal(exp_idx, result.columns)
-

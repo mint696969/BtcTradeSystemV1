@@ -21,4 +21,3 @@ class TestTZLocalizeToUTC:
         msg = "There are 2 dst switches when there should only be 1"
         with pytest.raises(pytz.AmbiguousTimeError, match=msg):
             tz_localize_to_utc(vals, pytz.timezone("US/Eastern"), ambiguous="infer")
-

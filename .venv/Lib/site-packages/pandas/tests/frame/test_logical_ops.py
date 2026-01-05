@@ -213,4 +213,3 @@ class TestDataFrameLogicalOperators:
         df2 = DataFrame([3, 4], index=["b", "c"])
         with pytest.raises(TypeError, match="unsupported operand type"):
             df1 & df2
-

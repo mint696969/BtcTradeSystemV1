@@ -395,4 +395,3 @@ def test_join_multiple_dataframes_on_key(using_copy_on_write):
     tm.assert_frame_equal(df1, df1_orig)
     for df, df_orig in zip(dfs_list, dfs_list_orig):
         tm.assert_frame_equal(df, df_orig)
-

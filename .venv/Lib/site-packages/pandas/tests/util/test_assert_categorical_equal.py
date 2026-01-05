@@ -88,4 +88,3 @@ Attribute "ordered" are different
 
     with pytest.raises(AssertionError, match=msg):
         tm.assert_categorical_equal(c1, c2, obj=obj)
-

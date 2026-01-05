@@ -104,4 +104,3 @@ def test_delete_reference(using_copy_on_write):
         assert df._mgr.blocks[0].refs.has_reference()
         assert df._mgr.blocks[1].refs.has_reference()
         assert x._mgr.blocks[0].refs.has_reference()
-

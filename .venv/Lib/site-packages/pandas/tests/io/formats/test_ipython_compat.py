@@ -88,4 +88,3 @@ class TestTableSchemaRepr:
             assert formatters[mimetype].enabled
             # smoke test that it works
             ip.instance(config=ip.config).display_formatter.format(cf)
-
