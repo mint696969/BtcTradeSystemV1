@@ -9,6 +9,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from pathlib import Path
 
 from . import env
 from . import io
@@ -21,13 +22,13 @@ from . import paths
 @dataclass(frozen=True)
 class AuditConfig:
     mode: str  # OFF / DEBUG / BOOST
-    path: str  # audit.jsonl のフルパス
+    path: Path  # audit.jsonl のフルパス
 
 
 def get_config() -> AuditConfig:
     """現在の監査設定（mode と出力先）を返す。"""
     p = paths.logs_dir() / "audit.jsonl"
-    return AuditConfig(mode=env.mode(), path=str(p))
+    return AuditConfig(mode=env.mode(), path=p)
 
 
 # ---- internals ----------------------------------------------------------------
@@ -88,7 +89,7 @@ def emit(
         "meta": _base_payload(),
     }
 
-    path = paths.logs_dir() / "audit.jsonl"
+    path = cfg.path
 
     # 追記の整合性を担保（クロスプロセス）
     with io.file_lock(path, timeout_sec=10.0):

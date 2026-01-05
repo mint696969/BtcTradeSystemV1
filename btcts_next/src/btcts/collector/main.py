@@ -318,6 +318,7 @@ def build_scheduler() -> Scheduler:
     # endpoints
     items = _norm_endpoints_cfg(endpoints_cfg)
     added = 0
+    registered: List[Dict[str, Any]] = []
     for it in items:
         ex = str(it.get("exchange") or "").strip()
         topic = str(it.get("topic") or it.get("endpoint") or "").strip()
@@ -346,6 +347,15 @@ def build_scheduler() -> Scheduler:
             )
         )
 
+        registered.append(
+            {
+                "exchange": ex,
+                "endpoint": topic,
+                "priority": prio,
+                "target_interval": interval,
+            }
+        )
+
         added += 1
 
     # endpoints が無い場合は、enabled exchange ごとにダミーを1本ずつ作る
@@ -362,6 +372,15 @@ def build_scheduler() -> Scheduler:
                     target_interval=1.0,
                     runner=_make_runner(sch, ex, "dummy", {}),
                 )
+            )
+
+            registered.append(
+                {
+                    "exchange": ex,
+                    "endpoint": "dummy",
+                    "priority": 0,
+                    "target_interval": 1.0,
+                }
             )
 
     # collector 設定のループ周期（あれば反映）
@@ -383,6 +402,8 @@ def build_scheduler() -> Scheduler:
                 "endpoints_added": added,
                 "endpoints_format": endpoints_format,
                 "exchanges_keys": list(_norm_exchanges_cfg(exchanges_cfg).keys())[:50],
+                "registered_endpoints_total": len(registered),
+                "registered_endpoints": registered[:20],
             },
         )
     except Exception:
@@ -393,6 +414,9 @@ def build_scheduler() -> Scheduler:
 
 def main() -> int:
     audit.emit("collector.main.start", feature="collector", level="INFO", payload={"pid": os.getpid()})
+    stop_reason: str = "unknown"
+    stop_signal: Optional[int] = None
+    stop_error: str = ""
 
     sch = build_scheduler()
     cfg = getattr(sch, "_btcts_collector_cfg", {})  # type: ignore[attr-defined]
@@ -402,6 +426,9 @@ def main() -> int:
     status_every = _as_float(cfg.get("status_every_sec"), 2.0) if isinstance(cfg, dict) else 2.0
 
     def _handle_sig(signum: int, _frame: Any) -> None:
+        nonlocal stop_reason, stop_signal
+        stop_reason = "signal"
+        stop_signal = signum
         audit.emit(
             "collector.signal",
             feature="collector",
@@ -416,19 +443,35 @@ def main() -> int:
     try:
         write_status(CollectorStatus(ts=_now(), mode="RUNNING", message="collector main running"))
         sch.run_forever(tick_sec=tick_sec, rate_state_every_sec=rate_every, status_every_sec=status_every)
+        if stop_reason == "unknown":
+            stop_reason = "stop_requested"
         return 0
+
     except Exception as e:
+        stop_reason = "exception"
+        stop_error = str(e)
         audit.emit(
             "collector.main.error",
             feature="collector",
             level="CRIT",
-            payload={"err": str(e)},
+            payload={"err": stop_error},
         )
-        write_status(CollectorStatus(ts=_now(), mode="ERROR", message="collector error", last_error=str(e)))
+        write_status(CollectorStatus(ts=_now(), mode="ERROR", message="collector error", last_error=stop_error))
         return 2
     finally:
-        write_status(CollectorStatus(ts=_now(), mode="STOPPED", message="collector main exit"), emit_audit=False)
-        audit.emit("collector.main.exit", feature="collector", level="INFO", payload={})
+        msg = f"collector main exit reason={stop_reason}"
+        if stop_signal is not None:
+            msg += f" signum={stop_signal}"
+        if stop_error:
+            msg += f" err={stop_error}"
+
+        write_status(CollectorStatus(ts=_now(), mode="STOPPED", message=msg), emit_audit=False)
+        audit.emit(
+            "collector.main.exit",
+            feature="collector",
+            level="INFO",
+            payload={"reason": stop_reason, "signum": stop_signal, "err": stop_error},
+        )
 
 
 if __name__ == "__main__":

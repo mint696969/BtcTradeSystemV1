@@ -9,6 +9,7 @@ import time
 from typing import Any, Dict, Optional, Tuple
 
 import streamlit as st
+from btcts.core import env as ENV
 
 
 def _env(k: str) -> str:
@@ -17,19 +18,19 @@ def _env(k: str) -> str:
 
 def _status_path() -> Tuple[str, str]:
     """(data_dir, status.json path)"""
-    data_dir = _env("BTC_TS_DATA_DIR")
-    if not data_dir:
+    try:
+        data_dir = str(ENV.data_dir())
+    except Exception:
         return "", ""
     return data_dir, os.path.join(data_dir, "collector", "status.json")
 
 
 def _read_status_file() -> Tuple[Optional[Dict[str, Any]], str]:
     """(json or None, reason)"""
-    data_dir = _env("BTC_TS_DATA_DIR")
+    data_dir, p = _status_path()
     if not data_dir:
-        return None, "BTC_TS_DATA_DIR is empty"
+        return None, "ENV.data_dir() is not resolved (BTC_TS_DATA_DIR is empty?)"
 
-    p = os.path.join(data_dir, "collector", "status.json")
     if not os.path.exists(p):
         return None, f"status.json not found: {p}"
 

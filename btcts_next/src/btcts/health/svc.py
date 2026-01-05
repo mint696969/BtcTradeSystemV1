@@ -37,24 +37,31 @@ def _now_iso() -> str:
 
 def _get_thresholds() -> Tuple[float, float]:
     """
-    monitoring.yaml の想定キー（例）:
-      thresholds:
-        age_sec:
-          warn: 60
-          crit: 300
-    無ければ妥協せず明示デフォルトに落とす（UIで理由を出す）
+    monitoring 実効値（load_yaml("monitoring")）から warn/crit を取り出す。
+
+    対応する形：
+    - thresholds.age_sec.warn/crit（旧）
+    - thresholds.default.age_sec.warn/crit（新・正）
+    - presets を使う拡張が入っても “default を基準”に読めるようにする
     """
     cfg = load_yaml("monitoring") or {}
-    warn = None
-    crit = None
-    try:
-        warn = float(cfg.get("thresholds", {}).get("age_sec", {}).get("warn"))
-    except Exception:
-        warn = None
-    try:
-        crit = float(cfg.get("thresholds", {}).get("age_sec", {}).get("crit"))
-    except Exception:
-        crit = None
+
+    # 1) まずは新系（正）: thresholds.default.age_sec
+    age = (
+        (cfg.get("thresholds") or {})
+        .get("default", {})
+        .get("age_sec", {})
+    )
+    warn = age.get("warn", None)
+    crit = age.get("crit", None)
+
+    # 2) フォールバック（旧）: thresholds.age_sec
+    if warn is None or crit is None:
+        age2 = (cfg.get("thresholds") or {}).get("age_sec", {})
+        if warn is None:
+            warn = age2.get("warn", None)
+        if crit is None:
+            crit = age2.get("crit", None)
 
     # 強制デフォルト（運用で困らない値）
     if warn is None:
@@ -62,11 +69,19 @@ def _get_thresholds() -> Tuple[float, float]:
     if crit is None:
         crit = 300.0
 
-    if crit < warn:
-        # 設定ミスは“直すべきもの”として矯正（crit>=warnに丸める）
-        crit = warn
+    try:
+        warn_f = float(warn)
+    except Exception:
+        warn_f = 60.0
+    try:
+        crit_f = float(crit)
+    except Exception:
+        crit_f = 300.0
 
-    return warn, crit
+    if crit_f < warn_f:
+        crit_f = warn_f
+
+    return warn_f, crit_f
 
 
 def _judge(age_sec: float, warn: float, crit: float) -> str:
@@ -96,13 +111,39 @@ def read_health() -> HealthSummary:
             reasons=[f"import btcts.collector.status failed: {type(e).__name__}: {e}"],
         )
 
-    st = read_status()  # CollectorStatus
-    raw_items = getattr(st, "items", None)
+    st = read_status()
 
-    if not raw_items:
-        # items=None / [] を許容（“収集してない”状態）
-        if st.mode != "RUNNING":
+    # read_status() は CollectorStatus / dict の両方を許容する（移植中の揺れ対策）
+    if isinstance(st, dict):
+        mode = str(st.get("mode", "") or "")
+        raw_items = st.get("items", None)
+    else:
+        mode = str(getattr(st, "mode", "") or "")
+        raw_items = getattr(st, "items", None)
+
+    # dict.items (builtin method) を拾ってしまった場合もここで無効化
+    if callable(raw_items):
+        raw_items = None
+
+    if raw_items is None:
+        # items が欠損/未取得（型揺れ・ファイル欠損等）
+        if mode != "RUNNING":
+            reasons.append("collector is not running (status.items is None)")
+        else:
+            reasons.append("collector is RUNNING but status.items is None")
+        return HealthSummary(
+            updated_at=_now_iso(),
+            counts={"OK": 0, "WARN": 0, "CRIT": 0},
+            items=[],
+            reasons=reasons,
+        )
+
+    if isinstance(raw_items, list) and len(raw_items) == 0:
+        # collector は動いているが endpoints=0 等で items が空のケースを区別
+        if mode != "RUNNING":
             reasons.append("collector is not running (status.items is empty)")
+        else:
+            reasons.append("collector is RUNNING but no items (endpoints=0?)")
         return HealthSummary(
             updated_at=_now_iso(),
             counts={"OK": 0, "WARN": 0, "CRIT": 0},
@@ -114,6 +155,9 @@ def read_health() -> HealthSummary:
     counts = {"OK": 0, "WARN": 0, "CRIT": 0}
 
     for it in raw_items:
+        if not isinstance(it, dict):
+            continue
+
         # it は dict を想定
         ex = str(it.get("exchange", ""))
         tp = str(it.get("topic", ""))
@@ -145,10 +189,11 @@ def read_health() -> HealthSummary:
 
     # 設定がデフォルトに落ちた可能性は reasons に出す（妥協なく透明化）
     cfg = load_yaml("monitoring") or {}
-    if not (cfg.get("thresholds", {}).get("age_sec", {}).get("warn") is not None):
-        reasons.append("monitoring.thresholds.age_sec.warn is missing -> default=60s")
-    if not (cfg.get("thresholds", {}).get("age_sec", {}).get("crit") is not None):
-        reasons.append("monitoring.thresholds.age_sec.crit is missing -> default=300s")
+    age = (cfg.get("thresholds") or {}).get("default", {}).get("age_sec", {})
+    if age.get("warn", None) is None:
+        reasons.append("monitoring.thresholds.default.age_sec.warn is missing -> default=60s")
+    if age.get("crit", None) is None:
+        reasons.append("monitoring.thresholds.default.age_sec.crit is missing -> default=300s")
 
     return HealthSummary(
         updated_at=_now_iso(),

@@ -57,7 +57,10 @@ def file_lock(path: Path, *, timeout_sec: float = 10.0, poll_sec: float = 0.05) 
     while True:
         try:
             fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
-            os.close(fd)
+            try:
+                os.write(fd, f"pid={os.getpid()} ts={time.time()}\n".encode("utf-8"))
+            finally:
+                os.close(fd)
             break
         except FileExistsError:
             if (time.time() - start) >= timeout_sec:

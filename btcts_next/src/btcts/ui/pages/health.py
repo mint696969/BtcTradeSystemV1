@@ -8,6 +8,8 @@ import time
 from typing import Any, Dict, List
 
 import streamlit as st
+from btcts.core import env as ENV
+from btcts.core import paths as PATHS
 
 
 def _env(k: str) -> str:
@@ -21,14 +23,22 @@ def render_health_page() -> None:
     from btcts.health.svc import read_health
 
     # 表示用：Paths
-    with st.expander("Paths (env)", expanded=False):
+    with st.expander("Paths (effective)", expanded=False):
         st.write(
             {
-                "BTC_TS_DATA_DIR": _env("BTC_TS_DATA_DIR"),
-                "BTC_TS_LOGS_DIR": _env("BTC_TS_LOGS_DIR"),
-                "BTC_TS_CONFIG_DIR": _env("BTC_TS_CONFIG_DIR"),
-                "BTC_TS_SECRETS_DIR": _env("BTC_TS_SECRETS_DIR"),
-                "BTC_TS_DATASET_DIR": _env("BTC_TS_DATASET_DIR"),
+                # env raw
+                "ENV.BTC_TS_DATA_DIR": _env("BTC_TS_DATA_DIR"),
+                "ENV.BTC_TS_LOGS_DIR": _env("BTC_TS_LOGS_DIR"),
+                "ENV.BTC_TS_CONFIG_DIR": _env("BTC_TS_CONFIG_DIR"),
+                "ENV.BTC_TS_SECRETS_DIR": _env("BTC_TS_SECRETS_DIR"),
+                "ENV.BTC_TS_DATASET_DIR": _env("BTC_TS_DATASET_DIR"),
+                # resolved (source of truth)
+                "repo_root": str(ENV.repo_root()),
+                "data_dir": str(ENV.data_dir()),
+                "logs_dir": str(ENV.logs_dir()),
+                "config_dir": str(ENV.config_dir()),
+                "schema_dir": str(PATHS.schema_dir()),
+                "ui_config_dir": str(PATHS.config_dir()),
             }
         )
 
@@ -51,7 +61,8 @@ def render_health_page() -> None:
             st.session_state["health_err"] = f"read_health() failed: {type(e).__name__}: {e}"
         st.session_state["health_ts"] = time.time()
 
-    if refresh or st.session_state["health_summary"] is None and not st.session_state["health_err"]:
+    should_load = refresh or (st.session_state["health_summary"] is None and not st.session_state["health_err"])
+    if should_load:
         _load()
 
     err = st.session_state.get("health_err", "")

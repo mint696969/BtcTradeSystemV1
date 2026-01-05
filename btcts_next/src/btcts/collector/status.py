@@ -36,8 +36,13 @@ def write_status(st: CollectorStatus, *, emit_audit: bool = True) -> Path:
     p.parent.mkdir(parents=True, exist_ok=True)
 
     obj = asdict(st)
-    # health/UI が扱いやすいよう ISO も付与
+    # health/UI が扱いやすいよう unix/ISO を付与（ts は unix のまま維持）
     obj["ts_unix"] = st.ts
+    obj["ts_iso"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(st.ts))
+
+    # items は常に list に正規化（None を書かない：items:null 回避）
+    if obj.get("items") is None:
+        obj["items"] = []
 
     with io.file_lock(p, timeout_sec=10.0):
         io.write_json(p, obj)

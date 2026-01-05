@@ -56,6 +56,43 @@ def resolve(name: str) -> SettingRef:
     )
 
 
+def _read_yaml_allow_header(path: Path) -> Dict[str, Any]:
+    """先頭が '# path:' '# desc:' の2行でも確実に読める YAML 読み取り。"""
+    if not path.exists():
+        return {}
+
+    # まずは既存 io.read_yaml を試す（通るならそれでOK）
+    try:
+        obj = io.read_yaml(path, default={}) or {}
+        return obj if isinstance(obj, dict) else {}
+    except Exception:
+        pass
+
+    # フォールバック：先頭コメント行を除去して safe_load
+    try:
+        import yaml  # type: ignore
+    except Exception:
+        return {}
+
+    try:
+        txt = path.read_text(encoding="utf-8")
+        lines = txt.splitlines()
+        # '# path:' '# desc:' を想定して最大2行スキップ
+        while lines and lines[0].lstrip().startswith("#"):
+            lines.pop(0)
+            if len(lines) < 1:
+                break
+            # 最大2行で止めたいので、2行目まで見たら抜ける
+            if len(lines) >= 0 and (len(txt.splitlines()) - len(lines)) >= 2:
+                break
+        body = "\n".join(lines).strip()
+        if not body:
+            return {}
+        obj = yaml.safe_load(body)  # type: ignore
+        return obj if isinstance(obj, dict) else {}
+    except Exception:
+        return {}
+
 # -----------------------------------------------------------------------------
 # schema helpers
 # -----------------------------------------------------------------------------
@@ -166,7 +203,7 @@ def load_yaml(name: str) -> Dict[str, Any]:
     defaults = _schema_defaults(schema)
     allowed = _schema_allowed_keys(schema)
 
-    cur = io.read_yaml(ref.current_path, default={}) or {}
+    cur = _read_yaml_allow_header(ref.current_path) or {}
     # current 先頭のコメント行は safe_load では無視される想定
 
     cur = _filter_to_schema(cur, allowed)

@@ -10,8 +10,13 @@ from typing import Optional
 
 def repo_root() -> Path:
     """btcts_next のリポルート（btcts_next/）を返す。"""
-    # .../btcts_next/src/btcts/core/env.py -> parents[3] == btcts_next
-    return Path(__file__).resolve().parents[3]
+    p = Path(__file__).resolve()
+    # 構造変更に強くする（btcts_next を親から探索）
+    for parent in p.parents:
+        if parent.name == "btcts_next":
+            return parent
+    # フォールバック（従来互換）
+    return p.parents[3]
 
 
 def _expand(p: str) -> Path:
@@ -64,3 +69,24 @@ def default_dataset_dir() -> Path:
 
 def mode() -> str:
     return (env_str(ENV_MODE, "OFF") or "OFF").upper()
+
+
+def data_dir() -> Path:
+
+    return env_or_default(ENV_DATA_DIR, str(default_data_dir()))
+
+
+def logs_dir() -> Path:
+    return env_or_default(ENV_LOGS_DIR, str(default_logs_dir()))
+
+
+def config_dir() -> Path:
+    return env_or_default(ENV_CONFIG_DIR, str(default_config_dir()))
+
+
+def secrets_dir() -> Path:
+    return env_or_default(ENV_SECRETS_DIR, str(default_secrets_dir()))
+
+
+def dataset_dir() -> Path:
+    return env_or_default(ENV_DATASET_DIR, str(default_dataset_dir()))

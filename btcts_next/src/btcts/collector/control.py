@@ -136,8 +136,7 @@ def status() -> CollectorStatus:
             pass
         return CollectorStatus(ts=time.time(), mode="STOPPED", message="process not alive", items=[])
 
-    return CollectorStatus(ts=time.time(), mode="RUNNING", message=f"pid={pid}")
-
+    return CollectorStatus(ts=time.time(), mode="RUNNING", message=f"pid={pid}", items=[])
 
 
 def start(*, python: Optional[str] = None) -> CollectorStatus:
@@ -151,6 +150,20 @@ def start(*, python: Optional[str] = None) -> CollectorStatus:
     # パス固定は事故る（btcts_next 配下に移植しているため）。
     # ここは PYTHONPATH を前提に、モジュール実行で起動する。
     cmd = [py, "-m", "btcts.collector.main"]
+    # 子プロセスで btcts を import できるように PYTHONPATH を保証する
+    env = os.environ.copy()
+    repo = paths.repo_root()
+    src = repo / "btcts_next" / "src"
+
+    sep = ";" if os.name == "nt" else ":"
+    cur = env.get("PYTHONPATH", "")
+    parts = [p for p in cur.split(sep) if p] if cur else []
+    # 先頭に repo/src を入れて優先（重複は避ける）
+    if str(repo) not in parts:
+        parts.insert(0, str(repo))
+    if str(src) not in parts:
+        parts.insert(1, str(src))
+    env["PYTHONPATH"] = sep.join(parts)
 
     lp = _log_path()
     lp.parent.mkdir(parents=True, exist_ok=True)
@@ -163,8 +176,13 @@ def start(*, python: Optional[str] = None) -> CollectorStatus:
         cwd=str(paths.repo_root()),
         stdout=logf,
         stderr=logf,
+        env=env,
         start_new_session=True,
     )
+    try:
+        logf.close()
+    except Exception:
+        pass
 
     # 起動直後に落ちたケースを検出（パスミス・importミス等）
     time.sleep(0.15)
@@ -174,6 +192,7 @@ def start(*, python: Optional[str] = None) -> CollectorStatus:
             mode="ERROR",
             message="collector process exited immediately",
             last_error=f"exitcode={proc.returncode}",
+            items=[],
         )
         write_status(st_err)
         audit.emit(
@@ -200,6 +219,22 @@ def start(*, python: Optional[str] = None) -> CollectorStatus:
         time.sleep(0.05)
 
     if not ok:
+        # 起動に失敗しているので、孤児プロセス化を防ぐため止める
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+        t1 = time.time()
+        while time.time() - t1 < 1.0:
+            if proc.poll() is not None:
+                break
+            time.sleep(0.05)
+        if proc.poll() is None and os.name == "nt":
+            try:
+                _terminate_windows(proc.pid)
+            except Exception:
+                pass
+
         st_err = CollectorStatus(
             ts=time.time(),
             mode="ERROR",
@@ -240,14 +275,14 @@ def stop(*, timeout_sec: float = 5.0) -> CollectorStatus:
     """collector を停止する（SIGTERM → SIGKILL）。"""
     p = _pid_path()
     if not p.exists():
-        st = CollectorStatus(ts=time.time(), mode="STOPPED", message="pid not found")
+        st = CollectorStatus(ts=time.time(), mode="STOPPED", message="pid not found", items=[])
         write_status(st)
         return st
 
     try:
         pid = int(p.read_text().strip())
     except Exception:
-        st = CollectorStatus(ts=time.time(), mode="ERROR", message="invalid pid file")
+        st = CollectorStatus(ts=time.time(), mode="ERROR", message="invalid pid file", items=[])
         write_status(st)
         return st
 
@@ -266,6 +301,7 @@ def stop(*, timeout_sec: float = 5.0) -> CollectorStatus:
                 mode="ERROR",
                 message=f"failed to stop pid={pid}",
                 last_error=f"terminate_ok={ok} (still alive after {timeout_sec:.1f}s)",
+                items=[],
             )
             write_status(st)
             audit.emit(
@@ -278,7 +314,7 @@ def stop(*, timeout_sec: float = 5.0) -> CollectorStatus:
 
     p.unlink(missing_ok=True)
 
-    st2 = CollectorStatus(ts=time.time(), mode="STOPPED", message=f"stopped pid={pid}")
+    st2 = CollectorStatus(ts=time.time(), mode="STOPPED", message=f"stopped pid={pid}", items=[])
     write_status(st2)
 
     audit.emit(

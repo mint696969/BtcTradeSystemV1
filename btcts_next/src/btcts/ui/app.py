@@ -7,6 +7,8 @@ import os
 
 import streamlit as st
 
+from btcts.core import env as ENV
+from btcts.core import paths as PATHS
 from btcts.ui.pages.collector import render_collector_page
 from btcts.ui.pages.health import render_health_page
 
@@ -19,14 +21,22 @@ def main() -> None:
     st.set_page_config(page_title="BTC TS Next", layout="wide")
     st.title("BTC TS Next")
 
-    with st.expander("Paths (env)", expanded=False):
+    with st.expander("Paths (effective)", expanded=False):
         st.write(
             {
-                "BTC_TS_DATA_DIR": _env("BTC_TS_DATA_DIR"),
-                "BTC_TS_LOGS_DIR": _env("BTC_TS_LOGS_DIR"),
-                "BTC_TS_CONFIG_DIR": _env("BTC_TS_CONFIG_DIR"),
-                "BTC_TS_SECRETS_DIR": _env("BTC_TS_SECRETS_DIR"),
-                "BTC_TS_DATASET_DIR": _env("BTC_TS_DATASET_DIR"),
+                # env raw
+                "ENV.BTC_TS_DATA_DIR": _env("BTC_TS_DATA_DIR"),
+                "ENV.BTC_TS_LOGS_DIR": _env("BTC_TS_LOGS_DIR"),
+                "ENV.BTC_TS_CONFIG_DIR": _env("BTC_TS_CONFIG_DIR"),
+                "ENV.BTC_TS_SECRETS_DIR": _env("BTC_TS_SECRETS_DIR"),
+                "ENV.BTC_TS_DATASET_DIR": _env("BTC_TS_DATASET_DIR"),
+                # resolved
+                "repo_root": str(ENV.repo_root()),
+                "data_dir": str(ENV.data_dir()),
+                "logs_dir": str(ENV.logs_dir()),
+                "config_dir": str(ENV.config_dir()),
+                "schema_dir": str(PATHS.schema_dir()),
+                "ui_config_dir": str(PATHS.config_dir()),
             }
         )
 
