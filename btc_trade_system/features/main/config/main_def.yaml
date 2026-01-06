@@ -1,8 +1,0 @@
-# path: ./btc_trade_system/features/main/config/main_def.yaml
-# desc: メインタブの既定設定（将来の複合ダッシュボード用の器）。当面は表示とタイトルのみ。
-
-title: "メイン"
-layout:
-  columns: [4, 4, 4] # 3カラムの器（後日カードを差し替え）
-  gutter_px: 8
-cards: [] # 後日、重要情報カードを列挙していく
