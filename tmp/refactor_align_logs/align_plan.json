@@ -1,0 +1,58 @@
+{
+  "time": "2025-10-26T12:20:54",
+  "root": "C:\\Users\\mint777\\BtcTradeSystemV1",
+  "items": [
+    {
+      "key": "monitoring.yaml",
+      "keep": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\config\\ui\\monitoring.yaml",
+      "keep_exists": true,
+      "keep_hash": "339C0BBC70562C9FC11249EB493DFFA315D6F824DAFFA8540E90DF392DB36732",
+      "duplicates": [
+        {
+          "path": "C:\\Users\\mint777\\BtcTradeSystemV1\\config\\ui\\monitoring.yaml",
+          "exists": true,
+          "hash": "AB5606AFB7B31B67D4B2FC3812E6F997ED982C1178802B84BEF96E14F8B5CFF0"
+        }
+      ]
+    },
+    {
+      "key": "health.yaml",
+      "keep": "C:\\Users\\mint777\\BtcTradeSystemV1\\btc_trade_system\\config\\ui\\health.yaml",
+      "keep_exists": true,
+      "keep_hash": "96BDDEEC049D52E1E2F79D7D7C69F12911A7EFF26D919FA3E991BCF4523631F9",
+      "duplicates": [
+        {
+          "path": "C:\\Users\\mint777\\BtcTradeSystemV1\\config\\ui\\health.yaml",
+          "exists": true,
+          "hash": "CDCEF4D417DADBD4B5FBC3D5E946A80DEA7BC15898D42434B4F5A334623D1B22"
+        }
+      ]
+    },
+    {
+      "key": "leader_status_bridge.py",
+      "keep": "C:\\Users\\mint777\\BtcTradeSystemV1\\scripts\\collector\\leader_status_bridge.py",
+      "keep_exists": true,
+      "keep_hash": "5865E05C4BAC142E2F1C6010685B9780FBFB6154DFA7D9A4EBE345A973A0AFE5",
+      "duplicates": [
+        {
+          "path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tools\\collector\\leader_status_bridge.py",
+          "exists": true,
+          "hash": "A80D6D4D5A7A4870960D5C6F524287987DC7A467EA80A792AA726597C6A0B8B0"
+        }
+      ]
+    },
+    {
+      "key": "audit_smoke.py",
+      "keep": "C:\\Users\\mint777\\BtcTradeSystemV1\\tools\\audit_smoke.py",
+      "keep_exists": true,
+      "keep_hash": "80825BD42337AC2209B266502502E30539BE2FEFEEF2DA48EFEC0676A94615BD",
+      "duplicates": [
+        {
+          "path": "C:\\Users\\mint777\\BtcTradeSystemV1\\tmp\\audit_smoke.py",
+          "exists": true,
+          "hash": "50ACE319E189A0F00D97110BF4F0F0EF89BAF7FA8FDF0503B8DE49D1F56F0D86"
+        }
+      ]
+    }
+  ]
+}

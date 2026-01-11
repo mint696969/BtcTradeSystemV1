@@ -1,0 +1,16 @@
+* text=auto
+
+# 改行方針
+*.py    text eol=lf
+*.ps1   text eol=crlf
+*.sh    text eol=lf
+*.md    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+
+# バイナリ
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.zip   binary
+*.gz    binary

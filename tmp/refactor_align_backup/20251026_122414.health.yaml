@@ -1,0 +1,4 @@
+order:
+  - bitflyer:trades
+  - bitflyer:board
+  - bybit:trades

@@ -1,0 +1,34 @@
+# 生成物・大容量（リポ汚染防止）
+/data/
+/logs/
+/artifacts/
+/backup/
+/tmp/
+/secrets/
+/.vscode/
+
+# venv（リポ直下に置く運用）
+.venv/
+/venv/
+
+# Python キャッシュ
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+pip-wheel-metadata/
+build/
+dist/
+
+# handoff の成果物は除外（TXT/MDのみ残す）
+/docs/handoff/*.zip
+/docs/handoff/CTX-*/
+/docs/handoff/**/
+!docs/handoff/*.md
+!docs/handoff/*.txt
+
+# アーカイブ類
+*.zip
+*.7z
+*.rar

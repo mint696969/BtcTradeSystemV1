@@ -1,0 +1,396 @@
+meta:
+  repo_root: "C:\\BtcTradeSystem"
+repo_structure:
+  - path: "Btc Ts-引き継ぎ書類zip作成.bat"
+    size: 1414
+    mtime: 1761418611
+  - path: "btcts_next/config/schema/collector_def.yaml"
+    head1: "./btc_trade_system/features/collector/config/collector_def.yaml"
+    head2: "Collector 既定設定（UI保存値とマージ前提）"
+    size: 756
+    mtime: 1762868602
+  - path: "btcts_next/config/schema/dash_def.yaml"
+    head1: "./btc_trade_system/features/dash/config/dash_def.yaml"
+    head2: "UI既定値（ユーザー上書き前のデフォルト）。basic.yaml 欠損時のフォールバック。"
+    size: 602
+    mtime: 1762815396
+  - path: "btcts_next/config/schema/endpoints_def.yaml"
+    head1: "./btc_trade_system/features/collector/config/endpoints_def.yaml"
+    head2: "各取引所のエンドポイント正準（URL/HTTP/クォータの正規定義）"
+    size: 479
+    mtime: 1762868602
+  - path: "btcts_next/config/schema/exchanges_def.yaml"
+    head1: "./btc_trade_system/features/collector/config/exchanges_def.yaml"
+    head2: "取引所登録の既定（辞書型）。current(exchanges.yaml)へ後勝ちマージ。"
+    size: 414
+    mtime: 1762868602
+  - path: "btcts_next/config/schema/health_def.yaml"
+    head1: "./btc_trade_system/features/health/config/health_def.yaml"
+    head2: "Health タブ UI既定（自動更新と期間プリセット / 判定閾値・表示順）"
+    size: 819
+    mtime: 1763077158
+  - path: "btcts_next/config/schema/monitoring_def.yaml"
+    head1: "./btc_trade_system/features/health/config/monitoring_def.yaml"
+    head2: "監視しきい値とプリセット（UI設定タブの既定）"
+    size: 820
+    mtime: 1763077158
+  - path: "btcts_next/config/schema/tabs_def.yaml"
+    head1: "btc_trade_system/features/dash/config/tabs_def.yaml"
+    head2: "タブ構成の既定（順序・表示名・有効/無効）。current は ./btc_trade_system/config/tabs.yaml"
+    size: 999
+    mtime: 1762949056
+  - path: "btcts_next/data/collector/status.json"
+    size: 156
+    mtime: 1765711069
+  - path: "btcts_next/src/btcts/__init__.py"
+    head1: "./btcts_next/src/btcts/__init__.py"
+    head2: "btcts パッケージ入口。循環import回避のため、ここでは eager import しない。"
+    size: 224
+    mtime: 1765699722
+  - path: "btcts_next/src/btcts/collector/__init__.py"
+    head1: "./btcts_next/src/btcts/collector/__init__.py"
+    head2: "collector サブパッケージ初期化（import安定化用）。"
+    size: 131
+    mtime: 1766262837
+  - path: "btcts_next/src/btcts/collector/control.py"
+    head1: "./btcts_next/src/btcts/collector/control.py"
+    head2: "collector プロセスの起動/停止/状態確認を司る制御層。UI/Health から呼ばれる正準I/F。"
+    size: 10276
+    mtime: 1767618035
+  - path: "btcts_next/src/btcts/collector/main.py"
+    head1: "./btcts_next/src/btcts/collector/main.py"
+    head2: "collector 常駐プロセスのエントリ。settings から exchanges/endpoints/collector を読み、Scheduler を起動する。"
+    size: 16321
+    mtime: 1767618035
+  - path: "btcts_next/src/btcts/collector/providers/__init__.py"
+    head1: "./btcts_next/src/btcts/collector/providers/__init__.py"
+    head2: "collector providers サブパッケージ初期化（import安定化用）。"
+    size: 151
+    mtime: 1766262893
+  - path: "btcts_next/src/btcts/collector/providers/bitflyer.py"
+    head1: "./btcts_next/src/btcts/collector/providers/bitflyer.py"
+    head2: "bitFlyer 公開API（board/executions）を取得し、429/Retry-After を解析して上位層へ返す。"
+    size: 4952
+    mtime: 1766181759
+  - path: "btcts_next/src/btcts/collector/rate.py"
+    head1: "./btcts_next/src/btcts/collector/rate.py"
+    head2: "取引所ごとのレート制御（soft/hard/429緊急制御）を提供する。Scheduler から呼ばれ、Health には状態を提供する。"
+    size: 6625
+    mtime: 1766182702
+  - path: "btcts_next/src/btcts/collector/scheduler.py"
+    head1: "./btcts_next/src/btcts/collector/scheduler.py"
+    head2: "RateController に従って endpoint runner を実行する最小スケジューラ。"
+    size: 8258
+    mtime: 1766268302
+  - path: "btcts_next/src/btcts/collector/status.py"
+    head1: "./btcts_next/src/btcts/collector/status.py"
+    head2: "collector の状態（status.json）と rate_state（rate_state.json）を正準パスへ書き出す。UI/Health はこれを読む。"
+    size: 2736
+    mtime: 1767618035
+  - path: "btcts_next/src/btcts/core/__init__.py"
+    head1: "./btcts_next/src/btcts/core/__init__.py"
+    head2: "core パッケージの公開口。循環import回避のため、このファイルでは子モジュールを eager import しない。"
+    size: 278
+    mtime: 1765699722
+  - path: "btcts_next/src/btcts/core/audit.py"
+    head1: "./btcts_next/src/btcts/core/audit.py"
+    head2: "監査ログ（audit.jsonl）への追記I/F。OFF/DEBUG/BOOST を維持し、I/O は core/io.py に一本化する。"
+    size: 3011
+    mtime: 1767618035
+  - path: "btcts_next/src/btcts/core/env.py"
+    head1: "./btcts_next/src/btcts/core/env.py"
+    head2: "環境変数（DATA/LOGS/CONFIG/SECRETS/DATASET 等）を正準化して取得する。"
+    size: 2412
+    mtime: 1767618035
+  - path: "btcts_next/src/btcts/core/io.py"
+    head1: "./btcts_next/src/btcts/core/io.py"
+    head2: "原子的I/O（atomic write/replace）とJSON/YAML/JSONLの読み書き、および簡易ファイルロックを提供する。"
+    size: 5555
+    mtime: 1767618035
+  - path: "btcts_next/src/btcts/core/paths.py"
+    head1: "./btcts_next/src/btcts/core/paths.py"
+    head2: "パス解決の正。ENV優先＋btcts_next内フォールバック。必要ディレクトリは確実に作成する。"
+    size: 3546
+    mtime: 1765702238
+  - path: "btcts_next/src/btcts/health/__init__.py"
+    head1: "./btcts_next/src/btcts/health/__init__.py"
+    head2: "Health（収集健全性）の公開I/F。"
+    size: 164
+    mtime: 1766202073
+  - path: "btcts_next/src/btcts/health/health.py"
+    head1: "./btcts_next/src/btcts/health/health.py"
+    head2: "HealthのCLI/デバッグ入口（UIは扱わない）。btcts.health.svc.read_health() を呼んで標準出力に出す。"
+    size: 663
+    mtime: 1766264470
+  - path: "btcts_next/src/btcts/health/svc.py"
+    head1: "./btcts_next/src/btcts/health/svc.py"
+    head2: "status.json と monitoring.yaml から収集健全性を評価し、UI向けサマリを返す。"
+    size: 6194
+    mtime: 1767618035
+  - path: "btcts_next/src/btcts/settings/__init__.py"
+    head1: "./btcts_next/src/btcts/settings/__init__.py"
+    head2: "settings の公開口（svc のみ公開）。UIやcollectorはここ経由で読む/保存する。"
+    size: 496
+    mtime: 1765697921
+  - path: "btcts_next/src/btcts/settings/svc.py"
+    head1: "./btcts_next/src/btcts/settings/svc.py"
+    head2: "設定（schema + current差分）を正準化して読み書きするサービス。ENV優先の config/ui を正とし、差分ゼロなら current を削除する。"
+    size: 9430
+    mtime: 1767618035
+  - path: "btcts_next/src/btcts/ui/__init__.py"
+    head1: "./btcts_next/src/btcts/ui/__init__.py"
+    head2: "UI サブパッケージ初期化（Streamlit側import安定化用）。"
+    size: 129
+    mtime: 1766262940
+  - path: "btcts_next/src/btcts/ui/app.py"
+    head1: "./btcts_next/src/btcts/ui/app.py"
+    head2: "btcts_next 独立Streamlitアプリのエントリ。pages を束ね、最小の運用UIを提供する。"
+    size: 1594
+    mtime: 1767618035
+  - path: "btcts_next/src/btcts/ui/pages/__init__.py"
+    head1: "./btcts_next/src/btcts/ui/pages/__init__.py"
+    head2: "UI pages サブパッケージ初期化（ページ群import安定化用）。"
+    size: 141
+    mtime: 1766262978
+  - path: "btcts_next/src/btcts/ui/pages/collector.py"
+    head1: "./btcts_next/src/btcts/ui/pages/collector.py"
+    head2: "Collectorの起動/停止と status.json 表示。ENV/パス不整合を“原因が分かる形”で提示する最小運用UI。"
+    size: 6211
+    mtime: 1767618035
+  - path: "btcts_next/src/btcts/ui/pages/health.py"
+    head1: "./btcts_next/src/btcts/ui/pages/health.py"
+    head2: "Healthページ（UI）。btcts.health.svc を呼び出して結果を表示する。UI→health の一方向に固定し循環importを防ぐ。"
+    size: 3884
+    mtime: 1767618035
+  - path: "docs/BtcTradeSystem V1 — 収集器完成までのロードマップ（最新版）.md"
+    size: 3596
+    mtime: 1763321148
+  - path: "docs/BtcTradeSystem V1 — 情報収集ドメイン 設計仕様書 v2.md"
+    size: 15431
+    mtime: 1763633264
+  - path: "docs/handoff/CTX-20260106_1937/diagnostics/status_excerpt.json"
+    size: 66
+    mtime: 1767695860
+  - path: "docs/handoff/CTX-20260106_1937/env/env_manifest.yaml"
+    size: 366
+    mtime: 1767695862
+  - path: "docs/handoff/CTX-20260106_1937/gpt_context_map.yaml"
+    size: 405
+    mtime: 1767695866
+  - path: "docs/handoff/CTX-20260106_1937/handover.md"
+    size: 328
+    mtime: 1767695866
+  - path: "docs/handoff/CTX-20260106_1937/README_HANDOFF.md"
+    size: 1011
+    mtime: 1767695866
+  - path: "docs/handoff/CTX-20260106_1937/REPO_MAP.extract.md"
+    size: 8839
+    mtime: 1767695862
+  - path: "docs/handoff/CTX-20260106_1937/repo_structure.yaml"
+    size: 16433
+    mtime: 1767695866
+  - path: "docs/handoff/CTX-20260106_1937/SUMMARY.md"
+    size: 315
+    mtime: 1767695866
+  - path: "docs/handover.md"
+    size: 9306
+    mtime: 1766286873
+  - path: "docs/仕様書一式/BtcTradeSystem NEXT 開発・運用統一ルール仕様書.md"
+    size: 5611
+    mtime: 1767766795
+  - path: "docs/仕様書一式/BtcTradeSystem 新機能追加マニュアル v4.md"
+    size: 19914
+    mtime: 1767748519
+  - path: "docs/仕様書一式/BtcTradeSystem 開発・運用統一ルール仕様書.md"
+    size: 7720
+    mtime: 1767705397
+  - path: "docs/仕様書一式/Git バックアップ・復元システム仕様書.md"
+    size: 8399
+    mtime: 1767748519
+  - path: "docs/仕様書一式/Git バックアップ・復元システム仕様書（NEXT 正準）.md"
+    size: 5412
+    mtime: 1767844913
+  - path: "docs/仕様書一式/ダッシュボード／アラート／設定 仕様書.md"
+    size: 14762
+    mtime: 1767729812
+  - path: "docs/仕様書一式/開発監査仕様書.md"
+    size: 8929
+    mtime: 1762061309
+  - path: "git_復元ポイント一覧.bat"
+    size: 101
+    mtime: 1760291841
+  - path: "git_復元ポイント作成.bat"
+    size: 640
+    mtime: 1760639528
+  - path: "README.md"
+    size: 210
+    mtime: 1760674951
+  - path: "scripts/collector/leader_status_bridge.py"
+    head1: "./tools/collector/leader_status_bridge.py"
+    head2: "LeaderLockのメタをstatus.jsonのleaderへワンショット反映（開発テスト用）"
+    size: 789
+    mtime: 1762493685
+  - path: "scripts/diag/api_probe.ps1"
+    head1: "scripts/diag/api_probe.ps1"
+    head2: "4取引所( bitFlyer / Binance / Bybit / OKX )の疎通＋中身チェック＋レポート"
+    size: 5982
+    mtime: 1760319508
+  - path: "scripts/diag/diag_api.ps1"
+    head1: "scripts/diag/diag_api.ps1"
+    head2: "IPv4優先で取引所の疎通スモーク"
+    size: 445
+    mtime: 1760267652
+  - path: "scripts/diag/diag_env.ps1"
+    head1: "./scripts/diag/diag_env.ps1"
+    head2: "リポ環境スモーク＆UI純読取チェック（apps/dashからの書込/削除APIの粗スキャンを含む）"
+    size: 5826
+    mtime: 1760509731
+  - path: "scripts/git/git_full_backup.ps1"
+    head1: "scripts/git/git_full_backup.ps1"
+    head2: "リポジトリの**完全バックアップ**（git bundle）を作成し、検証＆メタ情報を出力"
+    size: 3356
+    mtime: 1760415596
+  - path: "scripts/git/git_restore_from_bundle.ps1"
+    head1: "scripts/git/git_restore_from_bundle.ps1"
+    head2: "直近または指定の .bundle からワンショットで復元（clone or fetch）"
+    size: 2273
+    mtime: 1760408464
+  - path: "scripts/git/git_rp_list.ps1"
+    head1: "scripts/git/git_rp_list.ps1"
+    head2: "復元ポイントの総合一覧（rp-* タグ＋差分ZIP／フルbundle）を“従来表示”で最新順に表示。外部 BtcTradeSystemV1_git を走査"
+    size: 6281
+    mtime: 1763314009
+  - path: "scripts/git/git_rp_make.ps1"
+    head1: "scripts/git/git_rp_make.ps1"
+    head2: "復元ポイント作成（rp-YYYYMMDD_HHmmss）。必要に応じてコミット・タグ付け・差分バックアップ（ZIP/フォルダ）を実施。"
+    size: 4952
+    mtime: 1760641534
+  - path: "scripts/git/git_rp_restore.ps1"
+    head2: "復元ポイントからブランチを作って切り替え"
+    size: 600
+    mtime: 1760291044
+  - path: "scripts/handoff/make_handoff.ps1"
+    head1: "scripts/handoff/make_handoff.ps1"
+    head2: "チャットまたぎ用ハンドオフZIPを作成（最小構成）"
+    size: 15258
+    mtime: 1761418611
+  - path: "scripts/run.ps1"
+    head1: "./scripts/run.ps1"
+    head2: "起動ラッパ（ENV設定→ python -m / streamlit run）。Target で legacy/next/collector を切替、PYTHONPATH に btcts_next/src を必ず含める。"
+    size: 2064
+    mtime: 1767618035
+  - path: "scripts/test_settings_full.ps1"
+    head1: "./tmp/test_settings_full.ps1"
+    head2: "設定タブ全体と dev_audit / BOOST スナップショットの総合チェック用テストスクリプト"
+    size: 4854
+    mtime: 1763111515
+  - path: "scripts/test_settings_ops.ps1"
+    head1: "./tmp/test_settings_ops.ps1"
+    head2: "設定モーダルの保存/デフォルト動作を dev_audit と設定ファイルから一括チェックする簡易ツール"
+    size: 2219
+    mtime: 1763013868
+  - path: "tools/audit_smoke.py"
+    head1: "./tools/audit_smoke.py"
+    head2: "監査出力の動作確認（文脈セット→INFO/ERRORを1行ずつ記録）"
+    size: 1249
+    mtime: 1762493686
+  - path: "tools/collector/storage_status_bridge.py"
+    head1: "./tools/collector/storage_status_bridge.py"
+    head2: "StorageRouter の現状を書き出し、status.json の storage メタへ反映（開発確認用）"
+    size: 1013
+    mtime: 1762493686
+  - path: "tools/handoff/gen_summary.py"
+    head1: "tools/handoff/gen_summary.py"
+    head2: "有効設定の実効値サマリーをMarkdown化"
+    size: 2331
+    mtime: 1762493686
+  - path: "tools/make_repo_map_extract.py"
+    head1: "tools/make_repo_map_extract.py"
+    head2: "リポジトリを走査し、各ファイル先頭の「# path / # desc」を抽出して REPO_MAP の Markdown / YAML を生成（make_handoff.ps1 からのサブプロセス呼び出し対応）"
+    size: 13789
+    mtime: 1767848894
+  - path: "tools/test_health_eval.py"
+    head1: "tools/test_health_eval.py"
+    size: 536
+    mtime: 1762493686
+  - path: "tools/test_io_audit.py"
+    head1: "tools/test_io_audit.py"
+    head2: "io_safe / audit の最小動作テスト"
+    size: 765
+    mtime: 1762493686
+  - path: "tools/test_providers_health.py"
+    head1: "./tools/test_providers_health.py"
+    head2: "Health関連の最小動作テスト（svc_healthのサマリ/テーブルを出力）"
+    size: 1161
+    mtime: 1762493686
+  - path: "フルバックアップ.bat"
+    size: 436
+    mtime: 1760411516
+  - path: "提出物3/Btc Ts-引き継ぎ書類zip作成.bat"
+    size: 1414
+    mtime: 1761418611
+  - path: "提出物3/git/git_full_backup.ps1"
+    head1: "scripts/git/git_full_backup.ps1"
+    head2: "リポジトリの**完全バックアップ**（git bundle）を作成し、検証＆メタ情報を出力"
+    size: 3356
+    mtime: 1760415596
+  - path: "提出物3/git/git_restore_from_bundle.ps1"
+    head1: "scripts/git/git_restore_from_bundle.ps1"
+    head2: "直近または指定の .bundle からワンショットで復元（clone or fetch）"
+    size: 2273
+    mtime: 1760408464
+  - path: "提出物3/git/git_rp_list.ps1"
+    head1: "scripts/git/git_rp_list.ps1"
+    head2: "復元ポイントの総合一覧（rp-* タグ＋差分ZIP／フルbundle）を“従来表示”で最新順に表示。外部 BtcTradeSystemV1_git を走査"
+    size: 6281
+    mtime: 1763314009
+  - path: "提出物3/git/git_rp_make.ps1"
+    head1: "scripts/git/git_rp_make.ps1"
+    head2: "復元ポイント作成（rp-YYYYMMDD_HHmmss）。必要に応じてコミット・タグ付け・差分バックアップ（ZIP/フォルダ）を実施。"
+    size: 4952
+    mtime: 1760641534
+  - path: "提出物3/git/git_rp_restore.ps1"
+    head2: "復元ポイントからブランチを作って切り替え"
+    size: 600
+    mtime: 1760291044
+  - path: "提出物3/make_handoff.ps1"
+    head1: "scripts/handoff/make_handoff.ps1"
+    head2: "チャットまたぎ用ハンドオフZIPを作成（最小構成）"
+    size: 15258
+    mtime: 1761418611
+external_roots:
+  - name: "btc_ts"
+    root: "E:/btc_ts"
+    policy:
+      purpose: "runtime external root for BTCTS (paths/configs/outputs)"
+      secrets: "masked (names hidden)"
+      data_logs: "representative only (README etc.)"
+    dirs:
+      - path: "config/ui"
+        desc: "current override (diff-only) YAMLs"
+      - path: "config/schema"
+        desc: "schema/default YAMLs"
+      - path: "data"
+        desc: "runtime data root (representative only)"
+      - path: "logs"
+        desc: "runtime logs root (representative only)"
+      - path: "secrets"
+        desc: "API keys/tokens (masked; do not include files)"
+    files:
+      - path: "config/ui/collector.yaml"
+        head1: "E:/btc_ts/config/ui/collector.yaml"
+        head2: "NEXT Collector 実運用設定（有効取引所・収集周期・status.json・レート制御など）。運用時の唯一の正。"
+        size: 1049
+        mtime: 1767766694
+      - path: "config/ui/endpoints.yaml"
+        head1: "E:/btc_ts/config/ui/endpoints.yaml"
+        head2: "NEXT Collector が参照するエンドポイント正準（URL/HTTP/クォータ定義）。運用時の唯一の正。"
+        size: 762
+        mtime: 1767766660
+      - path: "config/ui/exchanges.yaml"
+        head1: "D:\\BtcTS_V1\\config\\ui\\exchanges.yaml"
+        size: 697
+        mtime: 1763718155
+      - path: "config/ui/monitoring.yaml"
+        size: 352
+        mtime: 1762453176

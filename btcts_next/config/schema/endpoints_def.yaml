@@ -1,0 +1,18 @@
+# path: ./btcts_next/config/schema/endpoints_def.yaml
+# desc: 各取引所のエンドポイント正準（URL/HTTP/クォータの正規定義）
+
+bitflyer:
+  orderbook:
+    topic: "orderbook"
+    url: "https://api.bitflyer.com/v1/board"
+    method: "GET"
+    max_rps: 8
+    burst: 2
+    priority: 0
+  trades:
+    topic: "trades"
+    url: "https://api.bitflyer.com/v1/executions"
+    method: "GET"
+    max_rps: 8
+    burst: 2
+    priority: 1
