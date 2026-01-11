@@ -1,34 +1,46 @@
-# 生成物・大容量（リポ汚染防止）
+# --- BTCTS NEXT: repo pollution prevention (authoritative) ---
+
+# runtime / generated (never commit)
 /data/
 /logs/
 /artifacts/
 /backup/
-/tmp/
 /secrets/
+/tmp/
+/local/
+
+# editor
 /.vscode/
 
-# venv（リポ直下に置く運用）
-.venv/
+# python venv (repo root)
+/.venv/
 /venv/
 
-# Python キャッシュ
+# python caches
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.egg-info/
-pip-wheel-metadata/
+*.py[cod]
+*$py.class
+
+# tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# build / packaging
 build/
 dist/
+*.egg-info/
+pip-wheel-metadata/
 
-# handoff の成果物は除外（TXT/MDのみ残す）
-/docs/handoff/*.zip
-/docs/handoff/CTX-*/
-/docs/handoff/**/
-!docs/handoff/*.md
-!docs/handoff/*.txt
-
-# アーカイブ類
+# archives (handoff zip etc.)
 *.zip
 *.7z
 *.rar
+
+# ---- handoff artifacts (NEXT canonical) ----
+docs/handoff/
+docs/handoff/**
+
+# tmp is a workspace, never tracked
+tmp/
+tmp/**

@@ -3,11 +3,13 @@
 
 """
 Usage (PowerShell):
-  $py = ".\\.venv\\Scripts\\python.exe"
-  & $py tools\\make_repo_map_extract.py --root . --out-md artifacts\\context_bundle\\TMP\\REPO_MAP.extract.md --out-yaml artifacts\\context_bundle\\TMP\\repo_structure.yaml
+  # python は PATH でもOK。venv を使う場合は各自の運用に合わせること。
+  $py = "python"
+  $out = ".\\tmp\\handoff"
+  & $py tools\\make_repo_map_extract.py --root . --out-md "$out\\REPO_MAP.extract.md" --out-yaml "$out\\repo_structure.yaml"
 
-外部ルート（ランタイム領域）も同時にマップ化する場合:
-  & $py tools\\make_repo_map_extract.py --root . --out-yaml artifacts\\context_bundle\\TMP\\repo_structure.yaml --extra-root E:\\btc_ts
+外部ルート（ランタイム領域）も同時にマップ化する場合（例: E:\\btc_ts）:
+  & $py tools\\make_repo_map_extract.py --root . --out-yaml "$out\\repo_structure.yaml" --extra-root E:\\btc_ts
 
 Notes:
 - 2行ヘッダ (# path / # desc) が無い場合は、実際の相対パスのみを出力
@@ -81,11 +83,23 @@ def read_header2(path: Path, max_bytes: int = 4096) -> Tuple[str, str]:
 
 
 def should_skip(root: Path, p: Path, exclude: List[str]) -> bool:
-    rel = p.relative_to(root).parts
-    if not rel:
+    """
+    除外ディレクトリ判定（階層非依存）。
+    例: root/btcts_next/data/... のように 2階層目以降に data/logs/tmp が出ても除外できるようにする。
+    """
+    try:
+        rel_parts = p.relative_to(root).parts
+    except Exception:
         return False
-    excl = {e.lower() for e in exclude}
-    return rel[0].lower() in excl
+    if not rel_parts:
+        return False
+
+    excl = {e.lower() for e in exclude if e}
+    # どの階層でも exclude 名が現れたら除外
+    for part in rel_parts:
+        if part.lower() in excl:
+            return True
+    return False
 
 
 def iter_files(root: Path, exts: List[str], exclude: List[str]) -> Iterable[Path]:

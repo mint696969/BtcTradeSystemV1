@@ -17,24 +17,31 @@ function Resolve-RepoRoot {
   return $repo
 }
 
-function Ensure-Dir([string]$p) {
+function New-Dir([string]$p) {
   New-Item -ItemType Directory -Force -Path $p | Out-Null
 }
 
 function Write-Text([string]$path, [string]$text) {
-  Ensure-Dir (Split-Path $path -Parent)
+  New-Dir (Split-Path $path -Parent)
   $text | Set-Content -Encoding UTF8 -LiteralPath $path
 }
 
 $repo = Resolve-RepoRoot
 
+# python は .venv を優先し、無ければ PATH の python を使う
+$pyVenv = Join-Path $repo ".venv\Scripts\python.exe"
+$py = if (Test-Path $pyVenv) { $pyVenv } else { "python" }
+if (-not (Get-Command $py -ErrorAction SilentlyContinue)) {
+  throw "python not found. (.venv missing and 'python' not on PATH)"
+}
+
 # 出力先は tmp に固定（docs/handoff は使わない）
 $outRoot = Join-Path $repo "tmp\handoff"
-Ensure-Dir $outRoot
+New-Dir $outRoot
 
 $ts = Get-Date -Format "yyyyMMdd_HHmmss"
 $ctxDir = Join-Path $outRoot ("CTX-{0}" -f $ts)
-Ensure-Dir $ctxDir
+New-Dir $ctxDir
 
 # --- git: 自動 rp タグ（必要なら） ---
 if ($AutoRpTag) {
@@ -85,7 +92,6 @@ if (Test-Path $handover) {
 }
 
 # --- repo map / structure ---
-$py = Join-Path $repo ".venv\Scripts\python.exe"
 $tool = Join-Path $repo "tools\make_repo_map_extract.py"
 
 # external root は「CONFIG_DIR から推定」して E:\btc_ts を入れる（あれば）
@@ -101,31 +107,51 @@ $mdOut = Join-Path $ctxDir "REPO_MAP.extract.md"
 $yOut  = Join-Path $ctxDir "repo_structure.yaml"
 
 if ((Test-Path $py) -and (Test-Path $tool)) {
-  $args = @(
+  $repoMapArgs = @(
     $tool,
     "--root", $repo,
     "--out-md", $mdOut,
     "--out-yaml", $yOut
   )
   if ($extraRoot -and (Test-Path $extraRoot)) {
-    $args += @("--extra-root", $extraRoot)
+    $repoMapArgs += @("--extra-root", $extraRoot)
   }
-  & $py @args | Out-Host
+
+  $repoMapOut = & $py @repoMapArgs 2>&1 | Out-String
+  Write-Text (Join-Path $ctxDir "diag\make_repo_map_stdout_stderr.txt") $repoMapOut
+  if ($LASTEXITCODE -ne 0) {
+    throw "make_repo_map_extract.py failed (exit=$LASTEXITCODE). See CTX/diag/make_repo_map_stdout_stderr.txt"
+  }
+} else {
+  throw "repo map tool missing. py_exists=$((Test-Path $py)) tool_exists=$((Test-Path $tool))"
 }
 
-# --- SUMMARY（あれば） ---
+# --- SUMMARY（必須） ---
 $gen = Join-Path $repo "tools\handoff\gen_summary.py"
-if ((Test-Path $py) -and (Test-Path $gen)) {
-  $sum = Join-Path $ctxDir "SUMMARY.md"
+if (-not (Test-Path $gen)) {
+  throw "gen_summary.py not found: $gen"
+}
 
-  # gen_summary.py は引数必須（--v1/--data/--logs/--out）
-  $v1Root = $repo
-  $dataDir = $env:BTC_TS_DATA_DIR
-  $logsDir = $env:BTC_TS_LOGS_DIR
-  if (-not $dataDir) { $dataDir = Join-Path $repo "data" }
-  if (-not $logsDir) { $logsDir = Join-Path $repo "logs" }
+$sum = Join-Path $ctxDir "SUMMARY.md"
 
-  & $py $gen --v1 $v1Root --data $dataDir --logs $logsDir --out $sum | Out-Host
+$repoRoot = $repo
+$dataDir = $env:BTC_TS_DATA_DIR
+$logsDir = $env:BTC_TS_LOGS_DIR
+if (-not $dataDir) { $dataDir = Join-Path $repo "data" }
+if (-not $logsDir) { $logsDir = Join-Path $repo "logs" }
+
+# 失敗時の原因を残す（最小：stdout/stderrのみ）
+$diagDir = Join-Path $ctxDir "diag"
+New-Dir $diagDir
+
+$cmdOut = & $py $gen --repo $repoRoot --data $dataDir --logs $logsDir --out $sum 2>&1 | Out-String
+Write-Text (Join-Path $diagDir "gen_summary_stdout_stderr.txt") $cmdOut
+
+if ($LASTEXITCODE -ne 0) {
+  throw "gen_summary.py failed (exit=$LASTEXITCODE). See CTX/diag/gen_summary_stdout_stderr.txt"
+}
+if (-not (Test-Path $sum)) {
+  throw "SUMMARY.md was not generated although gen_summary exited 0."
 }
 
 # --- ZIP 化（ctxDir を zip にして完了） ---
@@ -144,4 +170,4 @@ if (Test-Path $zipPath) {
 }
 
 Write-Host ("OK: {0}" -f $zipPath)
-exit 0
+return

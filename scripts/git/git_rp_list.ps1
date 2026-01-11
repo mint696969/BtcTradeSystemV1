@@ -1,14 +1,19 @@
 # path: scripts/git/git_rp_list.ps1
-# desc: 復元ポイントの総合一覧（rp-* タグ＋差分ZIP／フルbundle）を“従来表示”で最新順に表示。外部 BtcTradeSystemV1_git を走査
+# desc: 復元ポイントの総合一覧（rp-* タグ＋差分ZIP／フルbundle）を最新順に表示（NEXT正準：E:\btc_ts\backup を既定）
 
 param(
-  [string]$RpRoot   = "$env:USERPROFILE\BtcTradeSystemV1_git\git_rp",   # rp差分ZIPルート
-  [string]$FullRoot = "$env:USERPROFILE\BtcTradeSystemV1_git\git_full", # フルbundleルート
-  [int]   $Limit    = 10,                                               # 表示件数（latest 10）
-  [switch]$Details,                                                     # 追加情報（rp: +/-, full: head/branch）
-  [switch]$ShowTree,                                                    # ルートツリー表示
-  [switch]$OpenRoot,                                                    # ルートを開く
-  [switch]$NoPause                                                      # 終了待ちを無効化
+  # NEXT 正準：backup_root（ENV優先、無ければ E:\btc_ts\backup）
+  [string]$BackupRoot = $(if ($env:BTC_TS_BACKUP_DIR) { $env:BTC_TS_BACKUP_DIR } else { "E:\btc_ts\backup" }),
+
+  # 互換：明示指定も可能（未指定なら BackupRoot から決定）
+  [string]$RpRoot   = "",
+  [string]$FullRoot = "",
+
+  [int]   $Limit    = 10,   # 表示件数（latest 10）
+  [switch]$Details,         # 追加情報（rp: +/-, full: head/branch）
+  [switch]$ShowTree,        # ルートツリー表示
+  [switch]$OpenRoot,        # ルートを開く
+  [switch]$NoPause          # 終了待ちを無効化
 )
 
 $ErrorActionPreference = 'Stop'
@@ -36,37 +41,35 @@ function Get-ZipEntryText([string]$zipPath, [string]$entryName) {
   } finally { $fs.Dispose() }
 }
 
-# --- git 前提 & ルート ---
+# --- git 前提 & repo ルート ---
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'git not found' }
 $repo = Find-RepoRoot $PSScriptRoot
 if (-not $repo) { throw 'No git repository found' }
+
+# --- 既定ルート確定 ---
+if ([string]::IsNullOrWhiteSpace($RpRoot))   { $RpRoot   = Join-Path $BackupRoot "git_rp" }
+if ([string]::IsNullOrWhiteSpace($FullRoot)) { $FullRoot = Join-Path $BackupRoot "git_full" }
 
 # ===== rp-*（タグ） + 差分ZIP索引 =====
 $tags = & git -C $repo tag --list 'rp-*'
 $zipIndex = @{}
 if (Test-Path $RpRoot) {
   Get-ChildItem -LiteralPath $RpRoot -Recurse -Filter *.zip -File | ForEach-Object {
-    $base = Split-Path $_.DirectoryName -Leaf
     $name = [IO.Path]::GetFileNameWithoutExtension($_.Name)
-    $zipIndex[$name] = [pscustomobject]@{ zip=$_.FullName; base=$base }
+    $zipIndex[$name] = [pscustomobject]@{ zip=$_.FullName; base=(Split-Path $_.DirectoryName -Leaf) }
   }
 }
 
 $rpItems = @()
 foreach ($t in $tags) {
   if (-not $t) { continue }
-  # タグとして明示的に解決し、refname の曖昧さを避ける
   $ref  = "refs/tags/$t"
 
   $iso  = (& git -C $repo log -1 --format='%cI' $ref) 2>$null
   $date = if ($iso) { [datetime]::Parse($iso) } else { Get-Date 0 }
 
   $shaS = (& git -C $repo rev-parse --short $ref) 2>$null
-  if ($shaS) {
-    $shaS = $shaS.Trim()
-  } else {
-    $shaS = '--------'
-  }
+  if ($shaS) { $shaS = $shaS.Trim() } else { $shaS = '--------' }
 
   $subj = (& git -C $repo log -1 --format='%s' $ref).Trim()
 
@@ -112,17 +115,16 @@ if (Test-Path $FullRoot) {
     $fullItems += [pscustomobject]@{
       kind='FULL'; date=$d; sha=$headS; name=$b.BaseName; memo=$detail
     }
-  } # end: ForEach-Object
+  }
 
-  # ■重複抑止：同じ BaseName が複数ある場合は、日時の新しい1件だけ残す
+  # 重複抑止：同じ BaseName が複数ある場合は、日時の新しい1件だけ残す
   $fullItems = $fullItems | Sort-Object date -Descending
   $fullItems = $fullItems | Group-Object name | ForEach-Object { $_.Group | Select-Object -First 1 }
-} # end: if (Test-Path $FullRoot)
+}
 
 # ===== マージして最新順 =====
 $all = @($rpItems + $fullItems) | Sort-Object date -Descending | Select-Object -First $Limit
 
-# ===== 画面出力（従来風1行） =====
 "== Restore Points (rp-* / full)  (latest $Limit) =="
 foreach ($x in $all) {
   $dt = $x.date.ToString('yyyy-MM-dd  HH:mm:ss')
