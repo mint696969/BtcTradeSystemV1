@@ -1,156 +1,193 @@
-# Git バックアップ・復元システム仕様書（NEXT 正準）
+Git バックアップ・復元システム仕様書（NEXT 正準・改訂版）
+1. 目的（再定義・固定）
 
-> ======================================================================
-> ⚠️ 境界宣言（V1由来 / NEXT読み替え）
->
-> 本仕様書は V1 の思想（安全性・再現性・手動レビュー優先）を継承する。
-> ただし、保存先・構造・スクリプト配置は NEXT 正準に統一する。
->
-> - V1の保存先（例：%USERPROFILE%\BtcTradeSystemV1_git）は使用しない
-> - 差分成果物（metadata.json / diff.patch 等）を正準としない（NEXTでは作らない）
-> - 正準のバックアップ先は常に E:\btc_ts\backup
-> ======================================================================
+本仕様書は BtcTS NEXT プロジェクトにおける Git 履歴・作業状態・環境情報を、安全かつ最小構成で退避・復元するための正準仕様を定める。
 
-## 1. 目的
+ChatGPT（GPT）が 次チャットで迷わず開発を再開できることを最優先目的とする
 
-BtcTradeSystem NEXT における Git ベースのバックアップと復元手順を、運用でブレない「正準」として固定する。
+V1 系プロジェクト（btc_trade_system 等）との混在を防止する
 
-本書のゴール：
-- 誤操作で壊さない（自動ロールバック禁止、必ずレビュー）
-- 復元手順が一意（タグ/Bundleどちらでも復元できる）
-- GPT迷子防止（外部ルートの扱いを明文化）
+バックアップは「保全目的」であり、運用データ・巨大ファイルの保存は対象外とする
 
-## 1.5 設計原則（NEXT 正準）
+2. 正準ディレクトリ構成（確定）
+2.1 Repo 正準
 
-本バックアップ・復元システムは、以下の原則に従って設計・運用する。
+Repo root：
+C:\BtcTradeSystem
 
-- 自動で「戻らない」  
-  （復元・ロールバックは必ず人が判断し、レビューしてから行う）
+2.2 作業ディレクトリ（非Git管理）
 
-- 成果物は最小限にする  
-  （diff / metadata / 中間生成物を正準にしない）
+作業場：
+C:\BtcTradeSystem\tmp
 
-- 正は一つだけ持つ  
-  （保存先・命名規則・復元手順を複数用意しない）
+tmp は常に「作業場」であり、保管庫ではない。
 
-- GPTに推測させない  
-  （外部ルート・除外対象・参照禁止領域を明文化する）
+tmp 配下のファイル・ディレクトリは：
 
-この原則に反する仕組みは、便利であっても採用しない。
+実験
 
-## 2. 正準の保存先（固定）
+検証
 
-すべてリポジトリ外に保存する。
+一時生成物
+を目的とし、Git 管理対象外とする
 
-- backup_root: E:\btc_ts\backup
+3. バックアップ種別（正準）
+3.1 git bundle（完全履歴バックアップ）
 
-推奨構造（正準）：
-E:\btc_ts\backup\
-  ├─ git_bundle\        # フルバックアップ（git bundle）
-  ├─ rp_tags\           # rp-* タグ一覧の書き出し（監査/確認用）
-  └─ handoff_ctx\       # CTX-*.zip（引き継ぎZIPの退避）
+用途：
+リポジトリ全履歴の完全保全
 
-※ E:\btc_ts 自体は運用データや設定の外部ルートであり、Git管理対象ではない。
-   Gitバックアップは「リポジトリ（C:\BtcTradeSystem）」の再現を目的とする。
+生成例：
 
-## 3. 構成ファイル（リポ内）
+git bundle create ..\tmp\handoff\pre_reset.bundle --all
 
-- scripts/git/git_rp_make.ps1
-  - rp-YYYYMMDD_HHmmss タグを打つ（必要時のみコミット）
-- scripts/git/git_rp_list.ps1
-  - rp-* タグの一覧表示（運用確認）
-- scripts/git/git_restore_from_bundle.ps1
-  - bundle から復元（クローン/展開）
-- scripts/git/git_rp_restore.ps1
-  - rp タグへ戻す（※危険操作。手動レビュー前提）
-- scripts/handoff/make_handoff.ps1
-  - CTX-*.zip（GPT用引き継ぎZIP）を生成する
 
-補足：
-- scripts/git/git_full_backup.ps1 をフルバックアップ（bundle作成）の正準スクリプトとする。
-  （bundle作成の手動ワンライナーは、非常時の代替手段としてのみ掲載する）
-  
-## 4. Restore Point（RP）運用ルール（タグ）
+特徴：
 
-### 4.1 命名規則（固定）
-- rp-YYYYMMDD_HHmmss
+履歴・タグ・ブランチをすべて含む
 
-### 4.2 原則
-- 自動コミット禁止（必要時のみ明示的に commit）
-- rpタグは「復元ポイントの印」であり、差分ZIPやdiff.patch等の生成を正準としない
+通常運用では頻繁に使わない（大容量）
 
-### 4.3 実行例
-- タグのみ
-  pwsh .\scripts\git\git_rp_make.ps1
+3.2 Restore Point（rp タグ）
 
-- コミットしてからタグ（節目のみ）
-  pwsh .\scripts\git\git_rp_make.ps1 -Commit -RpMemo "milestone: collector stabilize"
+命名規則：
 
-## 5. フルバックアップ（git bundle）運用（正準）
+rp-YYYYMMDD_HHMMSS
 
-### 5.1 目的
-- リモート不要で「リポジトリ全体」をアーカイブする
-- 重大障害・移行・PC入替でも復元できる
 
-### 5.2 出力
-- 出力先：E:\btc_ts\backup\git_bundle\
-- 成果物：
-  - <name>.bundle（必須・これのみを正とする）
+用途：
 
-### 5.3 実行（例）
-- 正準スクリプト（将来）：git_full_backup.ps1
-  pwsh .\scripts\git\git_full_backup.ps1 -OutDir "E:\btc_ts\backup\git_bundle" -Name "BtcTS-next-main-20260108_1120"
+作業節目の軽量スナップショット
 
-- スクリプトが無い場合の手動正準（ワンライナー）
-  $name="BtcTS-next-main-$(Get-Date -Format yyyyMMdd_HHmmss)"
-  $out="E:\btc_ts\backup\git_bundle\$name.bundle"
-  git bundle create $out --all
-  git bundle verify $out
+ローカル復元・履歴参照用
 
-## 6. 復元手順（正準）
+管理対象：
 
-### 6.1 bundle から復元（推奨）
-1) 新規フォルダへ clone
-   git clone "<bundle_path>" "<dest_dir>"
-2) ブランチ確認
-   cd <dest_dir>
-   git checkout main
-3) 起動前チェック（最低限）
-   git status -sb
+Git tag のみ
 
-### 6.2 rp タグへ戻す（危険：必ずレビュー）
-原則：
-- 先に git diff / git status を見て、戻す必要性を確認
-- 可能なら worktree で検証してから適用
+実データ・zip は含めない
 
-例（手動レビューの流れ）：
-1) 現状退避（ブランチを切る等）
-2) rpタグへ移動
-   git reset --hard rp-YYYYMMDD_HHmmss
-3) 起動確認
+3.3 CTX（ハンドオフ ZIP）【最重要】
+3.3.1 目的
 
-※ 自動ロールバック（無確認で戻す仕組み）は作らない。
+CTX は ChatGPT に渡すための最小・正準スナップショットである。
 
-※※ rp タグ復元は「作業を巻き戻す行為」であり、
-   不具合修正や試行錯誤の代替手段として常用しない。
+次チャットで GPT が迷わないこと
 
-## 7. 外部ルートの扱い（GPT迷子防止の核）
+V1 由来の情報を含まないこと
 
-### 7.1 外部ルート（正準）
-- E:\btc_ts\ は運用外部ルート（config/data/logs/secrets 等）
+巨大データ・秘密情報を含まないこと
 
-### 7.2 repo_structure.yaml への反映ポリシー
-- リポ構造（C:\BtcTradeSystem 配下）は自動抽出して常に正とする
-- 外部ルート（E:\btc_ts）は「任意で付録として」同梱する
-  - secrets は常に除外
-  - 巨大フォルダ（dataset等）も除外
-  - ツリーは “概要” のみ（深掘りしない）
+3.3.2 出力先（固定）
 
-### 7.3 自動生成の要件
-- tools/make_repo_map_extract.py に --extra-root を追加し、
-  repo_structure.yaml に external_roots セクションを出力できること
-  （手書き [EXT_TREE] は廃止）
+出力ディレクトリ：
 
-## 8. 更新履歴
-- 2026-01-08: NEXT 正準 草案（保存先E:\btc_ts\backup固定 / diff成果物廃止）
-- 2026-01-09: 本仕様をもって Git バックアップ・復元システムを完成とする
+C:\BtcTradeSystem\tmp\handoff
+
+
+出力ファイル名：
+
+CTX-YYYYMMDD_HHMMSS.zip
+
+
+※ docs/handoff/ は 廃止
+※ CTX は tmp/handoff のみを使用する
+
+3.3.3 CTX 同梱物（正準）
+
+CTX ZIP には 以下のみを含める。
+
+必須（欠けたら失敗）
+
+handover.md
+
+直近1日分のみ
+
+過去履歴・長文ログは禁止
+
+SUMMARY.md
+
+次 GPT が最短で状況把握するための要約
+
+REPO_MAP.extract.md
+
+repo_structure.yaml
+
+補助情報
+
+env/environment.txt
+
+env/env_manifest.yaml
+
+git/
+
+BRANCH.txt
+
+HEAD.txt
+
+recent_commits.txt
+
+restore_points.txt
+
+created_tag.txt（存在する場合）
+
+diag/
+
+各ツールの stdout / stderr
+
+3.3.4 絶対に含めてはならないもの
+
+V1 系文字列を含むもの
+（例：btc_trade_system, BtcTradeSystemV1 等）
+
+secrets / APIキー
+
+data / logs の実データ
+
+.venv
+
+tmp 作業ファイル（handoff 生成物を除く）
+
+巨大ファイル（目安：10MB 超）
+
+3.3.5 生成失敗時の挙動（確定）
+
+SUMMARY.md は 必須
+
+gen_summary.py が失敗した場合：
+
+CTX 生成は 失敗扱い
+
+ZIP は作らない
+
+diag/gen_summary_stdout_stderr.txt に原因を残す
+
+※ 「ランダムで生成されない」状態は仕様上存在しない
+→ 失敗は 必ず環境・引数・パスの問題
+
+4. 復元ポリシー（安全側）
+4.1 git bundle 復元
+
+空ディレクトリにのみ復元すること
+
+既存作業ディレクトリへの上書きは禁止
+
+4.2 rp タグ復元
+
+git checkout <tag> を基本
+
+worktree 使用を推奨
+
+危険操作はスクリプトでは防がず、手順で縛る
+
+5. GPT 迷走防止ルール（明文化）
+
+以下に違反した場合、仕様違反＝回帰とみなす。
+
+CTX 内に V1 由来文字列が含まれる
+
+docs/handoff/ が再登場する
+
+tmp が保管庫扱いされる
+
+handover.md に複数日分の履歴が書かれる
