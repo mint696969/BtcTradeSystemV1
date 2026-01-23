@@ -92,10 +92,17 @@ def render_collector_page() -> None:
             st.session_state["collector_status_err"] = f"status() failed: {type(e).__name__}: {e}"
         st.session_state["collector_status_ts"] = time.time()
 
+    # --- Start disabled 判定（仕様: ready/reasons） ---
+    # 遅延import：import時の副作用/重さを避ける
+    from btcts.settings import svc as settings_svc
+
+    ready, reasons, details = settings_svc.exchanges_ready()
+
+    # 操作ボタン
     c1, c2, c3, c4 = st.columns([1, 1, 1, 2])
 
     with c1:
-        if st.button("Start", use_container_width=True, key="collector_start"):
+        if st.button("Start", use_container_width=True, disabled=(not ready), key="collector_start"):
             stt = start()
             st.toast(f"start: {stt.mode} {stt.message}")
             _refresh_status()
@@ -130,6 +137,25 @@ def render_collector_page() -> None:
             st.caption(f"status(): (no data) (age={age:.1f}s)")
         else:
             st.caption(f"status(): {stt.mode} / {stt.message} (age={age:.1f}s)")
+
+    # Start が disabled の場合は理由を表示（事故防止）
+    if not ready:
+        for r in reasons:
+            st.warning(r)
+
+        # 取引所ごとの詳細（必要なら折りたたみ）
+        with st.expander("取引所ごとの判定詳細", expanded=False):
+            for ex_id, d in (details or {}).items():
+                if not isinstance(d, dict):
+                    continue
+                ex_ready = bool(d.get("ready"))
+                ex_reasons = d.get("reasons") if isinstance(d.get("reasons"), list) else []
+                if ex_ready:
+                    st.success(f"{ex_id}: ready")
+                else:
+                    st.error(f"{ex_id}: not ready")
+                    for rr in ex_reasons:
+                        st.write(f"- {rr}")
 
     st.divider()
 

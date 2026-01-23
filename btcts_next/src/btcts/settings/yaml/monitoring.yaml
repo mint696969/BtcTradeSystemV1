@@ -1,0 +1,47 @@
+# path: ./btcts_next/src/btcts/settings/yaml/monitoring.yaml
+# desc: Health/Collector 用の監視設定（本稼働・設計正）。UI/Health は load_yaml("monitoring") でこれを読む。
+
+# ---- thresholds --------------------------------------------------------------
+# Health 判定に使う基本しきい値
+thresholds:
+  # 正準（Health SVC が最優先で読む）
+  default:
+    age_sec:
+      warn: 20      # WARN 判定（秒）
+      crit: 30      # CRIT 判定（秒）
+    latency_ms:
+      warn: 400
+      crit: 1200
+    gap_rate:
+      warn: 0.05
+      crit: 0.15
+    window_min: 5
+    require_all_ok: true
+
+  # 互換フォールバック（将来削除可）
+  age_sec:
+    warn: 20
+    crit: 30
+
+# ---- presets ----------------------------------------------------------------
+# 将来 UI から切替可能にするためのプリセット定義
+presets:
+  default:
+    thresholds:
+      age_sec:
+        warn: 20
+        crit: 30
+      latency_ms:
+        warn: 400
+        crit: 1200
+      gap_rate:
+        warn: 0.05
+        crit: 0.15
+      window_min: 5
+      require_all_ok: true
+
+# ---- slo --------------------------------------------------------------------
+# SLO / アラート連携用（将来拡張）
+slo:
+  ticker:
+    max_stale_s: 5

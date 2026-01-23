@@ -3,21 +3,32 @@
 
 from __future__ import annotations
 
+# load 系（I/O 専用）
+from .load_yaml import (
+    load_yaml,
+    load_yaml_with_path,
+    LoadedYaml,
+)
+
+# svc 系（意味解釈・操作）
 from .svc import (
     SCHEMA_MAP,
     SettingRef,
     get_paths,
-    load_yaml,
     reset_to_default,
     resolve,
     save_yaml,
 )
 
 __all__ = [
+    # load
+    "load_yaml",
+    "load_yaml_with_path",
+    "LoadedYaml",
+    # svc
     "SCHEMA_MAP",
     "SettingRef",
     "get_paths",
-    "load_yaml",
     "reset_to_default",
     "resolve",
     "save_yaml",

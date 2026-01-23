@@ -1,0 +1,34 @@
+# path: ./btcts_next/config/schema/rate_control_def.yaml
+# desc: APIレート制御の共通ポリシー（WARN/CRIT判定・cap・floor・backoff）
+
+defaults:
+  util_window_warn_sec: 10
+  util_window_clear_sec: 30
+
+  warn_util: 0.90
+  warn_clear_util: 0.85
+  crit_util: 0.98
+
+  warn_cap: 0.80
+  crit_cap: 0.50
+
+  floor_rps: 0.10
+
+  crit_backoff_initial_sec: 2
+  crit_backoff_max_sec: 30
+  crit_hold_min_sec: 10
+  no_429_for_sec: 60
+
+keys:
+  - util_window_warn_sec
+  - util_window_clear_sec
+  - warn_util
+  - warn_clear_util
+  - crit_util
+  - warn_cap
+  - crit_cap
+  - floor_rps
+  - crit_backoff_initial_sec
+  - crit_backoff_max_sec
+  - crit_hold_min_sec
+  - no_429_for_sec

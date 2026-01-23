@@ -27,7 +27,7 @@ def status_path() -> Path:
 
 
 def rate_state_path() -> Path:
-    # 後方互換：旧V1で health が参照していたファイル名を維持
+    # 互換維持：運用上の固定ファイル名（UI/Health が参照する）
     return paths.data_dir() / "collector" / "rate_state.json"
 
 
@@ -44,7 +44,7 @@ def write_status(st: CollectorStatus, *, emit_audit: bool = True) -> Path:
     if obj.get("items") is None:
         obj["items"] = []
 
-    with io.file_lock(p, timeout_sec=10.0):
+    with io.file_lock(p, timeout_sec=10.0, stale_sec=5.0):
         io.write_json(p, obj)
 
     if emit_audit:
@@ -68,7 +68,7 @@ def write_rate_state(snapshot: Dict[str, Any], *, emit_audit: bool = True) -> Pa
         "items": snapshot,
     }
 
-    with io.file_lock(p, timeout_sec=10.0):
+    with io.file_lock(p, timeout_sec=10.0, stale_sec=5.0):
         io.write_json(p, obj)
 
     if emit_audit:

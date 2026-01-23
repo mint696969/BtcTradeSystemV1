@@ -1,14 +1,15 @@
 # path: ./btcts_next/src/btcts/health/svc.py
-# desc: status.json と monitoring.yaml から収集健全性を評価し、UI向けサマリを返す。
+# desc: status.json と monitoring.yaml（閾値）と audit.jsonl（根拠）から Health を分類し、UI向けサマリを返す（推論しない）。
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from btcts.settings import load_yaml
+from btcts.core import audit as AUDIT
+from btcts.core import paths as PATHS
+from btcts.settings.load_yaml import load_yaml_with_path
 
 
 @dataclass(frozen=True)
@@ -16,7 +17,7 @@ class HealthItem:
     exchange: str
     topic: str
     age_sec: float
-    status: str  # OK / WARN / CRIT
+    status: str  # OK / WARN / CRIT（分類）
     cause: Optional[str] = None
     retries: int = 0
     last_ok: Optional[str] = None
@@ -26,38 +27,33 @@ class HealthItem:
 @dataclass(frozen=True)
 class HealthSummary:
     updated_at: str
+    overall: str  # OK / WARN / CRIT（分類）
     counts: Dict[str, int]
     items: List[HealthItem]
     reasons: List[str]
+    refs: Dict[str, str]  # 参照した根拠パス（status/audit/monitoring 等）
+    audit_tail: List[Dict[str, Any]]  # 根拠（直近イベントをそのまま）
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
-def _get_thresholds() -> Tuple[float, float]:
+def _get_thresholds_from_cfg(cfg: Dict[str, Any]) -> Tuple[float, float]:
     """
-    monitoring 実効値（load_yaml("monitoring")）から warn/crit を取り出す。
-
+    monitoring 実効値から warn/crit を取り出す（分類専用）。
     対応する形：
-    - thresholds.age_sec.warn/crit（旧）
-    - thresholds.default.age_sec.warn/crit（新・正）
-    - presets を使う拡張が入っても “default を基準”に読めるようにする
+      - thresholds.default.age_sec.warn/crit（新・正）
+      - thresholds.age_sec.warn/crit（旧）
     """
-    cfg = load_yaml("monitoring") or {}
-
-    # 1) まずは新系（正）: thresholds.default.age_sec
-    age = (
-        (cfg.get("thresholds") or {})
-        .get("default", {})
-        .get("age_sec", {})
-    )
+    # 1) 正：thresholds.default.age_sec
+    age = ((cfg.get("thresholds") or {}).get("default") or {}).get("age_sec") or {}
     warn = age.get("warn", None)
     crit = age.get("crit", None)
 
-    # 2) フォールバック（旧）: thresholds.age_sec
+    # 2) 旧：thresholds.age_sec
     if warn is None or crit is None:
-        age2 = (cfg.get("thresholds") or {}).get("age_sec", {})
+        age2 = (cfg.get("thresholds") or {}).get("age_sec", {}) or {}
         if warn is None:
             warn = age2.get("warn", None)
         if crit is None:
@@ -92,28 +88,72 @@ def _judge(age_sec: float, warn: float, crit: float) -> str:
     return "OK"
 
 
-def read_health() -> HealthSummary:
+def _overall_from(mode: str, counts: Dict[str, int], *, items_present: bool) -> str:
+    m = (mode or "").upper()
+    if m == "ERROR":
+        return "CRIT"
+    if m and m != "RUNNING":
+        # STOPPED 等。推論せず、運用上は注意喚起。
+        return "WARN"
+    if not items_present:
+        return "WARN"
+    if counts.get("CRIT", 0) > 0:
+        return "CRIT"
+    if counts.get("WARN", 0) > 0:
+        return "WARN"
+    return "OK"
+
+
+def read_health(*, audit_lines: int = 50) -> HealthSummary:
     """
-    btcts.collector.status.read_status() を使う想定。
-    ただし、collector未起動/ファイル欠損でも落とさない（空で返す）。
+    - 分類（OK/WARN/CRIT）のみを行う（推論しない）
+    - 根拠として参照パスと audit の直近イベントを提示する
+    - Collector 未起動/欠損でも落とさない
     """
     reasons: List[str] = []
-    warn_th, crit_th = _get_thresholds()
 
+    # --- refs（根拠パス）---
+    refs: Dict[str, str] = {}
     try:
-        from btcts.collector.status import read_status
+        hp = PATHS.health_paths()
+        refs.update({f"paths.{k}": str(v) for k, v in hp.items()})
     except Exception as e:
-        # これはコード不整合なので reasons に残す
+        reasons.append(f"paths.health_paths failed: {type(e).__name__}: {e}")
+
+    # monitoring（参照パス含む）
+    loaded_mon = load_yaml_with_path("monitoring")
+    refs["monitoring.path"] = str(loaded_mon.path) if loaded_mon.path else ""
+    cfg = loaded_mon.data or {}
+
+    warn_th, crit_th = _get_thresholds_from_cfg(cfg)
+
+    # 閾値欠損の透明化（推論ではなく事実）
+    age_default = ((cfg.get("thresholds") or {}).get("default") or {}).get("age_sec") or {}
+    if age_default.get("warn", None) is None:
+        reasons.append("monitoring.thresholds.default.age_sec.warn is missing -> default=60s")
+    if age_default.get("crit", None) is None:
+        reasons.append("monitoring.thresholds.default.age_sec.crit is missing -> default=300s")
+
+    # status（参照パス含む）
+    try:
+        from btcts.collector import status as CST
+        refs["status.path"] = str(CST.status_path())
+        refs["rate_state.path"] = str(CST.rate_state_path())
+        read_status = CST.read_status
+    except Exception as e:
         return HealthSummary(
             updated_at=_now_iso(),
+            overall="CRIT",
             counts={"OK": 0, "WARN": 0, "CRIT": 0},
             items=[],
             reasons=[f"import btcts.collector.status failed: {type(e).__name__}: {e}"],
+            refs=refs,
+            audit_tail=[],
         )
 
     st = read_status()
 
-    # read_status() は CollectorStatus / dict の両方を許容する（移植中の揺れ対策）
+    # read_status() は dict を返す（現物）。念のため揺れも吸収。
     if isinstance(st, dict):
         mode = str(st.get("mode", "") or "")
         raw_items = st.get("items", None)
@@ -121,44 +161,58 @@ def read_health() -> HealthSummary:
         mode = str(getattr(st, "mode", "") or "")
         raw_items = getattr(st, "items", None)
 
-    # dict.items (builtin method) を拾ってしまった場合もここで無効化
     if callable(raw_items):
         raw_items = None
 
+    # audit tail（根拠：そのまま提示）
+    refs["audit.path"] = str(PATHS.logs_dir(ensure=False) / "audit.jsonl")
+    try:
+        audit_tail = AUDIT.tail(max_lines=int(audit_lines))
+    except Exception as e:
+        audit_tail = []
+        reasons.append(f"audit.tail failed: {type(e).__name__}: {e}")
+
+    # items 欠損/空
     if raw_items is None:
-        # items が欠損/未取得（型揺れ・ファイル欠損等）
-        if mode != "RUNNING":
-            reasons.append("collector is not running (status.items is None)")
-        else:
-            reasons.append("collector is RUNNING but status.items is None")
+        if (mode or "").upper() == "ERROR":
+            reasons.append("collector mode=ERROR")
+        reasons.append("status.items is None")
         return HealthSummary(
             updated_at=_now_iso(),
+            overall=_overall_from(mode, {"OK": 0, "WARN": 0, "CRIT": 0}, items_present=False),
             counts={"OK": 0, "WARN": 0, "CRIT": 0},
             items=[],
             reasons=reasons,
+            refs=refs,
+            audit_tail=audit_tail,
         )
 
     if isinstance(raw_items, list) and len(raw_items) == 0:
-        # collector は動いているが endpoints=0 等で items が空のケースを区別
-        if mode != "RUNNING":
-            reasons.append("collector is not running (status.items is empty)")
-        else:
-            reasons.append("collector is RUNNING but no items (endpoints=0?)")
+        if (mode or "").upper() == "ERROR":
+            reasons.append("collector mode=ERROR")
+        reasons.append("status.items is empty (endpoints=0?)")
         return HealthSummary(
             updated_at=_now_iso(),
+            overall=_overall_from(mode, {"OK": 0, "WARN": 0, "CRIT": 0}, items_present=False),
             counts={"OK": 0, "WARN": 0, "CRIT": 0},
             items=[],
             reasons=reasons,
+            refs=refs,
+            audit_tail=audit_tail,
         )
 
+    # items を分類
     items: List[HealthItem] = []
     counts = {"OK": 0, "WARN": 0, "CRIT": 0}
+    mode_u = (mode or "").upper()
+    mode_is_error = mode_u == "ERROR"
+    if mode_is_error:
+        reasons.append("collector mode=ERROR -> force CRIT (classification)")
 
     for it in raw_items:
         if not isinstance(it, dict):
             continue
 
-        # it は dict を想定
         ex = str(it.get("exchange", ""))
         tp = str(it.get("topic", ""))
         age = float(it.get("age_sec", 0.0) or 0.0)
@@ -168,8 +222,10 @@ def read_health() -> HealthSummary:
         notes = it.get("notes")
 
         stt = _judge(age, warn_th, crit_th)
-        counts[stt] += 1
+        if mode_is_error:
+            stt = "CRIT"
 
+        counts[stt] += 1
         items.append(
             HealthItem(
                 exchange=ex,
@@ -183,21 +239,17 @@ def read_health() -> HealthSummary:
             )
         )
 
-    # 状態が悪いものを上に
     order = {"CRIT": 0, "WARN": 1, "OK": 2}
     items.sort(key=lambda x: (order.get(x.status, 9), x.exchange, x.topic))
 
-    # 設定がデフォルトに落ちた可能性は reasons に出す（妥協なく透明化）
-    cfg = load_yaml("monitoring") or {}
-    age = (cfg.get("thresholds") or {}).get("default", {}).get("age_sec", {})
-    if age.get("warn", None) is None:
-        reasons.append("monitoring.thresholds.default.age_sec.warn is missing -> default=60s")
-    if age.get("crit", None) is None:
-        reasons.append("monitoring.thresholds.default.age_sec.crit is missing -> default=300s")
+    overall = _overall_from(mode, counts, items_present=True)
 
     return HealthSummary(
         updated_at=_now_iso(),
+        overall=overall,
         counts=counts,
         items=items,
         reasons=reasons,
+        refs=refs,
+        audit_tail=audit_tail,
     )

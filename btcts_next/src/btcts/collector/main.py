@@ -9,14 +9,15 @@ import signal
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-
-from btcts.core import audit
+from pathlib import Path
+from btcts.core import audit, io, paths
 from btcts.settings import load_yaml
 
 from .rate import RatePolicy
 from .scheduler import Endpoint, Scheduler
 from .providers import bitflyer
 from .status import CollectorStatus, write_status
+from .scheduler import EndpointSkipped
 
 
 def _now() -> float:
@@ -29,7 +30,8 @@ def _utc_yyyymmdd(ts: Optional[float] = None) -> str:
 
 
 def _collector_out_path(exchange: str, topic: str, ts: Optional[float] = None) -> str:
-    data_dir = os.environ.get("BTC_TS_DATA_DIR", "") or os.getcwd()
+    # data_dir は paths の正準（ENV未設定でも repo 直下に落ちない）
+    data_dir = str(paths.data_dir())
     ymd = _utc_yyyymmdd(ts)
     # 例: <DATA_DIR>/collector/bitflyer/orderbook/20251219.jsonl
     return os.path.join(data_dir, "collector", exchange, topic, f"{ymd}.jsonl")
@@ -37,10 +39,19 @@ def _collector_out_path(exchange: str, topic: str, ts: Optional[float] = None) -
 
 def _append_jsonl(path: str, record: Dict[str, Any]) -> int:
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    line = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(line)
-    return len(line.encode("utf-8"))
+
+    # data への追記も audit と同様に「壊れにくさ」を優先（多重起動・同時追記の保護）
+    # - file_lock: クロスプロセス排他
+    # - append: 追記
+    # - fsync_each=False: 収集性能を優先（必要なら True にできる）
+    # io.file_lock は Path 前提
+    p = Path(path)
+    with io.file_lock(p, timeout_sec=10.0):
+        io.append_jsonl(p, record, fsync_each=False)
+
+    # io.append_jsonl は内部で JSON 文字列化して追記するため、ここでは概算バイト数を返す
+    #（bytes は監査表示用。厳密でなくて良い）
+    return len(json.dumps(record, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) + 1
 
 
 def _as_bool(v: Any, default: bool = False) -> bool:
@@ -79,10 +90,20 @@ def _norm_exchanges_cfg(raw: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
 
 
 def _build_policies(exchanges_cfg: Dict[str, Any], monitoring_cfg: Dict[str, Any]) -> List[Tuple[str, RatePolicy]]:
+    """
+    exchanges.yaml + monitoring.yaml から RatePolicy を生成する（schema準拠）。
+
+    schema（exchanges_def.yaml）の正準:
+      exchanges.<id>.enabled
+      exchanges.<id>.rate.max_rps
+      exchanges.<id>.rate.burst
+    追加（将来拡張）:
+      exchanges.<id>.rate.soft_ratio / hard_ratio / burst_base_sec などが来ても壊れないようにしておく
+    """
     exmap = _norm_exchanges_cfg(exchanges_cfg)
 
     # safety_factor は monitoring 由来（将来統合のためここで受ける）
-    # 未設定なら 0.9、bitflyer は 0.8 を既定（あなたの引継ぎ通り）
+    # 未設定なら 0.9、bitflyer は 0.8 を既定（引継ぎ通り）
     sf_map: Dict[str, float] = {}
     sf = monitoring_cfg.get("safety_factor") if isinstance(monitoring_cfg, dict) else None
     if isinstance(sf, dict):
@@ -95,26 +116,37 @@ def _build_policies(exchanges_cfg: Dict[str, Any], monitoring_cfg: Dict[str, Any
         if not enabled:
             continue
 
-        official = _as_float(cfg.get("official_max_rps"), 0.0)
-        if official <= 0:
-            # 設定が無い場合はとりあえず 1 rps（後で schema を厳格化）
-            official = 1.0
+        # --- schema準拠: rate セクションから読む ---
+        rate = cfg.get("rate") if isinstance(cfg.get("rate"), dict) else {}
 
-        burst_base = _as_float(cfg.get("burst_base_sec"), 1.0)
+        # 正準: max_rps
+        base_max_rps = _as_float(rate.get("max_rps"), 0.0)
+        if base_max_rps <= 0:
+            # schema的には必須だが、Collector側は安全に落とす（start側でdisabledになる想定）
+            # ここで無理に 1.0 を入れて走らせると事故るので、スキップ扱いにする。
+            continue
 
-        # soft/hard: WARN=soft, CRIT=hard（未設定は 0.8 / 0.9）
-        soft_ratio = _as_float(cfg.get("soft_ratio"), 0.8)
-        hard_ratio = _as_float(cfg.get("hard_ratio"), 0.9)
+        # burst（任意）
+        burst_base = _as_float(rate.get("burst_base_sec"), 1.0)
+        # schemaの burst は「回数」寄りの意味だが、現実装では burst_base_sec を使っているため、
+        # 今は burst を直接使わず、将来RatePolicy側を拡張する。
+        _ = _as_float(rate.get("burst"), 0.0)
 
-        # もし設定が逆（hard < soft）なら入れ替えて保護する
-        if hard_ratio < soft_ratio:
+        # soft/hard（cap倍率）。未設定は仕様書に合わせて 0.8 / 0.9 ではなく、
+        # WARNは緩い抑制を守るため soft=0.9, hard=0.8 を既定にする。
+        soft_ratio = _as_float(rate.get("soft_ratio"), _as_float(cfg.get("soft_ratio"), 0.9))
+        hard_ratio = _as_float(rate.get("hard_ratio"), _as_float(cfg.get("hard_ratio"), 0.8))
+
+        # 仕様: WARNはCRITより緩い抑制 → soft_ratio >= hard_ratio を維持
+        if soft_ratio < hard_ratio:
             soft_ratio, hard_ratio = hard_ratio, soft_ratio
 
-        # safety_factor があるなら official に掛ける（「制限を食らわない」設計）
+        # safety_factor を max_rps に掛ける（「制限を食らわない」設計）
         sfv = sf_map.get(ex)
         if sfv is None:
             sfv = 0.8 if ex.lower() == "bitflyer" else 0.9
-        official_eff = max(official * sfv, 0.1)
+
+        official_eff = max(base_max_rps * sfv, 0.1)
 
         out.append(
             (
@@ -293,12 +325,25 @@ def _make_runner(sch: Scheduler, exchange: str, topic: str, cfg: Dict[str, Any])
             return
 
         # --- fallback ---
+        # 未対応(exchange/topic) は “動いてる風” の原因になるため、理由を必ず残す
+        reason = "unsupported_exchange_or_topic"
+        hint = "Unsupported exchange/topic. Implement it in _make_runner (providers) or fix endpoints.yaml."
+
         audit.emit(
             "collector.endpoint.skip",
             feature="collector",
             level="DEBUG",
-            payload={"exchange": exchange, "topic": topic},
+            payload={
+                "exchange": exchange,
+                "topic": topic,
+                "reason": reason,
+                "normalized": {"exchange": ex_l, "topic": tp_l},
+                "hint": hint,
+            },
         )
+
+        # 重要: skip は「成功扱い」にしない（Scheduler 側の no_data 判定を成立させる）
+        raise EndpointSkipped(reason=reason, hint=hint)
 
     return _run
 
@@ -309,7 +354,23 @@ def build_scheduler() -> Scheduler:
     monitoring_cfg = load_yaml("monitoring")
     collector_cfg = load_yaml("collector")
 
+    # Phase1: 共通レート制御ポリシー（案A: <CONFIG_DIR>/rate_control.yaml）
+    # settings/svc.py の SCHEMA_MAP に rate_control が登録されている前提。
+    rate_control_cfg = load_yaml("rate_control")
+
     sch = Scheduler()
+
+    # Collector 設定のループ周期など（run_forever の引数で使う）
+    sch._btcts_collector_cfg = collector_cfg  # type: ignore[attr-defined]
+
+    # Phase1: Scheduler が util 判定や backoff/floor に使う共通ポリシー
+    sch._btcts_rate_control_cfg = rate_control_cfg  # type: ignore[attr-defined]
+
+    # Phase1: RateController に共通ポリシーを注入（rate_control.yaml を実際に効かせる）
+    try:
+        sch.rc.set_common_policy(rate_control_cfg)  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
     # policies
     for ex, pol in _build_policies(exchanges_cfg, monitoring_cfg):
@@ -358,34 +419,23 @@ def build_scheduler() -> Scheduler:
 
         added += 1
 
-    # endpoints が無い場合は、enabled exchange ごとにダミーを1本ずつ作る
+    # endpoints が 0 件は「設定不備」なので起動失敗に寄せる（事故防止）
+    # ダミー登録で“起動してる風”に見せると運用判断を誤るため禁止。
     if added == 0:
-        exmap = _norm_exchanges_cfg(exchanges_cfg)
-        for ex, cfg in exmap.items():
-            if not _as_bool(cfg.get("enabled"), True):
-                continue
-            sch.add(
-                Endpoint(
-                    exchange=ex,
-                    endpoint="dummy",
-                    priority=0,
-                    target_interval=1.0,
-                    runner=_make_runner(sch, ex, "dummy", {}),
-                )
-            )
-
-            registered.append(
-                {
-                    "exchange": ex,
-                    "endpoint": "dummy",
-                    "priority": 0,
-                    "target_interval": 1.0,
-                }
-            )
-
-    # collector 設定のループ周期（あれば反映）
-    # ※現時点では Scheduler.run_forever の引数で使うので main 側で保持
-    sch._btcts_collector_cfg = collector_cfg  # type: ignore[attr-defined]
+        audit.emit(
+            "collector.endpoints.empty",
+            feature="collector",
+            level="CRIT",
+            payload={
+                "hint": "Add endpoint definitions to endpoints.yaml (format: items: [...] or exchange map).",
+                "endpoints_format": (
+                    "items"
+                    if isinstance(endpoints_cfg, dict) and isinstance(endpoints_cfg.get("items"), list)
+                    else "map"
+                ),
+            },
+        )
+        raise RuntimeError("no endpoints registered (endpoints config is empty)")
 
     # debug: 何を読んで、何本 endpoints を登録したか（移植中の配置ミス検出用）
     try:
@@ -414,16 +464,49 @@ def build_scheduler() -> Scheduler:
 
 def main() -> int:
     audit.emit("collector.main.start", feature="collector", level="INFO", payload={"pid": os.getpid()})
+    sch: Optional[Scheduler] = None
     stop_reason: str = "unknown"
     stop_signal: Optional[int] = None
     stop_error: str = ""
 
-    sch = build_scheduler()
-    cfg = getattr(sch, "_btcts_collector_cfg", {})  # type: ignore[attr-defined]
+    try:
+        sch = build_scheduler()
 
-    tick_sec = _as_float(cfg.get("tick_sec"), 0.05) if isinstance(cfg, dict) else 0.05
-    rate_every = _as_float(cfg.get("rate_state_every_sec"), 1.0) if isinstance(cfg, dict) else 1.0
-    status_every = _as_float(cfg.get("status_every_sec"), 2.0) if isinstance(cfg, dict) else 2.0
+        def _status_items() -> List[Dict[str, Any]]:
+            try:
+                return sch._build_status_items(_now())  # type: ignore[attr-defined]
+            except Exception:
+                return []
+
+        cfg = getattr(sch, "_btcts_collector_cfg", {})  # type: ignore[attr-defined]
+
+        tick_sec = _as_float(cfg.get("tick_sec"), 0.05) if isinstance(cfg, dict) else 0.05
+        rate_every = _as_float(cfg.get("rate_state_every_sec"), 1.0) if isinstance(cfg, dict) else 1.0
+        status_every = _as_float(cfg.get("status_every_sec"), 2.0) if isinstance(cfg, dict) else 2.0
+
+        startup_grace_sec = _as_float(cfg.get("startup_grace_sec"), 30.0) if isinstance(cfg, dict) else 30.0
+        no_data_check_every_sec = (
+            _as_float(cfg.get("no_data_check_every_sec"), 1.0) if isinstance(cfg, dict) else 1.0
+        )
+
+    except Exception as _e:
+        stop_reason = "exception"
+        stop_error = str(_e)
+
+        audit.emit(
+            "collector.main.error",
+            feature="collector",
+            level="CRIT",
+            payload={"err": stop_error},
+        )
+        write_status(CollectorStatus(ts=_now(), mode="ERROR", message="collector error", last_error=stop_error))
+        audit.emit(
+            "collector.main.exit",
+            feature="collector",
+            level="INFO",
+            payload={"reason": stop_reason, "signum": stop_signal, "err": stop_error},
+        )
+        return 2
 
     def _handle_sig(signum: int, _frame: Any) -> None:
         nonlocal stop_reason, stop_signal
@@ -441,23 +524,56 @@ def main() -> int:
     signal.signal(signal.SIGTERM, _handle_sig)
 
     try:
-        write_status(CollectorStatus(ts=_now(), mode="RUNNING", message="collector main running"))
-        sch.run_forever(tick_sec=tick_sec, rate_state_every_sec=rate_every, status_every_sec=status_every)
+        # 起動直後の状態は RUNNING を明示（msg未定義の事故を避ける）
+        write_status(
+            CollectorStatus(
+                ts=_now(),
+                mode="RUNNING",
+                message="collector running",
+                last_error="",
+                items=_status_items(),
+            ),
+            emit_audit=False,
+        )
+
+        startup_grace_sec = _as_float(cfg.get("startup_grace_sec"), 30.0) if isinstance(cfg, dict) else 30.0
+        no_data_check_every_sec = (
+            _as_float(cfg.get("no_data_check_every_sec"), 1.0) if isinstance(cfg, dict) else 1.0
+        )
+
+        sch.run_forever(
+            tick_sec=tick_sec,
+            rate_state_every_sec=rate_every,
+            status_every_sec=status_every,
+            startup_grace_sec=startup_grace_sec,
+            no_data_check_every_sec=no_data_check_every_sec,
+        )
+
         if stop_reason == "unknown":
             stop_reason = "stop_requested"
         return 0
 
-    except Exception as e:
+    except Exception as _e:
         stop_reason = "exception"
-        stop_error = str(e)
+        stop_error = str(_e)
+
         audit.emit(
             "collector.main.error",
             feature="collector",
             level="CRIT",
             payload={"err": stop_error},
         )
-        write_status(CollectorStatus(ts=_now(), mode="ERROR", message="collector error", last_error=stop_error))
+        write_status(
+            CollectorStatus(
+                ts=_now(),
+                mode="ERROR",
+                message="collector error",
+                last_error=stop_error,
+                items=_status_items(),
+            )
+        )
         return 2
+
     finally:
         msg = f"collector main exit reason={stop_reason}"
         if stop_signal is not None:
@@ -465,7 +581,21 @@ def main() -> int:
         if stop_error:
             msg += f" err={stop_error}"
 
-        write_status(CollectorStatus(ts=_now(), mode="STOPPED", message=msg), emit_audit=False)
+        # 例外で落ちた場合、ERROR を STOPPED で上書きしない（原因追跡を容易にする）
+        final_mode = "ERROR" if stop_reason == "exception" else "STOPPED"
+        # sch があるなら items を付けて「空に戻す事故」を防ぐ
+        items = []
+        if sch is not None:
+            try:
+                items = sch._build_status_items(_now())  # type: ignore[attr-defined]
+            except Exception:
+                items = []
+
+        write_status(
+            CollectorStatus(ts=_now(), mode=final_mode, message=msg, last_error=stop_error, items=items),
+            emit_audit=False,
+        )
+
         audit.emit(
             "collector.main.exit",
             feature="collector",

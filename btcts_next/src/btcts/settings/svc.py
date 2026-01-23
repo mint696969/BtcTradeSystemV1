@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/settings/svc.py
-# desc: 設定（schema + current差分）を正準化して読み書きするサービス。ENV優先の config/ui を正とし、差分ゼロなら current を削除する。
+# desc: settings の公開口（svcのみ公開…という方針を維持しつつ、YAMLローダを“正準I/F”として一本化）
 
 from __future__ import annotations
 
@@ -36,6 +36,7 @@ SCHEMA_MAP: Dict[str, str] = {
     "endpoints": "endpoints_def",
     "monitoring": "monitoring_def",
     "health": "health_def",
+    "rate_control": "rate_control_def",
     # ui/dash
     "dash": "dash_def",
     "tabs": "tabs_def",
@@ -196,7 +197,7 @@ def _header_lines(ref: SettingRef) -> str:
 # -----------------------------------------------------------------------------
 
 
-def load_yaml(name: str) -> Dict[str, Any]:
+def load_effective(name: str) -> Dict[str, Any]:
     """schema defaults + current diff を合成した実効値を返す。"""
     ref = resolve(name)
     schema = io.read_yaml(ref.schema_path, default={}) or {}
@@ -284,3 +285,68 @@ def _yaml_dump(obj: Any) -> str:
     if not text.endswith("\n"):
         text += "\n"
     return text
+
+def exchanges_ready() -> tuple[bool, list[str], dict]:
+    """
+    Collector Start 可否判定（仕様書: ready/reasons）。
+
+    戻り:
+      - ready: Start可能か
+      - reasons: Start不可の理由（ユーザー向け文字列）
+      - details: 取引所ごとの判定詳細（UI表示用）
+
+    判定方針（Collector範囲で安全側・最小）:
+      - exchanges.yaml は schema どおり {exchanges:{...}} を正とする（誤形式は通さない）
+      - enabled=true の取引所が 1つ以上あること
+      - enabled 取引所に rate.max_rps > 0 があること（現状schemaの正準）
+      - public収集では secrets は必須にしない（private機能は将来拡張で判定追加）
+    """
+    reasons: list[str] = []
+    details: dict = {}
+
+    # 1) exchanges の実効値を取得
+    try:
+        cfg = load_effective("exchanges")  # schema + current の実効値
+    except Exception as e:
+        return False, [f"exchanges 設定の読み込みに失敗: {e}"], {}
+
+    if not isinstance(cfg, dict):
+        return False, ["exchanges 設定が不正（dict ではありません）"], {}
+
+    ex_map = cfg.get("exchanges")
+    if not isinstance(ex_map, dict):
+        return False, ["exchanges 設定が不正（'exchanges' が未設定/不正）"], {}
+
+    startable_ids: list[str] = []
+
+    for ex_id, ex in ex_map.items():
+        if not isinstance(ex, dict):
+            details[str(ex_id)] = {"ready": False, "reasons": ["設定が不正（dict ではありません）"]}
+            continue
+
+        enabled = bool(ex.get("enabled", False))
+        if not enabled:
+            details[ex_id] = {"ready": False, "reasons": ["disabled（enabled=false）"]}
+            continue
+
+        ex_reasons: list[str] = []
+
+        rate = ex.get("rate") if isinstance(ex.get("rate"), dict) else {}
+        max_rps = rate.get("max_rps")
+
+        if not isinstance(max_rps, (int, float)) or float(max_rps) <= 0:
+            ex_reasons.append("rate.max_rps が未設定/不正（> 0 が必須）")
+
+        ex_ready = len(ex_reasons) == 0
+        details[ex_id] = {"ready": ex_ready, "reasons": ex_reasons}
+
+        if ex_ready:
+            startable_ids.append(ex_id)
+
+    if not ex_map:
+        reasons.append("exchanges が未設定（取引所が1件もありません）")
+    if not startable_ids:
+        reasons.append("Start可能な取引所がありません（enabled / rate.max_rps を確認してください）")
+
+    ready = len(reasons) == 0
+    return ready, reasons, details

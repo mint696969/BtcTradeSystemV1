@@ -15,7 +15,7 @@ from typing import Optional
 import ctypes
 import ctypes.wintypes
 
-from btcts.core import audit, paths
+from btcts.core import audit, io, paths
 from .status import CollectorStatus, write_status
 
 
@@ -141,187 +141,224 @@ def status() -> CollectorStatus:
 
 def start(*, python: Optional[str] = None) -> CollectorStatus:
     """collector をバックグラウンド起動する。二重起動は防止。"""
-    st = status()
-    if st.mode == "RUNNING":
-        return st
-
-    py = python or sys.executable
-
-    # パス固定は事故る（btcts_next 配下に移植しているため）。
-    # ここは PYTHONPATH を前提に、モジュール実行で起動する。
-    cmd = [py, "-m", "btcts.collector.main"]
-    # 子プロセスで btcts を import できるように PYTHONPATH を保証する
-    env = os.environ.copy()
-    repo = paths.repo_root()
-    src = repo / "btcts_next" / "src"
-
-    sep = ";" if os.name == "nt" else ":"
-    cur = env.get("PYTHONPATH", "")
-    parts = [p for p in cur.split(sep) if p] if cur else []
-    # 先頭に repo/src を入れて優先（重複は避ける）
-    if str(repo) not in parts:
-        parts.insert(0, str(repo))
-    if str(src) not in parts:
-        parts.insert(1, str(src))
-    env["PYTHONPATH"] = sep.join(parts)
-
-    lp = _log_path()
-    lp.parent.mkdir(parents=True, exist_ok=True)
-
-    # collector 側の即死原因を必ず見える化する（DEVNULLは禁止）
-    logf = open(lp, "a", encoding="utf-8", errors="replace")
-
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(paths.repo_root()),
-        stdout=logf,
-        stderr=logf,
-        env=env,
-        start_new_session=True,
-    )
     try:
-        logf.close()
-    except Exception:
-        pass
+        # Start 全体を直列化（連打・同時押しで二重起動や孤児を作らない）
+        with io.file_lock(_pid_path(), timeout_sec=20.0):
+            st = status()
+            if st.mode == "RUNNING":
+                return st
 
-    # 起動直後に落ちたケースを検出（パスミス・importミス等）
-    time.sleep(0.15)
-    if proc.poll() is not None:
-        st_err = CollectorStatus(
-            ts=time.time(),
-            mode="ERROR",
-            message="collector process exited immediately",
-            last_error=f"exitcode={proc.returncode}",
-            items=[],
-        )
-        write_status(st_err)
-        audit.emit(
-            "collector.start.fail",
-            feature="collector",
-            level="CRIT",
-            payload={"cmd": cmd, "returncode": proc.returncode},
-        )
-        return st_err
+            py = python or sys.executable
 
+            # パス固定は事故る（btcts_next 配下に移植しているため）。
+            # ここは PYTHONPATH を前提に、モジュール実行で起動する。
+            cmd = [py, "-m", "btcts.collector.main"]
 
-    # ハンドシェイク：collector 本体が回り始めた証拠（rate_state.json 生成）を待つ
-    # これが出ない場合は「起動できていない」ので UI へ ERROR を返す
-    from .status import rate_state_path  # 遅延importで循環回避
+            # 子プロセスで btcts を import できるように PYTHONPATH を保証する
+            env = os.environ.copy()
+            repo = paths.repo_root()
+            src = repo / "btcts_next" / "src"
 
-    t0 = time.time()
-    ok = False
-    while time.time() - t0 < 2.0:
-        if proc.poll() is not None:
-            break
-        if rate_state_path().exists():
-            ok = True
-            break
-        time.sleep(0.05)
+            sep = ";" if os.name == "nt" else ":"
+            cur = env.get("PYTHONPATH", "")
+            parts = [p for p in cur.split(sep) if p] if cur else []
+            if str(repo) not in parts:
+                parts.insert(0, str(repo))
+            if str(src) not in parts:
+                parts.insert(1, str(src))
+            env["PYTHONPATH"] = sep.join(parts)
 
-    if not ok:
-        # 起動に失敗しているので、孤児プロセス化を防ぐため止める
-        try:
-            proc.terminate()
-        except Exception:
-            pass
-        t1 = time.time()
-        while time.time() - t1 < 1.0:
-            if proc.poll() is not None:
-                break
-            time.sleep(0.05)
-        if proc.poll() is None and os.name == "nt":
+            lp = _log_path()
+            lp.parent.mkdir(parents=True, exist_ok=True)
+
+            # collector 側の即死原因を必ず見える化する（DEVNULLは禁止）
+            logf = open(lp, "a", encoding="utf-8", errors="replace")
+
+            proc = subprocess.Popen(
+                cmd,
+                cwd=str(paths.repo_root()),
+                stdout=logf,
+                stderr=logf,
+                env=env,
+                start_new_session=True,
+            )
             try:
-                _terminate_windows(proc.pid)
+                logf.close()
             except Exception:
                 pass
 
+            # 起動直後に落ちたケースを検出（パスミス・importミス等）
+            time.sleep(0.15)
+            if proc.poll() is not None:
+                st_err = CollectorStatus(
+                    ts=time.time(),
+                    mode="ERROR",
+                    message="collector process exited immediately",
+                    last_error=f"exitcode={proc.returncode}",
+                    items=[],
+                )
+                write_status(st_err)
+                audit.emit(
+                    "collector.start.fail",
+                    feature="collector",
+                    level="CRIT",
+                    payload={"cmd": cmd, "returncode": proc.returncode},
+                )
+                return st_err
+
+            # ハンドシェイク：collector 本体が回り始めた証拠（rate_state.json 生成）を待つ
+            from .status import rate_state_path  # 遅延importで循環回避
+
+            t0 = time.time()
+            ok = False
+            while time.time() - t0 < 2.0:
+                if proc.poll() is not None:
+                    break
+                if rate_state_path().exists():
+                    ok = True
+                    break
+                time.sleep(0.05)
+
+            if not ok:
+                # 起動に失敗しているので、孤児プロセス化を防ぐため止める
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+                t1 = time.time()
+                while time.time() - t1 < 1.0:
+                    if proc.poll() is not None:
+                        break
+                    time.sleep(0.05)
+                if proc.poll() is None and os.name == "nt":
+                    try:
+                        _terminate_windows(proc.pid)
+                    except Exception:
+                        pass
+
+                st_err = CollectorStatus(
+                    ts=time.time(),
+                    mode="ERROR",
+                    message="collector did not produce rate_state.json",
+                    last_error=f"pid={proc.pid} poll={proc.poll()} log={_log_path()}",
+                    items=[],
+                )
+                write_status(st_err)
+                audit.emit(
+                    "collector.start.fail",
+                    feature="collector",
+                    level="CRIT",
+                    payload={"cmd": cmd, "pid": proc.pid, "log": str(_log_path())},
+                )
+                return st_err
+
+            _pid_path().write_text(str(proc.pid))
+
+            st2 = CollectorStatus(
+                ts=time.time(),
+                mode="RUNNING",
+                message=f"started pid={proc.pid}",
+                items=[],
+            )
+            write_status(st2)
+
+            audit.emit(
+                "collector.start",
+                feature="collector",
+                level="INFO",
+                payload={"pid": proc.pid, "cmd": cmd},
+            )
+
+            return st2
+
+    except TimeoutError as e:
+        # ロック競合時は write_status すると再度 lock を取りに行って落ちる可能性があるため禁止
         st_err = CollectorStatus(
             ts=time.time(),
             mode="ERROR",
-            message="collector did not produce rate_state.json",
-            last_error=f"pid={proc.pid} poll={proc.poll()} log={_log_path()}",
+            message="lock timeout (collector control)",
+            last_error=str(e),
+            items=[],
         )
-        write_status(st_err)
         audit.emit(
-            "collector.start.fail",
+            "collector.lock.timeout",
             feature="collector",
-            level="CRIT",
-            payload={"cmd": cmd, "pid": proc.pid, "log": str(_log_path())},
+            level="WARN",
+            payload={"where": "start", "err": str(e)},
         )
         return st_err
-
-    _pid_path().write_text(str(proc.pid))
-
-    st2 = CollectorStatus(
-        ts=time.time(),
-        mode="RUNNING",
-        message=f"started pid={proc.pid}",
-        items=[],
-    )
-    write_status(st2)
-
-    audit.emit(
-        "collector.start",
-        feature="collector",
-        level="INFO",
-        payload={"pid": proc.pid, "cmd": cmd},
-    )
-
-    return st2
-
 
 
 def stop(*, timeout_sec: float = 5.0) -> CollectorStatus:
     """collector を停止する（SIGTERM → SIGKILL）。"""
-    p = _pid_path()
-    if not p.exists():
-        st = CollectorStatus(ts=time.time(), mode="STOPPED", message="pid not found", items=[])
-        write_status(st)
-        return st
-
     try:
-        pid = int(p.read_text().strip())
-    except Exception:
-        st = CollectorStatus(ts=time.time(), mode="ERROR", message="invalid pid file", items=[])
-        write_status(st)
-        return st
+        # Stop 全体を直列化（連打・同時押しで pidfile/状態を破壊しない）
+        with io.file_lock(_pid_path(), timeout_sec=max(20.0, timeout_sec + 10.0)):
+            p = _pid_path()
+            if not p.exists():
+                st = CollectorStatus(ts=time.time(), mode="STOPPED", message="pid not found", items=[])
+                write_status(st)
+                return st
 
-    if os.name == "nt":
-        ok = _terminate_windows(pid)
-        t0 = time.time()
-        while time.time() - t0 < timeout_sec:
-            if not _is_alive(pid):
-                break
-            time.sleep(0.1)
+            try:
+                pid = int(p.read_text().strip())
+            except Exception:
+                st = CollectorStatus(ts=time.time(), mode="ERROR", message="invalid pid file", items=[])
+                write_status(st)
+                return st
 
-        if _is_alive(pid):
-            # 死んでないのに pidfile を消すのは禁止
-            st = CollectorStatus(
-                ts=time.time(),
-                mode="ERROR",
-                message=f"failed to stop pid={pid}",
-                last_error=f"terminate_ok={ok} (still alive after {timeout_sec:.1f}s)",
-                items=[],
-            )
-            write_status(st)
+            if os.name == "nt":
+                ok = _terminate_windows(pid)
+                t0 = time.time()
+                while time.time() - t0 < timeout_sec:
+                    if not _is_alive(pid):
+                        break
+                    time.sleep(0.1)
+
+                if _is_alive(pid):
+                    # 死んでないのに pidfile を消すのは禁止
+                    st = CollectorStatus(
+                        ts=time.time(),
+                        mode="ERROR",
+                        message=f"failed to stop pid={pid}",
+                        last_error=f"terminate_ok={ok} (still alive after {timeout_sec:.1f}s)",
+                        items=[],
+                    )
+                    write_status(st)
+                    audit.emit(
+                        "collector.stop.fail",
+                        feature="collector",
+                        level="CRIT",
+                        payload={"pid": pid, "terminate_ok": ok},
+                    )
+                    return st
+
+            p.unlink(missing_ok=True)
+
+            st2 = CollectorStatus(ts=time.time(), mode="STOPPED", message=f"stopped pid={pid}", items=[])
+            write_status(st2)
+
             audit.emit(
-                "collector.stop.fail",
+                "collector.stop",
                 feature="collector",
-                level="CRIT",
-                payload={"pid": pid, "terminate_ok": ok},
+                level="INFO",
+                payload={"pid": pid},
             )
-            return st
 
-    p.unlink(missing_ok=True)
-
-    st2 = CollectorStatus(ts=time.time(), mode="STOPPED", message=f"stopped pid={pid}", items=[])
-    write_status(st2)
-
-    audit.emit(
-        "collector.stop",
-        feature="collector",
-        level="INFO",
-        payload={"pid": pid},
-    )
-
-    return st2
+            return st2
+    except TimeoutError as e:
+        # ロック競合時は write_status すると再度 lock を取りに行って落ちる可能性があるため禁止
+        st_err = CollectorStatus(
+            ts=time.time(),
+            mode="ERROR",
+            message="lock timeout (collector control)",
+            last_error=str(e),
+            items=[],
+        )
+        audit.emit(
+            "collector.lock.timeout",
+            feature="collector",
+            level="WARN",
+            payload={"where": "stop", "err": str(e)},
+        )
+        return st_err

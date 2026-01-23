@@ -91,6 +91,16 @@ if (Test-Path $handover) {
   Write-Text (Join-Path $ctxDir "handover.md") "# handover`n"
 }
 
+# --- docs/開発メモ を同梱（人間向け補助資料 / 任意） ---
+$devMemoDir = Join-Path $repo "docs\開発メモ"
+if (Test-Path $devMemoDir) {
+  Copy-Item `
+    -Recurse `
+    -Force `
+    -LiteralPath $devMemoDir `
+    -Destination (Join-Path $ctxDir "開発メモ")
+}
+
 # --- repo map / structure ---
 $tool = Join-Path $repo "tools\make_repo_map_extract.py"
 

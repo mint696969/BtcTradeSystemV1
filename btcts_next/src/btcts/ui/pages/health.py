@@ -22,30 +22,10 @@ def render_health_page() -> None:
     # 遅延import（UI import時の副作用を避ける）
     from btcts.health.svc import read_health
 
-    # 表示用：Paths
-    with st.expander("Paths (effective)", expanded=False):
-        st.write(
-            {
-                # env raw
-                "ENV.BTC_TS_DATA_DIR": _env("BTC_TS_DATA_DIR"),
-                "ENV.BTC_TS_LOGS_DIR": _env("BTC_TS_LOGS_DIR"),
-                "ENV.BTC_TS_CONFIG_DIR": _env("BTC_TS_CONFIG_DIR"),
-                "ENV.BTC_TS_SECRETS_DIR": _env("BTC_TS_SECRETS_DIR"),
-                "ENV.BTC_TS_DATASET_DIR": _env("BTC_TS_DATASET_DIR"),
-                # resolved (source of truth)
-                "repo_root": str(ENV.repo_root()),
-                "data_dir": str(ENV.data_dir()),
-                "logs_dir": str(ENV.logs_dir()),
-                "config_dir": str(ENV.config_dir()),
-                "schema_dir": str(PATHS.schema_dir()),
-                "ui_config_dir": str(PATHS.config_dir()),
-            }
-        )
-
     # refresh
     c1, c2 = st.columns([1, 3])
     with c1:
-        refresh = st.button("Refresh", use_container_width=True)
+        refresh = st.button("Refresh", width="stretch")
 
     if "health_summary" not in st.session_state:
         st.session_state["health_summary"] = None
@@ -80,16 +60,24 @@ def render_health_page() -> None:
         st.caption(f"age={age:.1f}s")
         return
 
+    # Paths (根拠：svc が参照したもの)
+    refs = getattr(hs, "refs", {}) or {}
+    with st.expander("Refs (evidence)", expanded=False):
+        st.write(refs)
+
     # summary
     counts = getattr(hs, "counts", {}) or {}
     updated_at = getattr(hs, "updated_at", None)
-    st.caption(f"updated_at={updated_at} / OK={counts.get('OK', 0)} WARN={counts.get('WARN', 0)} CRIT={counts.get('CRIT', 0)} / age={age:.1f}s")
+    overall = getattr(hs, "overall", "")
+    st.caption(
+        f"updated_at={updated_at} / overall={overall} / "
+        f"OK={counts.get('OK', 0)} WARN={counts.get('WARN', 0)} CRIT={counts.get('CRIT', 0)} / age={age:.1f}s"
+    )
 
     items = getattr(hs, "items", []) or []
     if not items:
-        st.info("Health items is empty. collector/status.json や設定(endpoints/exchanges)を確認してください。")
+        st.info("Health items is empty. status.json / 設定(endpoints/exchanges) / audit.jsonl を確認してください。")
     else:
-        # item dict化（pydantic/dataclass両対応）
         rows: List[Dict[str, Any]] = []
         for it in items:
             if hasattr(it, "model_dump"):
@@ -101,11 +89,17 @@ def render_health_page() -> None:
             else:
                 rows.append({"value": str(it)})
 
-        st.dataframe(rows, use_container_width=True, hide_index=True)
+        st.dataframe(rows, width="stretch", hide_index=True)
 
     # reasons
     reasons = getattr(hs, "reasons", []) or []
     if reasons:
-        with st.expander("Reasons", expanded=False):
+        with st.expander("Reasons (facts)", expanded=False):
             for r in reasons:
                 st.write(f"- {r}")
+
+    # audit tail（根拠：そのまま提示、解釈しない）
+    audit_tail = getattr(hs, "audit_tail", []) or []
+    if audit_tail:
+        with st.expander("Audit tail (raw)", expanded=False):
+            st.dataframe(audit_tail, width="stretch", hide_index=True)

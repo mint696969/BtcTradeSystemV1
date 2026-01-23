@@ -21,57 +21,47 @@ except Exception:  # pragma: no cover
 
 
 @contextmanager
-def file_lock(path: Path, *, timeout_sec: float = 10.0, poll_sec: float = 0.05) -> Iterator[None]:
-    """クロスプロセスで使える簡易ロック。
-
-    - portalocker があればそれを使う（Windows対応）。
-    - 無ければ "排他用ファイルの原子的作成"（open('x')）で代替する。
-
-    注意: 代替方式はプロセス異常終了時にロックファイルが残る可能性がある。
-    その場合は timeout で諦める。
+def file_lock(target_path: Path, *, timeout_sec: float = 10.0, stale_sec: float = 60.0) -> Iterator[None]:
     """
+    排他用のロックファイルを作ってロックする。
 
-    lock_path = Path(str(path) + ".lock")
+    - target_path が ".../x.json" なら lock は ".../x.json.lock"
+    - 既存 lock が stale_sec より古ければ回収（削除）して取り直す
+    """
+    lock_path = Path(str(target_path) + ".lock")
+    deadline = time.time() + float(timeout_sec)
 
-    # portalocker がある場合
-    try:
-        import portalocker  # type: ignore
-
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(lock_path, "a", encoding="utf-8") as f:
-            portalocker.lock(f, portalocker.LOCK_EX)
-            try:
-                yield
-            finally:
-                try:
-                    portalocker.unlock(f)
-                except Exception:
-                    pass
-        return
-    except Exception:
-        pass
-
-    # fallback: lockfile create
-    start = time.time()
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
     while True:
         try:
             fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_RDWR)
             try:
-                os.write(fd, f"pid={os.getpid()} ts={time.time()}\n".encode("utf-8"))
+                msg = f"pid={os.getpid()} ts={time.time()}\n"
+                os.write(fd, msg.encode("utf-8", errors="replace"))
+                os.fsync(fd)
             finally:
                 os.close(fd)
             break
+
         except FileExistsError:
-            if (time.time() - start) >= timeout_sec:
+            # stale 判定：mtime が古い lock は回収する
+            try:
+                age = time.time() - lock_path.stat().st_mtime
+                if age >= float(stale_sec):
+                    lock_path.unlink(missing_ok=True)
+                    continue
+            except Exception:
+                pass
+
+            if time.time() >= deadline:
                 raise TimeoutError(f"lock timeout: {lock_path}")
-            time.sleep(poll_sec)
+
+            time.sleep(0.05)
 
     try:
         yield
     finally:
         try:
-            lock_path.unlink(missing_ok=True)  # py3.8+
+            lock_path.unlink(missing_ok=True)
         except Exception:
             pass
 
