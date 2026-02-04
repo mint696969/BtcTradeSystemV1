@@ -103,20 +103,32 @@ def _schema_defaults(schema: Any) -> Dict[str, Any]:
     """schema から既定値 dict を抽出する。
 
     対応形（柔軟に吸収）：
-    - {defaults: {...}}
-    - {default: {...}}
+    1) {defaults: {...}}
+    2) {default: {...}}
+    3) schema が「dict直書き」（= keys/fields/defaults/default いずれも無い）なら
+       schema 自体を defaults とみなす（現行スキーマ互換）
 
     ※ 将来スキーマが拡張されてもここで吸収する。
     """
     if not isinstance(schema, dict):
         return {}
+
     d = schema.get("defaults")
     if isinstance(d, dict):
         return d
+
     d = schema.get("default")
     if isinstance(d, dict):
         return d
-    return {}
+
+    # schema が keys/fields を持つ場合は直書き defaults 扱いにしない（構造が違うため）
+    if isinstance(schema.get("keys"), (list, tuple)):
+        return {}
+    if isinstance(schema.get("fields"), dict):
+        return {}
+
+    # ここまで来たら dict直書き schema とみなし、それ自体を defaults として返す
+    return schema
 
 
 def _schema_allowed_keys(schema: Any) -> Optional[set]:

@@ -44,3 +44,11 @@ docs/handoff/**
 # tmp is a workspace, never tracked
 tmp/
 tmp/**
+
+# ops / service (do not commit)
+service/
+service/**
+
+# logs
+*.log
+logs/

@@ -6,7 +6,8 @@ exchanges:
     enabled: true
     label: "bitFlyer"
     rate:
-      max_rps: 8
+      # 事実値: 500/5min/IP = 1.6667 rps
+      max_rps: 1.6667
       burst: 2
 
 secrets:

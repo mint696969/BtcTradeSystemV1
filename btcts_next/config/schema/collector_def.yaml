@@ -11,6 +11,17 @@ status:
 enabled_exchanges:
   - bitflyer
 
+# Collector 実行ループの実効設定（UI保存で消えないよう schema に明示）
+# NOTE:
+# - btcts/collector/main.py / scheduler.py が top-level を読む前提
+# - status.update_interval と二重表現になるため、実効は status_every_sec を正とし、
+#   status.update_interval は UI/表示・後方互換の既定として残す
+tick_sec: 0.05
+status_every_sec: 2.0
+rate_state_every_sec: 10.0
+startup_grace_sec: 30.0
+no_data_check_every_sec: 1.0
+
 # feeds は endpoints_def.yaml を参照して各 endpoint の on/off を与える層
 # ここは「既定の有効/無効」のみを持ち、詳細（URL等）は endpoints_def 側に置く
 feeds:

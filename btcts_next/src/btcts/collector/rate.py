@@ -87,6 +87,11 @@ class RateController:
         self._common: CommonRateControl = CommonRateControl()
         self._crit_backoff_sec: Dict[str, float] = {}  # exchange単位の backoff 状態
 
+
+    def has_policy(self, exchange: str) -> bool:
+        ex = (exchange or "").strip().lower()
+        return bool(ex) and (ex in self._policy)
+
     # ---- config -----------------------------------------------------------------
 
     def set_common_policy(self, cfg: Dict[str, Any]) -> None:
@@ -118,7 +123,7 @@ class RateController:
         c.no_429_for_sec = float(cfg.get("no_429_for_sec", c.no_429_for_sec))
 
     def set_policy(self, exchange: str, policy: RatePolicy) -> None:
-        ex = (exchange or "").strip()
+        ex = (exchange or "").strip().lower()
         if not ex:
             raise ValueError("exchange is empty")
         if policy.official_max_rps <= 0:
@@ -136,7 +141,8 @@ class RateController:
             self._next_allowed[ex] = 0.0
 
     def get_policy(self, exchange: str) -> Optional[RatePolicy]:
-        return self._policy.get(exchange)
+        ex = (exchange or "").strip().lower()
+        return self._policy.get(ex)
 
     def get_state(self, exchange: str) -> Optional[RateState]:
         return self._state.get(exchange)
@@ -166,7 +172,7 @@ class RateController:
         - ok=True なら即実行してよい
         - ok=False なら wait_ms 待ってから再試行
         """
-        ex = (exchange or "").strip()
+        ex = (exchange or "").strip().lower()
         pol = self._policy.get(ex)
         if not pol:
             raise KeyError(f"policy not set: {ex}")
@@ -189,7 +195,7 @@ class RateController:
 
     def on_429(self, exchange: str, retry_after_sec: float = 0.0) -> None:
         """429 を受けた場合の緊急制御（Phase1: 共通ポリシー準拠）。"""
-        ex = (exchange or "").strip()
+        ex = (exchange or "").strip().lower()
         pol = self._policy.get(ex)
         st = self._state.get(ex)
         if not pol or not st:
@@ -222,7 +228,7 @@ class RateController:
 
     def set_mode_by_util(self, exchange: str, util_ratio: float) -> str:
         """外部観測（利用率）から mode を更新する（Phase1: 共通ポリシー準拠）。"""
-        ex = (exchange or "").strip()
+        ex = (exchange or "").strip().lower()
         pol = self._policy.get(ex)
         st = self._state.get(ex)
         if not pol or not st:

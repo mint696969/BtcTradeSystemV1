@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 from btcts.core import audit, io, paths
-from btcts.settings import load_yaml
+from btcts.settings import svc as settings_svc
 
 from .rate import RatePolicy
 from .scheduler import Endpoint, Scheduler
@@ -349,14 +349,12 @@ def _make_runner(sch: Scheduler, exchange: str, topic: str, cfg: Dict[str, Any])
 
 
 def build_scheduler() -> Scheduler:
-    exchanges_cfg = load_yaml("exchanges")
-    endpoints_cfg = load_yaml("endpoints")
-    monitoring_cfg = load_yaml("monitoring")
-    collector_cfg = load_yaml("collector")
-
-    # Phase1: 共通レート制御ポリシー（案A: <CONFIG_DIR>/rate_control.yaml）
-    # settings/svc.py の SCHEMA_MAP に rate_control が登録されている前提。
-    rate_control_cfg = load_yaml("rate_control")
+    # settings は svc（schema defaults + current diff）を正準とする
+    exchanges_cfg = settings_svc.load_effective("exchanges")
+    endpoints_cfg = settings_svc.load_effective("endpoints")
+    monitoring_cfg = settings_svc.load_effective("monitoring")
+    collector_cfg = settings_svc.load_effective("collector")
+    rate_control_cfg = settings_svc.load_effective("rate_control")
 
     sch = Scheduler()
 
@@ -366,18 +364,45 @@ def build_scheduler() -> Scheduler:
     # Phase1: Scheduler が util 判定や backoff/floor に使う共通ポリシー
     sch._btcts_rate_control_cfg = rate_control_cfg  # type: ignore[attr-defined]
 
-    # Phase1: RateController に共通ポリシーを注入（rate_control.yaml を実際に効かせる）
-    try:
-        sch.rc.set_common_policy(rate_control_cfg)  # type: ignore[attr-defined]
-    except Exception:
-        pass
-
     # policies
     for ex, pol in _build_policies(exchanges_cfg, monitoring_cfg):
         sch.set_policy(ex, pol)
 
     # endpoints
+    # - endpoints.yaml をベースに items を列挙
+    # - exchanges.yaml の enabled=false は endpoint 登録対象外（policy未設定で落ちる事故を防ぐ）
+    # - collector.yaml: feeds.<exchange>.<topic> があれば enabled/priority/target_interval を上書きする
     items = _norm_endpoints_cfg(endpoints_cfg)
+
+    # 有効な取引所（exchanges.yaml の enabled を正準とする）
+    exmap = _norm_exchanges_cfg(exchanges_cfg)
+    enabled_exchanges: set[str] = set()
+    for exk, exv in exmap.items():
+        if _as_bool((exv or {}).get("enabled"), True):
+            enabled_exchanges.add(str(exk).strip().lower())
+
+    # collector.yaml の enabled_exchanges がある場合はさらに絞る
+    enabled_by_collector: Optional[set[str]] = None
+    if isinstance(collector_cfg, dict):
+        ex_list = collector_cfg.get("enabled_exchanges")
+        if isinstance(ex_list, list) and len(ex_list) > 0:
+            enabled_by_collector = {str(x).strip().lower() for x in ex_list if str(x).strip()}
+
+    # feeds override（collector_def.yaml に定義される制御レイヤ）
+    feeds_root = collector_cfg.get("feeds") if isinstance(collector_cfg, dict) else None
+    feeds_map: Dict[str, Dict[str, Any]] = {}
+    if isinstance(feeds_root, dict):
+        for exk, exv in feeds_root.items():
+            if not isinstance(exv, dict):
+                continue
+            ex_l = str(exk).strip().lower()
+            feeds_map[ex_l] = {str(tk).strip().lower(): tv for tk, tv in exv.items() if isinstance(tv, dict)}
+
+    def _get_feed_override(exchange: str, topic: str) -> Dict[str, Any]:
+        ex_l = exchange.strip().lower()
+        tp_l = topic.strip().lower()
+        return feeds_map.get(ex_l, {}).get(tp_l, {})
+
     added = 0
     registered: List[Dict[str, Any]] = []
     for it in items:
@@ -386,17 +411,58 @@ def build_scheduler() -> Scheduler:
         if not ex or not topic:
             continue
 
+        # exchanges.yaml / collector.yaml 側で無効な取引所は登録しない（policy未設定・事故防止）
+        ex_l = ex.strip().lower()
+        if ex_l not in enabled_exchanges:
+            continue
+        if enabled_by_collector is not None and ex_l not in enabled_by_collector:
+            continue
+
+        # endpoints.yaml 側 enabled（先に見る）
         if not _as_bool(it.get("enabled"), True):
             continue
 
-        # priority/prio の両対応
-        prio = int(_as_float(it.get("priority"), _as_float(it.get("prio"), 0)))
+        # feeds override（あればこちらが最終決定）
+        fov = _get_feed_override(ex, topic)
 
-        # interval:
-        # - max_rps が設定されていればそれに従う（endpoint 単位）
-        # - 無ければ 1秒
+        # RatePolicy が無い exchange は、後段で rc.acquire() が KeyError で落ちる。
+        # テスト/運用ともに「設定不備」として endpoint 登録自体を止める（no_data/empty 判定へ寄せる）。
+        try:
+            if not sch.rc.has_policy(ex_l):  # type: ignore[attr-defined]
+                audit.emit(
+                    "collector.endpoint.skip",
+                    feature="collector",
+                    level="CRIT",
+                    payload={
+                        "exchange": ex,
+                        "topic": topic,
+                        "reason": "policy_not_set",
+                        "hint": "Check exchanges.yaml: enabled=true and exchanges.<id>.rate.max_rps > 0 (and schema allows override).",
+                    },
+                )
+                continue
+
+        except Exception:
+            # has_policy が無い/rc 未注入などの異常時は、より安全に「登録しない」
+            continue
+
+        if fov:
+            # feeds.enabled が明示されて false なら停止（Phase1停止表現は enabled:false に統一）
+            if "enabled" in fov and not _as_bool(fov.get("enabled"), True):
+                continue
+
+        # priority/prio（endpoints → feeds の順で上書き）
+        prio = int(_as_float(it.get("priority"), _as_float(it.get("prio"), 0)))
+        if fov and ("priority" in fov):
+            prio = int(_as_float(fov.get("priority"), prio))
+
+        # interval（endpoints.yaml の max_rps 由来 → feeds.target_interval で上書き）
+        # NOTE: interval is a scheduler hint; actual pacing is enforced by RateController
         max_rps = _as_float(it.get("max_rps"), 0.0)
         interval = (1.0 / max(max_rps, 0.1)) if max_rps > 0 else 1.0
+
+        if fov and ("target_interval" in fov):
+            interval = float(_as_float(fov.get("target_interval"), interval))
 
         sch.add(
             Endpoint(
@@ -411,9 +477,10 @@ def build_scheduler() -> Scheduler:
         registered.append(
             {
                 "exchange": ex,
-                "endpoint": topic,
+                "topic": topic,
                 "priority": prio,
                 "target_interval": interval,
+                "feeds_override": bool(fov),
             }
         )
 
@@ -452,8 +519,8 @@ def build_scheduler() -> Scheduler:
                 "endpoints_added": added,
                 "endpoints_format": endpoints_format,
                 "exchanges_keys": list(_norm_exchanges_cfg(exchanges_cfg).keys())[:50],
-                "registered_endpoints_total": len(registered),
-                "registered_endpoints": registered[:20],
+                "registered_topics_total": len(registered),
+                "registered_topics": registered[:20],
             },
         )
     except Exception:
@@ -481,7 +548,11 @@ def main() -> int:
         cfg = getattr(sch, "_btcts_collector_cfg", {})  # type: ignore[attr-defined]
 
         tick_sec = _as_float(cfg.get("tick_sec"), 0.05) if isinstance(cfg, dict) else 0.05
-        rate_every = _as_float(cfg.get("rate_state_every_sec"), 1.0) if isinstance(cfg, dict) else 1.0
+
+        # rate_state.json は fsync + atomic replace を伴うため、既定を低頻度に寄せる（事故防止）
+        # ※運用で秒間監視が必要なら collector.yaml 側で rate_state_every_sec を明示設定する
+        rate_every = _as_float(cfg.get("rate_state_every_sec"), 10.0) if isinstance(cfg, dict) else 10.0
+
         status_every = _as_float(cfg.get("status_every_sec"), 2.0) if isinstance(cfg, dict) else 2.0
 
         startup_grace_sec = _as_float(cfg.get("startup_grace_sec"), 30.0) if isinstance(cfg, dict) else 30.0

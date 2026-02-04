@@ -125,10 +125,20 @@ function Get-DriveFreeGB([string]$AnyPath) {
 
 function Open-Lock([string]$LockPath) {
   New-DirectoryIfMissing (Split-Path -Parent $LockPath)
+
   try {
     return [System.IO.File]::Open($LockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
   } catch {
-    throw "lock busy: $LockPath"
+    # できる範囲で「誰が watchdog を動かしているか」を出す（原因特定用）
+    try {
+      $procs = Get-CimInstance Win32_Process -Filter "Name='pwsh.exe'" |
+        Where-Object { $_.CommandLine -match 'watchdog_collector\.ps1' } |
+        Select-Object ProcessId, CommandLine
+      $hint = ($procs | ConvertTo-Json -Compress -Depth 5)
+      throw "lock busy: $LockPath ; running_watchdogs=$hint"
+    } catch {
+      throw "lock busy: $LockPath"
+    }
   }
 }
 
@@ -222,15 +232,27 @@ function Start-Collector([string]$PythonExe, [string]$PyPath, [string]$ConfigDir
 
 if ($UseDummyCollector) {
   # Phase1テスト：ダミーCollector
+  $dummyCandidates = @(
+    (Join-Path $PSScriptRoot '..\tools\test_collector_entry.py')
+  )
+  $dummyScript = $null
+  foreach ($c in $dummyCandidates) {
+    if (Test-Path -LiteralPath $c) { $dummyScript = $c; break }
+  }
+  if (-not $dummyScript) {
+    throw "dummy collector script not found. looked: $($dummyCandidates -join ', ')"
+  }
+
   $pyArgs = @(
-    (Join-Path $PSScriptRoot '..\tmp\test_collector_entry.py')
+    $dummyScript
   )
 
   Add-LogLine  $LogPath 'INFO' 'collector.start.dummy' @{ script=$pyArgs[0] }
   Add-JsonlLine $JsonlPath @{ ts=NowIso; level='INFO'; event='collector.start.dummy'; script=$pyArgs[0] }
 
-  # Phase1最終テストは再現性固定
+  # Phase1最終テストは再現性固定（危険系は FORCE 指定が必要）
   $envMap['BTC_TS_TEST_MODE'] = 'ok_then_hang'
+  $envMap['BTC_TS_TEST_MODE_FORCE'] = $envMap['BTC_TS_TEST_MODE']
 
   $p = Start-Process -FilePath $PythonExe `
     -ArgumentList $pyArgs `
@@ -361,6 +383,20 @@ Clear-StaleStatusLock -StatusPath $statusPath -HangSec $hangSec -LogPath $superL
 $proc = $null
 $consecutiveFails = 0
 $consecutiveNoData = 0
+$exitReason = 'unknown'
+
+# Ctrl+C / セッション停止を「理由つきで」回収する
+$stopRequested = $false
+$cancelEventSub = $null
+try {
+  $cancelEventSub = Register-ObjectEvent -InputObject ([Console]) -EventName CancelKeyPress -Action {
+    $Event.SourceEventArgs.Cancel = $true
+    $script:exitReason = 'console.cancel'
+    $script:stopRequested = $true
+  }
+} catch {
+  $exitReason = 'cancel_hook_failed'
+}
 
 function Get-BackoffSeconds([int]$Fails, [object[]]$Backoffs) {
   if (-not $Backoffs -or $Backoffs.Count -eq 0) { return 10 }
@@ -370,15 +406,23 @@ function Get-BackoffSeconds([int]$Fails, [object[]]$Backoffs) {
 
 try {
   # 初回起動
-    $proc = Start-Collector -PythonExe $pythonExe -PyPath $pyPath -ConfigDir $cfgDir -DataDir $dataDir -LogsDir $logsDir -LogPath $superLog -JsonlPath $superJson -UseDummyCollector ([bool]$UseDummyCollector)
+  $proc = Start-Collector -PythonExe $pythonExe -PyPath $pyPath -ConfigDir $cfgDir -DataDir $dataDir -LogsDir $logsDir -LogPath $superLog -JsonlPath $superJson -UseDummyCollector ([bool]$UseDummyCollector)
 
   while ($true) {
+  if ($stopRequested) {
+    # Ctrl+C 等で止めたいときは、ここで理由つきで終了
+    break
+  }
+
     Start-Sleep -Seconds $cfgInterval
+    Add-JsonlLine $superJson @{ ts=NowIso; level='DEBUG'; event='loop.tick' }
+    Add-LogLine  $superLog  'DEBUG' 'loop.tick' @{}
 
     # ディスク安全弁（logsのドライブ）
     $freeGb = Get-DriveFreeGB $logsDir
     if ($null -ne $freeGb) {
       if ($freeGb -lt $freeStop) {
+        $exitReason = 'guard.disk.stop'
         Add-LogLine $superLog 'ERROR' 'guard.disk.stop' @{ free_gb=$freeGb; stop_gb=$freeStop }
         Add-JsonlLine $superJson @{ ts=NowIso; level='ERROR'; event='guard.disk.stop'; free_gb=$freeGb; stop_gb=$freeStop }
         Stop-Collector $proc $superLog $superJson
@@ -396,6 +440,7 @@ try {
       Add-JsonlLine $superJson @{ ts=NowIso; level='WARN'; event='collector.exited'; exit_code=$proc.ExitCode; fails=$consecutiveFails }
 
       if ($consecutiveFails -ge $maxFails) {
+        $exitReason = 'watchdog.stop.too_many_fails'
         Add-LogLine $superLog 'ERROR' 'watchdog.stop.too_many_fails' @{ fails=$consecutiveFails; max=$maxFails }
         Add-JsonlLine $superJson @{ ts=NowIso; level='ERROR'; event='watchdog.stop.too_many_fails'; fails=$consecutiveFails; max=$maxFails }
         break
@@ -407,7 +452,6 @@ try {
       Start-Sleep -Seconds $sleepSec
 
       $proc = Start-Collector -PythonExe $pythonExe -PyPath $pyPath -ConfigDir $cfgDir -DataDir $dataDir -LogsDir $logsDir -LogPath $superLog -JsonlPath $superJson -UseDummyCollector ([bool]$UseDummyCollector)
-
       continue
     }
 
@@ -435,6 +479,7 @@ try {
         Stop-Collector $proc $superLog $superJson
 
         if ($consecutiveFails -ge $maxFails) {
+          $exitReason = 'watchdog.stop.too_many_fails'
           Add-LogLine $superLog 'ERROR' 'watchdog.stop.too_many_fails' @{ fails=$consecutiveFails; max=$maxFails }
           Add-JsonlLine $superJson @{ ts=NowIso; level='ERROR'; event='watchdog.stop.too_many_fails'; fails=$consecutiveFails; max=$maxFails }
           break
@@ -458,24 +503,48 @@ try {
         Add-LogLine $superLog 'WARN' 'collector.no_data.detected' @{ count=$consecutiveNoData; limit=$noDataLimit }
         Add-JsonlLine $superJson @{ ts=NowIso; level='WARN'; event='collector.no_data.detected'; count=$consecutiveNoData; limit=$noDataLimit }
         if ($consecutiveNoData -ge $noDataLimit) {
+          $exitReason = 'watchdog.stop.no_data_limit'
           Add-LogLine $superLog 'ERROR' 'watchdog.stop.no_data_limit' @{ count=$consecutiveNoData; limit=$noDataLimit }
           Add-JsonlLine $superJson @{ ts=NowIso; level='ERROR'; event='watchdog.stop.no_data_limit'; count=$consecutiveNoData; limit=$noDataLimit }
           Stop-Collector $proc $superLog $superJson
           break
         }
       } else {
-        # 成功が観測できている限り no_data 連続はリセット
         $consecutiveNoData = 0
       }
     }
   }
 }
-finally {
+catch {
+  $exitReason = 'exception'
   try {
-    Add-LogLine $superLog 'INFO' 'watchdog.exit' @{}
-    Add-JsonlLine $superJson @{ ts=NowIso; level='INFO'; event='watchdog.exit' }
+    Add-LogLine  $superLog 'ERROR' 'watchdog.exception' @{ err=$_.Exception.Message }
+    Add-JsonlLine $superJson @{ ts=NowIso; level='ERROR'; event='watchdog.exception'; err=$_.Exception.Message }
+  } catch { }
+  throw
+}
+
+finally {
+  if ($exitReason -eq 'unknown') {
+    $exitReason = 'loop.ended_or_external_stop'
+  }
+
+  try {
+    Add-LogLine  $superLog 'INFO' 'watchdog.exit' @{ reason=$exitReason }
+    Add-JsonlLine $superJson @{ ts=NowIso; level='INFO'; event='watchdog.exit'; reason=$exitReason }
   } catch { }
 
   try { if ($lock) { $lock.Dispose() } } catch { }
+
+    try {
+    if ($cancelEventSub) {
+      Unregister-Event -SubscriptionId $cancelEventSub.Id -ErrorAction SilentlyContinue
+      Remove-Job -Id $cancelEventSub.Id -Force -ErrorAction SilentlyContinue
+    }
+  } catch { }
+
+  # lock ファイルは「ロック用」なので、終了時は必ず消す（残すと混乱の元）
+  try { Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue } catch { }
+
   try { Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue } catch { }
 }

@@ -31,185 +31,171 @@
 
 ---
 
-Supervisor（Watchdog）Phase1 完了報告書
+作業報告書（handover 追記用）
+概要
 
-（handover 記載用）
+Codex 導入を前提とした 開発環境の整地フェーズとして、
+Collector / Health / RateControl / Watchdog 周辺の テストツール群の整理・配置統一・挙動確認を実施した。
 
-1. このチャットでやったこと（実績）
-1.1 Supervisor（Watchdog）Phase1 実装・確定
+目的は以下の3点。
 
-scripts/watchdog_collector.ps1 を Phase1仕様として完成
+GPT / Codex が迷わない構成にする
 
-Collector を 24/7 運用するための外部 Supervisor として以下を実装・検証
+Phase1（24/7運用前）の安全確認を自動テストで再現できる状態にする
 
-多重起動防止（watchdog.lock / watchdog.pid）
+実運用コードとテストコードの責務を明確に分離する
 
-Collector 起動（実 / ダミー）
+今回やったこと
+1. テストスクリプトの配置・命名ルール統一
 
-環境変数の 明示注入（手動起動との差異排除）
+すべてのテスト用スクリプトを以下に統一
 
-status.json(ts_unix) による進捗監視
+C:\BtcTradeSystem\tools
 
-ハング検知 → kill → backoff → 再起動
 
-fails.reset による誤停止防止
+命名規則
 
-max_failures 到達時の Supervisor 自己停止
+test_*.ps1
+test_*.py
 
-no_data 連続検知の安全停止
 
-logs ドライブ残量による安全弁
+テスト成果物（config / data / logs）はすべて
 
-監査ログ（supervisor_collector.log / .jsonl）
+C:\BtcTradeSystem\tmp\<test_name>\...
 
-1.2 Phase1 テスト方針の明確化
 
-実 Collector は使わないと判断
+に出力する方針を確定。
 
-取引所 / API / endpoint が未登録の現状では事故リスクが高い
+2. 各テストスクリプトの実態把握・動作確認
+確認済みテストツール
 
-ダミー Collector（tmp/test_collector_entry.py）で
+test_collector.ps1
 
-「監視ロジックが正しく自己修復するか」のみを検証
+test_collector_entry.py
 
-ハング → kill → backoff → 再起動 → fails.reset のループを長時間確認
+test_health.ps1
 
-1.3 テスト再現性の固定
+test_rate_control_phase1.py
 
-手動コマンドのバラつきを排除するため
+test_phase1_cc_checks.ps1
 
-scripts/collector_watchdog_test.ps1 を作成
+watchdog_collector.ps1（※実運用寄りだが Phase1 テストでも使用）
 
-env セット・起動条件・ログ確認を 1発で再現可能にした
+それぞれについて：
 
-1.4 仕様書の統合作業
+何をテストするか
 
-追記が増えすぎたため、
+単体 / 結合 / 疑似運用のどれか
 
-Supervisor（Watchdog）正式仕様書を全文再構成
+依存関係（watchdog / dummy collector など）
 
-Phase1 の責務・運用ルール・禁止事項をすべて明文化
+生成物（status.json / audit.jsonl / log）
 
-「lock busy が出るのは正常動作」など、運用時に迷いやすい点も明記
+を確認し、
+仕様書として記述できる状態まで理解を整理した。
 
-2. 作業中に気が付いたこと（重要な知見）
-2.1 Supervisor と Collector の責務分離は必須
+3. watchdog_collector.ps1 の安全性・挙動確認
 
-Collector に監視や再起動を持たせる設計は破綻しやすい
+-UseDummyCollector モードでの挙動を重点確認
 
-Supervisor を 完全に外部プロセスとして切った判断は正解
+以下を確認済み：
 
-Phase2 以降もこの境界は絶対に崩さないほうが良い
+lock ファイルの生成・解放
 
-2.2 環境変数は「明示注入」しないと事故る
+watchdog 起動 / exit の reason 出力
 
-PowerShell から python を起動すると
+dummy collector（test_collector_entry.py）の起動
 
-手動実行と env が微妙にズレる
+loop.tick の定期出力
 
-Watchdog 側で PYTHONPATH / BTC_TS_* を 毎回注入することで
+status / audit が存在しなくても異常終了しないこと
 
-「起動するが import できない」系の事故を完全に排除できた
+特に重要な点：
 
-2.3 lock ファイルは「消せばいい」ではない
+watchdog_collector.ps1 は test ツールではない
 
-watchdog.lock が busy なのは 正常
+実運用 Supervisor
 
-status.json の ts を見て 安全条件付きで stale lock だけ消す
+test 側（test_phase1_cc_checks.ps1 等）から「被験体」として起動される
 
-このルールを仕様に明文化したのは大きい
+4. 「狙った結果が出ない」原因の切り分け
 
-手動削除運用は明確に禁止したほうがよい
+昨日から挙動が安定しなかった主因は以下。
 
-2.4 fails.reset が無いと実運用は破綻する
+テストコードと運用コードの責務境界が曖昧だった
 
-一時的な API 停滞・GC・IO詰まりなどで
+相対パス／PSScriptRoot／PYTHONPATH の前提が混在
 
-fails が累積 → Supervisor が勝手に止まる
+watchdog / dummy collector / test runner が 同一キャンバスで混線
 
-「進捗が見えた瞬間に fails を 0 に戻す」設計は必須
+→ 配置と役割を分離したことで、現在は再現性が取れている
 
-2.5 PSScriptAnalyzer 警告は早めに潰すべきだった
+現在の到達点
 
-後回しにすると
+Phase1 周辺のテストツールは すべて tools 配下に集約
 
-参照箇所が増えて差分が大きくなる
+watchdog / collector / dummy collector の関係性が明確化
 
-今回は VSC 設定＋関数整理で 警告ゼロにできた
+テスト結果（status / audit / log）を人間が読んで判断できる状態
 
-今後の ps1 は「警告ゼロを前提」に進めたほうが良い
+Codex が参照しても「どれがテストで、どれが本体か」迷わない構成
 
-3. 現在の到達点（Phase1 完了定義）
+次回タスク（おすすめ順）
+優先度 高
 
-ダミー Collector で以下がすべて確認済み
+各 test_.ps1 / test_.py の仕様書を docs 化
 
-ハング検知
+test_collector.ps1 と同レベルの説明を全テストに付与
 
-kill → backoff → 再起動
+「何を壊すテストか」「PASS とは何か」を明示
 
-fails.reset の動作
+Phase1 完了条件チェックリストの明文化
 
-max_failures 到達時の Supervisor 停止
+どのテストが PASS すれば Phase1 OK なのか
 
-Ctrl+C による安全停止
+手動確認が必要な項目の切り分け
 
-Supervisor の 監視ロジック自体は Phase1 合格
+優先度 中
 
-4. 次回タスク（次フェーズ）
-4.1 次の実装テーマ
+watchdog の exitReason を前提にした 監視ルール整理
 
-設定（取引所登録・エンドポイント制御）
+loop.ended_or_external_stop
 
-具体的には：
+watchdog.stop.too_many_fails
 
-取引所定義（exchanges.yaml 等）
+guard.disk.stop など
 
-有効/無効の切り替え
+テスト用 ENV 一覧の docs 化
 
-エンドポイント粒度での制御
+BTC_TS_* 系
 
-Collector が「何を回すか」を 設定だけで決められる構造
+PYTHONPATH
 
-4.2 Supervisor 側でやらないこと（重要）
+BTC_TS_TEST_MODE 系
 
-取引所の中身
+作業中の気づき・注意点
 
-API仕様
+「差し替え指示は行番号 or 一意なコード断片必須」
 
-レート制御
-→ これらは Collector / 設定層の責務
+catch / finally が多い PowerShell では曖昧指示は事故る
 
-5. 次のタスクで気を付けること（注意点）
+watchdog / collector は
 
-Supervisor を触らない
+「動いているように見えて何もしていない」状態が最も危険
 
-Phase1 で確定した仕様は凍結
+log / jsonl を必ずセットで確認する運用が必須
 
-Phase2 以降は「設定と Collector 側」で吸収する
+dummy collector は テストの命
 
-設定は「追加」ではなく「差し替え前提」
+実取引所を叩かず Phase1 を検証できるのは非常に強い
 
-exchanges.yaml / endpoints.yaml は
+総評
 
-後から GPT が見ても意図が分かる構造にする
+今回の作業は「機能追加」ではないが、
 
-実 Collector テストは最後
+将来の開発スピードと事故率を決定づける、非常に重要な整地
 
-設定が固まるまではダミーで良い
+になっている。
 
-いきなり実 API を叩かない
-
-「起動条件」を必ず固定化する
-
-env / config / entrypoint が曖昧だと
-
-再現不能なバグになる
-
-6. 総括
-
-Supervisor（Watchdog）Phase1 は 設計・実装・運用ルールまで含めて完了
-
-次に進む準備は整っている
-
-次フェーズは 「設定が主役」
-Supervisor は触らず、Collector を設定駆動にしていく段階
+この状態で Codex を使い始めるのは 正解。
+次フェーズは安心して進めてよい。
