@@ -1,34 +1,30 @@
 # path: ./tools/test_providers_health.py
-# desc: Health関連の最小動作テスト（svc_healthのサマリ/テーブルを出力）
-# repo 直下を PYTHONPATH に追加（tools/ からの相対）
+# desc: Provider(例: bitflyer) の最小疎通スモーク（公開APIを叩けるか）
+
+import os
 import sys
 from pathlib import Path
-ROOT = Path(__file__).resolve().parents[1]  # リポのルート
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from btc_trade_system.features.health.health_svc import (
-    get_health_summary,
-    get_health_table,
-)
+REPO = Path(__file__).resolve().parents[1]
+BTCTS_SRC = REPO / "btcts_next" / "src"
+if str(BTCTS_SRC) not in sys.path:
+    sys.path.insert(0, str(BTCTS_SRC))
 
-s = get_health_summary()
-print("updated_at:", s.get("updated_at"))
-print("all_ok:", s.get("all_ok"))
+from btcts.collector.providers.bitflyer import fetch_board, fetch_executions
 
-for c in s.get("cards", []):
-    age = c.get("age_sec")
-    age_s = f"{age:.1f}s" if isinstance(age, (int, float)) else "-"
-    print(f"CARD {c.get('exchange','?'):8s} {c.get('status','-'):4s} age={age_s} notes={c.get('notes','')}")
+def main():
+    print("[TEST] bitflyer board/executions")
+    b = fetch_board("BTC_JPY")
+    assert "mid_price" in b or "bids" in b or "asks" in b
+    print("[OK] board keys:", list(b.keys())[:8])
 
-print("--- table ---")
-t = get_health_table()
-for row in t:
-    age = row.get("age_sec")
-    age_s = f"{age:.1f}s" if isinstance(age, (int, float)) else "-"
-    print(
-        f"{row.get('exchange','?'):8s}  {row.get('topic','?'):7s}  "
-        f"{row.get('status','-'):4s}  age={age_s}  {row.get('last_iso','-')}  {row.get('source','-')}"
-    )
+    e = fetch_executions("BTC_JPY", count=5)
+    assert isinstance(e, list)
+    print("[OK] executions len:", len(e))
+    if e:
+        print("[SAMPLE] exec keys:", list(e[0].keys())[:8])
 
+    print("DONE")
 
+if __name__ == "__main__":
+    main()
