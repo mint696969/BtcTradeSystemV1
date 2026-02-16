@@ -1,0 +1,14 @@
+#!/bin/sh
+# path: ./.githooks/pre-commit
+# desc: pre-commit hook (runs PowerShell header check for staged files)
+
+# Run from repo root (safe)
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+if [ -z "$REPO_ROOT" ]; then
+  exit 0
+fi
+cd "$REPO_ROOT" || exit 0
+
+# Prefer pwsh
+pwsh -NoProfile -ExecutionPolicy Bypass -File "scripts/qa/check_file_headers.ps1"
+exit $?
