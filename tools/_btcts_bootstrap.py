@@ -1,5 +1,5 @@
 # path: ./tools/_btcts_bootstrap.py
-# desc: tools スクリプトから btcts_next/src を自動で sys.path に追加して btcts import を保証する
+# desc: tests/tools 用の btcts import bootstrap（PYTHONPATH 無しでも btcts_next/src を sys.path に追加）
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
-# path: tools/make_repo_map_extract.py
-# desc: リポジトリを走査し、各ファイル先頭の「# path / # desc」を抽出して REPO_MAP の Markdown / YAML を生成（make_handoff.ps1 からのサブプロセス呼び出し対応）
+# path: ./tools/make_repo_map_extract.py
+# desc: リポジトリ構造の要約/抽出（handoff 用 repo map 生成支援）
 
 """
 Usage (PowerShell):

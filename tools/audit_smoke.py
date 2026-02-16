@@ -1,5 +1,8 @@
 # path: ./tools/audit_smoke.py
-# desc: 監査出力の動作確認（文脈セット→INFO/ERRORを1行ずつ記録）
+# desc: audit.emit の最小スモーク（audit.jsonl へイベントを書けることを確認）
+
+from _btcts_bootstrap import ensure_btcts_on_syspath
+ensure_btcts_on_syspath()
 
 import sys, pathlib, traceback
 # リポジトリ直下（…/BtcTradeSystemV1）を sys.path 先頭に追加
