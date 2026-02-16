@@ -18,7 +18,7 @@ function Has-Header([string]$fullPath) {
 
   # バイナリっぽいのはスキップ（万一）
   try {
-    $lines = Get-Content -LiteralPath $fullPath -TotalCount 2 -ErrorAction Stop
+    $lines = @(Get-Content -LiteralPath $fullPath -TotalCount 2 -ErrorAction Stop)
   } catch {
     return $true
   }
@@ -64,3 +64,5 @@ if ($ng.Count -gt 0) {
 }
 
 exit 0
+
+
