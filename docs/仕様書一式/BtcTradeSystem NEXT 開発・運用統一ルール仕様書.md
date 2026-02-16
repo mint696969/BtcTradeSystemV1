@@ -130,7 +130,25 @@ UIは Streamlit を前提とし、現物ではタブ構成をコード側で保�
 
 ---
 
-## 8. 運用チェック（本番の最小確認）
+## 8. ドキュメント参照ルール（迷いを排除する）
+
+### 8.1 docs の参照優先順位（正準）
+- docs 配下の参照優先順位は `docs/_INDEX.md` に固定する。
+- 正式仕様は `docs/仕様書一式/` のみを正として扱う。
+
+### 8.2 作業メモ・引継ぎの置き場
+- 作業メモ／運用手順の補助は `tmp/gpt_room/` を正とする。
+- docs 配下にドラフトや引継ぎメモを増やさない（ブレ要因を排除する）。
+
+### 8.3 Gitバックアップ／CTX（ハンドオフ）機能の正準
+- Gitバックアップ／復元、CTX（チャットまたぎハンドオフ）に関する仕様と実行物は **GTP-Tool 側が正準**。
+  - Spec: `C:\ProgramData\GTP-Tool\Docs\BtcTradeSystem_NEXT_GitBackup\`
+  - Tools: `C:\ProgramData\GTP-Tool\tools\btc_git_backup_next\`
+- BtcTradeSystem リポジトリ側の関連ドキュメントは参照用スタブとして扱う。
+
+---
+
+## 9. 運用チェック（本番の最小確認）
 
 - ENV が本番を指していること
   - BTC_TS_CONFIG_DIR = E:\btc_ts\config\ui
@@ -143,6 +161,7 @@ UIは Streamlit を前提とし、現物ではタブ構成をコード側で保�
 
 ---
 
-## 9. 変更履歴
+## 10. 変更履歴
 
 - 2026-01-07: NEXT本番仕様書 初版（提出物.zip現物反映）
+
