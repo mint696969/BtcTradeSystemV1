@@ -1,7 +1,14 @@
 # path: ./tools/test_rate_control_phase1.py
+# desc: RateController + Scheduler のスモーク（短時間実行して rate_state.json を生成）
+
+# path: ./tools/test_rate_control_phase1.py
 # desc: Phase1 APIレート制御の簡易テスト（RateController+Scheduler接続、WARN(util)→CRIT(429)→復帰の確認）。
 
 from __future__ import annotations
+
+from _btcts_bootstrap import ensure_btcts_on_syspath
+ensure_btcts_on_syspath()
+
 
 import os
 import sys
@@ -189,3 +196,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
