@@ -51,7 +51,7 @@ def write_status(st: CollectorStatus, *, emit_audit: bool = True) -> Path:
         audit.emit(
             "collector.status.write",
             feature="collector",
-            level="INFO",
+            level="DEBUG",
             payload={"path": str(p), "mode": st.mode},
         )
 

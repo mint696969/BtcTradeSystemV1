@@ -9,6 +9,7 @@
 5. Health 正式仕様書
 6. Supervisor（Watchdog）正式仕様書
 7. Git バックアップ・復元システム仕様書（NEXT 正準）
+8. 監査（Audit）＋派生サマリ 正式仕様書
 
 ## 一覧
 - `BtcTradeSystem NEXT 開発・運用統一ルール仕様書.md`
@@ -18,5 +19,6 @@
 - `Health 正式仕様書.md`
 - `Supervisor（Watchdog）正式仕様書.md`
 - `Git バックアップ・復元システム仕様書（NEXT 正準）.md`
+- `監査（Audit）＋派生サマリ 正式仕様書.md`
 
 > NOTE: このREADME自体は正準入口ではありません。正準入口は `docs/_INDEX.md` です。

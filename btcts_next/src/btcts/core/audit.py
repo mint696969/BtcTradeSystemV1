@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/core/audit.py
-# desc: 監査ログ（audit.jsonl）への追記I/F。OFF/DEBUG/BOOST を維持し、I/O は core/io.py に一本化する。
+# desc: 監査ログ（audit.jsonl）への追記I/F。NORMAL/DEBUG/BOOST を運用の正とし、OFF は互換として扱う。I/O は core/io.py に一本化する。
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from . import paths
 
 @dataclass(frozen=True)
 class AuditConfig:
-    mode: str  # OFF / DEBUG / BOOST
+    mode: str  # NORMAL / DEBUG / BOOST（OFFは互換）
     path: Path  # audit.jsonl のフルパス
 
 
@@ -46,12 +46,21 @@ def _base_payload() -> Dict[str, Any]:
 
 
 def _should_emit(mode: str, level: str) -> bool:
-    m = (mode or "OFF").upper()
+    m = (mode or "NORMAL").upper()
+    lv = (level or "INFO").upper()
+
+    # 互換のため残すが、Phase2方針では基本使わない
     if m == "OFF":
         return False
-    # DEBUG/BOOST は全レベル出力（運用で抑制したければここで絞る）
-    return True
 
+    rank = {"DEBUG": 10, "INFO": 20, "WARN": 30, "ERROR": 40}.get(lv, 20)
+
+    if m == "NORMAL":
+        # 常時運用：DEBUGは捨てる
+        return rank >= 20
+
+    # DEBUG / BOOST：全レベル出力（BOOSTの“重い観測”は別途イベント側で増やす）
+    return True
 
 # ---- public API ---------------------------------------------------------------
 
@@ -108,3 +117,4 @@ def tail(*, max_lines: int = 200) -> list[Dict[str, Any]]:
 def flush_marker(event: str = "audit.flush") -> None:
     """動作確認用にマーカーを1行書く。"""
     emit(event, level="INFO", feature="audit", payload={"ok": True, "t": time.time()})
+

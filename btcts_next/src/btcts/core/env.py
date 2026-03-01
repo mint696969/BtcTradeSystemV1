@@ -44,7 +44,7 @@ ENV_LOGS_DIR = "BTC_TS_LOGS_DIR"
 ENV_CONFIG_DIR = "BTC_TS_CONFIG_DIR"
 ENV_SECRETS_DIR = "BTC_TS_SECRETS_DIR"
 ENV_DATASET_DIR = "BTC_TS_DATASET_DIR"
-ENV_MODE = "BTC_TS_MODE"  # OFF/DEBUG/BOOST 等（未設定でも動作させる）
+ENV_MODE = "BTC_TS_MODE"  # NORMAL/DEBUG/BOOST（OFFは互換）
 
 
 def default_data_dir() -> Path:
@@ -68,8 +68,17 @@ def default_dataset_dir() -> Path:
 
 
 def mode() -> str:
-    return (env_str(ENV_MODE, "OFF") or "OFF").upper()
+    # Phase2: 未設定は NORMAL（常時運用の既定）
+    m = (env_str(ENV_MODE, "NORMAL") or "NORMAL").upper()
 
+    # 互換：OFF は使わない方針のため NORMAL 扱いに寄せる
+    if m == "OFF":
+        return "NORMAL"
+
+    if m not in ("NORMAL", "DEBUG", "BOOST"):
+        return "NORMAL"
+
+    return m
 
 def data_dir() -> Path:
 
@@ -90,3 +99,4 @@ def secrets_dir() -> Path:
 
 def dataset_dir() -> Path:
     return env_or_default(ENV_DATASET_DIR, str(default_dataset_dir()))
+
