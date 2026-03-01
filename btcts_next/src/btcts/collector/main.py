@@ -102,13 +102,10 @@ def _build_policies(exchanges_cfg: Dict[str, Any], monitoring_cfg: Dict[str, Any
     """
     exmap = _norm_exchanges_cfg(exchanges_cfg)
 
-    # safety_factor は monitoring 由来（将来統合のためここで受ける）
-    # 未設定なら 0.9、bitflyer は 0.8 を既定（引継ぎ通り）
-    sf_map: Dict[str, float] = {}
-    sf = monitoring_cfg.get("safety_factor") if isinstance(monitoring_cfg, dict) else None
-    if isinstance(sf, dict):
-        for k, v in sf.items():
-            sf_map[str(k)] = _as_float(v, 0.9)
+    # NOTE:
+    # - RatePolicy.official_max_rps は「取引所公式上限（事実値）」をそのまま保持する。
+    # - safety_factor 等の運用上の安全係数は RateController（cap側）で扱う（ここで減衰させると二重になる）。
+    _ = monitoring_cfg  # reserved
 
     out: List[Tuple[str, RatePolicy]] = []
     for ex, cfg in exmap.items():
@@ -141,18 +138,14 @@ def _build_policies(exchanges_cfg: Dict[str, Any], monitoring_cfg: Dict[str, Any
         if soft_ratio < hard_ratio:
             soft_ratio, hard_ratio = hard_ratio, soft_ratio
 
-        # safety_factor を max_rps に掛ける（「制限を食らわない」設計）
-        sfv = sf_map.get(ex)
-        if sfv is None:
-            sfv = 0.8 if ex.lower() == "bitflyer" else 0.9
-
-        official_eff = max(base_max_rps * sfv, 0.1)
+        # official_max_rps は「事実値（公式上限）」をそのまま採用（ここで安全係数を掛けない）
+        official_max_rps = max(base_max_rps, 0.1)
 
         out.append(
             (
                 ex,
                 RatePolicy(
-                    official_max_rps=official_eff,
+                    official_max_rps=official_max_rps,
                     soft_ratio=soft_ratio,
                     hard_ratio=hard_ratio,
                     burst_base_sec=burst_base,
@@ -363,6 +356,18 @@ def build_scheduler() -> Scheduler:
 
     # Phase1: Scheduler が util 判定や backoff/floor に使う共通ポリシー
     sch._btcts_rate_control_cfg = rate_control_cfg  # type: ignore[attr-defined]
+
+    # RateController へ共通ポリシーを注入（rate_control.yaml を実効化）
+    try:
+        sch.rc.set_common_policy(rate_control_cfg)  # type: ignore[attr-defined]
+    except Exception as e:
+        # 設定不正でも即死させず、事実を監査に残してデフォルトで継続（安全側）
+        audit.emit(
+            "collector.rate_control.cfg.error",
+            feature="collector",
+            level="WARN",
+            payload={"err": f"{type(e).__name__}: {e}"},
+        )
 
     # policies
     for ex, pol in _build_policies(exchanges_cfg, monitoring_cfg):

@@ -262,25 +262,19 @@ if ($UseDummyCollector) {
     -RedirectStandardError  $stderrPath
 
 } else {
-  # 本番Collector
-  $boot = @"
-import sys
-sys.path.insert(0, r"$PyPath")
-import runpy
-runpy.run_module("btcts.collector.main", run_name="__main__")
-"@
+  # 本番Collector（Start-Process は引数クォートが壊れやすいので -m を使う）
+  $pyArgs = @('-m', 'btcts.collector.main')
 
-  Add-LogLine  $LogPath 'INFO' 'collector.start.real' @{ module='btcts.collector.main' }
-  Add-JsonlLine $JsonlPath @{ ts=NowIso; level='INFO'; event='collector.start.real'; module='btcts.collector.main' }
+  Add-LogLine  $LogPath 'INFO' 'collector.start.real' @{ module='btcts.collector.main'; mode='-m' }
+  Add-JsonlLine $JsonlPath @{ ts=NowIso; level='INFO'; event='collector.start.real'; module='btcts.collector.main'; mode='-m' }
 
   $p = Start-Process -FilePath $PythonExe `
-    -ArgumentList @('-c', $boot) `
+    -ArgumentList $pyArgs `
     -PassThru -WindowStyle Hidden `
     -Environment $envMap `
     -RedirectStandardOutput $stdoutPath `
     -RedirectStandardError  $stderrPath
 }
-
 return $p
 }
 

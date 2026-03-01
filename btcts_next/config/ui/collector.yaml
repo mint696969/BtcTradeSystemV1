@@ -1,0 +1,14 @@
+# desc: NEXT Collector 実運用設定（Phase1: bitflyer 24h証明用 / 429回避の安全側）
+tick_sec: 0.05
+status_every_sec: 2.0
+rate_state_every_sec: 10.0
+startup_grace_sec: 30.0
+no_data_check_every_sec: 1.0
+
+enabled_exchanges:
+  - bitflyer
+
+feeds:
+  bitflyer:
+    orderbook: { enabled: true, priority: 0, target_interval: 2.0 }
+    trades:    { enabled: true, priority: 1, target_interval: 3.0 }

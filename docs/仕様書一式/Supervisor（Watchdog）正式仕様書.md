@@ -45,7 +45,7 @@ Phase1 検証ワンショット（運用ではなくテスト用）
 ./scripts/collector_watchdog_test.ps1
 
 ダミーCollectorエントリ（Phase1）
-./tmp/test_collector_entry.py
+./tools/test_collector_entry.py
 
 2.2 監視対象（Collector進捗）
 
@@ -64,7 +64,7 @@ PYTHONPATH = <repo>\btcts_next\src
 
 3.2 起動コマンド
 
-実運用（将来のPhase2で実Collector統合後に使用）
+実運用（Phase1: 実取引所で使用）
 pwsh -File .\scripts\watchdog_collector.ps1
 
 Phase1（ダミーCollectorで監視ロジック検証）
@@ -136,7 +136,7 @@ Python で import btcts を実行し import 可否を確認
 
 6.2 起動方式
 
-Phase1（ダミー）：.\tmp\test_collector_entry.py
+Phase1（ダミー）：./tools/test_collector_entry.py
 
 本番（実Collector）：btcts.collector.main を runpy.run_module で起動
 
@@ -349,7 +349,7 @@ supervisor_collector.log / jsonl が監査証跡として残る
 
 16. Phase2 への前提（範囲外の明記）
 
-実Collector（実API/endpoint/取引所）登録後に統合テストへ進む
+「Phase2は複数取引所/サービス化/高度な運用拡張」として整理
 
 サービス化（Windows Service / Task Scheduler）は Phase2 以降
 
@@ -358,4 +358,5 @@ Supervisor 自体の自己監視（Supervisor監視のSupervisor）は Phase2 �
 結論（設計思想の固定）
 
 本Supervisorは 「Collectorを止めないために、止める」 を実装する。
-Phase1 の目的は「監視ロジックの正当性」固定であり、それはダミー検証により満たされた。
+Phase1 のゴールは「bitFlyer 1取引所で、レート制御しつつ Collector が 24時間安定して収集し続ける」ことの実運用証明である。
+ダミー検証は Watchdog の監視・再起動ループの正当性確認であり、Phase1完了を意味しない。

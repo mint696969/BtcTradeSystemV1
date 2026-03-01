@@ -262,12 +262,13 @@ class Scheduler:
 
             # endpoint run
             # self.keys に残骸が混ざっても落ちないように table 側でフィルタしてからソート
+            # priority: 小さいほど高優先（0が最優先）
             keys = sorted(
                 (k for k in self.keys if k in self.table),
                 key=lambda k: self.table[k].priority,
-                reverse=True,
+                reverse=False,
             )
-
+            
             did_work = False
 
             # Phase1: util 計算・mode監査は 1秒に1回程度に抑える（過剰なsnapshotを避ける）

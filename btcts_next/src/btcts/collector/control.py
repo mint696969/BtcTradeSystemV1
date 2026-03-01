@@ -156,16 +156,19 @@ def start(*, python: Optional[str] = None) -> CollectorStatus:
 
             # 子プロセスで btcts を import できるように PYTHONPATH を保証する
             env = os.environ.copy()
-            repo = paths.repo_root()
-            src = repo / "btcts_next" / "src"
+            # paths.repo_root() は btcts_next/ を返す（env.py の仕様）
+            repo_btcts_next = paths.repo_root()
+            src = repo_btcts_next / "src"
 
             sep = ";" if os.name == "nt" else ":"
             cur = env.get("PYTHONPATH", "")
             parts = [p for p in cur.split(sep) if p] if cur else []
-            if str(repo) not in parts:
-                parts.insert(0, str(repo))
+            # btcts を確実に import できる最小セット（src優先）
             if str(src) not in parts:
-                parts.insert(1, str(src))
+                parts.insert(0, str(src))
+            # btcts_next 自体を PYTHONPATH に入れる必要は通常ないが、相対import事故の保険で後ろに足す
+            if str(repo_btcts_next) not in parts:
+                parts.append(str(repo_btcts_next))
             env["PYTHONPATH"] = sep.join(parts)
 
             lp = _log_path()
