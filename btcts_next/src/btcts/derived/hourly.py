@@ -366,6 +366,9 @@ def run_hourly(*, now_utc: Optional[datetime] = None) -> Path:
     derived_dir = logs_dir / "derived"
     state_path = derived_dir / "state.json"
 
+    # Phase2: derived 出力先は必ず作る（file_lock が lock を作るため）
+    derived_dir.mkdir(parents=True, exist_ok=True)
+
     audit_path = logs_dir / "audit.jsonl"
     super_path = logs_dir / "supervisor_collector.jsonl"
 
