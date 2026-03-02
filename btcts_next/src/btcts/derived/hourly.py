@@ -538,8 +538,13 @@ def run_hourly(*, now_utc: Optional[datetime] = None) -> Path:
 
             # write output
             out = derived_dir / f"hourly_{hk}.json"
-            io.write_json(out, b, indent=2, sort_keys=True)
-            io.write_json(latest_path, b, indent=2, sort_keys=True)
+
+            # exported object（内部キーは出さない）
+            out_obj = {k: v for k, v in b.items() if not str(k).startswith("_")}
+            out_obj["generated_utc"] = _now_dt_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            io.write_json(out, out_obj, indent=2, sort_keys=True)
+            io.write_json(latest_path, out_obj, indent=2, sort_keys=True)
 
             b["_written"] = True
             wrote_any = True
