@@ -58,8 +58,13 @@ def run_daily(*, day: Optional[str] = None) -> Path:
     derived_dir.mkdir(parents=True, exist_ok=True)
 
     if day is None:
-        # “確定済み日”を作りたいので、基本は前日（UTC）
-        day = _day_key(_now_utc() - timedelta(days=1))
+        # まず derived の hourly_* から「存在する最新日」を選ぶ
+        days = sorted({p.name[7:15] for p in derived_dir.glob("hourly_????????_??.json")})
+        if days:
+            day = days[-1]
+        else:
+            # hourly が1つも無い場合だけ「前日(UTC)」にフォールバック
+            day = _day_key(_now_utc() - timedelta(days=1))
 
     # hourly files for the day
     hourly_files = sorted(derived_dir.glob(f"hourly_{day}_*.json"))
@@ -178,5 +183,12 @@ def run_daily(*, day: Optional[str] = None) -> Path:
 
 
 if __name__ == "__main__":
-    out = run_daily()
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--day", default=None, help="UTC day: YYYYMMDD (optional)")
+    args = ap.parse_args()
+
+    out = run_daily(day=args.day)
     print(f"OK derived_daily: {out}")
+    
