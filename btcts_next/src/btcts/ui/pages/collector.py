@@ -63,7 +63,7 @@ def render_collector_page() -> None:
         )
 
     # 遅延import：import時の副作用/重さを避ける
-    from btcts.collector.control import start, status, stop
+    from btcts.collector.control import restart, start, status, stop
 
     # status.json パスの表示（ENVミスはここで即わかる）
     data_dir, st_path = _status_path()
@@ -74,6 +74,13 @@ def render_collector_page() -> None:
                 "status.json": st_path,
             }
         )
+
+    selected_mode = st.selectbox(
+        "Collector mode",
+        ["NORMAL", "DEBUG", "BOOST"],
+        index=0,
+        key="collector_mode_select",
+    )
 
     # セッションキャッシュ（Refresh/Start/Stop でだけ更新）
     if "collector_status" not in st.session_state:
@@ -99,11 +106,15 @@ def render_collector_page() -> None:
     ready, reasons, details = settings_svc.exchanges_ready()
 
     # 操作ボタン
-    c1, c2, c3, c4 = st.columns([1, 1, 1, 2])
+    c1, c2, c3, c4, c5 = st.columns([1, 1, 1, 1, 2])
 
     with c1:
         if st.button("Start", use_container_width=True, disabled=(not ready), key="collector_start"):
-            stt = start()
+            stt = start(
+                desired_mode=selected_mode,
+                requested_by="ui",
+                reason=f"ui start mode={selected_mode}",
+            )
             st.toast(f"start: {stt.mode} {stt.message}")
             _refresh_status()
             st.rerun()
@@ -116,11 +127,22 @@ def render_collector_page() -> None:
             st.rerun()
 
     with c3:
-        if st.button("Refresh", use_container_width=True, key="collector_refresh"):
+        if st.button("Restart", use_container_width=True, disabled=(not ready), key="collector_restart"):
+            stt = restart(
+                desired_mode=selected_mode,
+                requested_by="ui",
+                reason=f"ui restart mode={selected_mode}",
+            )
+            st.toast(f"restart: {stt.mode} {stt.message}")
             _refresh_status()
             st.rerun()
 
     with c4:
+        if st.button("Refresh", use_container_width=True, key="collector_refresh"):
+            _refresh_status()
+            st.rerun()
+
+    with c5:
         if st.session_state["collector_status"] is None and not st.session_state.get("collector_status_err"):
             # 初回表示だけ status() を叩く
             _refresh_status()
@@ -159,8 +181,26 @@ def render_collector_page() -> None:
 
     st.divider()
 
-    st.write("status.json (raw)")
     js, reason = _read_status_file()
+
+    if js is not None and isinstance(js, dict):
+        actual_state = str(js.get("actual_state") or js.get("mode") or "")
+        actual_mode = str(js.get("actual_mode") or "")
+        rc = js.get("rate_control") if isinstance(js.get("rate_control"), dict) else {}
+        rc_state = str(rc.get("summary_state") or "")
+        rc_reason = str(rc.get("last_reason") or "")
+
+        st.write("status.json (summary)")
+        st.json(
+            {
+                "actual_state": actual_state,
+                "actual_mode": actual_mode,
+                "rate_control.summary_state": rc_state,
+                "rate_control.last_reason": rc_reason,
+            }
+        )
+
+    st.write("status.json (raw)")
 
     if js is None:
         # ここは“原因が分かる”文言にする（妥協しない）

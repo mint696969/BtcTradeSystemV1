@@ -127,6 +127,79 @@ class Scheduler:
         items.sort(key=lambda d: (d["exchange"], d["topic"]))
         return items
 
+    def _build_rate_control_summary(self) -> Dict[str, Any]:
+        """status.json に載せる rate_control 要約を作る。"""
+        try:
+            snap = self.rc.snapshot() or {}
+            items = (snap.get("items") or {}) if isinstance(snap, dict) else {}
+        except Exception:
+            items = {}
+
+        if not isinstance(items, dict) or not items:
+            return {
+                "summary_state": "NORMAL",
+                "engaged": False,
+                "last_reason": "",
+                "last_changed_at": "",
+                "items": [],
+            }
+
+        # CRIT > WARN > NORMAL の順で代表状態を決める
+        summary_state = "NORMAL"
+        engaged = False
+        last_reason = ""
+        last_changed_at = ""
+        out_items: List[Dict[str, Any]] = []
+
+        best_rank = -1
+        rank_map = {"NORMAL": 0, "WARN": 1, "CRIT": 2}
+
+        for ex, st in items.items():
+            if not isinstance(st, dict):
+                continue
+
+            mode = str(st.get("mode") or "NORMAL").upper()
+            reason = str(st.get("reason") or "")
+            ts = float(st.get("ts") or 0.0)
+
+            out_items.append(
+                {
+                    "exchange": str(st.get("exchange") or ex),
+                    "mode": mode,
+                    "reason": reason,
+                    "eff_max_rps": float(st.get("eff_max_rps") or 0.0),
+                    "wait_ms": int(st.get("wait_ms") or 0),
+                    "last_429_ts": float(st.get("last_429_ts") or 0.0),
+                    "last_retry_after_sec": float(st.get("last_retry_after_sec") or 0.0),
+                }
+            )
+
+            rank = rank_map.get(mode, 0)
+            if rank > 0:
+                engaged = True
+
+            if rank > best_rank:
+                best_rank = rank
+                summary_state = mode
+                last_reason = reason
+                last_changed_at = (
+                    datetime.fromtimestamp(ts, tz=timezone.utc)
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                    if ts > 0.0
+                    else ""
+                )
+
+        out_items.sort(key=lambda d: d["exchange"])
+        return {
+            "summary_state": summary_state,
+            "engaged": engaged,
+            "last_reason": last_reason,
+            "last_changed_at": last_changed_at,
+            "items": out_items,
+        }
+    
     # ---- rate_control helpers ---------------------------------------------
 
     def _rate_control_cfg(self) -> Dict[str, Any]:
@@ -178,6 +251,13 @@ class Scheduler:
                 mode="RUNNING",
                 message="scheduler started",
                 items=self._build_status_items(now0),
+                last_heartbeat=(
+                    datetime.fromtimestamp(now0, tz=timezone.utc)
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                ),
+                rate_control=self._build_rate_control_summary(),
             )
         )
 
@@ -216,6 +296,13 @@ class Scheduler:
                                 mode="ERROR",
                                 message="no successful collection within startup grace",
                                 items=self._build_status_items(now),
+                                last_heartbeat=(
+                                    datetime.fromtimestamp(now, tz=timezone.utc)
+                                    .replace(microsecond=0)
+                                    .isoformat()
+                                    .replace("+00:00", "Z")
+                                ),
+                                rate_control=self._build_rate_control_summary(),
                             ),
                             emit_audit=False,
                         )
@@ -248,6 +335,13 @@ class Scheduler:
                             mode="RUNNING",
                             message=f"scheduler running endpoints={len(self.table)}",
                             items=self._build_status_items(now),
+                            last_heartbeat=(
+                                datetime.fromtimestamp(now, tz=timezone.utc)
+                                .replace(microsecond=0)
+                                .isoformat()
+                                .replace("+00:00", "Z")
+                            ),
+                            rate_control=self._build_rate_control_summary(),
                         ),
                         emit_audit=False,
                     )
@@ -399,12 +493,20 @@ class Scheduler:
         # NOTE:
         # - no_data 等の異常終了は例外で上位へ伝播するため、ここでは STOPPED を書かない。
         # - stop() による正常停止のみ STOPPED を書く。
+        _ts_end = time.time()
         write_status(
             CollectorStatus(
-                ts=time.time(),
+                ts=_ts_end,
                 mode="STOPPED",
                 message="scheduler stopped",
-                items=self._build_status_items(time.time()),
+                items=self._build_status_items(_ts_end),
+                last_heartbeat=(
+                    datetime.fromtimestamp(_ts_end, tz=timezone.utc)
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                ),
+                rate_control=self._build_rate_control_summary(),
             ),
             emit_audit=False,
         )

@@ -3,10 +3,12 @@
 
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
-from typing import Any
+from typing import Any, Dict, Optional, Tuple
+
+from btcts.core import audit
 
 
 @dataclass
@@ -14,13 +16,9 @@ class RatePolicy:
     """取引所ごとの制御方針。
 
     official_max_rps: 取引所公式の上限（rps）
-    soft_ratio:      ここを超えたら WARN（= 計画的な減速を開始）
-    hard_ratio:      ここを超えたら CRIT（= 強制的に最低限の収集へ落とす）
-    ※ Phase1では soft_ratio / hard_ratio は閾値・capとしては使用しない（互換保持のみ）。
-       閾値は rate_control.yaml の warn_util / crit_util、cap は warn_cap / crit_cap が正。
+    soft_ratio:      ここを超えたら WARN（互換保持用）
+    hard_ratio:      ここを超えたら CRIT（互換保持用）
     burst_base_sec:  バースト許容量のベース秒（旧V1の概念を踏襲）
-
-    注意: ratio は 0.0〜1.0（1.0 が 100%）。
     """
 
     official_max_rps: float
@@ -40,10 +38,12 @@ class RateState:
     wait_ms: int
     last_429_ts: float = 0.0
     last_retry_after_sec: float = 0.0
+    reason: str = ""
+
 
 @dataclass
 class CommonRateControl:
-    """rate_control.yaml の共通ポリシー（Phase1）。"""
+    """rate_control.yaml の共通ポリシー。"""
 
     util_window_warn_sec: float = 10.0
     util_window_clear_sec: float = 30.0
@@ -64,9 +64,9 @@ class CommonRateControl:
 
 
 class RateController:
-    """取引所別の最大RPSを守りつつ、状況に応じて自動で抑制する（Phase1）。
+    """取引所別の最大RPSを守りつつ、状況に応じて自動で抑制する。
 
-    - 取引所固有: RatePolicy.official_max_rps（公式上限）
+    - 取引所固有: RatePolicy.official_max_rps
     - 共通ポリシー: rate_control.yaml（閾値/cap/floor/backoff）
 
     mode と eff_max_rps:
@@ -83,40 +83,127 @@ class RateController:
         self._state: Dict[str, RateState] = {}
         self._next_allowed: Dict[str, float] = {}
 
-        # Phase1: rate_control.yaml の共通ポリシー（Scheduler/main が注入）
         self._common: CommonRateControl = CommonRateControl()
-        self._crit_backoff_sec: Dict[str, float] = {}  # exchange単位の backoff 状態
+        self._crit_backoff_sec: Dict[str, float] = {}
 
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+
+    def _audit_mode(self) -> str:
+        return (os.environ.get("BTC_TS_MODE", "") or "NORMAL").strip().upper()
+
+    def _emit_rate_event(
+        self,
+        event: str,
+        *,
+        exchange: str,
+        prev_mode: str = "",
+        new_mode: str = "",
+        reason: str = "",
+        level: str = "INFO",
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        payload: Dict[str, Any] = {
+            "exchange": exchange,
+            "prev_mode": prev_mode,
+            "new_mode": new_mode,
+            "reason": reason,
+        }
+        if extra:
+            payload.update(extra)
+        audit.emit(event, feature="collector", level=level, payload=payload)
+
+    def _set_mode(
+        self,
+        ex: str,
+        *,
+        new_mode: str,
+        eff_max_rps: float,
+        reason: str,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> str:
+        st = self._state.get(ex)
+        if not st:
+            return "UNKNOWN"
+
+        prev_mode = st.mode
+        prev_reason = st.reason
+
+        st.mode = new_mode
+        st.eff_max_rps = eff_max_rps
+        st.reason = reason
+        st.ts = time.time()
+
+        # 重要イベントは全モードで必ず出す
+        if prev_mode != new_mode:
+            if new_mode == "NORMAL" and prev_mode in ("WARN", "CRIT"):
+                self._emit_rate_event(
+                    "rate_control.released",
+                    exchange=ex,
+                    prev_mode=prev_mode,
+                    new_mode=new_mode,
+                    reason=reason,
+                    level="INFO",
+                    extra=extra,
+                )
+            else:
+                self._emit_rate_event(
+                    "rate_control.engaged",
+                    exchange=ex,
+                    prev_mode=prev_mode,
+                    new_mode=new_mode,
+                    reason=reason,
+                    level="INFO",
+                    extra=extra,
+                )
+        else:
+            # modeは同じでも理由が変わったら DEBUG/BOOST では見たい
+            if prev_reason != reason and self._audit_mode() in ("DEBUG", "BOOST"):
+                self._emit_rate_event(
+                    "rate_control.reason",
+                    exchange=ex,
+                    prev_mode=prev_mode,
+                    new_mode=new_mode,
+                    reason=reason,
+                    level="DEBUG",
+                    extra=extra,
+                )
+
+        return st.mode
+
+    def _current_eff(self, ex: str) -> float:
+        st = self._state.get(ex)
+        if not st:
+            return 0.0
+        return float(st.eff_max_rps)
+
+    # ------------------------------------------------------------------
+    # public config
+    # ------------------------------------------------------------------
 
     def has_policy(self, exchange: str) -> bool:
         ex = (exchange or "").strip().lower()
         return bool(ex) and (ex in self._policy)
 
-    # ---- config -----------------------------------------------------------------
-
     def set_common_policy(self, cfg: Dict[str, Any]) -> None:
-        """rate_control.yaml の共通ポリシーを注入する（Phase1）。"""
+        """rate_control.yaml の共通ポリシーを注入する。"""
         if not isinstance(cfg, dict):
             return
 
         c = self._common
-        # window
         c.util_window_warn_sec = float(cfg.get("util_window_warn_sec", c.util_window_warn_sec))
         c.util_window_clear_sec = float(cfg.get("util_window_clear_sec", c.util_window_clear_sec))
 
-        # thresholds (util)
         c.warn_util = float(cfg.get("warn_util", c.warn_util))
         c.warn_clear_util = float(cfg.get("warn_clear_util", c.warn_clear_util))
         c.crit_util = float(cfg.get("crit_util", c.crit_util))
 
-        # caps
         c.warn_cap = float(cfg.get("warn_cap", c.warn_cap))
         c.crit_cap = float(cfg.get("crit_cap", c.crit_cap))
 
-        # floor
         c.floor_rps = float(cfg.get("floor_rps", c.floor_rps))
 
-        # backoff/hold
         c.crit_backoff_initial_sec = float(cfg.get("crit_backoff_initial_sec", c.crit_backoff_initial_sec))
         c.crit_backoff_max_sec = float(cfg.get("crit_backoff_max_sec", c.crit_backoff_max_sec))
         c.crit_hold_min_sec = float(cfg.get("crit_hold_min_sec", c.crit_hold_min_sec))
@@ -128,8 +215,8 @@ class RateController:
             raise ValueError("exchange is empty")
         if policy.official_max_rps <= 0:
             raise ValueError("official_max_rps must be > 0")
+
         self._policy[ex] = policy
-        # init state
         if ex not in self._state:
             self._state[ex] = RateState(
                 ts=time.time(),
@@ -137,6 +224,7 @@ class RateController:
                 mode="NORMAL",
                 eff_max_rps=policy.official_max_rps,
                 wait_ms=0,
+                reason="policy_initialized",
             )
             self._next_allowed[ex] = 0.0
 
@@ -145,7 +233,8 @@ class RateController:
         return self._policy.get(ex)
 
     def get_state(self, exchange: str) -> Optional[RateState]:
-        return self._state.get(exchange)
+        ex = (exchange or "").strip().lower()
+        return self._state.get(ex)
 
     def snapshot(self) -> Dict[str, Dict]:
         """health/UI へ渡すための軽量スナップショット。"""
@@ -160,10 +249,13 @@ class RateController:
                 "wait_ms": st.wait_ms,
                 "last_429_ts": st.last_429_ts,
                 "last_retry_after_sec": st.last_retry_after_sec,
+                "reason": st.reason,
             }
         return {"ts": now, "items": items}
 
-    # ---- scheduling --------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # scheduling
+    # ------------------------------------------------------------------
 
     def acquire(self, exchange: str) -> Tuple[bool, int]:
         """1リクエスト分の実行許可を取得する。
@@ -182,11 +274,21 @@ class RateController:
         if now < next_ok:
             wait_ms = int((next_ok - now) * 1000)
             self._update_state(ex, wait_ms=wait_ms)
+
+            # BOOST だけ acquire待ちを細かく観測
+            if self._audit_mode() == "BOOST":
+                self._emit_rate_event(
+                    "rate_control.acquire_delayed",
+                    exchange=ex,
+                    prev_mode=self._state[ex].mode,
+                    new_mode=self._state[ex].mode,
+                    reason=self._state[ex].reason,
+                    level="DEBUG",
+                    extra={"wait_ms": max(wait_ms, 1)},
+                )
             return False, max(wait_ms, 1)
 
-        # NORMAL モード前提の間隔（mode に応じて eff_max_rps は変わる）
         st = self._state[ex]
-        # Phase1: floor_rps を確実に守る（完全停止回避）
         eff = max(float(st.eff_max_rps), float(self._common.floor_rps), 0.0001)
         interval = 1.0 / eff
         self._next_allowed[ex] = now + interval
@@ -194,7 +296,7 @@ class RateController:
         return True, 0
 
     def on_429(self, exchange: str, retry_after_sec: float = 0.0) -> None:
-        """429 を受けた場合の緊急制御（Phase1: 共通ポリシー準拠）。"""
+        """429 を受けた場合の緊急制御。"""
         ex = (exchange or "").strip().lower()
         pol = self._policy.get(ex)
         st = self._state.get(ex)
@@ -204,30 +306,66 @@ class RateController:
         c = self._common
         now = time.time()
 
-        # CRIT に落とす（capは共通ポリシー、floorを適用）
-        st.mode = "CRIT"
-        st.eff_max_rps = max(pol.official_max_rps * float(c.crit_cap), float(c.floor_rps))
-        st.last_429_ts = now
-        st.last_retry_after_sec = max(float(retry_after_sec), 0.0)
-        st.ts = now
+        eff = max(pol.official_max_rps * float(c.crit_cap), float(c.floor_rps))
 
-        # backoff（Retry-After優先、無ければ指数的に増やす）
-        if st.last_retry_after_sec > 0.0:
-            hold = st.last_retry_after_sec
+        if retry_after_sec > 0.0:
+            hold = float(retry_after_sec)
             self._crit_backoff_sec[ex] = float(c.crit_backoff_initial_sec)
+            reason = "retry_after_header"
         else:
             cur = float(self._crit_backoff_sec.get(ex, c.crit_backoff_initial_sec) or c.crit_backoff_initial_sec)
             hold = cur
             nxt = min(cur * 2.0, float(c.crit_backoff_max_sec))
             self._crit_backoff_sec[ex] = nxt
+            reason = "http_429"
 
-        # 最低holdを保証
+            if self._audit_mode() in ("DEBUG", "BOOST"):
+                self._emit_rate_event(
+                    "rate_control.backoff_changed",
+                    exchange=ex,
+                    prev_mode=st.mode,
+                    new_mode="CRIT",
+                    reason="http_429_backoff",
+                    level="DEBUG",
+                    extra={"prev_backoff_sec": cur, "next_backoff_sec": nxt},
+                )
+
         hold = max(float(hold), float(c.crit_hold_min_sec))
-
         self._next_allowed[ex] = max(self._next_allowed.get(ex, 0.0), now + hold)
 
+        st.last_429_ts = now
+        st.last_retry_after_sec = max(float(retry_after_sec), 0.0)
+
+        extra: Dict[str, Any] = {
+            "retry_after_sec": st.last_retry_after_sec,
+            "hold_sec": hold,
+        }
+        if self._audit_mode() in ("DEBUG", "BOOST"):
+            extra["eff_max_rps"] = eff
+            extra["floor_rps"] = float(c.floor_rps)
+
+        self._set_mode(
+            ex,
+            new_mode="CRIT",
+            eff_max_rps=eff,
+            reason=reason,
+            extra=extra,
+        )
+
+        # hold開始の事実は DEBUG/BOOST で追加観測
+        if self._audit_mode() in ("DEBUG", "BOOST"):
+            self._emit_rate_event(
+                "rate_control.hold_started",
+                exchange=ex,
+                prev_mode=st.mode,
+                new_mode=st.mode,
+                reason=reason,
+                level="DEBUG",
+                extra={"hold_sec": hold},
+            )
+
     def set_mode_by_util(self, exchange: str, util_ratio: float) -> str:
-        """外部観測（利用率）から mode を更新する（Phase1: 共通ポリシー準拠）。"""
+        """外部観測（利用率）から mode を更新する。"""
         ex = (exchange or "").strip().lower()
         pol = self._policy.get(ex)
         st = self._state.get(ex)
@@ -236,47 +374,133 @@ class RateController:
 
         c = self._common
         now = time.time()
-
-        # 429 直後は一定期間 CRIT 維持（no_429_for_sec を満たすまで復帰しない）
-        if st.last_429_ts and (now - st.last_429_ts) < float(c.no_429_for_sec):
-            st.ts = now
-            return st.mode
-
         u = max(0.0, min(1.0, float(util_ratio)))
 
-        # CRIT判定（閾値は crit_util）
-        if u >= float(c.crit_util):
-            st.mode = "CRIT"
-            st.eff_max_rps = max(pol.official_max_rps * float(c.crit_cap), float(c.floor_rps))
+        # DEBUG/BOOST では util 観測を残しておく
+        if self._audit_mode() in ("DEBUG", "BOOST"):
+            self._emit_rate_event(
+                "rate_control.util_observed",
+                exchange=ex,
+                prev_mode=st.mode,
+                new_mode=st.mode,
+                reason="util_sampled",
+                level="DEBUG",
+                extra={
+                    "util_ratio": u,
+                    "warn_util": float(c.warn_util),
+                    "warn_clear_util": float(c.warn_clear_util),
+                    "crit_util": float(c.crit_util),
+                },
+            )
+
+        # 429直後は一定期間 CRIT 維持
+        if st.last_429_ts and (now - st.last_429_ts) < float(c.no_429_for_sec):
             st.ts = now
+            st.reason = "cooldown_after_429"
+
+            if self._audit_mode() in ("DEBUG", "BOOST"):
+                self._emit_rate_event(
+                    "rate_control.reason",
+                    exchange=ex,
+                    prev_mode=st.mode,
+                    new_mode=st.mode,
+                    reason="cooldown_after_429",
+                    level="DEBUG",
+                    extra={
+                        "elapsed_since_429_sec": now - st.last_429_ts,
+                        "no_429_for_sec": float(c.no_429_for_sec),
+                    },
+                )
             return st.mode
 
-        # WARN判定（ヒステリシス：WARN中は warn_clear_util まで落ちないと戻らない）
+        # CRIT
+        if u >= float(c.crit_util):
+            eff = max(pol.official_max_rps * float(c.crit_cap), float(c.floor_rps))
+            return self._set_mode(
+                ex,
+                new_mode="CRIT",
+                eff_max_rps=eff,
+                reason="crit_util_threshold",
+                extra={
+                    "util_ratio": u,
+                    "threshold": float(c.crit_util),
+                    "eff_max_rps": eff,
+                } if self._audit_mode() in ("DEBUG", "BOOST") else None,
+            )
+
+        # WARN中のヒステリシス
         if st.mode == "WARN":
             if u <= float(c.warn_clear_util):
-                st.mode = "NORMAL"
-                st.eff_max_rps = pol.official_max_rps
-            else:
-                st.mode = "WARN"
-                st.eff_max_rps = max(pol.official_max_rps * float(c.warn_cap), float(c.floor_rps))
-            st.ts = now
-            return st.mode
+                return self._set_mode(
+                    ex,
+                    new_mode="NORMAL",
+                    eff_max_rps=pol.official_max_rps,
+                    reason="recovered_below_warn_clear_util",
+                    extra={
+                        "util_ratio": u,
+                        "threshold": float(c.warn_clear_util),
+                    } if self._audit_mode() in ("DEBUG", "BOOST") else None,
+                )
+            eff = max(pol.official_max_rps * float(c.warn_cap), float(c.floor_rps))
+            return self._set_mode(
+                ex,
+                new_mode="WARN",
+                eff_max_rps=eff,
+                reason="warn_hysteresis_hold",
+                extra={
+                    "util_ratio": u,
+                    "warn_clear_util": float(c.warn_clear_util),
+                    "eff_max_rps": eff,
+                } if self._audit_mode() in ("DEBUG", "BOOST") else None,
+            )
 
+        # WARN入り
         if u >= float(c.warn_util):
-            st.mode = "WARN"
-            st.eff_max_rps = max(pol.official_max_rps * float(c.warn_cap), float(c.floor_rps))
-        else:
-            st.mode = "NORMAL"
-            st.eff_max_rps = pol.official_max_rps
+            eff = max(pol.official_max_rps * float(c.warn_cap), float(c.floor_rps))
+            return self._set_mode(
+                ex,
+                new_mode="WARN",
+                eff_max_rps=eff,
+                reason="warn_util_threshold",
+                extra={
+                    "util_ratio": u,
+                    "threshold": float(c.warn_util),
+                    "eff_max_rps": eff,
+                } if self._audit_mode() in ("DEBUG", "BOOST") else None,
+            )
 
-        st.ts = now
-        return st.mode
+        # NORMAL
+        return self._set_mode(
+            ex,
+            new_mode="NORMAL",
+            eff_max_rps=pol.official_max_rps,
+            reason="normal_util_range",
+            extra={
+                "util_ratio": u,
+                "eff_max_rps": pol.official_max_rps,
+            } if self._audit_mode() in ("DEBUG", "BOOST") else None,
+        )
 
-    # ---- internal ---------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # internal
+    # ------------------------------------------------------------------
 
     def _update_state(self, ex: str, *, wait_ms: int) -> None:
         st = self._state.get(ex)
         if not st:
             return
+        prev_wait = int(st.wait_ms or 0)
         st.ts = time.time()
         st.wait_ms = int(wait_ms)
+
+        # hold終了の事実は DEBUG/BOOST だけで拾う
+        if prev_wait > 0 and st.wait_ms == 0 and self._audit_mode() in ("DEBUG", "BOOST"):
+            self._emit_rate_event(
+                "rate_control.hold_finished",
+                exchange=ex,
+                prev_mode=st.mode,
+                new_mode=st.mode,
+                reason=st.reason or "wait_cleared",
+                level="DEBUG",
+                extra={"prev_wait_ms": prev_wait},
+            )

@@ -601,13 +601,20 @@ def main() -> int:
 
     try:
         # 起動直後の状態は RUNNING を明示（msg未定義の事故を避ける）
+        _ts_boot = _now()
         write_status(
             CollectorStatus(
-                ts=_now(),
+                ts=_ts_boot,
                 mode="RUNNING",
                 message="collector running",
                 last_error="",
                 items=_status_items(),
+                last_heartbeat=(
+                    datetime.fromtimestamp(_ts_boot, tz=timezone.utc)
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                ),
             ),
             emit_audit=False,
         )
@@ -639,13 +646,20 @@ def main() -> int:
             level="CRIT",
             payload={"err": stop_error},
         )
+        _ts_err = _now()
         write_status(
             CollectorStatus(
-                ts=_now(),
+                ts=_ts_err,
                 mode="ERROR",
                 message="collector error",
                 last_error=stop_error,
                 items=_status_items(),
+                last_heartbeat=(
+                    datetime.fromtimestamp(_ts_err, tz=timezone.utc)
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                ),
             )
         )
         return 2
@@ -660,15 +674,28 @@ def main() -> int:
         # 例外で落ちた場合、ERROR を STOPPED で上書きしない（原因追跡を容易にする）
         final_mode = "ERROR" if stop_reason == "exception" else "STOPPED"
         # sch があるなら items を付けて「空に戻す事故」を防ぐ
+        _ts_final = _now()
         items = []
         if sch is not None:
             try:
-                items = sch._build_status_items(_now())  # type: ignore[attr-defined]
+                items = sch._build_status_items(_ts_final)  # type: ignore[attr-defined]
             except Exception:
                 items = []
 
         write_status(
-            CollectorStatus(ts=_now(), mode=final_mode, message=msg, last_error=stop_error, items=items),
+            CollectorStatus(
+                ts=_ts_final,
+                mode=final_mode,
+                message=msg,
+                last_error=stop_error,
+                items=items,
+                last_heartbeat=(
+                    datetime.fromtimestamp(_ts_final, tz=timezone.utc)
+                    .replace(microsecond=0)
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                ),
+            ),
             emit_audit=False,
         )
 
