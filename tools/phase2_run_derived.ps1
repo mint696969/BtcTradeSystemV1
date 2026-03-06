@@ -24,7 +24,6 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 # ---- process/meta（StrictMode対策 + 終了理由の記録）----
-$runnerPid = $PID
 $reason = ""
 $lastError = ""
 function NowIsoUtc {
@@ -41,11 +40,19 @@ function New-DirIfMissing([string]$p) {
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 
 # ---- ENV 正準化（Phase2運用の既定）----
-$env:PYTHONPATH        = (Join-Path $RepoRoot "btcts_next\src")
-$env:BTC_TS_CONFIG_DIR = (Join-Path $RepoRoot "btcts_next\config\ui")
-$env:BTC_TS_DATA_DIR   = (Join-Path $RepoRoot "btcts_next\data")
-$env:BTC_TS_LOGS_DIR   = (Join-Path $RepoRoot "btcts_next\logs")
-$env:BTC_TS_MODE       = $Mode
+# 重要: 運用の正本（例: E:\btc_ts\*）を尊重する。未設定時のみ repo フォールバックを入れる。
+$env:PYTHONPATH  = (Join-Path $RepoRoot "btcts_next\src")
+$env:BTC_TS_MODE = $Mode
+
+if (-not $env:BTC_TS_CONFIG_DIR -or -not $env:BTC_TS_CONFIG_DIR.Trim()) {
+  $env:BTC_TS_CONFIG_DIR = (Join-Path $RepoRoot "btcts_next\config\ui")
+}
+if (-not $env:BTC_TS_DATA_DIR -or -not $env:BTC_TS_DATA_DIR.Trim()) {
+  $env:BTC_TS_DATA_DIR = (Join-Path $RepoRoot "btcts_next\data")
+}
+if (-not $env:BTC_TS_LOGS_DIR -or -not $env:BTC_TS_LOGS_DIR.Trim()) {
+  $env:BTC_TS_LOGS_DIR = (Join-Path $RepoRoot "btcts_next\logs")
+}
 
 New-DirIfMissing $env:BTC_TS_CONFIG_DIR
 New-DirIfMissing $env:BTC_TS_DATA_DIR
@@ -102,55 +109,100 @@ function Invoke-LogRotateIfNeeded {
     Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
-function New-RunnerLock {
-  if (Test-Path -LiteralPath $lockPath) {
-    $stale = $false
-    $lockPid = $null
-    try {
-      $raw = Get-Content -LiteralPath $lockPath -Raw -Encoding UTF8
-      if ($raw) {
-        $j = $raw | ConvertFrom-Json
-        $lockPid = $j.pid
-      }
-    } catch {}
-
-    if ($lockPid) {
-      $proc = Get-Process -Id $lockPid -ErrorAction SilentlyContinue
-      if (-not $proc) { $stale = $true }
-    } else {
-      $stale = $true
-    }
-
-    if ($Force -and $stale) {
-      Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue
-    } else {
-      throw "lock busy: $lockPath (use -Force only if stale)"
-    }
-  }
-
-  # CreateNew 相当（排他）: 既存なら例外
-  $fs = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+function Get-ProcessStartUtcOrNull {
+  param([Parameter(Mandatory)][int]$Id)
   try {
-    $payload = @{
-      pid = $runnerPid
-      host = $env:COMPUTERNAME
-      start_utc = (NowIsoUtc)
-      repo_root = $RepoRoot
-      mode = $Mode
-      hourly_every_sec = $HourlyEverySec
-      daily_every_sec  = $DailyEverySec
-      duration_hours   = $DurationHours
-      once = [bool]$Once
-    } | ConvertTo-Json -Depth 10
-    $bytes = [System.Text.Encoding]::UTF8.GetBytes($payload)
-    $fs.Write($bytes, 0, $bytes.Length)
-  } finally {
-    $fs.Close()
+    $p = Get-Process -Id $Id -ErrorAction Stop
+    return $p.StartTime.ToUniversalTime()
+  } catch {
+    return $null
   }
 }
 
+function New-RunnerLock {
+  param(
+    [Parameter(Mandatory)][string]$LockPath,
+    [switch]$Force
+  )
+
+  New-DirIfMissing (Split-Path -Parent $LockPath)
+
+  # --- stale lock cleanup ---
+  if (Test-Path -LiteralPath $LockPath) {
+    $stale = $false
+    $lockPid = $null
+    $lockStartedUtc = $null
+
+    try {
+      $lockObj = Get-Content -LiteralPath $LockPath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
+      if ($null -ne $lockObj.pid) { $lockPid = [int]$lockObj.pid }
+      if ($null -ne $lockObj.started_utc) {
+        $lockStartedUtc = [datetime]::Parse($lockObj.started_utc).ToUniversalTime()
+      }
+    } catch {
+      # JSON が壊れてる/読めない = stale 扱い
+      $stale = $true
+    }
+
+    if ($Force) {
+      $stale = $true
+    } elseif ($lockPid) {
+      $procStartUtc = Get-ProcessStartUtcOrNull -Id $lockPid
+      if ($null -eq $procStartUtc) {
+        $stale = $true
+      } elseif ($lockStartedUtc -and ($procStartUtc -ne $lockStartedUtc)) {
+        # PID再利用を検出
+        $stale = $true
+      }
+    } else {
+      # pid が無いロックは「古さ」で判定（保守的に 6h）
+      try {
+        $age = (Get-Date) - (Get-Item -LiteralPath $LockPath).LastWriteTime
+        if ($age.TotalHours -ge 6) { $stale = $true }
+      } catch {
+        $stale = $true
+      }
+    }
+
+    if ($stale) {
+      Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue
+    }
+  }
+
+  # --- acquire lock (CreateNew + FileShare.None) ---
+  try {
+    $fs = [System.IO.File]::Open(
+      $LockPath,
+      [System.IO.FileMode]::CreateNew,
+      [System.IO.FileAccess]::ReadWrite,
+      [System.IO.FileShare]::None
+    )
+  } catch {
+    throw "lock busy: $LockPath (use -Force only if stale)"
+  }
+
+  try {
+    $obj = @{
+      pid         = $PID
+      host        = $env:COMPUTERNAME
+      user        = $env:USERNAME
+      started_utc = (Get-Date).ToUniversalTime().ToString("o")
+    }
+    $json  = ($obj | ConvertTo-Json -Compress)
+    $bytes = [Text.Encoding]::UTF8.GetBytes($json)
+
+    $fs.Write($bytes, 0, $bytes.Length)
+    $fs.Flush()
+  } finally {
+    $fs.Dispose()
+  }
+
+  return $obj
+}
+
 function Remove-RunnerLock {
-  Remove-Item -LiteralPath $lockPath -Force -ErrorAction SilentlyContinue
+  param([Parameter(Mandatory)][string]$LockPath)
+  Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue
 }
 
 function Get-LatestHourlyDay {
@@ -184,7 +236,7 @@ function Invoke-Python([string[]]$PyArgs, [string]$EventName) {
 }
 
 # ---------------- main ----------------
-New-RunnerLock
+[void](New-RunnerLock -LockPath $lockPath -Force:$Force)
 Add-Log "INFO" "derived_runner.start repo=$RepoRoot mode=$Mode"
 Add-Jsonl @{ level="INFO"; event="runner.start"; repo_root=$RepoRoot; mode=$Mode }
 
@@ -203,6 +255,14 @@ try {
     Invoke-LogRotateIfNeeded -Path $jsonlPath -MaxMB 20 -Keep 20 -ArchiveRoot $archiveRoot
     Invoke-LogRotateIfNeeded -Path $logPath  -MaxMB 10 -Keep 10 -ArchiveRoot $archiveRoot
 
+
+    # ---- audit / supervisor logs rotation (long-term safety) ----
+    $logsArchiveRoot = Join-Path $env:BTC_TS_LOGS_DIR "_archive"
+    New-DirIfMissing $logsArchiveRoot
+
+    Invoke-LogRotateIfNeeded -Path (Join-Path $env:BTC_TS_LOGS_DIR "audit.jsonl") -MaxMB 50 -Keep 20 -ArchiveRoot $logsArchiveRoot
+    Invoke-LogRotateIfNeeded -Path (Join-Path $env:BTC_TS_LOGS_DIR "supervisor_collector.jsonl") -MaxMB 50 -Keep 20 -ArchiveRoot $logsArchiveRoot
+    Invoke-LogRotateIfNeeded -Path (Join-Path $env:BTC_TS_LOGS_DIR "supervisor_collector.log") -MaxMB 20 -Keep 10 -ArchiveRoot $logsArchiveRoot
     # “生きてる証拠” を60秒に1回だけ出す（解析が楽）
     if (-not $script:lastTick) { $script:lastTick = (Get-Date).ToUniversalTime() }
     if ( ((Get-Date).ToUniversalTime() - $script:lastTick).TotalSeconds -ge 60 ) {
@@ -270,7 +330,7 @@ catch {
   throw
 }
 finally {
-  Remove-RunnerLock
+  Remove-RunnerLock -LockPath $lockPath
   if (-not $reason) { $reason = "exit" }
   Add-Log "INFO" "derived_runner.exit reason=$reason"
   Add-Jsonl @{ level="INFO"; event="runner.exit"; reason=$reason; last_error=$lastError }
