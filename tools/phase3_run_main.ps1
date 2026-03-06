@@ -118,6 +118,33 @@ function Invoke-EvidencePackOnce {
   }
 }
 
+function Invoke-SoakReportOnce {
+  param(
+    [Parameter(Mandatory)][string]$PythonExe,
+    [Parameter(Mandatory)][string]$RepoRoot,
+    [Parameter(Mandatory)][string]$JsonlPath,
+    [double]$Hours = 168
+  )
+
+  Add-Jsonl $JsonlPath @{ level='INFO'; event='soak_report.start'; hours=$Hours }
+
+  Push-Location $RepoRoot
+  try {
+    $out = & $PythonExe 'tools\phase3_soak_report.py' --hours $Hours 2>&1
+    $txt = ($out -join "`n")
+
+    if ($LASTEXITCODE -eq 0) {
+      Add-Jsonl $JsonlPath @{ level='INFO'; event='soak_report.ok'; hours=$Hours; output=$txt }
+      return $true
+    } else {
+      Add-Jsonl $JsonlPath @{ level='ERROR'; event='soak_report.fail'; hours=$Hours; exit_code=$LASTEXITCODE; output=$txt }
+      return $false
+    }
+  } finally {
+    Pop-Location
+  }
+}
+
 function TodayUtcKey { (Get-Date).ToUniversalTime().ToString('yyyyMMdd') }
 
 function Get-DirSizeBytes([string]$Path) {
@@ -321,6 +348,7 @@ $lastPackDay = ''
 try {
   if ($Once) {
     Invoke-EvidencePackOnce -PythonExe $pythonExe -EnvMap $childEnv -JsonlPath $runnerJsonl | Out-Null
+    Invoke-SoakReportOnce -PythonExe $pythonExe -RepoRoot $repoRoot -JsonlPath $runnerJsonl -Hours 24 | Out-Null
     Add-Jsonl $runnerJsonl @{ level='INFO'; event='phase3.stop.once' }
     return
   }
@@ -371,9 +399,13 @@ try {
   }
 
   Add-Jsonl $runnerJsonl @{ level='INFO'; event='phase3.stop.duration'; duration_hours=$dur }
+  Invoke-SoakReportOnce -PythonExe $pythonExe -RepoRoot $repoRoot -JsonlPath $runnerJsonl -Hours 168 | Out-Null
 
 } catch {
   Add-Jsonl $runnerJsonl @{ level='ERROR'; event='phase3.exception'; err=$_.Exception.Message }
+  try {
+    Invoke-SoakReportOnce -PythonExe $pythonExe -RepoRoot $repoRoot -JsonlPath $runnerJsonl -Hours 24 | Out-Null
+  } catch { }
   throw
 } finally {
   try {
