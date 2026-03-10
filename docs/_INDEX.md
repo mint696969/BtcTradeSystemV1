@@ -1,26 +1,105 @@
-# path: ./docs/_INDEX.md
-# desc: docs配下の索引（リンク集）。仕様書一式など主要ドキュメントへの導線。
+# BTC Trade System (BTC-TS)
+## Documentation Index
 
-この `docs/_INDEX.md` が **docs の正準入口**です。
+この `docs/_INDEX.md` は **BTC-TS ドキュメントの正準入口**です。
+Project Chimera の設計・仕様はここから参照します。
 
-> 仕様書は増減します。ファイル一覧に依存せず、導線はここで管理します。
+---
 
-## 1. 正準（まずここを見る）
-- 仕様書一式の入口: `docs/仕様書一式/README.md`
-- 仕様書（完成版）: `docs/仕様書一式/`
-- Phase2: 監査（Audit）＋派生サマリ: `docs/仕様書一式/監査（Audit）＋派生サマリ 正式仕様書.md`
+# 1. Core Design (Project Chimera)
 
-## 2. 補助（ツール手順・サンプル）
-- `docs/tools/`（各テスト・運用スクリプト仕様）
-- `docs/placeholders/`（サンプル）
+まず最初に読むドキュメント
 
-## 3. 参考（原則 repo には置かない）
-- 作業メモ・引継ぎ・途中経過は `tmp/gpt_room/` に置く
+- BTC-TS Manifest  
+  docs/BTC_TS_MANIFEST.md
 
-## 4. 非正準（原則参照しない）
-- `docs/working/**`（ドラフト置き場は作らない。必要なら `tmp/gpt_room/_cold/` に退避して明示参照）
+- System Architecture  
+  docs/architecture/SYSTEM_ARCHITECTURE.md
 
-## 5. 最新一覧（補助）
-- tmp: `tmp/gpt_room/_generated/DOCS_INDEX.md`（Utilities生成）
+- AI Architecture  
+  docs/architecture/AI_ARCHITECTURE.md
 
-> `DOCS_INDEX.md` は正準ではないが、増減するファイルの「最新一覧」を見る用途で便利。
+- Data Architecture  
+  docs/architecture/DATA_ARCHITECTURE.md
+
+---
+
+# 2. Strategy System
+
+戦略進化システム
+
+- Strategy Genome System  
+  docs/strategy/STRATEGY_SYSTEM.md
+
+---
+
+# 3. UI System
+
+Human-AI インターフェース
+
+- UI Architecture  
+  docs/ui/UI_ARCHITECTURE.md
+
+---
+
+# 4. Development Plan
+
+開発ロードマップ
+
+- Development Roadmap  
+  docs/roadmap/DEVELOPMENT_ROADMAP.md
+
+---
+
+# 5. Subsystem Specifications
+
+実装サブシステム仕様
+
+Collector System
+
+docs/systems/collector/
+
+含まれる仕様
+
+- Collector
+- API Rate Control
+- Health Monitoring
+- Supervisor (Watchdog)
+- Audit System
+- Exchange Configuration
+
+---
+
+# 6. Tools & Utilities
+
+テストツール・運用ツール
+
+docs/tools/
+
+---
+
+# 7. Examples / Samples
+
+サンプルデータ
+
+docs/placeholders/
+
+---
+
+# 8. GPT Working Area
+
+GPTの作業・記憶領域
+
+tmp/gpt_room/
+
+※ここは正本ではない
+
+---
+
+# Rule
+
+- 正式仕様 → docs/
+- 作業メモ → tmp/gpt_room
+- 古い仕様 → _stash/Docs_OLD
+
+docs = Project Chimera Official Documentation

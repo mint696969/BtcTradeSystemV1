@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import streamlit as st
@@ -45,6 +46,46 @@ def _expected_status_path_hint(data_dir: str) -> str:
     if not data_dir:
         return ""
     return os.path.join(data_dir, "collector", "status.json")
+
+
+def _phase3_dir() -> Path:
+    try:
+        logs_dir = str(ENV.logs_dir())
+    except Exception:
+        return Path(".")
+    return Path(logs_dir) / "phase3"
+
+
+def _find_latest_soak_report_json() -> Tuple[Optional[Path], str]:
+    phase3_dir = _phase3_dir()
+    if not phase3_dir.exists():
+        return None, f"phase3 dir not found: {phase3_dir}"
+
+    files = sorted(
+        phase3_dir.glob("soak_report_*.json"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    if not files:
+        return None, f"soak_report_*.json not found under: {phase3_dir}"
+
+    return files[0], ""
+
+
+def _read_latest_soak_report() -> Tuple[Optional[Dict[str, Any]], str]:
+    p, reason = _find_latest_soak_report_json()
+    if p is None:
+        return None, reason
+
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+        if not isinstance(obj, dict):
+            return None, f"invalid soak report json: {p}"
+        obj["_report_path"] = str(p)
+        return obj, ""
+    except Exception as e:
+        return None, f"soak report read failed: {type(e).__name__}: {e}"
 
 
 def render_collector_page() -> None:
@@ -199,6 +240,50 @@ def render_collector_page() -> None:
                 "rate_control.last_reason": rc_reason,
             }
         )
+
+    soak_js, soak_reason = _read_latest_soak_report()
+
+    st.write("latest soak report (summary)")
+    if soak_js is None:
+        st.info(soak_reason)
+    else:
+        decision = soak_js.get("decision") if isinstance(soak_js.get("decision"), dict) else {}
+        findings = soak_js.get("findings") if isinstance(soak_js.get("findings"), list) else []
+        summary = soak_js.get("summary") if isinstance(soak_js.get("summary"), dict) else {}
+        rate = summary.get("rate_control") if isinstance(summary.get("rate_control"), dict) else {}
+        top_reasons = rate.get("top_reasons") if isinstance(rate.get("top_reasons"), list) else []
+
+        summary_obj = {
+            "report_path": soak_js.get("_report_path", ""),
+            "generated_at": soak_js.get("generated_at", ""),
+            "decision.ui_parallel_safe": decision.get("ui_parallel_safe", ""),
+            "decision.phase3c_required": decision.get("phase3c_required", ""),
+            "decision.phase3c_recommended": decision.get("phase3c_recommended", ""),
+            "rate_control.engaged_count": rate.get("engaged_count", 0),
+            "rate_control.released_count": rate.get("released_count", 0),
+            "findings.count": len(findings),
+        }
+
+        if top_reasons:
+            summary_obj["rate_control.top_reason_1"] = (
+                f"{top_reasons[0].get('reason')}: {top_reasons[0].get('count')}"
+            )
+        if len(top_reasons) >= 2:
+            summary_obj["rate_control.top_reason_2"] = (
+                f"{top_reasons[1].get('reason')}: {top_reasons[1].get('count')}"
+            )
+
+        st.json(summary_obj)
+
+        with st.expander("latest soak findings", expanded=False):
+            if findings:
+                for f in findings:
+                    sev = str(f.get("severity") or "")
+                    title = str(f.get("title") or "")
+                    detail = str(f.get("detail") or "")
+                    st.write(f"- [{sev}] {title} :: {detail}")
+            else:
+                st.write("- (none)")
 
     st.write("status.json (raw)")
 

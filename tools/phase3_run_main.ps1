@@ -97,6 +97,58 @@ function Find-RunningPwshScript {
   return $p
 }
 
+function Get-ChildProcessTreeIds([int]$RootPid) {
+  $all = @(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue)
+  $result = New-Object System.Collections.Generic.List[int]
+  $queue = New-Object System.Collections.Generic.Queue[int]
+  $queue.Enqueue($RootPid)
+
+  while ($queue.Count -gt 0) {
+    $cur = $queue.Dequeue()
+    $children = @($all | Where-Object { $_.ParentProcessId -eq $cur })
+    foreach ($c in $children) {
+      if (-not $result.Contains([int]$c.ProcessId)) {
+        $result.Add([int]$c.ProcessId)
+        $queue.Enqueue([int]$c.ProcessId)
+      }
+    }
+  }
+
+  return @($result)
+}
+
+function Stop-ProcessTree([int]$RootPid) {
+  $childIds = @(Get-ChildProcessTreeIds -RootPid $RootPid)
+
+  foreach ($childPid in ($childIds | Sort-Object -Descending)) {
+    try { Stop-Process -Id $childPid -Force -ErrorAction SilentlyContinue } catch { }
+  }
+
+  try { Stop-Process -Id $RootPid -Force -ErrorAction SilentlyContinue } catch { }
+
+  return @{
+    root_pid = $RootPid
+    child_pids = $childIds
+    child_count = @($childIds).Count
+  }
+}
+
+function Stop-CollectorMainProcesses {
+  $targets = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+    Where-Object {
+      (($_.Name -as [string]) -match '^python(3)?(\\.exe)?$') -and
+      (($_.CommandLine -as [string]) -match '(^|\\s)-m\\s+btcts\\.collector\\.main(\\s|$)')
+    }
+
+  foreach ($t in $targets) {
+    try {
+      Stop-Process -Id $t.ProcessId -Force -ErrorAction SilentlyContinue
+    } catch { }
+  }
+
+  return @($targets).Count
+}
+
 function Invoke-EvidencePackOnce {
   param(
     [Parameter(Mandatory)][string]$PythonExe,
@@ -227,19 +279,25 @@ function Invoke-NasSync {
   Add-Jsonl $JsonlPath @{ level='INFO'; event='nas.sync.start'; nas_root=$NasRoot }
 
   # 実行中ログ/ロック/一時ファイルは除外して sharing violation を避ける
-  $excludeLogs = @(
-    'phase3_runner.jsonl',
-    'watchdog_stdout.log',
-    'watchdog_stderr.log',
-    'derived_stdout.log',
-    'derived_stderr.log',
-    'derived_runner.lock',
-    'derived_runner.pid',
-    'watchdog.lock',
-    'watchdog.pid',
-    '*.lock',
-    '*.pid'
-  )
+$excludeLogs = @(
+  'audit.jsonl',
+  'audit.jsonl.lock',
+  'supervisor_collector.jsonl',
+  'supervisor_collector.log',
+  'collector_stdout.log',
+  'collector_stderr.log',
+  'phase3_runner.jsonl',
+  'watchdog_stdout.log',
+  'watchdog_stderr.log',
+  'derived_stdout.log',
+  'derived_stderr.log',
+  'derived_runner.lock',
+  'derived_runner.pid',
+  'watchdog.lock',
+  'watchdog.pid',
+  '*.lock',
+  '*.pid'
+)
 
   $args1 = @(
     $LogsDir, $dstLogs,
@@ -249,7 +307,8 @@ function Invoke-NasSync {
 
   $args2 = @(
     $DataDir, $dstData,
-    '/E','/XO','/FFT','/Z','/R:1','/W:1','/NFL','/NDL','/NP'
+    '/E','/XO','/FFT','/Z','/R:1','/W:1','/NFL','/NDL','/NP',
+    '/XD', (Join-Path $DataDir 'collector')
   )
 
   & robocopy @args1 | Out-Null
@@ -416,7 +475,22 @@ try {
 
   try {
     if (-not $watchdogExternal -and $watchdogProc -and -not $watchdogProc.HasExited) {
-      Stop-Process -Id $watchdogProc.Id -Force -ErrorAction SilentlyContinue
+      $tree = Stop-ProcessTree -RootPid $watchdogProc.Id
+      Add-Jsonl $runnerJsonl @{
+        level='WARN'
+        event='watchdog.tree.stop'
+        root_pid=$tree.root_pid
+        child_count=$tree.child_count
+        child_pids=($tree.child_pids -join ',')
+      }
+      Start-Sleep -Milliseconds 1200
+    }
+  } catch {}
+
+  try {
+    $killed = Stop-CollectorMainProcesses
+    if ($killed -gt 0) {
+      Add-Jsonl $runnerJsonl @{ level='WARN'; event='collector.orphan.stop'; count=$killed }
     }
   } catch {}
 

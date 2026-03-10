@@ -215,10 +215,12 @@ function Start-Collector([string]$PythonExe, [string]$PyPath, [string]$ConfigDir
 
     # 子プロセスへ渡す環境を「明示固定」して、手動起動との差・事故を無くす
   $envMap = @{}
-  $envMap['PYTHONPATH']        = $PyPath
-  $envMap['BTC_TS_CONFIG_DIR'] = $ConfigDir
-  $envMap['BTC_TS_DATA_DIR']   = $DataDir
-  $envMap['BTC_TS_LOGS_DIR']   = $LogsDir
+  $envMap['PYTHONPATH']          = $PyPath
+  $envMap['BTC_TS_CONFIG_DIR']   = $ConfigDir
+  $envMap['BTC_TS_DATA_DIR']     = $DataDir
+  $envMap['BTC_TS_LOGS_DIR']     = $LogsDir
+  $envMap['PYTHONUNBUFFERED']    = '1'
+  $envMap['PYTHONFAULTHANDLER']  = '1'
   if (-not (Test-BtctsImport -PythonExe $PythonExe -PyPath $PyPath -LogPath $LogPath -JsonlPath $JsonlPath)) {
     throw "preflight failed: btcts import"
   }
@@ -291,6 +293,55 @@ function Stop-Collector([System.Diagnostics.Process]$Proc, [string]$LogPath, [st
   }
 }
 
+function Get-FileTailText([string]$Path, [int]$Lines = 80) {
+  try {
+    if (-not (Test-Path -LiteralPath $Path)) { return "" }
+    $arr = Get-Content -LiteralPath $Path -Tail $Lines -Encoding UTF8 -ErrorAction SilentlyContinue
+    if (-not $arr) { return "" }
+    return ($arr -join "`n")
+  } catch {
+    return ""
+  }
+}
+
+function Get-StatusRawText([string]$StatusPath) {
+  try {
+    if (-not (Test-Path -LiteralPath $StatusPath)) { return "" }
+    return (Get-Content -LiteralPath $StatusPath -Raw -Encoding UTF8 -ErrorAction SilentlyContinue)
+  } catch {
+    return ""
+  }
+}
+
+function Write-CollectorExitDiagnostics(
+  [int]$ExitCode,
+  [string]$StdoutPath,
+  [string]$StderrPath,
+  [string]$StatusPath,
+  [string]$LogPath,
+  [string]$JsonlPath
+) {
+  $stdoutTail = Get-FileTailText -Path $StdoutPath -Lines 120
+  $stderrTail = Get-FileTailText -Path $StderrPath -Lines 120
+  $statusRaw  = Get-StatusRawText -StatusPath $StatusPath
+
+  Add-LogLine $LogPath 'WARN' 'collector.exit.diag' @{
+    exit_code   = $ExitCode
+    stdout_tail = ($stdoutTail -replace "`r?`n", ' <NL> ')
+    stderr_tail = ($stderrTail -replace "`r?`n", ' <NL> ')
+  }
+
+  Add-JsonlLine $JsonlPath @{
+    ts          = NowIso
+    level       = 'WARN'
+    event       = 'collector.exit.diag'
+    exit_code   = $ExitCode
+    stdout_tail = $stdoutTail
+    stderr_tail = $stderrTail
+    status_raw  = $statusRaw
+  }
+}
+
 # ---- main ----
 
 # 必須ENV（config/data/logs）を先に確定する（ConfigPath決定に必要）
@@ -334,6 +385,8 @@ $lockPath  = Join-PathSafe $logsDir 'watchdog.lock'
 $pidPath   = Join-PathSafe $logsDir 'watchdog.pid'
 
 $statusPath = Join-PathSafe (Join-PathSafe $dataDir 'collector') 'status.json'
+$collectorStdoutPath = Join-PathSafe $logsDir 'collector_stdout.log'
+$collectorStderrPath = Join-PathSafe $logsDir 'collector_stderr.log'
 
 function Clear-StaleStatusLock([string]$StatusPath, [int]$HangSec, [string]$LogPath, [string]$JsonlPath) {
   $lockPath = "$StatusPath.lock"
@@ -433,6 +486,14 @@ try {
       Add-LogLine $superLog 'WARN' 'collector.exited' @{ exit_code=$proc.ExitCode; fails=$consecutiveFails }
       Add-JsonlLine $superJson @{ ts=NowIso; level='WARN'; event='collector.exited'; exit_code=$proc.ExitCode; fails=$consecutiveFails }
 
+      Write-CollectorExitDiagnostics `
+        -ExitCode $proc.ExitCode `
+        -StdoutPath $collectorStdoutPath `
+        -StderrPath $collectorStderrPath `
+        -StatusPath $statusPath `
+        -LogPath $superLog `
+        -JsonlPath $superJson
+
       if ($consecutiveFails -ge $maxFails) {
         $exitReason = 'watchdog.stop.too_many_fails'
         Add-LogLine $superLog 'ERROR' 'watchdog.stop.too_many_fails' @{ fails=$consecutiveFails; max=$maxFails }
@@ -526,6 +587,13 @@ finally {
   try {
     Add-LogLine  $superLog 'INFO' 'watchdog.exit' @{ reason=$exitReason }
     Add-JsonlLine $superJson @{ ts=NowIso; level='INFO'; event='watchdog.exit'; reason=$exitReason }
+  } catch { }
+
+  try {
+    if ($proc) {
+      Stop-Collector $proc $superLog $superJson
+      Start-Sleep -Milliseconds 500
+    }
   } catch { }
 
   try { if ($lock) { $lock.Dispose() } } catch { }

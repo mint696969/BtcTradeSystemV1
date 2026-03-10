@@ -221,3 +221,209 @@ Collector は現状 bitFlyer BTC だが、最終的に FX / 株 / その他の�
 5) **テスト**：モード別イベント差分、サマリ生成の整合、ローテ後も運用継続
 
 ---
+
+## 11. 実装状況（2026-03-05）
+
+### 11.1 現在の運用ルート（正本）
+- 実運用の正本は `E:\btc_ts\` 配下（logs/data/config/secrets）。
+- リポジトリ配下（例：`btcts_next/logs`）はフォールバック/テンプレ用途。
+- runner は既存の `BTC_TS_*` 環境変数を尊重し、未設定時のみ repo フォールバックを採用する。
+
+### 11.2 出力構造（実装）
+- `${BTC_TS_LOGS_DIR}/derived/`
+  - `hourly_YYYYMMDD_HH.json`
+  - `daily_YYYYMMDD.json`
+  - `latest_hourly.json` / `latest_daily.json`
+  - `state.json`
+- `${BTC_TS_LOGS_DIR}/quality/`（GPT判定を高速化する最小サマリ）
+  - `coverage_YYYYMMDD_HH.json`（hourlyから生成）
+  - `gaps_YYYYMMDD_HH.jsonl`（hourly topics の max_age_sec から生成）
+  - `anomaly_YYYYMMDD.json`（dailyから生成）
+
+### 11.3 Evidence Pack（実装）
+- Evidence Pack は `derived/*` に加えて `quality/*`（最新）を同梱する。
+
+### 11.4 ローテーション（実装）
+- runner ログ（derived_runner.*）に加えて、以下もサイズ閾値で `_archive/` へ退避する：
+  - `audit.jsonl`
+  - `supervisor_collector.jsonl`
+  - `supervisor_collector.log`
+- 方式：サイズ閾値超過 → `${BTC_TS_LOGS_DIR}/_archive/<timestamp>/` へ Move（保持本数で掃除）
+
+> 注：本仕様の「日次切替/gzip」は提案であり、現実装は「サイズ閾値＋保持本数」の簡易方式。運用要件に応じて日次+圧縮へ拡張可能。
+
+### 11.5 受け入れ条件（Phase2 Done）チェック（現状）
+- [x] NORMAL で 24/365 運用してもログが過剰に肥大しない（ローテ設計が入り、運用ルートも正本へ統一）
+- [x] `derived/latest_daily.json` が生成され、主要指標が入る
+- [x] Evidence Pack がワンコマンドで作れる
+- [x] GPT が「派生サマリ中心」で品質判断できる（derived + quality の入口が揃った）
+- [ ] `BTC_TS_MODE` が `NORMAL/DEBUG/BOOST` で差が出る（差分の受け入れ条件は次フェーズで明確化）
+
+---
+
+## 12. 追記（2026-03-06）
+Phase3A 統合実行（Main PC 代替 collector 運用）
+
+本仕様に加えて、Phase3A では Main PC 上で collector 系処理を統合実行するための統合 runner を定義する。
+
+実行スクリプト：tools/phase3_run_main.ps1
+
+主目的：
+
+scripts/watchdog_collector.ps1 による collector watchdog 実行
+
+tools/phase2_run_derived.ps1 による derived / quality 実行
+
+日次 evidence_pack 生成
+
+disk guard
+
+NAS sync
+
+位置づけ：
+
+収集専用機未導入期間における Main PC の代替 collector 運用
+
+最終的な collector 専用機移行を前提とした暫定かつ実運用可能な統合形態
+
+Phase3A 統合 runner の役割
+
+tools/phase3_run_main.ps1 は以下を統合して扱う。
+
+collector watchdog 起動・監視
+scripts/watchdog_collector.ps1 を起動し、collector の継続実行を担保する。
+
+derived / quality 起動・監視
+tools/phase2_run_derived.ps1 を起動し、以下を継続生成する。
+
+hourly
+
+daily
+
+coverage
+
+gaps
+
+anomaly
+
+evidence pack 生成
+UTC 日付単位で btcts.derived.evidence_pack を実行し、証跡パックを生成する。
+
+disk guard
+logs / data のサイズおよび空き容量を定期点検し、phase3_runner.jsonl に記録する。
+
+NAS sync
+BTC_TS_NAS_ROOT が設定されている場合、logs / data を NAS 側へ同期する。
+
+Phase3A 実行ログ
+
+統合 runner のログ出力先は以下とする。
+
+BTC_TS_LOGS_DIR\phase3\phase3_runner.jsonl
+
+BTC_TS_LOGS_DIR\phase3\watchdog_stdout.log
+
+BTC_TS_LOGS_DIR\phase3\watchdog_stderr.log
+
+BTC_TS_LOGS_DIR\phase3\derived_stdout.log
+
+BTC_TS_LOGS_DIR\phase3\derived_stderr.log
+
+phase3_runner.jsonl には少なくとも以下のイベントが出力される。
+
+phase3.start
+
+watchdog.spawn / watchdog.attach_existing
+
+derived.spawn
+
+disk.guard
+
+nas.sync.start
+
+nas.sync.done
+
+evidence_pack.start
+
+evidence_pack.ok / evidence_pack.fail
+
+evidence_pack.done
+
+phase3.stop.once または phase3.stop.duration
+
+phase3.exit
+
+NAS sync の扱い
+
+NAS sync は任意機能とし、BTC_TS_NAS_ROOT が設定されている場合のみ動作する。
+
+同期対象：
+
+BTC_TS_LOGS_DIR
+
+BTC_TS_DATA_DIR
+
+実装：
+
+robocopy を用いた非破壊同期
+
+判定：
+
+robocopy の戻り値 0〜7 を成功扱いとする
+
+備考：
+
+実行中ログ、lock、pid などは必要に応じて除外し、sharing violation を抑制する
+
+旧 NAS / SMB1 環境は暫定テスト用途として許容するが、最終本番構成は新しい NAS への移行を前提とする
+
+stale lock recovery（derived runner）
+
+tools/phase2_run_derived.ps1 は stale lock recovery を備える。
+
+lock ファイルが存在していても、
+
+対象 PID が存在しない場合
+
+lock 記録の開始時刻と実プロセス開始時刻が一致しない場合
+
+lock JSON が破損している場合
+
+-Force 指定時
+は stale lock とみなし、自動復旧可能とする。
+
+これにより、強制終了・停電・異常停止後でも derived runner の再開性を担保する。
+
+Phase3A 完了時点の到達状態
+
+Phase3A 完了時点では、Main PC において以下の統合フローが成立していることを意味する。
+
+collector watchdog 実行
+
+derived / quality 実行
+
+evidence pack 生成
+
+disk guard 記録
+
+NAS sync 実行
+
+所定時間運転後の正常終了
+
+正常系の代表的なイベント系列は以下とする。
+
+phase3.start
+
+watchdog.spawn
+
+derived.spawn
+
+disk.guard
+
+nas.sync.done (ok=true)
+
+evidence_pack.done (ok=true)
+
+phase3.stop.duration
+
+phase3.exit
