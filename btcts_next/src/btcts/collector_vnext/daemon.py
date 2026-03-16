@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/collector_vnext/daemon.py
-# desc: Continuous runner for Collector vNext that repeats smoke collection cycles and refreshes vNext state files.
+# desc: Smoke daemon for Collector vNext that repeats qualification cycles and refreshes vNext state files.
 
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def _emit_loop_status(
         build_status(
             mode=mode,
             message=(
-                f"collector_vnext daemon active cycle={cycle_no} "
+                f"collector_vnext smoke daemon active cycle={cycle_no} "
                 f"interval_sec={interval_sec} failures={consecutive_failures}"
             ),
             session_id=f"{cfg.collector_id}-daemon",
@@ -245,7 +245,7 @@ def run_forever() -> int:
                     cfg,
                     build_status(
                         mode="STOPPED",
-                        message="collector_vnext daemon stopped by keyboard interrupt",
+                        message="collector_vnext smoke daemon stopped by keyboard interrupt",
                         session_id=f"{cfg.collector_id}-daemon",
                         stream_session_id=f"{cfg.collector_id}-daemon-loop",
                         consecutive_failures=consecutive_failures,
@@ -283,7 +283,7 @@ def run_forever() -> int:
                     build_status(
                         mode="DEGRADED",
                         message=(
-                            "collector_vnext daemon cycle failed "
+                            "collector_vnext smoke daemon cycle failed "
                             f"failures={consecutive_failures} error={exc}"
                         ),
                         session_id=f"{cfg.collector_id}-daemon",
@@ -333,7 +333,7 @@ def run_forever() -> int:
                         build_status(
                             mode="STOPPED",
                             message=(
-                                "collector_vnext daemon stopped after too many failures "
+                                "collector_vnext smoke daemon stopped after too many failures "
                                 f"max_failures={max_failures}"
                             ),
                             session_id=f"{cfg.collector_id}-daemon",

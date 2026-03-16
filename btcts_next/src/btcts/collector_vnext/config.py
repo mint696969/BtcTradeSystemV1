@@ -63,7 +63,6 @@ class CollectorConfig:
     def roots(self) -> Dict[str, Path]:
         return {
             "raw": self.data_root / "collector_raw",
-            "compact": self.data_root / "collector_compact",
             "canonical": self.data_root / "market_data",
             "logs": self.logs_root / "collector_vnext",
             "state": self.state_root / "collector_vnext",

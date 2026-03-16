@@ -1,5 +1,5 @@
 # path: ./tools/run_collector_vnext.ps1
-# desc: Safe launcher for Collector vNext with repo-local PYTHONPATH and optional dev WS SSL override.
+# desc: Safe smoke launcher for Collector vNext with repo-local PYTHONPATH and optional dev WS SSL override.
 
 $ErrorActionPreference = 'Stop'
 

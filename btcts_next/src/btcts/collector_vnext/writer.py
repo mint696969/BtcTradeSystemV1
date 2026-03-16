@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/collector_vnext/writer.py
-# desc: JSONL append writers for Raw, Compact, Canonical, and state outputs in Collector vNext.
+# desc: JSONL append writers for raw, canonical, and state outputs in Collector vNext.
 
 from __future__ import annotations
 
@@ -21,13 +21,6 @@ def _append_jsonl(path: Path, record: Dict[str, Any]) -> None:
 def write_raw(cfg: CollectorConfig, *, exchange: str, symbol: str, channel: str, record_type: str, record: Dict[str, Any]) -> Path:
     lp = build_layer_paths(cfg, exchange=exchange, symbol=symbol, channel=channel, record_type=record_type)
     out = part_file_path(lp.raw_dir, part_no=1)
-    _append_jsonl(out, record)
-    return out
-
-
-def write_compact(cfg: CollectorConfig, *, exchange: str, symbol: str, channel: str, record_type: str, record: Dict[str, Any]) -> Path:
-    lp = build_layer_paths(cfg, exchange=exchange, symbol=symbol, channel=channel, record_type=record_type)
-    out = part_file_path(lp.compact_dir, part_no=1)
     _append_jsonl(out, record)
     return out
 

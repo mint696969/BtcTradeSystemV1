@@ -38,6 +38,7 @@ def canonical_board_snapshot(
     return {
         "snapshot_id": snapshot_id,
         "prev_snapshot_id": None,
+        "prev_event_id": None,
         "base_snapshot_id": snapshot_id,
         "bids": bids,
         "asks": asks,

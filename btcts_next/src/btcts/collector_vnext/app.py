@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/collector_vnext/app.py
-# desc: Thin entrypoint for Collector vNext smoke execution and state output.
+# desc: Smoke entrypoint for Collector vNext that runs one qualification cycle and writes state outputs.
 
 from __future__ import annotations
 
@@ -135,18 +135,18 @@ def main() -> int:
         },
     )
 
-    status_message = "collector_vnext bootstrap + rest board/trades smoke completed"
+    status_message = "collector_vnext smoke cycle completed: bootstrap + rest board/trades"
     status_mode = "RUNNING"
 
     if ws_trades["ok"]:
-        status_message += " + ws trade smoke completed"
+        status_message += " + ws trade check completed"
     else:
-        status_message += " + ws trade smoke timeout(warn)"
+        status_message += " + ws trade check timeout(warn)"
 
     if ws_board["ok"]:
-        status_message += " + ws board smoke completed"
+        status_message += " + ws board check completed"
     else:
-        status_message += " + ws board smoke failed"
+        status_message += " + ws board check failed"
         status_mode = "DEGRADED"
 
     rate_state = rate_runtime.snapshot()

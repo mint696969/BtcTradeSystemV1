@@ -1,5 +1,5 @@
 # path: ./tools/run_collector_vnext_daemon.ps1
-# desc: Safe continuous launcher for Collector vNext daemon with repo-local PYTHONPATH and configurable loop interval.
+# desc: Safe smoke-daemon launcher for Collector vNext with repo-local PYTHONPATH and configurable loop interval.
 
 $ErrorActionPreference = 'Stop'
 
