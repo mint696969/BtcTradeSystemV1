@@ -1,53 +1,24 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/ai_signal_panel.py
-# desc: Market / Trade Flow を基に簡易 AI シグナルを生成する WarRoom パネル
+# desc: Replay / Research artifact を基に簡易 AI シグナルを生成する WarRoom パネル
+
+from __future__ import annotations
 
 import streamlit as st
-import json
-from pathlib import Path
+
+from btcts.apps.operator_ui.components.research_bridge import (
+    board_signal_metrics,
+    latest_best_strategy_name,
+    latest_board_row,
+    latest_regime_name,
+    latest_trade_row,
+    load_latest_experiment_payload,
+    load_latest_replay_payload,
+    tradeflow_metrics,
+)
 from btcts.apps.operator_ui.ui_text import get_text
-
-ORDERBOOK_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\orderbook")
-TRADES_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\trades")
-
-
-def _read_latest_jsonl(dir_path):
-
-    if not dir_path.exists():
-        return None
-
-    files = sorted(dir_path.glob("*.jsonl"))
-
-    if not files:
-        return None
-
-    latest = files[-1]
-
-    with open(latest, "rb") as f:
-
-        f.seek(0, 2)
-        size = f.tell()
-
-        block = 4096
-        data = b""
-
-        while size > 0:
-
-            step = min(block, size)
-            size -= step
-            f.seek(size)
-
-            data = f.read(step) + data
-
-            if data.count(b"\n") >= 2:
-                break
-
-        line = data.splitlines()[-1]
-
-    return json.loads(line)
 
 
 def _badge_class(value: str) -> str:
-
     if value in ("LONG BIAS", "ロング寄り"):
         return "badge-buy"
 
@@ -61,59 +32,61 @@ def _badge_class(value: str) -> str:
 
 
 def render():
-
     lang = st.session_state.get("ui_lang", "en")
 
     st.markdown(f"### {get_text(lang, 'ai_signal_title')}")
 
-    ob = _read_latest_jsonl(ORDERBOOK_DIR)
-    tr = _read_latest_jsonl(TRADES_DIR)
+    replay_payload = load_latest_replay_payload()
+    experiment_payload = load_latest_experiment_payload()
 
-    if not ob or not tr:
+    board = board_signal_metrics(latest_board_row(replay_payload))
+    flow = tradeflow_metrics(latest_trade_row(replay_payload))
+
+    if not board or not flow:
         st.warning(get_text(lang, "ai_signal_missing_data"))
         return
 
-    bids = ob.get("bids", [])
-    asks = ob.get("asks", [])
+    imbalance = board.get("imbalance")
+    delta = flow.get("trade_delta")
+    regime = latest_regime_name(experiment_payload)
+    best_strategy = latest_best_strategy_name(experiment_payload)
 
-    if not bids or not asks:
-        st.warning(get_text(lang, "ai_signal_orderbook_unavailable"))
-        return
-
-    bid_vol = sum(b["size"] for b in bids[:10])
-    ask_vol = sum(a["size"] for a in asks[:10])
-
-    imbalance = 0
-    total = bid_vol + ask_vol
-
-    if total > 0:
-        imbalance = (bid_vol - ask_vol) / total
-
-    items = tr.get("items", [])
-
-    buy_vol = sum(x["size"] for x in items if x.get("side") == "BUY")
-    sell_vol = sum(x["size"] for x in items if x.get("side") == "SELL")
-
-    delta = buy_vol - sell_vol
-
-    regime = get_text(lang, "ai_signal_value_range")
-
-    if abs(imbalance) > 0.25:
-        regime = get_text(lang, "ai_signal_value_trend")
+    regime_label = get_text(lang, "ai_signal_value_range")
+    if regime in {"trend_up", "trend_down"}:
+        regime_label = get_text(lang, "ai_signal_value_trend")
+    elif regime == "liquidity_vacuum":
+        regime_label = "Liquidity Vacuum"
+    elif regime == "absorption_zone":
+        regime_label = "Absorption Zone"
 
     decision = get_text(lang, "ai_signal_value_wait")
 
-    if imbalance > 0.2 and delta > 0:
-        decision = get_text(lang, "ai_signal_value_long_bias")
+    if regime == "trend_up" and isinstance(imbalance, (int, float)) and isinstance(delta, (int, float)):
+        if imbalance > 0 and delta > 0:
+            decision = get_text(lang, "ai_signal_value_long_bias")
 
-    if imbalance < -0.2 and delta < 0:
-        decision = get_text(lang, "ai_signal_value_short_bias")
+    elif regime == "trend_down" and isinstance(imbalance, (int, float)) and isinstance(delta, (int, float)):
+        if imbalance < 0 and delta < 0:
+            decision = get_text(lang, "ai_signal_value_short_bias")
+
+    elif regime == "absorption_zone":
+        if best_strategy in {"microstructure_v1", "regime_aware_microstructure_v1"}:
+            if isinstance(delta, (int, float)) and delta < 0:
+                decision = get_text(lang, "ai_signal_value_short_bias")
+            elif isinstance(delta, (int, float)) and delta > 0:
+                decision = get_text(lang, "ai_signal_value_long_bias")
 
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric(get_text(lang, "ai_signal_market_regime"), regime)
-    c2.metric(get_text(lang, "ai_signal_orderbook_bias"), round(imbalance, 3))
-    c3.metric(get_text(lang, "ai_signal_trade_delta"), round(delta, 4))
+    c1.metric(get_text(lang, "ai_signal_market_regime"), regime_label)
+    c2.metric(
+        get_text(lang, "ai_signal_orderbook_bias"),
+        "-" if imbalance is None else round(float(imbalance), 3),
+    )
+    c3.metric(
+        get_text(lang, "ai_signal_trade_delta"),
+        "-" if delta is None else round(float(delta), 4),
+    )
     c4.metric(get_text(lang, "ai_signal_decision"), decision)
 
     st.markdown(
@@ -126,5 +99,7 @@ def render():
         """,
         unsafe_allow_html=True,
     )
+
+    st.caption(f"best_strategy={best_strategy} / replay_ts={flow.get('event_ts')}")
 
     st.divider()

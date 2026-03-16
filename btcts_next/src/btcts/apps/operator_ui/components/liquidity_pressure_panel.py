@@ -1,52 +1,19 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/liquidity_pressure_panel.py
-# desc: orderbook の上位板から流動性の壁を算出し、Bid/Ask の圧力を表示する WarRoom パネル
+# desc: Replay board signal から壁と流動性圧力を表示する WarRoom パネル
+
+from __future__ import annotations
 
 import streamlit as st
-import json
-from pathlib import Path
+
+from btcts.apps.operator_ui.components.research_bridge import (
+    board_signal_metrics,
+    latest_board_row,
+    load_latest_replay_payload,
+)
 from btcts.apps.operator_ui.ui_text import get_text
-
-ORDERBOOK_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\orderbook")
-
-
-def _read_latest_jsonl(dir_path):
-
-    if not dir_path.exists():
-        return None
-
-    files = sorted(dir_path.glob("*.jsonl"))
-
-    if not files:
-        return None
-
-    latest = files[-1]
-
-    with open(latest, "rb") as f:
-
-        f.seek(0, 2)
-        size = f.tell()
-
-        block = 4096
-        data = b""
-
-        while size > 0:
-
-            step = min(block, size)
-            size -= step
-            f.seek(size)
-
-            data = f.read(step) + data
-
-            if data.count(b"\n") >= 2:
-                break
-
-        line = data.splitlines()[-1]
-
-    return json.loads(line)
 
 
 def _badge_class(value: str) -> str:
-
     if value in ("BUY", "買い"):
         return "badge-buy"
 
@@ -57,42 +24,42 @@ def _badge_class(value: str) -> str:
 
 
 def render():
-
     lang = st.session_state.get("ui_lang", "en")
 
     st.markdown(f"### {get_text(lang, 'liquidity_pressure_title')}")
 
-    ob = _read_latest_jsonl(ORDERBOOK_DIR)
+    replay_payload = load_latest_replay_payload()
+    board = board_signal_metrics(latest_board_row(replay_payload))
 
-    if not ob:
+    if not board:
         st.warning(get_text(lang, "liquidity_pressure_not_found"))
         return
 
-    bids = ob.get("bids", [])
-    asks = ob.get("asks", [])
-
-    if not bids or not asks:
-        st.warning(get_text(lang, "liquidity_pressure_empty"))
-        return
-
-    top_bid_wall = max(b["size"] for b in bids[:10])
-    top_ask_wall = max(a["size"] for a in asks[:10])
-
-    total_wall = top_bid_wall + top_ask_wall
-    wall_ratio = 0 if total_wall == 0 else (top_bid_wall - top_ask_wall) / total_wall
+    top_bid_wall = board.get("bid_wall_size")
+    top_ask_wall = board.get("ask_wall_size")
+    wall_ratio = board.get("wall_ratio")
+    wall_side = board.get("wall_side")
 
     wall_bias = get_text(lang, "liquidity_pressure_value_neutral")
-
-    if wall_ratio > 0.2:
+    if wall_side == "bid":
         wall_bias = get_text(lang, "liquidity_pressure_value_buy")
-    elif wall_ratio < -0.2:
+    elif wall_side == "ask":
         wall_bias = get_text(lang, "liquidity_pressure_value_sell")
 
     c1, c2, c3, c4 = st.columns(4)
 
-    c1.metric(get_text(lang, "liquidity_pressure_top_bid_wall"), round(top_bid_wall, 4))
-    c2.metric(get_text(lang, "liquidity_pressure_top_ask_wall"), round(top_ask_wall, 4))
-    c3.metric(get_text(lang, "liquidity_pressure_wall_ratio"), round(wall_ratio, 3))
+    c1.metric(
+        get_text(lang, "liquidity_pressure_top_bid_wall"),
+        "-" if top_bid_wall is None else round(float(top_bid_wall), 4),
+    )
+    c2.metric(
+        get_text(lang, "liquidity_pressure_top_ask_wall"),
+        "-" if top_ask_wall is None else round(float(top_ask_wall), 4),
+    )
+    c3.metric(
+        get_text(lang, "liquidity_pressure_wall_ratio"),
+        "-" if wall_ratio is None else round(float(wall_ratio), 3),
+    )
     c4.metric(get_text(lang, "liquidity_pressure_wall_bias"), wall_bias)
 
     st.markdown(

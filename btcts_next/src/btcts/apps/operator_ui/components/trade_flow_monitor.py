@@ -1,77 +1,45 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/trade_flow_monitor.py
-# desc: trades JSONL から最新約定群を読み、BUY/SELL volume と delta を表示する WarRoom パネル
+# desc: Replay tradeflow から BUY/SELL volume と delta を表示する WarRoom パネル
+
+from __future__ import annotations
 
 import streamlit as st
-import json
-from pathlib import Path
+
+from btcts.apps.operator_ui.components.research_bridge import (
+    latest_trade_row,
+    load_latest_replay_payload,
+    tradeflow_metrics,
+)
 from btcts.apps.operator_ui.ui_text import get_text
-
-DATA_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\trades")
-
-
-def read_latest_trades():
-
-    if not DATA_DIR.exists():
-        return None
-
-    files = sorted(DATA_DIR.glob("*.jsonl"))
-
-    if not files:
-        return None
-
-    latest = files[-1]
-
-    with open(latest, "rb") as f:
-
-        f.seek(0, 2)
-        size = f.tell()
-
-        block = 4096
-        data = b""
-
-        while size > 0:
-
-            step = min(block, size)
-            size -= step
-            f.seek(size)
-
-            data = f.read(step) + data
-
-            if data.count(b"\n") >= 2:
-                break
-
-        line = data.splitlines()[-1]
-
-    return json.loads(line)
 
 
 def render():
-
     lang = st.session_state.get("ui_lang", "en")
 
     st.markdown(f"### {get_text(lang, 'trade_flow_title')}")
 
-    tr = read_latest_trades()
+    replay_payload = load_latest_replay_payload()
+    flow = tradeflow_metrics(latest_trade_row(replay_payload))
 
-    if not tr:
+    if not flow:
         st.warning(get_text(lang, "trade_flow_not_found"))
         return
 
-    items = tr.get("items", [])
-
-    if not items:
-        st.warning(get_text(lang, "trade_flow_empty"))
-        return
-
-    buy_vol = sum(x["size"] for x in items if x.get("side") == "BUY")
-    sell_vol = sum(x["size"] for x in items if x.get("side") == "SELL")
-    delta = buy_vol - sell_vol
+    buy_vol = flow.get("buy_volume")
+    sell_vol = flow.get("sell_volume")
+    delta = flow.get("trade_delta")
+    trade_count = flow.get("trade_count")
 
     c1, c2, c3 = st.columns(3)
 
-    c1.metric(get_text(lang, "trade_flow_buy_volume"), round(buy_vol, 4))
-    c2.metric(get_text(lang, "trade_flow_sell_volume"), round(sell_vol, 4))
-    c3.metric(get_text(lang, "trade_flow_delta"), round(delta, 4))
+    c1.metric(get_text(lang, "trade_flow_buy_volume"), "-" if buy_vol is None else round(float(buy_vol), 4))
+    c2.metric(get_text(lang, "trade_flow_sell_volume"), "-" if sell_vol is None else round(float(sell_vol), 4))
+    c3.metric(get_text(lang, "trade_flow_delta"), "-" if delta is None else round(float(delta), 4))
 
-    st.caption(f"{get_text(lang, 'trade_flow_recent_count')}: {len(items)}")
+    st.caption(f"{get_text(lang, 'trade_flow_recent_count')}: {trade_count}")
+
+    micro_names = flow.get("micro_event_names") or []
+    if micro_names:
+        st.caption("microstructure: " + ", ".join(micro_names[:5]))
+
     st.divider()

@@ -1,98 +1,60 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/ai_conversation_panel.py
-# desc: orderbook / trades の最新状態から定型質問に対するローカル要約回答を返す WarRoom 会話パネル
+# desc: Replay / Research artifact を基に定型質問へ回答する WarRoom 会話パネル
+
+from __future__ import annotations
 
 import streamlit as st
-import json
-from pathlib import Path
-from btcts.apps.operator_ui.ui_text import get_text
+
+from btcts.apps.operator_ui.ai_memory_store import (
+    append_memory,
+    load_recent_memory,
+)
 from btcts.apps.operator_ui.ai_runtime import (
     default_mode,
     generate_answer,
     supported_modes,
 )
-from btcts.apps.operator_ui.ai_memory_store import (
-    append_memory,
-    load_recent_memory,
+from btcts.apps.operator_ui.components.research_bridge import (
+    board_signal_metrics,
+    latest_best_strategy_name,
+    latest_board_row,
+    latest_regime_name,
+    latest_trade_row,
+    load_latest_experiment_payload,
+    load_latest_replay_payload,
+    tradeflow_metrics,
 )
-
-ORDERBOOK_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\orderbook")
-TRADES_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\trades")
-
-
-def _read_latest_jsonl(dir_path):
-
-    if not dir_path.exists():
-        return None
-
-    files = sorted(dir_path.glob("*.jsonl"))
-
-    if not files:
-        return None
-
-    latest = files[-1]
-
-    with open(latest, "rb") as f:
-
-        f.seek(0, 2)
-        size = f.tell()
-
-        block = 4096
-        data = b""
-
-        while size > 0:
-
-            step = min(block, size)
-            size -= step
-            f.seek(size)
-
-            data = f.read(step) + data
-
-            if data.count(b"\n") >= 2:
-                break
-
-        line = data.splitlines()[-1]
-
-    return json.loads(line)
+from btcts.apps.operator_ui.ui_text import get_text
 
 
 def _analyze_state():
 
-    ob = _read_latest_jsonl(ORDERBOOK_DIR)
-    tr = _read_latest_jsonl(TRADES_DIR)
+    replay_payload = load_latest_replay_payload()
+    experiment_payload = load_latest_experiment_payload()
 
-    if not ob or not tr:
+    board = board_signal_metrics(latest_board_row(replay_payload))
+    flow = tradeflow_metrics(latest_trade_row(replay_payload))
+
+    if not board or not flow:
         return None
 
-    bids = ob.get("bids", [])
-    asks = ob.get("asks", [])
-    items = tr.get("items", [])
+    spread = board.get("spread")
+    imbalance = board.get("imbalance")
+    delta = flow.get("trade_delta")
+    wall_ratio = board.get("wall_ratio")
 
-    if not bids or not asks or not items:
+    if spread is None or imbalance is None or delta is None or wall_ratio is None:
         return None
-
-    best_bid = ob.get("best_bid", bids[0]["price"])
-    best_ask = ob.get("best_ask", asks[0]["price"])
-    spread = ob.get("spread", best_ask - best_bid)
-
-    bid_vol = sum(b["size"] for b in bids[:10])
-    ask_vol = sum(a["size"] for a in asks[:10])
-    total = bid_vol + ask_vol
-    imbalance = 0 if total == 0 else (bid_vol - ask_vol) / total
-
-    buy_vol = sum(x["size"] for x in items if x.get("side") == "BUY")
-    sell_vol = sum(x["size"] for x in items if x.get("side") == "SELL")
-    delta = buy_vol - sell_vol
-
-    top_bid_wall = max(b["size"] for b in bids[:10])
-    top_ask_wall = max(a["size"] for a in asks[:10])
-    wall_total = top_bid_wall + top_ask_wall
-    wall_ratio = 0 if wall_total == 0 else (top_bid_wall - top_ask_wall) / wall_total
 
     return {
-        "spread": spread,
-        "imbalance": imbalance,
-        "delta": delta,
-        "wall_ratio": wall_ratio,
+        "spread": float(spread),
+        "imbalance": float(imbalance),
+        "delta": float(delta),
+        "wall_ratio": float(wall_ratio),
+        "regime": latest_regime_name(experiment_payload),
+        "best_strategy": latest_best_strategy_name(experiment_payload),
+        "pressure_bias": board.get("pressure_bias"),
+        "event_ts": flow.get("event_ts") or board.get("event_ts"),
     }
 
 
@@ -102,6 +64,7 @@ def render():
 
     if "ai_conversation_history" not in st.session_state:
         st.session_state.ai_conversation_history = []
+
     if "ai_market_memory" not in st.session_state:
         st.session_state.ai_market_memory = load_recent_memory(max_items=8)
 
@@ -119,10 +82,13 @@ def render():
 
     mode_options = supported_modes()
 
+    current_mode = st.session_state.ai_runtime_mode
+    mode_index = mode_options.index(current_mode) if current_mode in mode_options else 0
+
     selected_mode = st.selectbox(
         get_text(lang, "ai_runtime_mode"),
         mode_options,
-        index=mode_options.index(st.session_state.ai_runtime_mode),
+        index=mode_index,
         key="ai_runtime_mode_selector",
     )
     st.session_state.ai_runtime_mode = selected_mode
@@ -202,10 +168,10 @@ def render():
         return
 
     latest_memory_entry = {
-        "spread": float(state["spread"]),
-        "imbalance": float(state["imbalance"]),
-        "delta": float(state["delta"]),
-        "wall_ratio": float(state["wall_ratio"]),
+        "spread": state["spread"],
+        "imbalance": state["imbalance"],
+        "delta": state["delta"],
+        "wall_ratio": state["wall_ratio"],
     }
 
     memory = st.session_state.ai_market_memory
@@ -218,7 +184,7 @@ def render():
             latest_memory_entry,
             max_items_hint=8,
         )
-        
+
     c1, c2, c3, c4 = st.columns(4)
 
     c1.metric(get_text(lang, "ai_conversation_state_spread"), round(state["spread"], 1))
@@ -226,15 +192,28 @@ def render():
     c3.metric(get_text(lang, "ai_conversation_state_delta"), round(state["delta"], 3))
     c4.metric(get_text(lang, "ai_conversation_state_wall_ratio"), round(state["wall_ratio"], 3))
 
+    st.caption(
+        f"regime={state['regime']} / best_strategy={state['best_strategy']} / "
+        f"pressure_bias={state['pressure_bias']} / ts={state['event_ts']}"
+    )
+
     final_prompt = custom_prompt.strip() if custom_prompt.strip() else prompt
     effective_prompt = f"[{intent} / {style}] {final_prompt}"
     st.caption(f"{get_text(lang, 'ai_conversation_effective_prompt')}: {effective_prompt}")
+
+    augmented_prompt = (
+        f"{final_prompt}\n"
+        f"regime={state['regime']}, "
+        f"best_strategy={state['best_strategy']}, "
+        f"pressure_bias={state['pressure_bias']}, "
+        f"event_ts={state['event_ts']}"
+    )
 
     if send_clicked:
         answer, runtime_source = generate_answer(
             mode=st.session_state.ai_runtime_mode,
             lang=lang,
-            prompt=final_prompt,
+            prompt=augmented_prompt,
             state=state,
             note=note,
             memory=st.session_state.ai_market_memory,
@@ -273,8 +252,7 @@ def render():
             st.markdown(
                 f"**{get_text(lang, 'ai_conversation_user')}** "
                 f"({item['mode']} / {item.get('runtime_source', item['mode'])}) "
-                f"[{item.get('intent', '-')}"
-                f" / {item.get('style', '-')}]"
+                f"[{item.get('intent', '-')} / {item.get('style', '-')}]"
                 f": {item['prompt']}"
             )
             st.markdown(f"**{get_text(lang, 'ai_conversation_ai')}**: {item['answer']}")

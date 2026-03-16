@@ -1,37 +1,42 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/system_stats.py
-# desc: Derived summary (latest_hourly.json) を読み、Collector の統計情報を表示する WarRoom パネル
+# desc: Collector vNext の live state / audit のみを基に Collector 統計を表示する live Operations パネル。
+
+from __future__ import annotations
 
 import streamlit as st
-import json
-from pathlib import Path
-from btcts.apps.operator_ui.ui_text import get_text
 
-DERIVED_PATH = Path(r"E:\btc_ts\logs\derived\latest_hourly.json")
+from btcts.apps.operator_ui.components.live_bridge import collector_runtime_snapshot
+from btcts.apps.operator_ui.ui_text import get_text
 
 
 def render():
-
     lang = st.session_state.get("ui_lang", "en")
 
     st.markdown(f"### {get_text(lang, 'system_stats_title')}")
 
-    if not DERIVED_PATH.exists():
-        st.warning(get_text(lang, "system_stats_not_found"))
-        return
+    runtime = collector_runtime_snapshot()
 
-    try:
-        data = json.loads(DERIVED_PATH.read_text(encoding="utf-8"))
-    except Exception as e:
-        st.error(f"{get_text(lang, 'system_stats_load_error')}: {e}")
-        return
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Live Mode", runtime["mode"])
+    c2.metric("Health", runtime["health_status"])
+    c3.metric(
+        "Avg Cycle Latency",
+        "-" if runtime["avg_latency_ms"] is None else runtime["avg_latency_ms"],
+    )
+    c4.metric("Active Topics", runtime["active_topics"])
 
-    collector = data.get("collector", {})
-    http = collector.get("http", {})
+    c5, c6, c7, c8 = st.columns(4)
+    c5.metric("Last Sequence ID", runtime.get("last_sequence_id") or "-")
+    c6.metric("Audit Rows", len(runtime["audit_rows"]))
+    c7.metric("Stream Sessions", runtime["stream_sessions"])
+    c8.metric("Feed State", runtime["feed_state"])
 
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(get_text(lang, "system_stats_http_total"), http.get("total", 0))
-    c2.metric(get_text(lang, "system_stats_http_429"), http.get("status_429", 0))
-    c3.metric(get_text(lang, "system_stats_restarts"), collector.get("proc_restart_count", 0))
+    st.caption(
+        f"source=collector_vnext_live / "
+        f"exchange_state={runtime['exchange_state']} / "
+        f"status_mode={runtime.get('live_summary', {}).get('status_mode')} / "
+        f"health_status={runtime.get('live_summary', {}).get('health_status')} / "
+        f"daemon_status={runtime.get('live_summary', {}).get('daemon_status')}"
+    )
 
     st.divider()

@@ -1,0 +1,66 @@
+# path: ./btcts_next/src/btcts/replay/replay_pipeline.py
+# desc: Replay pipeline that rebuilds orderbook state and recomputes liquidity signals/events.
+
+from __future__ import annotations
+
+from typing import Dict, List, Optional
+
+from btcts.collector_vnext.events import EventType
+from btcts.collector_vnext.orderbook.book_rebuilder import OrderBookRebuilder
+from btcts.collector_vnext.orderbook.signal_events import build_signal_events
+from btcts.collector_vnext.orderbook.signal_pipeline import build_signal_payload
+from btcts.collector_vnext.orderbook.signal_state import SignalState
+
+
+class ReplayPipeline:
+    def __init__(self):
+        self.rebuilder = OrderBookRebuilder()
+        self.signal_state = SignalState()
+
+    def process_record(self, record: Dict) -> Optional[Dict]:
+        record_type = str(record.get("record_type") or "")
+        payload = record.get("payload")
+
+        if not isinstance(payload, dict):
+            return None
+
+        if record_type not in {
+            EventType.MARKET_ORDERBOOK_SNAPSHOT,
+            EventType.MARKET_ORDERBOOK_DIFF,
+        }:
+            return None
+
+        prev_signal = self.signal_state.get()
+
+        signal_payload = build_signal_payload(
+            self.rebuilder,
+            payload,
+            levels=10,
+            wall_levels=20,
+        )
+
+        if signal_payload is None:
+            return None
+
+        events = build_signal_events(prev_signal, signal_payload)
+        self.signal_state.update(signal_payload)
+
+        return {
+            "record_type": record_type,
+            "record_id": record.get("record_id"),
+            "event_ts": record.get("event_ts"),
+            "signal": signal_payload,
+            "events": events,
+            "best_bid": self.rebuilder.best_bid(),
+            "best_ask": self.rebuilder.best_ask(),
+        }
+
+    def process_records(self, records: List[Dict]) -> List[Dict]:
+        out: List[Dict] = []
+
+        for record in records:
+            result = self.process_record(record)
+            if result is not None:
+                out.append(result)
+
+        return out

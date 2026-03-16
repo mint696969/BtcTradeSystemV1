@@ -11,7 +11,9 @@ from btcts.apps.operator_ui.views import (
     config_page,
     research_page,
     replay_page,
+    warroom_page,
 )
+
 from btcts.apps.operator_ui.ui_text import get_text
 
 
@@ -28,6 +30,7 @@ def apply_ui_scale(scale: str):
     st.markdown(
         f"""
         <style>
+
         html, body, [class*="css"] {{
             font-size: {factor}em;
         }}
@@ -98,7 +101,6 @@ def apply_ui_scale(scale: str):
             background: rgba(34, 197, 94, 0.18);
             color: #86efac;
         }}
-                
         </style>
         """,
         unsafe_allow_html=True,
@@ -107,7 +109,7 @@ def apply_ui_scale(scale: str):
 
 st.set_page_config(
     page_title="BTC-TS Operator",
-    layout="wide"
+    layout="wide",
 )
 
 if "ui_lang" not in st.session_state:
@@ -122,10 +124,14 @@ if "ui_auto_refresh" not in st.session_state:
 if "ui_refresh_interval" not in st.session_state:
     st.session_state.ui_refresh_interval = 5
 
+if "ui_selected_page" not in st.session_state:
+    st.session_state.ui_selected_page = None
+
 st.session_state.ui_lang = st.sidebar.selectbox(
     get_text(st.session_state.ui_lang, "lang_label"),
     ["ja", "en"],
     index=["ja", "en"].index(st.session_state.ui_lang),
+    key="ui_lang_selector",
 )
 
 lang = st.session_state.ui_lang
@@ -134,17 +140,20 @@ st.session_state.ui_scale = st.sidebar.selectbox(
     get_text(lang, "scale_label"),
     ["50%", "75%", "100%"],
     index=["50%", "75%", "100%"].index(st.session_state.ui_scale),
+    key="ui_scale_selector",
 )
 
 st.session_state.ui_auto_refresh = st.sidebar.checkbox(
     get_text(lang, "refresh_label"),
     value=st.session_state.ui_auto_refresh,
+    key="ui_auto_refresh_checkbox",
 )
 
 st.session_state.ui_refresh_interval = st.sidebar.selectbox(
     get_text(lang, "refresh_interval_label"),
     [3, 5, 10, 15, 30],
     index=[3, 5, 10, 15, 30].index(st.session_state.ui_refresh_interval),
+    key="ui_refresh_interval_selector",
 )
 
 apply_ui_scale(st.session_state.ui_scale)
@@ -154,6 +163,7 @@ st.subheader(get_text(lang, "app_subtitle"))
 
 pages = {
     get_text(lang, "page_collector"): collector_page,
+    get_text(lang, "page_warroom"): warroom_page,
     get_text(lang, "page_health"): health_page,
     get_text(lang, "page_logs"): logs_page,
     get_text(lang, "page_config"): config_page,
@@ -161,22 +171,42 @@ pages = {
     get_text(lang, "page_replay"): replay_page,
 }
 
+page_names = list(pages.keys())
+
+if st.session_state.ui_selected_page not in page_names:
+    st.session_state.ui_selected_page = page_names[0]
+
 st.sidebar.title(get_text(lang, "sidebar_title"))
 
 selection = st.sidebar.radio(
     get_text(lang, "sidebar_nav"),
-    list(pages.keys())
+    page_names,
+    index=page_names.index(st.session_state.ui_selected_page),
+    key="ui_sidebar_page_radio",
 )
 
-if st.session_state.ui_auto_refresh:
+st.session_state.ui_selected_page = selection
+
+auto_refresh_pages = {
+    get_text(lang, "page_collector"),
+    get_text(lang, "page_warroom"),
+    get_text(lang, "page_health"),
+    get_text(lang, "page_logs"),
+}
+
+is_auto_refresh_target = selection in auto_refresh_pages
+
+if st.session_state.ui_auto_refresh and is_auto_refresh_target:
     st.sidebar.caption(
         f"{get_text(lang, 'refresh_status_on')} / {st.session_state.ui_refresh_interval}s"
     )
 else:
     st.sidebar.caption(get_text(lang, "refresh_status_off"))
 
-pages[selection].render()
+page_module = pages[selection]
+page_module.render()
 
-if st.session_state.ui_auto_refresh:
+# Auto refresh は live / monitor 系ページに限定する
+if st.session_state.ui_auto_refresh and is_auto_refresh_target:
     time.sleep(st.session_state.ui_refresh_interval)
     st.rerun()

@@ -1,56 +1,32 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/risk_monitor_panel.py
-# desc: orderbook / trades / audit の直近状態から WarRoom 用の総合リスクを表示する専用パネル
+# desc: Replay / Research / Audit からリアルタイムリスクを評価する WarRoom Risk Monitor
+
+from __future__ import annotations
 
 import json
 from pathlib import Path
-
 import streamlit as st
 
+from btcts.apps.operator_ui.components.research_bridge import (
+    board_signal_metrics,
+    latest_board_row,
+    latest_trade_row,
+    load_latest_replay_payload,
+    tradeflow_metrics,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 
-ORDERBOOK_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\orderbook")
-TRADES_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\trades")
+
 AUDIT_LOG = Path(r"E:\btc_ts\logs\audit.jsonl")
 
 
-def _read_latest_jsonl(dir_path):
-
-    if not dir_path.exists():
-        return None
-
-    files = sorted(dir_path.glob("*.jsonl"))
-    if not files:
-        return None
-
-    latest = files[-1]
-
-    with open(latest, "rb") as f:
-        f.seek(0, 2)
-        size = f.tell()
-
-        block = 4096
-        data = b""
-
-        while size > 0:
-            step = min(block, size)
-            size -= step
-            f.seek(size)
-            data = f.read(step) + data
-
-            if data.count(b"\n") >= 2:
-                break
-
-        line = data.splitlines()[-1]
-
-    return json.loads(line)
-
-
-def _read_recent_audit(lines=40):
+def _recent_audit_latency(lines: int = 40):
 
     if not AUDIT_LOG.exists():
-        return []
+        return None
 
     with open(AUDIT_LOG, "rb") as f:
+
         f.seek(0, 2)
         size = f.tell()
 
@@ -63,34 +39,63 @@ def _read_recent_audit(lines=40):
             f.seek(size)
             data = f.read(step) + data
 
-    out = []
+    rows = []
 
     for line in data.splitlines()[-lines:]:
         try:
             obj = json.loads(line)
             payload = obj.get("payload", {})
-            out.append(
-                {
-                    "event": obj.get("event"),
-                    "latency_ms": payload.get("elapsed_ms"),
-                    "topic": payload.get("topic"),
-                }
-            )
+            if payload.get("elapsed_ms") is not None:
+                rows.append(float(payload["elapsed_ms"]))
         except Exception:
             continue
 
-    return out
+    if not rows:
+        return None
+
+    return sum(rows) / len(rows)
 
 
-def _risk_badge_class(value: str) -> str:
+def _risk_score(spread, imbalance, delta, wall_ratio, latency):
 
-    if value in ("高", "HIGH"):
-        return "badge-risk-high"
+    score = 0
 
-    if value in ("低", "LOW"):
-        return "badge-risk-low"
+    # spread
+    if spread and spread > 7000:
+        score += 2
+    elif spread and spread > 4500:
+        score += 1
 
-    return "badge-neutral"
+    # imbalance vs delta conflict
+    if imbalance and delta:
+        if (imbalance > 0.2 and delta < 0) or (imbalance < -0.2 and delta > 0):
+            score += 2
+
+    # liquidity wall
+    if wall_ratio and abs(wall_ratio) > 0.45:
+        score += 2
+    elif wall_ratio and abs(wall_ratio) > 0.25:
+        score += 1
+
+    # latency
+    if latency:
+        if latency > 450:
+            score += 2
+        elif latency > 320:
+            score += 1
+
+    return score
+
+
+def _risk_level(score, lang):
+
+    if score >= 6:
+        return get_text(lang, "risk_value_high")
+
+    if score >= 3:
+        return get_text(lang, "risk_value_medium")
+
+    return get_text(lang, "risk_value_low")
 
 
 def render():
@@ -99,117 +104,62 @@ def render():
 
     st.markdown(f"### {get_text(lang, 'risk_monitor_title')}")
 
-    ob = _read_latest_jsonl(ORDERBOOK_DIR)
-    tr = _read_latest_jsonl(TRADES_DIR)
-    audit_rows = _read_recent_audit(lines=40)
+    replay_payload = load_latest_replay_payload()
 
-    if not ob or not tr:
+    board = board_signal_metrics(
+        latest_board_row(replay_payload)
+    )
+
+    flow = tradeflow_metrics(
+        latest_trade_row(replay_payload)
+    )
+
+    if not board or not flow:
         st.warning(get_text(lang, "risk_monitor_missing_data"))
         return
 
-    bids = ob.get("bids", [])
-    asks = ob.get("asks", [])
-    items = tr.get("items", [])
+    spread = board.get("spread")
+    imbalance = board.get("imbalance")
+    wall_ratio = board.get("wall_ratio")
 
-    if not bids or not asks or not items:
-        st.warning(get_text(lang, "risk_monitor_unavailable"))
-        return
+    delta = flow.get("trade_delta")
 
-    best_bid = ob.get("best_bid", bids[0]["price"])
-    best_ask = ob.get("best_ask", asks[0]["price"])
-    spread = ob.get("spread", best_ask - best_bid)
+    latency = _recent_audit_latency()
 
-    bid_vol = sum(b["size"] for b in bids[:10])
-    ask_vol = sum(a["size"] for a in asks[:10])
-    total = bid_vol + ask_vol
-    imbalance = 0 if total == 0 else (bid_vol - ask_vol) / total
+    score = _risk_score(
+        spread,
+        imbalance,
+        delta,
+        wall_ratio,
+        latency,
+    )
 
-    buy_vol = sum(x["size"] for x in items if x.get("side") == "BUY")
-    sell_vol = sum(x["size"] for x in items if x.get("side") == "SELL")
-    delta = buy_vol - sell_vol
+    level = _risk_level(score, lang)
 
-    top_bid_wall = max(b["size"] for b in bids[:10])
-    top_ask_wall = max(a["size"] for a in asks[:10])
-    wall_total = top_bid_wall + top_ask_wall
-    wall_ratio = 0 if wall_total == 0 else (top_bid_wall - top_ask_wall) / wall_total
+    c1, c2, c3, c4 = st.columns(4)
 
-    latencies = [
-        float(row["latency_ms"])
-        for row in audit_rows
-        if row.get("latency_ms") is not None
-    ]
-    avg_latency = round(sum(latencies) / len(latencies), 1) if latencies else 0.0
+    c1.metric(
+        get_text(lang, "risk_monitor_level"),
+        level,
+    )
 
-    spread_risk = get_text(lang, "risk_monitor_value_low")
-    latency_risk = get_text(lang, "risk_monitor_value_low")
-    flow_risk = get_text(lang, "risk_monitor_value_low")
-    liquidity_risk = get_text(lang, "risk_monitor_value_low")
+    c2.metric(
+        get_text(lang, "risk_monitor_score"),
+        score,
+    )
 
-    risk_score = 0
+    c3.metric(
+        get_text(lang, "risk_monitor_latency"),
+        "-" if latency is None else round(latency, 1),
+    )
 
-    if spread > 7000:
-        spread_risk = get_text(lang, "risk_monitor_value_high")
-        risk_score += 2
-    elif spread > 4500:
-        spread_risk = get_text(lang, "risk_monitor_value_medium")
-        risk_score += 1
-
-    if avg_latency >= 450:
-        latency_risk = get_text(lang, "risk_monitor_value_high")
-        risk_score += 2
-    elif avg_latency >= 320:
-        latency_risk = get_text(lang, "risk_monitor_value_medium")
-        risk_score += 1
-
-    if (imbalance > 0.15 and delta < 0) or (imbalance < -0.15 and delta > 0):
-        flow_risk = get_text(lang, "risk_monitor_value_high")
-        risk_score += 2
-    elif abs(delta) < 0.1 and abs(imbalance) < 0.1:
-        flow_risk = get_text(lang, "risk_monitor_value_medium")
-        risk_score += 1
-
-    if abs(wall_ratio) > 0.45:
-        liquidity_risk = get_text(lang, "risk_monitor_value_high")
-        risk_score += 2
-    elif abs(wall_ratio) > 0.25:
-        liquidity_risk = get_text(lang, "risk_monitor_value_medium")
-        risk_score += 1
-
-    overall_risk = get_text(lang, "risk_monitor_value_low")
-    if risk_score >= 6:
-        overall_risk = get_text(lang, "risk_monitor_value_high")
-    elif risk_score >= 3:
-        overall_risk = get_text(lang, "risk_monitor_value_medium")
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-
-    c1.metric(get_text(lang, "risk_monitor_overall"), overall_risk)
-    c2.metric(get_text(lang, "risk_monitor_spread"), spread_risk)
-    c3.metric(get_text(lang, "risk_monitor_latency"), latency_risk)
-    c4.metric(get_text(lang, "risk_monitor_flow"), flow_risk)
-    c5.metric(get_text(lang, "risk_monitor_liquidity"), liquidity_risk)
-
-    st.markdown(
-        f"""
-        <div class="warroom-badges">
-            <span class="warroom-badge {_risk_badge_class(overall_risk)}">
-                {get_text(lang, 'risk_monitor_badge_overall')}: {overall_risk}
-            </span>
-            <span class="warroom-badge {_risk_badge_class(spread_risk)}">
-                {get_text(lang, 'risk_monitor_badge_spread')}: {spread_risk}
-            </span>
-            <span class="warroom-badge {_risk_badge_class(latency_risk)}">
-                {get_text(lang, 'risk_monitor_badge_latency')}: {latency_risk}
-            </span>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    c4.metric(
+        get_text(lang, "risk_monitor_spread"),
+        "-" if spread is None else round(float(spread), 2),
     )
 
     st.caption(
-        f"{get_text(lang, 'risk_monitor_snapshot')}: "
-        f"spread={round(spread, 1)}, avg_latency={avg_latency}, "
-        f"imbalance={round(imbalance, 3)}, delta={round(delta, 3)}, wall_ratio={round(wall_ratio, 3)}"
+        f"imbalance={imbalance} / delta={delta} / wall_ratio={wall_ratio}"
     )
 
     st.divider()

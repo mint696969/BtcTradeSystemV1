@@ -1,49 +1,21 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/ai_market_summary_panel.py
-# desc: orderbook / trades の最新状態から市場状況を文章で要約する WarRoom パネル
+# desc: Replay / Research artifact から市場状況を文章で要約する WarRoom パネル
+
+from __future__ import annotations
 
 import streamlit as st
-import json
-from pathlib import Path
+
+from btcts.apps.operator_ui.components.research_bridge import (
+    board_signal_metrics,
+    latest_best_strategy_name,
+    latest_board_row,
+    latest_regime_name,
+    latest_trade_row,
+    load_latest_experiment_payload,
+    load_latest_replay_payload,
+    tradeflow_metrics,
+)
 from btcts.apps.operator_ui.ui_text import get_text
-
-ORDERBOOK_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\orderbook")
-TRADES_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\trades")
-
-
-def _read_latest_jsonl(dir_path):
-
-    if not dir_path.exists():
-        return None
-
-    files = sorted(dir_path.glob("*.jsonl"))
-
-    if not files:
-        return None
-
-    latest = files[-1]
-
-    with open(latest, "rb") as f:
-
-        f.seek(0, 2)
-        size = f.tell()
-
-        block = 4096
-        data = b""
-
-        while size > 0:
-
-            step = min(block, size)
-            size -= step
-            f.seek(size)
-
-            data = f.read(step) + data
-
-            if data.count(b"\n") >= 2:
-                break
-
-        line = data.splitlines()[-1]
-
-    return json.loads(line)
 
 
 def render():
@@ -52,57 +24,59 @@ def render():
 
     st.markdown(f"### {get_text(lang, 'ai_summary_title')}")
 
-    ob = _read_latest_jsonl(ORDERBOOK_DIR)
-    tr = _read_latest_jsonl(TRADES_DIR)
+    replay_payload = load_latest_replay_payload()
+    experiment_payload = load_latest_experiment_payload()
 
-    if not ob or not tr:
+    board = board_signal_metrics(latest_board_row(replay_payload))
+    flow = tradeflow_metrics(latest_trade_row(replay_payload))
+
+    if not board or not flow:
         st.warning(get_text(lang, "ai_summary_missing_data"))
         return
 
-    bids = ob.get("bids", [])
-    asks = ob.get("asks", [])
-    items = tr.get("items", [])
+    spread = board.get("spread")
+    imbalance = board.get("imbalance")
+    pressure_bias = board.get("pressure_bias")
+    delta = flow.get("trade_delta")
 
-    if not bids or not asks or not items:
-        st.warning(get_text(lang, "ai_summary_missing_data"))
-        return
+    regime = latest_regime_name(experiment_payload)
+    best_strategy = latest_best_strategy_name(experiment_payload)
 
-    best_bid = ob.get("best_bid", bids[0]["price"])
-    best_ask = ob.get("best_ask", asks[0]["price"])
-    spread = ob.get("spread", best_ask - best_bid)
-
-    bid_vol = sum(b["size"] for b in bids[:10])
-    ask_vol = sum(a["size"] for a in asks[:10])
-    total = bid_vol + ask_vol
-    imbalance = 0 if total == 0 else (bid_vol - ask_vol) / total
-
-    buy_vol = sum(x["size"] for x in items if x.get("side") == "BUY")
-    sell_vol = sum(x["size"] for x in items if x.get("side") == "SELL")
-    delta = buy_vol - sell_vol
-
-    if imbalance > 0.2:
+    if pressure_bias == "buy_pressure" or (isinstance(imbalance, (int, float)) and imbalance > 0.2):
         headline = get_text(lang, "ai_summary_value_buy_bias")
-    elif imbalance < -0.2:
+    elif pressure_bias == "sell_pressure" or (isinstance(imbalance, (int, float)) and imbalance < -0.2):
         headline = get_text(lang, "ai_summary_value_sell_bias")
     else:
         headline = get_text(lang, "ai_summary_value_neutral_bias")
 
     bullets = []
 
-    if spread > 7000:
-        bullets.append(get_text(lang, "ai_summary_value_wide_spread"))
-    elif spread < 3000:
-        bullets.append(get_text(lang, "ai_summary_value_tight_spread"))
+    if isinstance(spread, (int, float)):
+        if spread > 7000:
+            bullets.append(get_text(lang, "ai_summary_value_wide_spread"))
+        elif spread < 3000:
+            bullets.append(get_text(lang, "ai_summary_value_tight_spread"))
 
-    if delta > 0.2:
-        bullets.append(get_text(lang, "ai_summary_value_buy_flow"))
-    elif delta < -0.2:
-        bullets.append(get_text(lang, "ai_summary_value_sell_flow"))
+    if isinstance(delta, (int, float)):
+        if delta > 0:
+            bullets.append(get_text(lang, "ai_summary_value_buy_flow"))
+        elif delta < 0:
+            bullets.append(get_text(lang, "ai_summary_value_sell_flow"))
 
-    if imbalance > 0.2 and delta > 0:
+    bullets.append(f"regime={regime}")
+    bullets.append(f"best_strategy={best_strategy}")
+
+    if regime in {"trend_up"} and isinstance(delta, (int, float)) and delta > 0:
         outlook = get_text(lang, "ai_summary_value_long_watch")
-    elif imbalance < -0.2 and delta < 0:
+    elif regime in {"trend_down"} and isinstance(delta, (int, float)) and delta < 0:
         outlook = get_text(lang, "ai_summary_value_short_watch")
+    elif regime == "absorption_zone":
+        if isinstance(delta, (int, float)) and delta < 0:
+            outlook = get_text(lang, "ai_summary_value_short_watch")
+        elif isinstance(delta, (int, float)) and delta > 0:
+            outlook = get_text(lang, "ai_summary_value_long_watch")
+        else:
+            outlook = get_text(lang, "ai_summary_value_wait")
     else:
         outlook = get_text(lang, "ai_summary_value_wait")
 

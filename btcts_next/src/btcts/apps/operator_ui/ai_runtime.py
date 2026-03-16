@@ -290,10 +290,21 @@ def generate_answer(
             runtime_source = "external"
         except Exception as e:
             if AI_EXTERNAL_FALLBACK_TO_LOCAL:
-                answer = (
-                    f"{get_text(lang, 'ai_runtime_fallback_prefix')}: {e}\n\n"
-                    f"{build_local_answer(lang, effective_prompt, state, memory)}"
-                )
+                fallback_reason = str(e).strip() or "unknown external failure"
+
+                if lang == "ja":
+                    answer = (
+                        "external AI failed -> fallback local\n"
+                        f"reason: {fallback_reason}\n\n"
+                        f"{build_local_answer(lang, effective_prompt, state, memory)}"
+                    )
+                else:
+                    answer = (
+                        "external AI failed -> fallback local\n"
+                        f"reason: {fallback_reason}\n\n"
+                        f"{build_local_answer(lang, effective_prompt, state, memory)}"
+                    )
+
                 runtime_source = "fallback-local"
             else:
                 raise

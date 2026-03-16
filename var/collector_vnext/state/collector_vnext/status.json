@@ -1,0 +1,21 @@
+{
+  "ts": "2026-03-16T05:35:34Z",
+  "mode": "STOPPED",
+  "message": "collector_vnext daemon stopped by keyboard interrupt",
+  "collector_vnext": true,
+  "session_id": "collector_main-daemon",
+  "stream_session_id": "collector_main-daemon-loop",
+  "consecutive_failures": 0,
+  "last_error": null,
+  "last_success_ts": "2026-03-16T05:35:06Z",
+  "ws_trades_warn_streak": 0,
+  "rate_control": {
+    "summary_state": "NORMAL",
+    "engaged": false,
+    "reason": "normal_util_range",
+    "wait_ms": 275,
+    "util_ratio": 0.11999760004799903,
+    "last_429_ts": null,
+    "recovery_phase": "steady"
+  }
+}

@@ -1,5 +1,20 @@
 # Collector 記録設計 vNext（正式項目案 / Draft）
 
+> [!NOTE]
+> この文書は **Collector vNext の記録設計思想・将来拡張・目標契約（target contract）** を扱う補助資料である。  
+> **現行実装の正式仕様・運用契約の正本は `Collector 正式仕様書.md` を参照** すること。  
+> 本書には、現時点で未実装または一部のみ実装の項目も含まれる。  
+> したがって、本書をそのまま「現行実装が全面的に満たしている仕様」とみなしてはならない。
+>
+> 読み分けの目安:
+> - **Collector 正式仕様書.md**
+>   - 現行 `collector_vnext/` 実装の正式仕様
+>   - state / health / daemon / lock / rate control / weekly運用を含む現在の正本
+> - **本書（Collector 記録設計 vNext.md）**
+>   - 記録設計の思想
+>   - 将来の canonical 契約
+>   - continuity / lineage / provenance / schema evolution の拡張方針
+
 ## 0. 文書目的
 本書は BtcTradeSystem NEXT における Collector の最終記録設計を定義する。
 

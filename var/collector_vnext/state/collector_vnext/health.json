@@ -1,0 +1,30 @@
+{
+  "ts": "2026-03-16T05:35:06Z",
+  "ok": true,
+  "status": "healthy",
+  "collector_vnext": true,
+  "session_id": "collector_main-sess-20260316T053444Z-d42c7a70",
+  "stream_session_id": "collector_main-stream-bitflyer-board_snapshot-20260316T053444Z-6e2c7a82",
+  "checks": [
+    {
+      "name": "bootstrap",
+      "result": "ok"
+    },
+    {
+      "name": "bitflyer_rest_board",
+      "result": "ok"
+    },
+    {
+      "name": "bitflyer_rest_executions",
+      "result": "ok"
+    },
+    {
+      "name": "bitflyer_ws_executions",
+      "result": "ok"
+    },
+    {
+      "name": "bitflyer_ws_board",
+      "result": "ok"
+    }
+  ]
+}

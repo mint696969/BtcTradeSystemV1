@@ -1,53 +1,15 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/strategy_state_panel.py
-# desc: Market / Liquidity / Trade Flow から現在の戦略状態を簡易判定して表示する WarRoom パネル
+# desc: Market / Liquidity / Trade Flow と Research の最新実験結果から現在の戦略状態を表示する WarRoom パネル
+
+from __future__ import annotations
 
 import streamlit as st
-import json
-from pathlib import Path
+
+from btcts.apps.operator_ui.components.research_bridge import load_latest_experiment_payload
 from btcts.apps.operator_ui.ui_text import get_text
-
-ORDERBOOK_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\orderbook")
-TRADES_DIR = Path(r"E:\btc_ts\data\collector\bitflyer\trades")
-
-
-def _read_latest_jsonl(dir_path):
-
-    if not dir_path.exists():
-        return None
-
-    files = sorted(dir_path.glob("*.jsonl"))
-
-    if not files:
-        return None
-
-    latest = files[-1]
-
-    with open(latest, "rb") as f:
-
-        f.seek(0, 2)
-        size = f.tell()
-
-        block = 4096
-        data = b""
-
-        while size > 0:
-
-            step = min(block, size)
-            size -= step
-            f.seek(size)
-
-            data = f.read(step) + data
-
-            if data.count(b"\n") >= 2:
-                break
-
-        line = data.splitlines()[-1]
-
-    return json.loads(line)
 
 
 def _mode_badge_class(value: str) -> str:
-
     if value in ("上昇トレンド", "LONG TREND"):
         return "badge-buy"
 
@@ -61,7 +23,6 @@ def _mode_badge_class(value: str) -> str:
 
 
 def _risk_badge_class(value: str) -> str:
-
     if value in ("高", "HIGH"):
         return "badge-risk-high"
 
@@ -71,93 +32,71 @@ def _risk_badge_class(value: str) -> str:
     return "badge-neutral"
 
 
-def render():
+def _strategy_display_name(name: str, lang: str) -> str:
+    mapping = {
+        "microstructure_v1": "Microstructure v1",
+        "regime_aware_microstructure_v1": "Regime-aware Microstructure v1",
+        "baseline_none": "Baseline None",
+    }
+    return mapping.get(name, name)
 
+
+def render():
     lang = st.session_state.get("ui_lang", "en")
 
     st.markdown(f"### {get_text(lang, 'strategy_state_title')}")
 
-    ob = _read_latest_jsonl(ORDERBOOK_DIR)
-    tr = _read_latest_jsonl(TRADES_DIR)
-
-    if not ob or not tr:
-        st.warning(get_text(lang, "strategy_state_missing_data"))
+    payload = load_latest_experiment_payload()
+    if not payload:
+        st.warning("Research artifact がまだありません。")
         return
 
-    bids = ob.get("bids", [])
-    asks = ob.get("asks", [])
-    items = tr.get("items", [])
+    summary = payload.get("summary") or {}
+    best_strategy = payload.get("best_strategy") or {}
+    regime_report = payload.get("regime_report") or {}
 
-    if not bids or not asks or not items:
-        st.warning(get_text(lang, "strategy_state_unavailable"))
-        return
-
-    best_bid = ob.get("best_bid", bids[0]["price"])
-    best_ask = ob.get("best_ask", asks[0]["price"])
-    spread = ob.get("spread", best_ask - best_bid)
-
-    bid_vol = sum(b["size"] for b in bids[:10])
-    ask_vol = sum(a["size"] for a in asks[:10])
-    total = bid_vol + ask_vol
-    imbalance = 0 if total == 0 else (bid_vol - ask_vol) / total
-
-    buy_vol = sum(x["size"] for x in items if x.get("side") == "BUY")
-    sell_vol = sum(x["size"] for x in items if x.get("side") == "SELL")
-    delta = buy_vol - sell_vol
-
-    top_bid_wall = max(b["size"] for b in bids[:10])
-    top_ask_wall = max(a["size"] for a in asks[:10])
-    wall_total = top_bid_wall + top_ask_wall
-    wall_ratio = 0 if wall_total == 0 else (top_bid_wall - top_ask_wall) / wall_total
+    regime = str(regime_report.get("regime") or summary.get("regime") or "unknown")
+    best_name = str(best_strategy.get("strategy") or summary.get("best_strategy") or "unknown")
+    total_pnl = float(best_strategy.get("total_pnl") or 0.0)
+    wins = int(best_strategy.get("wins") or 0)
+    losses = int(best_strategy.get("losses") or 0)
+    trade_count = int(best_strategy.get("trade_count") or 0)
 
     strategy_mode = get_text(lang, "strategy_state_value_neutral")
     risk_state = get_text(lang, "strategy_state_value_medium")
     confidence = 0.50
-    recommended_archetype = get_text(lang, "strategy_state_value_observe")
+    recommended_archetype = _strategy_display_name(best_name, lang)
 
-    if spread > 7000:
-        risk_state = get_text(lang, "strategy_state_value_high")
-    elif spread < 3000:
-        risk_state = get_text(lang, "strategy_state_value_low")
-
-    if imbalance > 0.2 and delta > 0 and wall_ratio > 0:
+    if regime == "trend_up":
         strategy_mode = get_text(lang, "strategy_state_value_long_trend")
-        recommended_archetype = get_text(lang, "strategy_state_value_breakout")
-        confidence = 0.72
-
-    elif imbalance < -0.2 and delta < 0 and wall_ratio < 0:
+        risk_state = get_text(lang, "strategy_state_value_low")
+        confidence = 0.78
+    elif regime == "trend_down":
         strategy_mode = get_text(lang, "strategy_state_value_short_trend")
-        recommended_archetype = get_text(lang, "strategy_state_value_liquidity_trap")
-        confidence = 0.74
-
-    elif abs(imbalance) < 0.15 and abs(delta) < 0.15:
+        risk_state = get_text(lang, "strategy_state_value_low")
+        confidence = 0.78
+    elif regime == "range":
         strategy_mode = get_text(lang, "strategy_state_value_range_scalp")
-        recommended_archetype = get_text(lang, "strategy_state_value_mean_reversion")
-        confidence = 0.63
-
-    elif abs(delta) > 0.4 and abs(imbalance) < 0.15:
+        risk_state = get_text(lang, "strategy_state_value_medium")
+        confidence = 0.64
+    elif regime == "liquidity_vacuum":
         strategy_mode = get_text(lang, "strategy_state_value_volatility_watch")
-        recommended_archetype = get_text(lang, "strategy_state_value_momentum_probe")
-        confidence = 0.61
+        risk_state = get_text(lang, "strategy_state_value_high")
+        confidence = 0.59
+    elif regime == "absorption_zone":
+        strategy_mode = get_text(lang, "strategy_state_value_volatility_watch")
+        risk_state = get_text(lang, "strategy_state_value_medium")
+        confidence = 0.74
+    elif regime == "sweep_risk":
+        strategy_mode = get_text(lang, "strategy_state_value_volatility_watch")
+        risk_state = get_text(lang, "strategy_state_value_high")
+        confidence = 0.57
 
     c1, c2, c3, c4 = st.columns(4)
 
     c1.metric(get_text(lang, "strategy_state_mode"), strategy_mode)
     c2.metric(get_text(lang, "strategy_state_risk"), risk_state)
-    
-    archetype_label_map = {
-        get_text(lang, "strategy_state_value_observe"): get_text(lang, "strategy_state_value_observe_label"),
-        get_text(lang, "strategy_state_value_breakout"): get_text(lang, "strategy_state_value_breakout_label"),
-        get_text(lang, "strategy_state_value_liquidity_trap"): get_text(lang, "strategy_state_value_liquidity_trap_label"),
-        get_text(lang, "strategy_state_value_mean_reversion"): get_text(lang, "strategy_state_value_mean_reversion_label"),
-        get_text(lang, "strategy_state_value_momentum_probe"): get_text(lang, "strategy_state_value_momentum_probe_label"),
-    }
-
-    c3.metric(
-        get_text(lang, "strategy_state_archetype"),
-        archetype_label_map.get(recommended_archetype, recommended_archetype),
-    )
-
+    c3.metric(get_text(lang, "strategy_state_archetype"), recommended_archetype)
     c4.metric(get_text(lang, "strategy_state_confidence"), round(confidence, 2))
 
     st.markdown(
@@ -173,5 +112,19 @@ def render():
         """,
         unsafe_allow_html=True,
     )
+
+    st.info(
+        f"Research 推奨: regime={regime} / best={recommended_archetype} / "
+        f"PnL={round(total_pnl, 2)} / wins={wins} / losses={losses} / trades={trade_count}"
+    )
+
+    with st.expander("Latest Research Strategy Artifact"):
+        st.json(
+            {
+                "summary": summary,
+                "best_strategy": best_strategy,
+                "regime_report": regime_report,
+            }
+        )
 
     st.divider()
