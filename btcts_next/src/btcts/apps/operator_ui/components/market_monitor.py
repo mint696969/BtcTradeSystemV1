@@ -5,6 +5,11 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_overview,
+    market_monitor_metrics,
+    market_state_status_caption,
+)
 from btcts.apps.operator_ui.components.research_bridge import (
     board_signal_metrics,
     latest_board_row,
@@ -18,8 +23,12 @@ def render():
 
     st.markdown(f"### {get_text(lang, 'market_monitor_title')}")
 
-    replay_payload = load_latest_replay_payload()
-    board = board_signal_metrics(latest_board_row(replay_payload))
+    state = load_market_overview()
+    board = market_monitor_metrics(state)
+
+    if not board:
+        replay_payload = load_latest_replay_payload()
+        board = board_signal_metrics(latest_board_row(replay_payload))
 
     if not board:
         st.warning(get_text(lang, "market_monitor_not_found"))
@@ -43,5 +52,8 @@ def render():
     st.caption(
         f"best_bid={board.get('best_bid')} / best_ask={board.get('best_ask')} / ts={board.get('event_ts')}"
     )
+
+    if state:
+        st.caption(market_state_status_caption(state))
 
     st.divider()

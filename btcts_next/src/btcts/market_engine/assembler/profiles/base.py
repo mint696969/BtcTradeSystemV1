@@ -1,0 +1,60 @@
+# path: ./btcts_next/src/btcts/market_engine/assembler/profiles/base.py
+# desc: Abstract exchange profile contract for Market Engine assembly and venue-specific rebuild policy.
+
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+from btcts.market_engine.assembler.models.book_state import BookState
+from btcts.market_engine.assembler.models.series_state import SeriesState
+from btcts.market_engine.types import BoundaryReason
+
+
+class ExchangeProfile(ABC):
+    profile_name: str
+
+    @abstractmethod
+    def classify_event(self, normalized_event: dict[str, Any]) -> str:
+        """Return canonical family such as snapshot / diff / boundary / trade / unknown."""
+
+    @abstractmethod
+    def message_family(self, normalized_event: dict[str, Any]) -> str:
+        """Return venue-level message family for routing and diagnostics."""
+
+    @abstractmethod
+    def is_boundary_event(self, normalized_event: dict[str, Any]) -> bool:
+        """Return True when the event forces boundary handling."""
+
+    @abstractmethod
+    def boundary_reason(self, normalized_event: dict[str, Any]) -> BoundaryReason:
+        """Return the semantic reason for a boundary split or trust transition."""
+
+    @abstractmethod
+    def is_anchor_candidate(self, normalized_event: dict[str, Any]) -> bool:
+        """Return True when the event can become a new anchor snapshot."""
+
+    @abstractmethod
+    def can_attach_diff(
+        self,
+        book_state: BookState,
+        normalized_event: dict[str, Any],
+        series_state: SeriesState,
+    ) -> bool:
+        """Return True when a diff may be safely attached to the current assembled state."""
+
+    @abstractmethod
+    def apply_anchor(self, book_state: BookState, normalized_event: dict[str, Any]) -> BookState:
+        """Apply an anchor snapshot and return the updated book state."""
+
+    @abstractmethod
+    def apply_diff(self, book_state: BookState, normalized_event: dict[str, Any]) -> BookState:
+        """Apply a diff event and return the updated book state."""
+
+    @abstractmethod
+    def build_zone_policy(self, book_state: BookState) -> dict[str, Any]:
+        """Return near/far zone policy metadata for the current book state."""
+
+    @abstractmethod
+    def validate_rebuild_state(self, book_state: BookState) -> bool:
+        """Return True when the rebuilt state is semantically acceptable for downstream use."""
