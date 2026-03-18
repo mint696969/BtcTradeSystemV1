@@ -1,139 +1,110 @@
 # Collector vNext 正式仕様書
 
-（BtcTradeSystem / btcts_next / current official spec）
+最終更新: 2026-03-19  
+対象実装: `btcts_next/src/btcts/collector_vnext/`
 
 ## 0. この文書の位置づけ
-本書は **現行の Collector vNext (`btcts/collector_vnext/`) の正式仕様書** である。
+本書は **現行 Collector vNext 実装の正式仕様書** である。  
+ここでいう正式仕様とは、実装済みコード・起動導線・出力物・運用前提に乖離しない現在契約を指す。
 
-目的は以下の 3 つである。
-- 現行実装と運用契約を 1 本の文書で把握できるようにする
-- 旧 Collector 仕様と vNext 記録設計 Draft の情報を、現行仕様として再整理する
-- 後続 GPT / 人間が「どれが今の正本か」で迷わない状態を作る
-
-本書を正本とし、以下の文書は補助資料とする。
+補助資料の役割分担は以下とする。
+- `Collector 正式仕様書.md`
+  - 現在の実装・運用契約の正本
 - `Collector 記録設計 vNext.md`
-  - 設計思想・将来拡張・未実装を含む補助資料
-- 旧 `Collector 正式仕様書.md`
-  - 本書へ置き換える
+  - 記録設計思想、将来拡張、取引所追加方法、テスト導線を含む設計補助資料
 
 ---
 
 ## 1. Collector vNext の定義
-Collector vNext は、bitFlyer BTC/JPY 市場データを
-- Raw
-- Compact
-- Canonical
-の 3 層で記録し、将来の
-- UI
-- Replay
-- Research
-- Feature
-- AI
-- Strategy Sandbox
-へ接続可能な **Event Capture System / 記録基盤** である。
+Collector vNext は、取引所市場データと収集状態を **append-only JSONL** と **state / health / audit** へ記録する記録基盤である。
 
-Collector vNext は分析や判断を担当しない。
-責務は、**市場イベントと収集状態を、順序・出自・品質情報付きで正しく・安全に記録すること** に限定される。
+現在の主責務は以下。
+- bitFlyer BTC/JPY の smoke 収集
+- raw / canonical への記録
+- stream control event の記録
+- state / health / checkpoint / daemon health / rate state の更新
+- REST / WS の smoke qualification
+
+Collector は戦略判断や市場判断を行わない。  
+責務は **市場事実と収集状態を、順序・出自・品質情報付きで残すこと** に限定する。
 
 ---
 
-## 2. 主目的
-### 2.1 市場データの継続取得
-- board snapshot
-- executions
-- WebSocket board
-- WebSocket executions
-を継続取得する。
-
-### 2.2 運用事故を避ける
-- 多重起動防止
-- state / health の分離
-- soft-fail / degraded の段階管理
-- API レート制御の可視化
-により「動いているように見える事故」を避ける。
-
-### 2.3 下流の共通入力源になる
-- Replay
-- Research
-- UI
-- 将来の戦略 / AI
-に対して、共通の入力基盤を提供する。
-
----
-
-## 3. 現在の収集対象
-### 3.1 対象取引所 / 銘柄
+## 2. 現在の実装スコープ
+### 2.1 対象取引所・銘柄
 - exchange: `bitflyer`
-- symbol: `BTC_JPY`
 - market: `spot`
+- symbol: `BTC_JPY`
+- instrument_id: `bitflyer.spot.BTC_JPY`
 
-### 3.2 REST
-- board snapshot
-- executions
+### 2.2 現在の収集経路
+REST:
+- `/v1/board`
+- `/v1/executions`
 
-### 3.3 WebSocket
-- board_ws
-- executions_ws
+WebSocket:
+- executions stream
+- board stream
+- board snapshot stream
+
+### 2.3 現在の主な smoke 導線
+- `tools/run_collector_vnext.ps1`
+  - 単発 smoke
+- `tools/run_collector_vnext_daemon.ps1`
+  - ループ daemon
+- `btcts.collector_vnext.app`
+  - 1 qualification cycle 実行
+- `btcts.collector_vnext.daemon`
+  - loop / lock / state 更新付き daemon
 
 ---
 
-## 4. 記録レイヤ構成
-### 4.1 Raw Layer
+## 3. レイヤ構成
+現行 Collector vNext は **raw と canonical を正本として実装**している。
+
+### 3.1 Raw Layer
 目的:
 - 原本保全
 - forensic
-- parser / canonicalizer 再処理
+- transform 再処理
+- provider payload 保持
 
-保存先例:
-- `data/collector_raw/exchange=bitflyer/symbol=BTC_JPY/channel=board_snapshot/date=YYYY-MM-DD/part-00001.jsonl`
-- `data/collector_raw/exchange=bitflyer/symbol=BTC_JPY/channel=executions_ws/date=YYYY-MM-DD/part-00001.jsonl`
+保存先:
+- `BTCTS_DATA_ROOT/collector_raw/exchange=<exchange>/symbol=<symbol>/channel=<channel>/date=<YYYY-MM-DD>/part-00001.jsonl`
 
-### 4.2 Compact Layer
+特徴:
+- provider request / response meta を保持
+- source payload を保持
+- append-only
+
+### 3.2 Canonical Layer
 目的:
-- Operator UI
-- 軽量監視
-- board signal / compact snapshot の保存
+- downstream 共通入力
+- Replay / Research / Market Engine への入力
+- stream control / board continuity 記録
 
-保存先例:
-- `data/collector_compact/exchange=bitflyer/symbol=BTC_JPY/topic=board_snapshot/date=YYYY-MM-DD/part-00001.jsonl`
-- `data/collector_compact/exchange=bitflyer/symbol=BTC_JPY/topic=board_signals_ws/date=YYYY-MM-DD/part-00001.jsonl`
+保存先:
+- `BTCTS_DATA_ROOT/market_data/exchange=<exchange>/symbol=<symbol>/type=<record_type>/date=<YYYY-MM-DD>/part-00001.jsonl`
 
-### 4.3 Canonical Layer
-目的:
-- Replay
-- Research
-- Feature / AI 入力
-- 共通の正準入力
+特徴:
+- 共通 envelope を持つ
+- orderbook snapshot / diff / trade / stream control を同一記録系で保持
+- append-only
 
-保存先例:
-- `data/market_data/exchange=bitflyer/symbol=BTC_JPY/type=market.trade/date=YYYY-MM-DD/part-00001.jsonl`
-- `data/market_data/exchange=bitflyer/symbol=BTC_JPY/type=market.orderbook.snapshot/date=YYYY-MM-DD/part-00001.jsonl`
+### 3.3 Compact Layer について
+本日時点の `collector_vnext/` 正本実装は **Compact Layer を主書き込み先としては持たない**。  
+Compact / UI 向け縮約は現行 Collector 正本の主要責務ではなく、必要に応じて後段で扱う。
 
 ---
 
-## 5. 記録原則
-### 5.1 3層分離
-UI 向け縮約と研究向け正準を分離する。
+## 4. 共通 envelope
+実装上、`events.py` の `make_record()` が canonical / raw 共通 envelope を生成する。
 
-### 5.2 append-only
-すべての主記録は JSONL append-only を原則とする。
-
-### 5.3 collector は判断しない
-Collector 本体に戦略判断・市場判断は入れない。
-
-### 5.4 事実と収集状態の両方を記録する
-市場データだけでなく、collector 側の状態・stream の状態も重要なデータとみなす。
-
-### 5.5 soft-fail を隠さない
-不完全さ・warn・quality 低下は隠さず state / audit / record に残す。
-
----
-
-## 6. 共通 record envelope
-Collector vNext の record は共通 envelope を持つ。
-
-### 6.1 現在の共通フィールド
+### 4.1 現在の共通項目
 - `schema_version`
+- `schema_contract`（canonical のみ）
+- `schema_contract_version`（canonical のみ）
+- `payload_contract_version`（canonical のみ）
 - `record_type`
 - `record_id`
 - `collector_id`
@@ -160,150 +131,175 @@ Collector vNext の record は共通 envelope を持つ。
 - `confidence_score`
 - `payload`
 
-### 6.2 意味
-これにより以下を統一的に追える。
-- どの collector 実行か
-- どの stream か
-- どの順序か
-- いつのイベントか
-- 品質はどうか
+### 4.2 原則
+- `event_ts` は `exchange_ts` 優先、なければ `collector_ts`
+- collector 由来の `sequence_id` を全記録で持つ
+- 品質低下は `quality_flags` / `confidence_score` で落とさず残す
 
 ---
 
-## 7. ID / session / ordering
-### 7.1 session_id
-Collector 1 回の smoke / cycle を識別する。
+## 5. record_type taxonomy
+`collector_vnext/events.py` 上の現行 taxonomy は以下。
 
-例:
-- `collector_main-sess-...`
-
-### 7.2 stream_session_id
-個別 stream / 接続単位を識別する。
-
-例:
-- `collector_main-stream-bitflyer-board_ws-...`
-
-### 7.3 sequence_id
-collector 側の連番であり、Replay 上の正準順序キーの一つとなる。
-
-### 7.4 record_id
-collector 側で生成する各 record 固有 ID。
-
----
-
-## 8. record_type taxonomy
-### 8.1 現在使う主 record_type
+市場イベント:
 - `market.trade`
 - `market.orderbook.snapshot`
 - `market.orderbook.diff`
 - `market.liquidity.signal`
-- `stream.started`
 
-### 8.2 現在 taxonomy 上は定義されているが、全面活用ではないもの
+stream control:
+- `stream.started`
 - `stream.stopped`
 - `stream.reconnected`
 - `stream.heartbeat`
 - `stream.gap_detected`
 - `stream.resync_started`
 - `stream.resync_completed`
+
+品質 / 例外:
 - `quality.validation`
 - `system.provider_error`
 
-※ これらは将来契約として保持しているが、現時点で全てが常時出力されるとは限らない。
-
----
-
-## 9. 時刻設計
-Collector vNext は単一 `ts` ではなく、複数 timestamp を持つ。
-
-### 9.1 現在の主要 timestamp
-- `exchange_ts`
-- `collector_ts`
-- `ingest_ts`
-- `event_ts`
-
-### 9.2 原則
-- exchange 起点と collector 起点の時刻を混同しない
-- 順序は `event_ts` と `sequence_id` の両方で補助する
-
----
-
-## 10. path 設計
-### 10.1 Raw
-`data/collector_raw/exchange=<exchange>/symbol=<symbol>/channel=<channel>/date=<YYYY-MM-DD>/part-00001.jsonl`
-
-### 10.2 Compact
-`data/collector_compact/exchange=<exchange>/symbol=<symbol>/topic=<topic>/date=<YYYY-MM-DD>/part-00001.jsonl`
-
-### 10.3 Canonical
-`data/market_data/exchange=<exchange>/symbol=<symbol>/type=<record_type>/date=<YYYY-MM-DD>/part-00001.jsonl`
-
-### 10.4 現時点の注記
-- 日付 partition は実装済み
-- `part-00001.jsonl` 固定であり、本格ローテーションは未実装
-
----
-
-## 11. trade 記録設計（現行）
-### 11.1 原則
-Canonical Layer では原則 `1 trade = 1 event`。
-
-### 11.2 現在の代表 payload 項目
-- `trade_id`
-- `side`
-- `price`
-- `size`
-- `notional`
-- `liquidity_role`
-
-### 11.3 現時点の注記
-- payload 内の `trade_id` は保持している
-- envelope 側 `source_event_id` への全面反映は今後の改善余地あり
-
----
-
-## 12. orderbook 記録設計（現行）
-### 12.1 主 record_type
+### 5.1 現在よく出るもの
+- `market.trade`
 - `market.orderbook.snapshot`
 - `market.orderbook.diff`
-
-### 12.2 現時点の状態
-- snapshot 系は主力として安定稼働
-- diff / continuity / lineage の契約は育成中
-- 文書上の理想契約（prev_snapshot_id / continuity_state など）は全面固定ではない
-
-### 12.3 運用上の重要点
-- board 系は collector の主軸
-- weekly 中も board 主軸が維持されることを重要視する
-
----
-
-## 13. stream control / collector state の扱い
-市場イベントだけでなく、collector 側の状態も重要な記録対象とする。
-
-### 13.1 実装済みの代表例
 - `stream.started`
-- `status.json`
-- `health.json`
-- `daemon_health.json`
-- `checkpoint.json`
-- `rate_state.json`
+- `stream.gap_detected`
+- `stream.resync_started`
+- `stream.resync_completed`
+- `system.provider_error`
 
-### 13.2 意味
-- collector の進行状況
-- degraded / warning
-- replay / research 側の信頼性判断
-に使う。
+### 5.2 注記
+`market.liquidity.signal` は taxonomy には存在するが、Collector vNext の主線機能として常時出力しているわけではない。
 
 ---
 
-## 14. state ファイル
-保存先:
-- `state/collector_vnext/`
+## 6. セッション / 順序 / ID
+### 6.1 session_id
+collector 実行単位のセッション ID。  
+`run_smoke()` では `make_session_id()` を用いる。
 
-### 14.1 status.json
+### 6.2 stream_session_id
+接続・channel 単位のセッション ID。  
+例:
+- `collector_main-stream-bitflyer-board_snapshot-...`
+- `collector_main-stream-bitflyer-board_ws-...`
+- `collector_main-stream-bitflyer-executions_ws-...`
+
+### 6.3 sequence_id
+collector 側の正準連番。  
+Raw / Canonical / stream control すべてで付与される。
+
+### 6.4 record_id
+`make_record_id()` により collector 側で生成する一意 ID。
+
+---
+
+## 7. REST 収集仕様
+### 7.1 board snapshot
+実装:
+- `providers/bitflyer_rest.py::fetch_board`
+- `emit_rest.py::emit_rest_board_snapshot`
+
+Raw:
+- provider / endpoint / request_meta / response_meta / source_payload を保存
+
+Canonical:
+- `canonical_board_snapshot()` を通して `market.orderbook.snapshot` を出力
+- `snapshot_id`
+- `base_snapshot_id`
+- `integration_hint`
+- `dedupe_hint`
+- `completeness_hint`
+- `origin_hint`
+を付与
+
+### 7.2 executions
+実装:
+- `providers/bitflyer_rest.py::fetch_executions`
+- `emit_rest.py::emit_rest_trades`
+
+Canonical:
+- `canonical_trades()` を通して **1 trade = 1 canonical record** を出力
+- `source_event_id` には `trade_id` を反映
+- `integration_hint / dedupe_hint / completeness_hint / origin_hint` を付与
+
+---
+
+## 8. WebSocket 収集仕様
+### 8.1 executions_ws
+実装:
+- `providers/bitflyer_ws.py`
+- `emit_ws.py::emit_ws_trade_smoke`
+- `transforms/ws_trade_to_canonical.py`
+
+Canonical:
+- `market.trade`
+- `source_event_id = trade_id`
+- `source_sequence = provider 由来 sequence（取得できる範囲）`
+- realtime provenance を `origin_hint` に記録
+
+### 8.2 board_ws
+実装:
+- `providers/bitflyer_ws_board.py`
+- `venue_adapters/bitflyer_board.py`
+- `emit_ws.py::emit_ws_board_smoke`
+- `transforms/ws_board_to_canonical.py`
+
+board adapter の役割:
+- snapshot / delta の判別
+- bid / ask level の正規化
+- venue 仕様の局所吸収
+
+Canonical board の重要項目:
+- `stream_event_no`
+- `snapshot_id`
+- `base_snapshot_id`
+- `prev_event_id`
+- `continuity_state`
+- `rebuild_required`
+- `is_gap_fill`
+- `is_resync`
+- `integration_hint`
+- `dedupe_hint`
+- `completeness_hint`
+- `origin_hint`
+
+### 8.3 明示 control event
+board_ws は現在、以下の control event を canonical に出力できる。
+- `stream.started`
+- `stream.gap_detected`
+- `stream.resync_started`
+- `stream.resync_completed`
+- `system.provider_error`
+
+この点は旧仕様より前進しており、board continuity 観測の正本は現行実装側にある。
+
+---
+
+## 9. 品質情報
+現行 quality 実装は `quality.py` と emit 系に分かれる。
+
+### 9.1 現在の扱い
+- `validate_board_payload()`
+- `flags_for_missing_exchange_ts()`
+- `confidence_from_flags()`
+
+### 9.2 原則
+- 欠損を捨てず `quality_flags` へ落とす
+- `confidence_score` は低下として記録する
+- collector が高次判断を確定しない
+
+---
+
+## 10. state / health / checkpoint / logs
+state 系の主保存先:
+- `BTCTS_STATE_ROOT/collector_vnext/`
+
+### 10.1 `status.json`
 用途:
-- 現在状態の人間向け一次表示
+- 現在状態の一次表示
 
 代表項目:
 - `mode`
@@ -316,232 +312,184 @@ Canonical Layer では原則 `1 trade = 1 event`。
 - `ws_trades_warn_streak`
 - `rate_control`
 
-### 14.2 health.json
+### 10.2 `health.json`
 用途:
-- app / smoke の実収集 health
+- 単発 smoke 実行の health
 
-代表項目:
-- `ok`
-- `status`
-- `checks`
-
-### 14.3 daemon_health.json
+### 10.3 `daemon_health.json`
 用途:
-- daemon 側の継続運転 health
-
-代表項目:
+- daemon ループ状態の health
 - `cycle_no`
 - `interval_sec`
 - `consecutive_failures`
-- `last_success_ts`
 - `ws_trades_warn_streak`
 - `rate_control`
 
-### 14.4 checkpoint.json
+### 10.4 `checkpoint.json`
 用途:
-- 進行位置の確認
-
-代表項目:
+- last processed の目安保存
 - `last_sequence_id`
 - `last_channel`
 - `last_symbol`
 - `last_exchange`
 
-### 14.5 rate_state.json
+### 10.5 `rate_state.json`
 用途:
-- API レート制御状態の正準 state
-
-代表項目:
-- `items.<exchange>.mode`
-- `eff_max_rps`
-- `wait_ms`
-- `last_429_ts`
-- `last_retry_after_sec`
+- REST rate control 状態の正本
+- `summary_state`
+- `engaged`
 - `reason`
+- `wait_ms`
+- `util_ratio`
+- `last_429_ts`
+- `recovery_phase`
+
+### 10.6 origin status
+board_ws origin audit 用の補助 state として `write_origin_status()` が使われる。
 
 ---
 
-## 15. Audit
-保存先:
-- `logs/audit.jsonl`
+## 11. daemon / lock / degraded 運用
+### 11.1 daemon
+実装:
+- `collector_vnext/daemon.py`
 
-### 15.1 現在の代表イベント
-- `collector_vnext.board_snapshot.completed`
-- `collector_vnext.rest_trades.completed`
-- `collector_vnext.ws_trades.completed`
-- `collector_vnext.ws_trades.failed`
-- `collector_vnext.ws_board.completed`
-- `collector_vnext.ws_board.failed`
-- `collector_vnext.run_smoke.completed`
+機能:
+- 一定間隔で `app.main()` を反復実行
+- 失敗回数を管理
+- `status.json` / `daemon_health.json` を更新
+- warn streak と rate summary を引き継ぐ
 
-### 15.2 目的
-- 後追い調査
-- 健全性確認
-- GPT / 人間の原因解析
-
----
-
-## 16. 実行モード
-### 16.1 単発 smoke
-コマンド:
-- `tools/run_collector_vnext.ps1`
-
-用途:
-- 短時間確認
-- qualification
-- 手動確認
-
-### 16.2 daemon
-コマンド:
-- `tools/run_collector_vnext_daemon.ps1`
-
-用途:
-- 継続運転
-- 24h / weekly test
-
-特徴:
-- loop 実行
-- state 更新
-- health 更新
-- audit 継続出力
-
----
-
-## 17. 多重起動防止
-### 17.1 実装
+### 11.2 単一起動防止
+実装:
 - `collector_vnext/lock.py`
-- lock file + pid 生存確認
 
-### 17.2 契約
-1 本目 daemon 起動中に 2 本目を起動した場合、
-- `already_running: true`
-で拒否する。
+契約:
+- daemon 起動時に lock を取得
+- 既に稼働中なら `already_running=true` で拒否
 
-### 17.3 意義
-- 過去にあった多重起動によるデータ汚染を防ぐ
-
----
-
-## 18. WebSocket 劣化判定
-### 18.1 基本方針
-- `ws_board` は主軸であり hard-fail 寄り
-- `ws_trades` は単発 timeout を即全体障害扱いしない
-
-### 18.2 現在の運用項目
-- `ws_trades_warn_streak`
-
-### 18.3 意味
-- 単発 timeout = soft fail / warn
-- 連続 warn = 段階的劣化
-- 全停止とは別扱い
+### 11.3 degraded 判定
+現行方針:
+- `ws_board` 失敗は強めに扱う
+- `ws_trades` は warn streak で段階評価
+- `rate_state` は別 severity として保持
 
 ---
 
-## 19. API レート制御（現行最小導入）
-### 19.1 現在の対象
-まず REST 経路を対象に導入している。
-- board REST
-- executions REST
+## 12. レート制御
+実装:
+- `rate_runtime.py`
+- `VNextRateRuntime`
 
-### 19.2 現在の状態
-- `RateController` を vNext 用 runtime で薄く再利用
-- `rate_state.json` へ現在状態を出力
-- `status.json` / `daemon_health.json` に要約を出力
-- `Retry-After` の通り道あり
-- 429 時の入口あり
+対象:
+- 現在は主に REST 側
 
-### 19.3 現在の可視化項目
-- `mode: NORMAL / WARN / CRIT`
-- `eff_max_rps`
-- `wait_ms`
-- `last_429_ts`
-- `last_retry_after_sec`
-- `reason`
+効果:
+- `acquire()` / `note_request_sent()` / `on_success()` / `on_429()`
+- `rate_state.json` への状態保存
+- status / daemon health への summary 反映
 
-### 19.4 注意
-- 429 実地時の長時間挙動は継続観測対象
-- 週間テスト時点では「最小導入版」である
+注記:
+- 現在は最小導入版
+- 長時間・実地 429 の観測は継続対象
 
 ---
 
-## 20. BTC_TS_MODE と severity の分離
-### 20.1 BTC_TS_MODE
-- `NORMAL / DEBUG / BOOST`
-- 監査・観測密度モード
+## 13. 現在の path 契約
+### 13.1 Raw
+`<BTCTS_DATA_ROOT>/collector_raw/exchange=<exchange>/symbol=<symbol>/channel=<channel>/date=<YYYY-MM-DD>/part-00001.jsonl`
 
-### 20.2 rate severity
-- `NORMAL / WARN / CRIT`
-- レート制御 / 状態評価 / UI バッジ用語彙
+### 13.2 Canonical
+`<BTCTS_DATA_ROOT>/market_data/exchange=<exchange>/symbol=<symbol>/type=<record_type>/date=<YYYY-MM-DD>/part-00001.jsonl`
 
-### 20.3 原則
-両者を混同しない。
-同じ `NORMAL` でも意味が違うため、別フィールド・別概念として扱う。
+### 13.3 注記
+- 現在の writer は `part-00001.jsonl` 固定
+- rotation policy は config に存在するが、writer 側の part 分割は未反映
 
 ---
 
-## 21. Replay / Research / UI 接続
-Collector vNext の Canonical / Compact 出力は、すでに以下と接続されている。
-- Operator UI
-- Replay
-- Research
-- Strategy sandbox 周辺
+## 14. 現在の起動方法
+### 14.1 単発 smoke
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\run_collector_vnext.ps1
+```
 
-Collector vNext は単なる取得器ではなく、後段システムの入力基盤である。
+### 14.2 daemon
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\run_collector_vnext_daemon.ps1
+```
 
----
-
-## 22. 現時点で安定しているもの
-- REST board
-- REST trades
-- WS board
-- 3層書き込み
-- state / health / checkpoint
-- daemon 単一起動防止
-- weekly qualification 通過済みの基本運転
-
----
-
-## 23. 現時点で継続観測中のもの
-- `ws_trades` の断続 timeout
-- 長時間運転時の劣化判定の自然さ
-- 429 実地時の rate control 動作
-- より高度な continuity / lineage 契約
-- source_event_id の活用強化
-- file rotation / part 分割
+### 14.3 主要環境変数
+- `BTCTS_DATA_ROOT`
+- `BTCTS_LOGS_ROOT`
+- `BTCTS_STATE_ROOT`
+- `BTCTS_COLLECTOR_ID`
+- `BTCTS_COLLECTOR_ROLE`
+- `BTCTS_HOST_NAME`
+- `BTCTS_ENABLED_EXCHANGES`
+- `BTCTS_ENABLED_STREAMS`
+- `BTCTS_MARKET`
+- `BTCTS_SYMBOL`
+- `BTCTS_INSTRUMENT_ID`
+- `BTCTS_WS_SSL_VERIFY`
+- `BTCTS_LOOP_INTERVAL_SEC`
+- `BTCTS_MAX_FAILURES`
+- `BTCTS_FAILURE_BACKOFF_SEC`
 
 ---
 
-## 24. Collector vNext に入れないもの
-Collector 本体に以下を入れない。
+## 15. 現在のテスト / 診断導線
+実装と一緒に保守すべき主なツール:
+- `tools/test_collector_vnext_invariants.py`
+- `tools/test_collector_vnext_boundary_cleanup.py`
+- `tools/test_collector_vnext_live_diff_gate.py`
+- `tools/test_collector_vnext_live_rate_control_gate.py`
+- `tools/test_collector_vnext_board_ws_sequence.py`
+- `tools/test_collector_vnext_board_ws_rebuild.py`
+- `tools/test_collector_vnext_board_ws_rebuild_diagnose.py`
+- `tools/test_collector_vnext_board_ws_best_mismatch_audit.py`
+- `tools/test_collector_vnext_board_ws_compare_diagnose.py`
+- `tools/test_collector_vnext_board_internal_risk_audit.py`
+
+### 15.1 運用上の読み方
+- smoke / gate ツールは「最低条件が壊れていないか」を確認する
+- diagnose / audit ツールは board continuity や diff 品質を深掘りする
+- 仕様書を更新するときは、関連ツールの前提も同時に確認する
+
+---
+
+## 16. Collector に入れないもの
+Collector 本体には以下を入れない。
 - 市場判断
 - 戦略判断
+- spoof 判定などの高次解釈
 - AI commentary
-- spoof 判定などの高次判断
 
-これらは Derived / Research / Feature / AI 層で扱う。
-
----
-
-## 25. 開発・運用上の注意
-- skip を success 扱いにしない
-- 事実を捨てない
-- state / audit / data の契約を壊さない
-- board 主軸を維持する
-- weekly 中は本体ロジックを原則変更しない
+これらは Derived / Research / Market Engine / AI レイヤで扱う。
 
 ---
 
-## 26. legacy との関係
-旧 `btcts/collector/` は legacy collector であり、構造も責務も vNext と異なる。
-旧 Collector 仕様は参考資料としてのみ扱い、現行の正本は本書とする。
+## 17. 現在の強みと未完了事項
+### 17.1 現在の強み
+- raw / canonical の共通 envelope
+- board_ws continuity 系 control event
+- state / health / daemon health / checkpoint / rate state 分離
+- lock による多重起動防止
+- smoke と gate の導線が揃っている
+
+### 17.2 未完了事項
+- writer の part rotation 実装
+- multi-exchange の本格拡張
+- Compact Layer の正式復活が必要なら別途設計
+- 実地 429 長時間運用の蓄積
 
 ---
 
-## 27. まとめ
-Collector vNext は、
+## 18. まとめ
+Collector vNext の現行正本は、
 
-**市場イベントと収集状態を、順序・出自・品質情報付きで 3 層記録し、UI / Replay / Research / AI の土台となる現行記録基盤**
+**bitFlyer BTC/JPY の市場イベントと stream 状態を raw / canonical / state 系へ記録し、後段の Replay / Research / Market Engine の土台となる記録基盤**
 
-として定義される。
+である。
 
-本書を Collector vNext の正式仕様の正本とする。
+本書は現行実装の正式仕様の正本とする。

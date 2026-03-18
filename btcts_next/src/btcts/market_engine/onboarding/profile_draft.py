@@ -19,6 +19,8 @@ class ProfileDraft:
     has_diff_family: bool
     has_boundary_family: bool
     likely_anchor_family: str | None
+    known_profile_hints: dict[str, Any] | None
+    runtime_candidate_policy: dict[str, Any] | None
     notes: list[str]
 
 
@@ -32,6 +34,7 @@ class ProfileDraftBuilder:
         *,
         normalized_events: list[dict[str, Any]],
         profile_name_hint: str,
+        profile: Any | None = None,
     ) -> ProfileDraft:
         family_set: set[str] = set()
         continuity_set: set[str] = set()
@@ -50,15 +53,36 @@ class ProfileDraftBuilder:
 
         likely_anchor_family = "snapshot" if has_snapshot_family else None
 
+        known_profile_hints: dict[str, Any] | None = None
+        runtime_candidate_policy: dict[str, Any] | None = None
+        if profile is not None:
+            candidate = profile.audit_policy()
+            if isinstance(candidate, dict):
+                known_profile_hints = candidate
+                runtime_candidate_policy = dict(candidate)
+
         notes: list[str] = []
         if has_snapshot_family:
             notes.append("snapshot family observed; likely anchor candidate exists")
         if has_diff_family:
             notes.append("diff family observed; profile will need explicit diff attach rules")
+        if has_boundary_family:
+            notes.append("boundary family observed; stream lifecycle evidence is available for onboarding")
+        if summary.stream_started_count > 0:
+            notes.append("stream.started observed; session boundaries can be tracked from normalized evidence")
+        if summary.expected_discontinuity_count > 0:
+            notes.append("expected_continuity=false stream starts were observed; some boundaries are intentionally non-continuous")
         if summary.gap_detected_count > 0:
             notes.append("gap_detected observed; boundary split behavior is required")
         if summary.resync_like_count > 0:
             notes.append("resync-like continuity observed; fresh anchor handling is likely required")
+        if has_boundary_family and summary.gap_detected_count == 0 and summary.resync_like_count == 0:
+            notes.append("boundary evidence exists, but explicit gap/resync continuity events were not observed in this sample")
+        if known_profile_hints is not None:
+            notes.append("known venue profile hints are available for comparison against observations")
+        if runtime_candidate_policy is not None:
+            notes.append("runtime candidate policy was extracted as a review-only bridge to assembler profile")
+
         if not notes:
             notes.append("observation set is still sparse; collect more normalized events")
 
@@ -70,6 +94,8 @@ class ProfileDraftBuilder:
             has_diff_family=has_diff_family,
             has_boundary_family=has_boundary_family,
             likely_anchor_family=likely_anchor_family,
+            known_profile_hints=known_profile_hints,
+            runtime_candidate_policy=runtime_candidate_policy,
             notes=notes,
         )
 
@@ -78,10 +104,12 @@ class ProfileDraftBuilder:
         *,
         normalized_events: list[dict[str, Any]],
         profile_name_hint: str,
+        profile: Any | None = None,
     ) -> dict[str, Any]:
         draft = self.build(
             normalized_events=normalized_events,
             profile_name_hint=profile_name_hint,
+            profile=profile,
         )
         return {
             "profile_name_hint": draft.profile_name_hint,
@@ -91,5 +119,7 @@ class ProfileDraftBuilder:
             "has_diff_family": draft.has_diff_family,
             "has_boundary_family": draft.has_boundary_family,
             "likely_anchor_family": draft.likely_anchor_family,
+            "known_profile_hints": draft.known_profile_hints,
+            "runtime_candidate_policy": draft.runtime_candidate_policy,
             "notes": draft.notes,
         }

@@ -90,6 +90,22 @@ def _mid_price(best_bid: float | None, best_ask: float | None) -> float | None:
 class BitflyerProfile(ExchangeProfile):
     profile_name = "bitflyer"
 
+    min_healthy_overlap_top10 = 0.8
+    strong_best_gap_abs = 1000.0
+    dominant_drift_side = "ask"
+    small_timing_drift_decision = "allow"
+    strong_timing_drift_decision = "observe"
+
+    review_allow_top50_floor = 0.90
+    review_observe_top50_floor = 0.60
+    review_reanchor_top50_floor = 0.30
+
+    review_allow_best_gap_abs = 1500.0
+    review_observe_best_gap_abs = 5000.0
+
+    anchor_truth_mode = "snapshot"
+    diff_usage_mode = "conditional_structural_use"
+
     def classify_event(self, normalized_event: dict[str, Any]) -> str:
         record_type = str(normalized_event.get("record_type") or "")
         payload = _payload(normalized_event)
@@ -214,8 +230,63 @@ class BitflyerProfile(ExchangeProfile):
         }
 
     def validate_rebuild_state(self, book_state: BookState) -> bool:
+        # Runtime semantic minimum:
+        # - both sides must exist
+        # - crossed book is never acceptable
+        #
+        # Intentionally not enforced here:
+        # - exact best-of-book match to a future snapshot
+        # - structural overlap thresholds
+        # - venue review bucket decisions
+        #
+        # Those belong to Layer3 review/onboarding policy, where bitFlyer diff
+        # is treated as conditional structural-use evidence rather than strict
+        # deterministic next-snapshot truth.
         if book_state.best_bid is None or book_state.best_ask is None:
             return False
         if book_state.best_bid > book_state.best_ask:
             return False
         return True
+
+    def review_policy(self) -> dict[str, Any]:
+        return {
+            "anchor_truth_mode": self.anchor_truth_mode,
+            "diff_usage_mode": self.diff_usage_mode,
+            "notes": [
+                "snapshot is the safer runtime truth anchor",
+                "diff is treated as conditional structural-use evidence",
+                "best mismatch alone does not imply structural failure",
+            ],
+            "allow_structural_use": {
+                "min_top50_overlap_floor": self.review_allow_top50_floor,
+                "max_best_gap_abs": self.review_allow_best_gap_abs,
+                "requires_not_crossed": True,
+            },
+            "observe_only": {
+                "min_top50_overlap_floor": self.review_observe_top50_floor,
+                "max_best_gap_abs": self.review_observe_best_gap_abs,
+                "requires_not_crossed": True,
+            },
+            "reanchor_required": {
+                "top50_overlap_below": self.review_reanchor_top50_floor,
+                "crossed_book_forces_reanchor": True,
+            },
+        }
+
+    def audit_policy(self) -> dict[str, Any]:
+        review_policy = self.review_policy()
+        return {
+            "min_healthy_overlap_top10": self.min_healthy_overlap_top10,
+            "strong_best_gap_abs": self.strong_best_gap_abs,
+            "dominant_drift_side": self.dominant_drift_side,
+            "small_timing_drift_decision": self.small_timing_drift_decision,
+            "strong_timing_drift_decision": self.strong_timing_drift_decision,
+            "anchor_truth_mode": self.anchor_truth_mode,
+            "diff_usage_mode": self.diff_usage_mode,
+            "review_notes": review_policy.get("notes"),
+            "review_allow_top50_floor": self.review_allow_top50_floor,
+            "review_observe_top50_floor": self.review_observe_top50_floor,
+            "review_reanchor_top50_floor": self.review_reanchor_top50_floor,
+            "review_allow_best_gap_abs": self.review_allow_best_gap_abs,
+            "review_observe_best_gap_abs": self.review_observe_best_gap_abs,
+        }

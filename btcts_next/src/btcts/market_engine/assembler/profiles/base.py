@@ -58,3 +58,12 @@ class ExchangeProfile(ABC):
     @abstractmethod
     def validate_rebuild_state(self, book_state: BookState) -> bool:
         """Return True when the rebuilt state is semantically acceptable for downstream use."""
+
+    def review_policy(self) -> dict[str, Any]:
+        """Return venue review posture metadata for Layer3/onboarding use."""
+        return {}
+
+    def audit_policy(self) -> dict[str, Any]:
+        """Return profile hints for onboarding/audit bridges."""
+        return self.review_policy()
+        

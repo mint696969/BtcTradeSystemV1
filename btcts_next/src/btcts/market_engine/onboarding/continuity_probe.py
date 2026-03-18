@@ -26,6 +26,9 @@ class ContinuityProbeSummary:
     gap_detected_count: int
     resync_like_count: int
     unknown_continuity_count: int
+    boundary_event_count: int
+    stream_started_count: int
+    expected_discontinuity_count: int
 
 
 class ContinuityProbe:
@@ -39,6 +42,8 @@ class ContinuityProbe:
 
         first_sequence_id: int | None = None
         last_sequence_id: int | None = None
+        stream_started_count = 0
+        expected_discontinuity_count = 0
 
         for event in normalized_events:
             classified = self._classifier.classify(event)
@@ -48,6 +53,11 @@ class ContinuityProbe:
 
             continuity_state = str(payload.get("continuity_state") or "missing")
             continuity_counts[continuity_state] += 1
+
+            if classified.record_type == "stream.started":
+                stream_started_count += 1
+                if payload.get("expected_continuity") is False:
+                    expected_discontinuity_count += 1
 
             stream_session_id = classified.stream_session_id or "missing"
             stream_session_counts[stream_session_id] += 1
@@ -69,4 +79,7 @@ class ContinuityProbe:
             gap_detected_count=continuity_counts.get("gap_detected", 0),
             resync_like_count=continuity_counts.get("resynced", 0) + continuity_counts.get("resync_started", 0),
             unknown_continuity_count=continuity_counts.get("unknown", 0) + continuity_counts.get("missing", 0),
+            boundary_event_count=family_counts.get("boundary", 0),
+            stream_started_count=stream_started_count,
+            expected_discontinuity_count=expected_discontinuity_count,
         )

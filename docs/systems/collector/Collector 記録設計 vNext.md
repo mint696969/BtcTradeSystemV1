@@ -1,582 +1,412 @@
-# Collector 記録設計 vNext（正式項目案 / Draft）
+# Collector 記録設計 vNext
+
+最終更新: 2026-03-19  
+対象: `btcts_next/src/btcts/collector_vnext/` / `btcts_next/src/btcts/market_engine/`
 
 > [!NOTE]
-> この文書は **Collector vNext の記録設計思想・将来拡張・目標契約（target contract）** を扱う補助資料である。  
-> **現行実装の正式仕様・運用契約の正本は `Collector 正式仕様書.md` を参照** すること。  
-> 本書には、現時点で未実装または一部のみ実装の項目も含まれる。  
-> したがって、本書をそのまま「現行実装が全面的に満たしている仕様」とみなしてはならない。
->
-> 読み分けの目安:
-> - **Collector 正式仕様書.md**
->   - 現行 `collector_vnext/` 実装の正式仕様
->   - state / health / daemon / lock / rate control / weekly運用を含む現在の正本
-> - **本書（Collector 記録設計 vNext.md）**
->   - 記録設計の思想
->   - 将来の canonical 契約
->   - continuity / lineage / provenance / schema evolution の拡張方針
-
-## 0. 文書目的
-本書は BtcTradeSystem NEXT における Collector の最終記録設計を定義する。
-
-本設計は以下を同時に満たすことを目的とする。
-
-- 24/365 の安定収集
-- 将来の Replay / Research / Feature / AI / Strategy Sandbox / Execution への拡張容易性
-- orderbook reconstruction を前提とした deterministic な市場再構成
-- multi-collector / shadow collector / canonical merge への対応
-- UI 向け軽量データと研究向け高忠実度データの分離
-
-Collector は判断ロジックを持たない。
-Collector の責務は、将来の判断に必要な事実と収集状態を、順序・出自・品質情報付きで記録することである。
+> 本書は **Collector vNext の記録設計・拡張方針・実装手順** をまとめる補助資料である。  
+> 現在の運用契約そのものは `Collector 正式仕様書.md` を正本とする。  
+> 本書は、後続 GPT / 人間が「どこを触れば新取引所を追加できるか」「どのテストで何を確認すべきか」を判断できることを目的にしている。
 
 ---
 
-## 1. 基本原則
+## 0. 目的
+Collector vNext の記録設計は、以下を両立するために存在する。
+- append-only での事実保全
+- 後段の Replay / Research / Market Engine / UI の共通入力化
+- stream continuity / provenance / quality を後から解析できる構造
+- 新しい取引所・新しい channel を安全に追加できる拡張性
 
-### 1.1 Record raw facts before interpretation
-取得した事実は解釈前に保存する。
+Collector の原則は変わらない。
 
-### 1.2 Event ordering is first-class
-イベント順序は第一級情報として扱う。
-
-### 1.3 Collector stream state is also data
-市場イベントだけでなく、collector 側の stream 状態も同じく記録対象とする。
-
-### 1.4 Every record carries provenance
-すべてのレコードは出自情報を持つ。
-
-### 1.5 Rebuild must be deterministic
-Replay / orderbook rebuild は deterministic でなければならない。
-
-### 1.6 UI-friendly data and research-grade data must be separated
-UI 向け縮約データと研究向け高忠実度データを分離する。
-
-### 1.7 Schema evolution must be explicit
-schema 変更は version を通じて明示的に行う。
-
-### 1.8 Quality uncertainty must be preserved
-不完全さ・欠損・再構成・信頼度低下は隠さず残す。
+**Collector は判断しない。事実と収集状態を残す。**
 
 ---
 
-## 2. 記録レイヤ構成
-Collector の出力は 3 層に分ける。
+## 1. 設計原則
+### 1.1 事実優先
+source payload と provider 情報を先に残す。  
+解釈や review は後段で行う。
 
-### 2.1 Raw Layer
-目的:
-- 原本保存
-- forensic
-- replay source
-- parser / rebuild / canonicalizer 改善時の再処理
+### 1.2 順序は第一級情報
+`sequence_id`・`stream_session_id`・`event_ts` は再構成の土台である。
 
-性質:
-- append-only
-- 可能な限り source 事実に近い
-- source metadata を落とさない
+### 1.3 stream 状態もデータ
+市場イベントだけでなく、`stream.started` / `stream.gap_detected` / `stream.resync_*` / `system.provider_error` をデータとして扱う。
 
-### 2.2 Compact Layer
-目的:
-- WarRoom UI
-- 軽量監視
-- 直近状況の高速把握
+### 1.4 provenance を落とさない
+provider / transport / endpoint / session / stream session を残す。
 
-性質:
-- UI 向けに縮約
-- 既存の orderbook / trades 参照系を移行しやすい
-- 研究原本にはしない
+### 1.5 append-only
+raw / canonical は JSONL append-only を原則とする。
 
-### 2.3 Canonical Layer
-目的:
-- Replay
-- Feature Engine
-- Strategy Sandbox
-- Research
-- AI 入力
-- multi-collector merge
-
-性質:
-- 順序・品質・lineage を持つ
-- replay/read path の正準入力
-- raw から再生成可能
+### 1.6 downstream 用の意味づけはレイヤ分離
+高次判断は Collector に持ち込まない。  
+後段の Layer3 review / Market Engine / Research で扱う。
 
 ---
 
-## 3. レコード共通必須フィールド
-すべてのレコードは以下の共通フィールドを持つ。
+## 2. 現行の実装レイヤ
+### 2.1 Raw
+- provider payload を保存
+- forensic / replay source / transform 再処理用
 
-- `schema_version`
-- `record_type`
-- `record_id`
-- `collector_id`
-- `collector_role`
-- `session_id`
-- `stream_session_id`
-- `exchange`
-- `market`
-- `symbol`
-- `instrument_id`
-- `channel`
-- `transport`
-- `source_event_id`
-- `source_sequence`
-- `sequence_id`
-- `exchange_ts`
-- `collector_ts`
-- `ingest_ts`
-- `event_ts`
-- `quality_flags`
-- `is_partial`
-- `is_reconstructed`
-- `confidence_score`
+### 2.2 Canonical
+- 下流の正準入力
+- market / stream control / provider error を同一 envelope で保持
+- board continuity の主記録を持つ
 
-### 3.1 フィールド定義
-#### schema_version
-例:
-- `collector.vnext.raw`
-- `collector.vnext.compact`
-- `collector.vnext.canonical`
+### 2.3 State / Health / Audit
+- `status.json`
+- `health.json`
+- `daemon_health.json`
+- `checkpoint.json`
+- `rate_state.json`
+- `origin_status.json`
+- audit event
 
-#### record_type
-例:
-- `trade`
-- `orderbook_snapshot`
-- `orderbook_diff`
-- `stream_control`
-- `quality_event`
-
-#### record_id
-各レコード固有 ID。
-
-#### collector_id
-collector 識別子。例: `collector_A`
-
-#### collector_role
-例:
-- `production`
-- `shadow`
-- `research`
-
-#### session_id
-collector プロセス起動単位のセッション ID。
-
-#### stream_session_id
-個別 stream / connection 単位のセッション ID。
-
-#### market
-例:
-- `spot`
-- `futures`
-- `options`
-
-#### instrument_id
-将来の multi-market / multi-exchange を見据えた正準 instrument 識別子。
-
-#### channel
-例:
-- `board_snapshot`
-- `board_diff`
-- `executions`
-
-#### transport
-例:
-- `rest`
-- `ws`
-
-#### source_event_id
-取引所由来のイベント ID。trade id 等。
-
-#### source_sequence
-取引所提供 sequence。存在しない場合は null 可。
-
-#### sequence_id
-collector 側の正準イベント連番。Replay の正順キー。
-
-#### exchange_ts
-取引所上でのイベント時刻。
-
-#### collector_ts
-collector が受信した時刻。
-
-#### ingest_ts
-永続化直前の時刻。
-
-#### event_ts
-内部順序構築に使用する正準時刻。
-
-#### quality_flags
-品質フラグ配列。
-例:
-- `missing_exchange_ts`
-- `out_of_order`
-- `gap_after_reconnect`
-- `duplicate_source_event`
-- `partial_snapshot`
-- `clock_skew_high`
-
-#### is_partial
-部分データかどうか。
-
-#### is_reconstructed
-再構成データかどうか。
-
-#### confidence_score
-0.0-1.0 の範囲で記録信頼度を表す。
+### 2.4 Compact
+現行正本では collector 主書き込みの主線ではない。  
+必要なら別設計で復活させる。
 
 ---
 
-## 4. 時刻設計
-Collector は単一 `ts` を廃し、複数 timestamp を採用する。
+## 3. Canonical 記録設計の中心
+### 3.1 trade
+`market.trade`
 
-### 4.1 必須 timestamp
-- `exchange_ts`
-- `collector_ts`
-- `ingest_ts`
-- `event_ts`
+方針:
+- 1 trade = 1 canonical event
+- `source_event_id` に native id を入れられるものは入れる
+- `integration_hint / dedupe_hint / completeness_hint / origin_hint` を payload に付与する
 
-### 4.2 推奨補助項目
-- `exchange_ts_source`
-- `clock_skew_ms`
-- `ingest_latency_ms`
+### 3.2 board snapshot / diff
+- `market.orderbook.snapshot`
+- `market.orderbook.diff`
 
-### 4.3 原則
-- exchange 起点の時刻と collector 起点の時刻を混同しない
-- 順序構築は `event_ts` と `sequence_id` の両方で担保する
-- latency / skew は将来の quality engine と replay 検証の入力とする
-
----
-
-## 5. ID / 順序 / lineage 設計
-
-### 5.1 ID 種別
-- `record_id`
-- `source_event_id`
-- `source_sequence`
-- `sequence_id`
+現行 board canonical で重要な項目:
 - `snapshot_id`
 - `base_snapshot_id`
-- `prev_snapshot_id`
-
-### 5.2 原則
-- source 由来 ID と collector 由来 ID を混ぜない
-- replay 順序は `sequence_id` を正準とする
-- diff 系イベントはどの snapshot に依存するかを明示する
-
----
-
-## 6. Collector stream control event
-市場イベントだけでなく、collector の stream 状態も canonical event として保存する。
-
-### 6.1 record_type
-- `stream_control`
-
-### 6.2 event_name 例
-- `stream_started`
-- `stream_stopped`
-- `stream_reconnected`
-- `gap_detected`
-- `gap_recovered`
-- `resync_started`
-- `resync_completed`
-- `snapshot_refreshed`
-- `sequence_reset`
-- `heartbeat`
-- `provider_error`
-- `clock_drift_warning`
-
-### 6.3 意義
-- Replay 時に市場由来異常と collector 由来異常を区別できる
-- orderbook rebuild の continuity 判定に利用できる
-- audit と別に市場時間軸上の control event として扱える
-
----
-
-## 7. Trade 記録設計
-
-### 7.1 原則
-- Canonical Layer では `1 trade = 1 event` を基本とする
-- Compact Layer では UI 向けに一覧まとめを許容する
-
-### 7.2 trade event 推奨フィールド
-- `trade_id`
-- `price`
-- `size`
-- `notional`
-- `side`
-- `aggressor_side`
-- `maker_side`（取得可能なら）
-- `exchange_ts`
-- `source_sequence`
-- `sequence_id`
-- `match_count`（集約時のみ）
-- `is_block_trade`（取得可能なら）
-
-### 7.3 効果
-- orderflow imbalance
-- trade velocity
-- sweep / absorption 解析
-- deterministic replay
-
----
-
-## 8. OrderBook 記録設計
-
-### 8.1 record_type
-- `orderbook_snapshot`
-- `orderbook_diff`
-
-### 8.2 snapshot 必須項目
-- `snapshot_id`
-- `depth`
-- `bids`
-- `asks`
-- `best_bid`
-- `best_ask`
-- `mid`
-- `spread`
-- `snapshot_reason`
-- `is_resync_snapshot`
-
-### 8.3 diff 必須項目
-- `base_snapshot_id`
-- `diff_seq_start`
-- `diff_seq_end`
-- `changes`
-
-### 8.4 changes の各要素
-- `side`
-- `price`
-- `size`
-- `op`
-- `level_hint`
-- `source_sequence`
-
-### 8.5 op の定義
-- `add`
-- `update`
-- `remove`
-
-remove を曖昧な size=0 解釈に依存させない。
-
----
-
-## 9. OrderBook Reconstruction 前提項目
-板再構成のため、板系 record に以下を持たせる。
-
-- `snapshot_id`
-- `prev_snapshot_id`
-- `base_snapshot_id`
-- `rebuild_required`
+- `prev_event_id`
+- `stream_event_no`
 - `continuity_state`
+- `rebuild_required`
 - `is_gap_fill`
 - `is_resync`
+- `integration_hint`
+- `dedupe_hint`
+- `completeness_hint`
+- `origin_hint`
 
-### 9.1 continuity_state 例
-- `continuous`
-- `gap_detected`
-- `resynced`
-- `unknown`
+### 3.3 stream control
+- `stream.started`
+- `stream.gap_detected`
+- `stream.resync_started`
+- `stream.resync_completed`
+- `system.provider_error`
 
----
-
-## 10. 品質情報設計
-品質情報は外部ログに閉じず、各 record に保持する。
-
-### 10.1 必須
-- `quality_flags`
-- `confidence_score`
-- `is_partial`
-- `is_gap_fill`
-- `is_reconstructed`
-- `validation_state`
-
-### 10.2 原則
-- 不完全データは削除せず、低信頼として残す
-- quality engine は raw を破壊せず、canonical に判断結果を反映する
+board_ws はこの control event を canonical に残す点が重要。  
+後段の continuity 観測や rebuild review はこの記録を前提にできる。
 
 ---
 
-## 11. Provenance 設計
-各 record は出自を示す provenance を持つ。
-
-### 11.1 必須/推奨項目
-- `collector_id`
-- `collector_role`
-- `host`
-- `process_id`
-- `session_id`
-- `stream_session_id`
-- `provider_name`
-- `provider_version`
-- `transport`
-- `channel`
-- `endpoint`
-- `request_id`
-- `subscription_id`
-
-### 11.2 意義
-- production / shadow の分離
-- provider 差分比較
-- collector 別品質評価
-- failover / reconnect 分析
-
----
-
-## 12. book 表現方針
-
-### 12.1 Compact Layer
-既存 UI 互換を重視し、配列形式を維持してよい。
-例:
-- `bids: [{price, size}, ...]`
-- `asks: [{price, size}, ...]`
-
-### 12.2 Canonical Layer
-列指向分析や Parquet 変換を前提に、後で以下へ落とせる契約を持つ。
-- `side`
-- `price`
-- `size`
-- `level_index`
+## 4. continuity / lineage の現在地
+### 4.1 現在の前進点
+旧 Draft と比べて、現行実装は少なくとも以下を board canonical に持てる。
 - `snapshot_id`
+- `base_snapshot_id`
+- `prev_event_id`
+- `continuity_state`
+- `rebuild_required`
+- `is_resync`
+
+### 4.2 まだ強化余地がある点
+- すべての venue で同じ密度の control event を出せるわけではない
+- explicit gap/resync が薄いサンプルもある
+- `source_sequence` は venue 依存で弱いことがある
+
+### 4.3 方針
+Collector は continuity の **材料** を残す。  
+その continuity をどう review するかは Layer3 / Market Engine 側の責務とする。
 
 ---
 
-## 13. 保存パス方針
+## 5. Collector と Market Engine の責務境界
+### 5.1 Collector（Layer1 / Layer2 相当）
+- 取引所事実を取得する
+- provenance / session / sequence を付与する
+- stream state を記録する
+- canonical event を生成する
+- board continuity の材料を残す
 
-### 13.1 Raw Layer
-`data/collector_raw/exchange=<exchange>/market=<market>/symbol=<symbol>/channel=<channel>/date=<YYYY-MM-DD>/part-xxxxx.jsonl`
+### 5.2 Market Engine onboarding / review（Layer3 相当）
+- snapshot / diff の rebuild review
+- overlap / gap 観測
+- `allow_structural_use / observe_only / reanchor_required` の判断
+- venue 固有の review posture 整理
 
-### 13.2 Compact Layer
-`data/collector_compact/exchange=<exchange>/symbol=<symbol>/topic=<topic>/date=<YYYY-MM-DD>/part-xxxxx.jsonl`
-
-### 13.3 Canonical Layer
-`data/market_data/exchange=<exchange>/symbol=<symbol>/type=<record_type>/date=<YYYY-MM-DD>/part-xxxxx.jsonl`
-
-### 13.4 原則
-- 日付 partition を持つ
-- part 分割を前提とする
-- symbol / type / channel を path に含める
-
----
-
-## 14. ファイルローテーション方針
-orderbook diff など高頻度データを想定し、1日1ファイル固定を避ける。
-
-### 14.1 分割条件例
-- file size
-- line count
-- time window
-
-### 14.2 効果
-- 破損時の影響局所化
-- replay / transform / parquet 化の効率改善
-- tail 読みの軽量化
+### 5.3 原則
+Collector は「使える / 使えない」を最終判断しない。  
+Collector は **再判断できるだけの事実を残す**。
 
 ---
 
-## 15. 研究レイヤ接続方針
-Collector primary write は JSONL append-only を維持する。
-その上で別レイヤで以下へ変換する。
+## 6. 新しい取引所を追加する方法
+ここは後続 GPT / 人間向けの実務手順として重要。
 
-- Transformer
-- Parquet
-- DuckDB
+### 6.1 追加対象を分解する
+新取引所追加は、原則として以下を分離して考える。
+1. config
+2. provider
+3. transform
+4. venue adapter（board 系）
+5. emit 導線
+6. smoke / gate / diagnose テスト
+7. 必要なら Market Engine profile
 
-### 15.1 方針
-- Collector 本体に研究用 DB を直接混ぜない
-- Canonical Layer は Parquet 化しやすい列契約を持つ
-- 研究速度向上は transform 層で担保する
+### 6.2 最小追加ポイント
+#### config
+- `collector_vnext/config.py`
+- `enabled_exchanges`
+- `symbol / instrument_id / market` の扱い整理
+
+#### REST provider
+追加例:
+- `collector_vnext/providers/<exchange>_rest.py`
+
+実装責務:
+- endpoint を叩く
+- request / response meta を返す
+- `RestFetchResult` 相当の結果構造に揃える
+
+#### WS provider
+追加例:
+- `collector_vnext/providers/<exchange>_ws.py`
+- `collector_vnext/providers/<exchange>_ws_board.py`
+
+実装責務:
+- 生 message を返す
+- received_ts / message meta / source_sequence を可能な範囲で埋める
+
+#### transform
+追加例:
+- `collector_vnext/transforms/raw_to_canonical.py`
+- `collector_vnext/transforms/raw_to_canonical_trades.py`
+- `collector_vnext/transforms/ws_trade_to_canonical.py`
+- `collector_vnext/transforms/ws_board_to_canonical.py`
+
+実装責務:
+- source payload を canonical payload に変換
+- collector で高次判断をしない
+- downstream が読むための最低限の payload 契約を守る
+
+#### venue adapter（board）
+追加例:
+- `collector_vnext/venue_adapters/<exchange>_board.py`
+
+実装責務:
+- snapshot / delta / unknown 判定
+- bids / asks の正規化
+- venue 固有仕様の局所吸収
+
+#### emit 導線
+- `emit_rest.py`
+- `emit_ws.py`
+- 必要に応じて新しい emit module
+
+実装責務:
+- raw と canonical の両方に書く
+- stream control event を必要に応じて書く
+- provider error を canonical に落とす
+
+### 6.3 board 追加時の実務ルール
+board 系を追加するなら最低でも以下を考える。
+- snapshot があるか
+- delta があるか
+- snapshot/delta の判別方法
+- size=0 の意味
+- venue sequence があるか
+- continuity をどこまで collector が残せるか
+- gap / resync をどう control event 化するか
+
+### 6.4 取引所追加時に触るべきファイル一覧
+現行 bitFlyer を雛形にする場合の主な参照先:
+- `btcts_next/src/btcts/collector_vnext/providers/bitflyer_rest.py`
+- `btcts_next/src/btcts/collector_vnext/providers/bitflyer_ws.py`
+- `btcts_next/src/btcts/collector_vnext/providers/bitflyer_ws_board.py`
+- `btcts_next/src/btcts/collector_vnext/venue_adapters/bitflyer_board.py`
+- `btcts_next/src/btcts/collector_vnext/transforms/raw_to_canonical.py`
+- `btcts_next/src/btcts/collector_vnext/transforms/raw_to_canonical_trades.py`
+- `btcts_next/src/btcts/collector_vnext/transforms/ws_trade_to_canonical.py`
+- `btcts_next/src/btcts/collector_vnext/transforms/ws_board_to_canonical.py`
+- `btcts_next/src/btcts/collector_vnext/emit_rest.py`
+- `btcts_next/src/btcts/collector_vnext/emit_ws.py`
 
 ---
 
-## 16. session 境界設計
+## 7. 新しい取引所追加後の確認順
+新規追加後は、いきなり weekly に行かない。
 
-### 16.1 必須
-- `session_id`
-- `stream_session_id`
+### 7.1 単発 smoke
+- `tools/run_collector_vnext.ps1`
+- `btcts.collector_vnext.app`
 
-### 16.2 意義
-- 再接続前後の区別
-- watchdog 再起動の区別
-- stream reset / resync 判定
+確認項目:
+- raw が出る
+- canonical が出る
+- status / health が更新される
+
+### 7.2 daemon
+- `tools/run_collector_vnext_daemon.ps1`
+- `btcts.collector_vnext.daemon`
+
+確認項目:
+- lock が効く
+- daemon_health が更新される
+- warn / degraded / stopped が自然
+
+### 7.3 board continuity 系
+board を追加した場合は必ず continuity / rebuild 診断を行う。
+bitFlyer なら既存ツール群が参考になる。
 
 ---
 
-## 17. schema governance
-Collector 記録設計は version 管理の対象とする。
+## 8. 現在使う主要テストツール
+### 8.1 Collector vNext 単体確認
+- `tools/test_collector_vnext_invariants.py`
+- `tools/test_collector_vnext_boundary_cleanup.py`
+- `tools/test_collector_vnext_live_rate_control_gate.py`
+- `tools/test_collector_vnext_live_diff_gate.py`
 
-### 17.1 管理対象
-- `schema_version`
-- record_type ごとの required / optional
-- backward compatibility 方針
-- migration 方針
-- deprecation 方針
+### 8.2 board sequence / rebuild / audit
+- `tools/test_collector_vnext_board_ws_sequence.py`
+- `tools/test_collector_vnext_board_ws_rebuild.py`
+- `tools/test_collector_vnext_board_ws_rebuild_diagnose.py`
+- `tools/test_collector_vnext_board_ws_rebuild_long.py`
+- `tools/test_collector_vnext_board_ws_compare_diagnose.py`
+- `tools/test_collector_vnext_board_ws_best_mismatch_audit.py`
+- `tools/test_collector_vnext_board_ws_best_mismatch_trace.py`
+- `tools/test_collector_vnext_board_internal_risk_audit.py`
 
-### 17.2 推奨
-Collector 正式仕様書とは別に、record schema 専用仕様書を持つ。
+### 8.3 Market Engine 接続確認
+- `tools/export_market_engine_onboarding_input.py`
+- `tools/run_market_engine_onboarding.py`
+- `tools/test_market_engine_onboarding_rebuild_accuracy.py`
+- `tools/test_market_engine_short_soak_gate.py`
+- `tools/run_market_engine_runtime_smoke.py`
+
+### 8.4 テストツールの読み方
+- `run_*.py / run_*.ps1`
+  - 正式導線 / smoke 実行
+- `test_*_gate.py`
+  - 最低条件の確認
+- `test_*_diagnose.py`
+  - 原因解析用
+- `test_*_audit.py`
+  - 品質観測 / 監査用
+- `test_*_rebuild*.py`
+  - board continuity / rebuild 観測用
 
 ---
 
-## 18. 将来派生するが Collector では直接判定しないもの
-以下は Collector 本体で判断せず、Derived / Feature / Research 層で生成する。
+## 9. 現在の Market Engine 側との接続点
+Collector の canonical board / trade は、現在 Market Engine onboarding / runtime に接続されている。
 
-- `wall_created`
-- `wall_removed`
-- `liquidity_added`
-- `liquidity_pulled`
-- `sweep_detected`
-- `absorption_detected`
-- `refresh_detected`
-- `spoof_suspected`
-- regime 判定
+### 9.1 onboarding 側
+- `market_engine/onboarding/runner.py`
+- `bitflyer_rebuild_review.py`
+- `bitflyer_review_policy.py`
+
+### 9.2 実装上の意味
+Collector は以下を残せばよい。
+- snapshot / diff / control event
+- provenance
+- continuity 材料
+- payload の事実
+
+review / rebuild 品質判定は Market Engine 側で行う。
+
+---
+
+## 10. bitFlyer board の現時点の設計理解
+Collector 正本としての理解は次。
+- snapshot は safer baseline / truth anchor 候補
+- diff は board continuity の材料
+- explicit gap / resync control event を collector が残せる範囲で残す
+- best mismatch 単独で collector が diff を否定しない
+
+この「使えるかどうか」の判断は Market Engine review 側へ渡す。
+
+---
+
+## 11. schema / contract の現在地
+### 11.1 実装済みで強いもの
+- 共通 envelope
+- canonical schema contract fields
+- raw / canonical path 契約
+- board control event の canonical 記録
+
+### 11.2 まだ将来強化余地のあるもの
+- file rotation の実体実装
+- multi-exchange の本格 config 化
+- venue ごとの richer source_sequence 利用
+- Compact Layer の再定義
+
+---
+
+## 12. 今後の拡張方針
+### 12.1 Collector でやること
+- 事実を増やす
+- continuity 材料を増やす
+- provenance を増やす
+
+### 12.2 Collector でやらないこと
+- venue quality の最終判定
+- structural use / reanchor の最終判断
 - AI commentary
+- strategy ロジック
 
-Collector はこれらの判定に必要な事実粒度を落とさないことに責任を持つ。
-
----
-
-## 19. 推奨追加メタ情報
-以下は強く推奨する。
-
-- `heartbeat` event
-- `last_contiguous_sequence`
-- `last_snapshot_id`
-- `expected_continuity` metadata
-- `tombstone` / `remove` support
-- symbol / side / venue normalization hints
-- replay cursor 用最小キー (`event_ts`, `sequence_id`, `record_id`)
+### 12.3 役割分担
+- Collector
+  - capture / normalize / record
+- Market Engine onboarding / review
+  - evaluate / review / bridge
+- Runtime profile
+  - venue posture を runtime 正本へ反映
 
 ---
 
-## 20. 実装優先順位（設計反映順）
+## 13. 実務メモ: 仕様更新時の確認順
+この文書や正式仕様書を更新する際は、最低限以下を現物確認する。
+1. `collector_vnext/events.py`
+2. `collector_vnext/app.py`
+3. `collector_vnext/daemon.py`
+4. `collector_vnext/emit_rest.py`
+5. `collector_vnext/emit_ws.py`
+6. `collector_vnext/writer.py`
+7. `collector_vnext/paths.py`
+8. `collector_vnext/providers/*`
+9. `collector_vnext/venue_adapters/*`
+10. 関連する `tools/test_*` / `tools/run_*`
 
-### Tier S
-- 共通必須フィールド導入
-- 時刻 4 本化
-- sequence / provenance 導入
-- Raw / Compact / Canonical の三層化
-- orderbook snapshot / diff 契約固定
-- stream_control event 導入
-- session / stream_session 導入
-
-### Tier A
-- lineage / continuity_state / gap/resync metadata
-- quality_flags / confidence_score
-- part 分割 / 新 path 体系
-- trade 1 event 正準化
-
-### Tier B
-- parquet 変換前提の canonical 変換契約
-- level row 化しやすい book 変換契約
-- expected continuity / watermark 付与
+仕様書は会話ベースで更新せず、必ず現物コード確認ベースで更新する。
 
 ---
 
-## 21. Collector vNext の定義
-Collector vNext は、単なる API 取得器ではない。
+## 14. まとめ
+Collector 記録設計 vNext の要点は、
 
-Collector vNext は
+**事実・順序・出自・stream 状態を落とさず append-only で残し、後段の review / rebuild / AI / research が再解釈できるようにすること**
 
-**市場イベントと収集状態を、順序・出自・品質情報付きで記録する Event Capture System**
+である。
 
-として定義される。
+新しい取引所を追加するときも、Collector は判断を増やすのではなく、
+- provider
+- transform
+- venue adapter
+- emit
+- control event
+- テスト導線
+を整えることで拡張する。
 
-この定義をもって、Replay / Liquidity Intelligence / Strategy Sandbox / Multi-Collector / AI / Research Layer の土台とする。
+本書はそのための設計補助資料とする。

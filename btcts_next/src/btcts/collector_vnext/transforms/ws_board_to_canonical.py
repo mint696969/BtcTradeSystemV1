@@ -1,44 +1,27 @@
 # path: ./btcts_next/src/btcts/collector_vnext/transforms/ws_board_to_canonical.py
-# desc: Convert WS board snapshot/diff to canonical orderbook delta events.
+# desc: Convert adapter-normalized WS board levels to canonical orderbook events.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, Protocol
+
+from btcts.collector_vnext.venue_adapters.bitflyer_board import NormalizedBoardLevels
 
 
-def _levels(rows: Any) -> List[Dict[str, float]]:
-    out: List[Dict[str, float]] = []
-
-    if not isinstance(rows, list):
-        return out
-
-    for r in rows:
-        if not isinstance(r, dict):
-            continue
-
-        try:
-            price = float(r["price"])
-            size = float(r["size"])
-        except Exception:
-            continue
-
-        out.append(
-            {
-                "price": price,
-                "size": size,
-            }
-        )
-
-    return out
+class BoardLevelsAdapter(Protocol):
+    def extract_board_levels(self, payload: Dict[str, Any]) -> NormalizedBoardLevels:
+        ...
 
 
 def canonical_board_event(
     payload: Dict[str, Any],
     *,
     snapshot: bool,
+    adapter: BoardLevelsAdapter,
 ) -> Dict[str, Any]:
-    bids = _levels(payload.get("bids"))
-    asks = _levels(payload.get("asks"))
+    levels = adapter.extract_board_levels(payload)
+    bids = levels.bids
+    asks = levels.asks
 
     return {
         "event_type": "snapshot" if snapshot else "delta",

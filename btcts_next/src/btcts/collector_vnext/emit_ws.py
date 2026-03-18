@@ -25,6 +25,7 @@ from .providers.bitflyer_ws import connect_and_stream_executions
 from .providers.bitflyer_ws_board import connect_and_stream_board
 from .transforms.ws_board_to_canonical import canonical_board_event
 from .transforms.ws_trade_to_canonical import canonical_ws_trade
+from .venue_adapters.bitflyer_board import BitflyerBoardVenueAdapter
 from .state import write_origin_status
 from .writer import write_canonical, write_raw
 from btcts.core import audit
@@ -192,6 +193,7 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
 
     provider_name = "bitflyer_ws_board"
     endpoint_or_channel = "board_ws"
+    board_adapter = BitflyerBoardVenueAdapter()
 
     raw_path: Optional[str] = None
     canonical_path: Optional[str] = None
@@ -298,8 +300,20 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
         )
 
         for msg in stream:
-            is_snapshot = "snapshot" in msg.channel
-            record_type = EventType.MARKET_ORDERBOOK_SNAPSHOT if is_snapshot else EventType.MARKET_ORDERBOOK_DIFF
+            message_kind = board_adapter.classify_board_message_kind(
+                channel=msg.channel,
+                payload=msg.payload,
+            )
+
+            if message_kind == "unknown":
+                continue
+
+            is_snapshot = message_kind == "snapshot"
+            record_type = (
+                EventType.MARKET_ORDERBOOK_SNAPSHOT
+                if is_snapshot
+                else EventType.MARKET_ORDERBOOK_DIFF
+            )
 
             raw_ctx = EnvelopeContext(
                 config=cfg,
@@ -342,6 +356,7 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
             canonical_payload = canonical_board_event(
                 msg.payload,
                 snapshot=is_snapshot,
+                adapter=board_adapter,
             )
 
             board_event_no += 1
