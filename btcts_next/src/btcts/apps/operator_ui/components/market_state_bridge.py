@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 from btcts.apps.operator_ui.market_state_service import load_latest_market_state
@@ -18,6 +19,44 @@ def load_market_overview(
         symbol_raw=symbol_raw,
         state_type="market.overview",
     )
+
+
+def market_state_age_seconds(state: dict[str, Any] | None) -> float | None:
+    if not state:
+        return None
+
+    ts = state.get("collector_ts") or state.get("exchange_ts")
+    if not isinstance(ts, str) or not ts:
+        return None
+
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    return max((datetime.now(timezone.utc) - dt).total_seconds(), 0.0)
+
+
+def market_state_freshness_label(
+    state: dict[str, Any] | None,
+    *,
+    live_sec: float = 30.0,
+    stale_sec: float = 120.0,
+) -> str:
+    if not state:
+        return "UNAVAILABLE"
+
+    age = market_state_age_seconds(state)
+    if age is None:
+        return "UNKNOWN"
+
+    if age <= live_sec:
+        return "LIVE"
+
+    if age <= stale_sec:
+        return "QUIET"
+
+    return "STALE"
 
 
 def market_monitor_metrics(state: dict[str, Any] | None) -> dict[str, Any]:
@@ -48,4 +87,8 @@ def market_state_status_caption(state: dict[str, Any] | None) -> str:
     trust = state.get("trust_state") or "-"
     boundary = state.get("boundary_reason") or "-"
     series_id = state.get("source_series_id") or "-"
-    return f"trust={trust} / boundary={boundary} / series={series_id}"
+    freshness = market_state_freshness_label(state)
+    age = market_state_age_seconds(state)
+
+    age_text = "-" if age is None else f"{age:.1f}s"
+    return f"freshness={freshness} / age={age_text} / trust={trust} / boundary={boundary} / series={series_id}"
