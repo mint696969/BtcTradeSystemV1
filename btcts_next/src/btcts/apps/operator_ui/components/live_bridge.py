@@ -1,18 +1,22 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/live_bridge.py
-# desc: Collector UI 用の live state / audit 読み込みブリッジ。state.json / health.json / checkpoint.json / audit.jsonl を統一的に扱う。
+# desc: Collector UI / War Room 用の live state / audit / canonical 読み込みブリッジ。
 
 from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from btcts.core import paths as core_paths
 
 
 def logs_path() -> Path:
     return core_paths.logs_dir(ensure=False) / "audit.jsonl"
+
+
+def data_root() -> Path:
+    return core_paths.data_dir(ensure=False)
 
 
 def state_root() -> Path:
@@ -28,6 +32,60 @@ def _read_json(path: Path) -> Optional[dict]:
         return None
 
 
+def _read_recent_jsonl_objects(path: Path, *, lines: int = 80) -> list[dict[str, Any]]:
+    if not path.exists() or not path.is_file():
+        return []
+
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            size = f.tell()
+
+            block = 4096
+            data = b""
+
+            while size > 0 and data.count(b"\n") < lines:
+                step = min(block, size)
+                size -= step
+                f.seek(size)
+                data = f.read(step) + data
+    except Exception:
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for line in data.splitlines()[-lines:]:
+        try:
+            obj = json.loads(line)
+            if isinstance(obj, dict):
+                rows.append(obj)
+        except Exception:
+            continue
+    return rows
+
+
+def _utc_today() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def _market_type_path(
+    *,
+    exchange: str,
+    symbol: str,
+    record_type: str,
+    date: str | None = None,
+) -> Path:
+    target_date = date or _utc_today()
+    return (
+        data_root()
+        / "market_data"
+        / f"exchange={exchange}"
+        / f"symbol={symbol}"
+        / f"type={record_type}"
+        / f"date={target_date}"
+        / "part-00001.jsonl"
+    )
+
+
 def load_status() -> Optional[dict]:
     return _read_json(state_root() / "status.json")
 
@@ -37,7 +95,14 @@ def load_health() -> Optional[dict]:
 
 
 def load_daemon_health() -> Optional[dict]:
-    return _read_json(state_root() / "daemon_health.json")
+    for path in [
+        state_root() / "daemon_health.json",
+        state_root() / "health.json",
+    ]:
+        data = _read_json(path)
+        if data:
+            return data
+    return None
 
 
 def load_checkpoint() -> Optional[dict]:
@@ -49,44 +114,239 @@ def read_recent_audit_events(lines: int = 80) -> list[dict]:
     if not log_path.exists():
         return []
 
-    with open(log_path, "rb") as f:
-        f.seek(0, 2)
-        size = f.tell()
-
-        block = 4096
-        data = b""
-
-        while size > 0 and data.count(b"\n") < lines:
-            step = min(block, size)
-            size -= step
-            f.seek(size)
-            data = f.read(step) + data
-
     rows: list[dict] = []
+    for obj in _read_recent_jsonl_objects(log_path, lines=lines):
+        payload = obj.get("payload", {}) or {}
 
-    for line in data.splitlines()[-lines:]:
+        rows.append(
+            {
+                "ts": obj.get("ts"),
+                "event": obj.get("event"),
+                "exchange": payload.get("exchange"),
+                "topic": payload.get("topic"),
+                "latency_ms": payload.get("elapsed_ms"),
+                "bytes": payload.get("bytes"),
+                "stream_session_id": payload.get("stream_session_id"),
+                "source": "audit",
+                "ok": payload.get("ok"),
+                "session_id": payload.get("session_id"),
+                "payload": payload,
+                "level": obj.get("level"),
+                "feature": obj.get("feature"),
+                "reason": payload.get("reason"),
+            }
+        )
+
+    return rows
+
+
+def read_recent_live_trade_rows(
+    *,
+    exchange: str = "bitflyer",
+    symbol: str = "BTC_JPY",
+    date: str | None = None,
+    lines: int = 80,
+) -> list[dict[str, Any]]:
+    path = _market_type_path(
+        exchange=exchange,
+        symbol=symbol,
+        record_type="market.trade",
+        date=date,
+    )
+    return _read_recent_jsonl_objects(path, lines=lines)
+
+
+def recent_live_tradeflow_metrics(
+    *,
+    exchange: str = "bitflyer",
+    symbol: str = "BTC_JPY",
+    date: str | None = None,
+    lines: int = 80,
+) -> dict[str, Any]:
+    rows = read_recent_live_trade_rows(
+        exchange=exchange,
+        symbol=symbol,
+        date=date,
+        lines=lines,
+    )
+    if not rows:
+        return {}
+
+    buy_size = 0.0
+    sell_size = 0.0
+    buy_count = 0
+    sell_count = 0
+    prices: list[float] = []
+    latest_ts: str | None = None
+
+    for row in rows:
+        payload = row.get("payload", {}) or {}
+        side = str(payload.get("side") or "").upper()
+        size = payload.get("size")
+        price = payload.get("price")
+        event_ts = row.get("event_ts") or row.get("collector_ts")
+
         try:
-            obj = json.loads(line)
-            payload = obj.get("payload", {}) or {}
+            size_f = float(size)
+        except Exception:
+            size_f = 0.0
 
-            rows.append(
-                {
-                    "ts": obj.get("ts"),
-                    "event": obj.get("event"),
-                    "exchange": payload.get("exchange"),
-                    "topic": payload.get("topic"),
-                    "latency_ms": payload.get("elapsed_ms"),
-                    "bytes": payload.get("bytes"),
-                    "stream_session_id": payload.get("stream_session_id"),
-                    "source": "audit",
-                    "ok": payload.get("ok"),
-                    "session_id": payload.get("session_id"),
-                }
-            )
+        try:
+            price_f = float(price)
+            prices.append(price_f)
+        except Exception:
+            price_f = None
+
+        if side == "BUY":
+            buy_size += size_f
+            buy_count += 1
+        elif side == "SELL":
+            sell_size += size_f
+            sell_count += 1
+
+        if event_ts:
+            latest_ts = str(event_ts)
+
+    total_count = buy_count + sell_count
+    total_size = buy_size + sell_size
+    delta = buy_size - sell_size
+    last_price = prices[-1] if prices else None
+
+    return {
+        "source": "live_canonical",
+        "event_ts": latest_ts,
+        "buy_size": round(buy_size, 8),
+        "sell_size": round(sell_size, 8),
+        "delta": round(delta, 8),
+        "trade_count": total_count,
+        "buy_count": buy_count,
+        "sell_count": sell_count,
+        "total_size": round(total_size, 8),
+        "last_price": last_price,
+    }
+
+
+def read_recent_live_stream_events(
+    *,
+    exchange: str = "bitflyer",
+    symbol: str = "BTC_JPY",
+    date: str | None = None,
+    lines: int = 40,
+) -> list[dict[str, Any]]:
+    record_types = [
+        "stream.started",
+        "stream.gap_detected",
+        "stream.resync_started",
+        "stream.resync_completed",
+    ]
+
+    rows: list[dict[str, Any]] = []
+    for record_type in record_types:
+        path = _market_type_path(
+            exchange=exchange,
+            symbol=symbol,
+            record_type=record_type,
+            date=date,
+        )
+        rows.extend(_read_recent_jsonl_objects(path, lines=lines))
+
+    rows.sort(
+        key=lambda row: str(
+            row.get("event_ts")
+            or row.get("collector_ts")
+            or row.get("ingest_ts")
+            or ""
+        )
+    )
+    return rows[-lines:]
+
+
+def read_recent_live_board_rows(
+    *,
+    exchange: str = "bitflyer",
+    symbol: str = "BTC_JPY",
+    date: str | None = None,
+    lines: int = 20,
+) -> list[dict[str, Any]]:
+    path = _market_type_path(
+        exchange=exchange,
+        symbol=symbol,
+        record_type="market.orderbook.snapshot",
+        date=date,
+    )
+    return _read_recent_jsonl_objects(path, lines=lines)
+
+
+def latest_live_board_metrics(
+    *,
+    exchange: str = "bitflyer",
+    symbol: str = "BTC_JPY",
+    date: str | None = None,
+) -> dict[str, Any]:
+    rows = read_recent_live_board_rows(
+        exchange=exchange,
+        symbol=symbol,
+        date=date,
+        lines=8,
+    )
+    if not rows:
+        return {}
+
+    row = rows[-1]
+    payload = row.get("payload", {}) or {}
+
+    bids = payload.get("bids") or []
+    asks = payload.get("asks") or []
+
+    best_bid = None
+    best_ask = None
+
+    if bids:
+        try:
+            best_bid = float((bids[0] or {}).get("price"))
+        except Exception:
+            best_bid = None
+
+    if asks:
+        try:
+            best_ask = float((asks[0] or {}).get("price"))
+        except Exception:
+            best_ask = None
+
+    spread = None
+    if best_bid is not None and best_ask is not None:
+        spread = best_ask - best_bid
+
+    bid_depth = 0.0
+    ask_depth = 0.0
+
+    for level in bids[:10]:
+        try:
+            bid_depth += float((level or {}).get("size") or 0.0)
         except Exception:
             continue
 
-    return rows
+    for level in asks[:10]:
+        try:
+            ask_depth += float((level or {}).get("size") or 0.0)
+        except Exception:
+            continue
+
+    return {
+        "source": "live_canonical",
+        "event_ts": row.get("event_ts") or row.get("collector_ts"),
+        "record_type": row.get("record_type"),
+        "stream_session_id": row.get("stream_session_id"),
+        "best_bid": best_bid,
+        "best_ask": best_ask,
+        "spread": spread,
+        "bid_levels": len(bids),
+        "ask_levels": len(asks),
+        "bid_depth": round(bid_depth, 8),
+        "ask_depth": round(ask_depth, 8),
+        "continuity_state": payload.get("continuity_state"),
+        "is_resync": payload.get("is_resync"),
+    }
 
 
 def average_latency(events: list[dict]) -> float | None:
@@ -149,6 +409,37 @@ def _payload_age_seconds(payload: dict | None) -> Optional[float]:
     now = datetime.now(timezone.utc)
     age = (now - ts).total_seconds()
     return max(age, 0.0)
+
+
+def _origin_continuity_feed_state(
+    status: dict | None,
+    *,
+    live_threshold_sec: int = 30,
+    stale_threshold_sec: int = 120,
+) -> Optional[str]:
+    if not isinstance(status, dict):
+        return None
+
+    origin = status.get("origin_continuity")
+    if not isinstance(origin, dict) or not origin:
+        return None
+
+    ws_state = str(origin.get("ws_state") or "").upper()
+    status_age = _payload_age_seconds(status)
+
+    if ws_state != "LIVE":
+        return "STALE"
+
+    if status_age is None:
+        return "UNKNOWN"
+
+    if status_age <= live_threshold_sec:
+        return "LIVE"
+
+    if status_age <= stale_threshold_sec:
+        return "QUIET"
+
+    return "STALE"
 
 
 def _format_age(age: Optional[float]) -> str:
@@ -215,7 +506,7 @@ def _build_live_summary(
     health_checks = health.get("checks") or []
     warn_count = sum(1 for check in health_checks if check.get("result") != "ok")
 
-    feed_state = _feed_state(audit_rows)
+    feed_state = _origin_continuity_feed_state(status) or _feed_state(audit_rows)
 
     status_age = _payload_age_seconds(status)
     health_age = _payload_age_seconds(health)
@@ -309,7 +600,7 @@ def collector_runtime_snapshot() -> dict:
     elif mode == "RUNNING" and health_status == "healthy":
         exchange_state = "CONNECTED"
 
-    feed_state = _feed_state(audit_rows)
+    feed_state = _origin_continuity_feed_state(status) or _feed_state(audit_rows)
 
     active_topics = len(
         {

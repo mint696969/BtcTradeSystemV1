@@ -25,6 +25,7 @@ def build_status(
     last_success_ts: str | None = None,
     ws_trades_warn_streak: int = 0,
     rate_control: Dict[str, object] | None = None,
+    origin_continuity: Dict[str, object] | None = None,
 ) -> Dict[str, object]:
     return {
         "ts": now_iso_utc(),
@@ -43,6 +44,7 @@ def build_status(
             "reason": "",
             "wait_ms": 0,
         },
+        "origin_continuity": origin_continuity or {},
     }
 
 

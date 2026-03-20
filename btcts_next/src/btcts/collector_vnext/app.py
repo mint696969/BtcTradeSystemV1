@@ -55,6 +55,7 @@ def _emit_component_audit(
 
 def main() -> int:
     cfg = load_config()
+
     rate_runtime = VNextRateRuntime.build(cfg)
 
     started_at = time.perf_counter()
@@ -170,6 +171,16 @@ def main() -> int:
             "wait_ms": 0,
         }
 
+    ws_board_info = ws_board.get("info", {}) if isinstance(ws_board.get("info"), dict) else {}
+    status_origin_continuity = {
+        "ws_state": ws_board_info.get("ws_state"),
+        "snapshot_to_live_ms": ws_board_info.get("snapshot_to_live_ms"),
+        "resync_occurred": ws_board_info.get("resync_occurred"),
+        "pre_snapshot_delta_drop_count": ws_board_info.get("pre_snapshot_delta_drop_count"),
+        "event_type": ws_board_info.get("event_type"),
+        "stream_session_id": ws_board_info.get("stream_session_id"),
+    }
+
     write_status(
         cfg,
         build_status(
@@ -182,6 +193,7 @@ def main() -> int:
             last_success_ts=now_iso_utc(),
             ws_trades_warn_streak=0 if ws_trades["ok"] else 1,
             rate_control=status_rate_control,
+            origin_continuity=status_origin_continuity,
         ),
     )
 

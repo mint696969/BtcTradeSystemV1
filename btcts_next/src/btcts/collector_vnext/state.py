@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from .config import CollectorConfig
 from .paths import ensure_dir
@@ -46,15 +47,20 @@ def write_origin_status(
     channel: str,
     last_event_name: str,
     reason: str,
-    stream_session_id: str,
-    last_good_event_id: str | None = None,
-    first_uncertain_event_id: str | None = None,
-    provider: str | None = None,
-    transport: str | None = None,
-    error_class: str | None = None,
-    error_message: str | None = None,
+    stream_session_id: Optional[str],
+    last_good_event_id: Optional[str],
+    first_uncertain_event_id: Optional[str],
+    provider: Optional[str],
+    transport: Optional[str],
+    ws_state: Optional[str] = None,
+    snapshot_to_live_ms: Optional[float] = None,
+    resync_occurred: Optional[bool] = None,
+    pre_snapshot_delta_drop_count: Optional[int] = None,
+    error_class: Optional[str] = None,
+    error_message: Optional[str] = None,
 ) -> Path:
     payload = {
+        "ts": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "exchange": exchange,
         "channel": channel,
         "last_event_name": last_event_name,
@@ -64,6 +70,10 @@ def write_origin_status(
         "first_uncertain_event_id": first_uncertain_event_id,
         "provider": provider,
         "transport": transport,
+        "ws_state": ws_state,
+        "snapshot_to_live_ms": snapshot_to_live_ms,
+        "resync_occurred": resync_occurred,
+        "pre_snapshot_delta_drop_count": pre_snapshot_delta_drop_count,
         "error_class": error_class,
         "error_message": error_message,
     }

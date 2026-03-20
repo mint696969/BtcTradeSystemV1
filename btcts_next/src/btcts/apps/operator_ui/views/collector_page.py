@@ -2,7 +2,8 @@
 # desc: Collector vNext の live 運転状態を表示する Operator UI ページ。state / health / checkpoint / audit を基に監視する。
 
 from __future__ import annotations
-
+from datetime import datetime, timezone
+import json
 import streamlit as st
 
 from btcts.apps.operator_ui.components import execution_feed_panel
@@ -35,6 +36,178 @@ def _overall_status_label(value: str) -> str:
     return mapping.get(value, value)
 
 
+def _rate_rows(rate_state: dict) -> list[dict]:
+    items = rate_state.get("items") if isinstance(rate_state, dict) else {}
+    if not isinstance(items, dict):
+        return []
+
+    rows: list[dict] = []
+    for exchange, item in items.items():
+        if not isinstance(item, dict):
+            continue
+
+        rows.append(
+            {
+                "exchange": exchange,
+                "summary_state": item.get("summary_state"),
+                "engaged": item.get("engaged"),
+                "reason": item.get("reason"),
+                "official_max_rps": item.get("official_max_rps"),
+                "internal_safe_max_rps": item.get("internal_safe_max_rps"),
+                "eff_max_rps": item.get("eff_max_rps"),
+                "util_ratio": item.get("util_ratio"),
+                "wait_ms": item.get("wait_ms"),
+                "last_429_ts": item.get("last_429_ts"),
+                "hold_until_ts": item.get("hold_until_ts"),
+                "backoff_sec": item.get("backoff_sec"),
+                "recovery_phase": item.get("recovery_phase"),
+                "ts": item.get("ts"),
+            }
+        )
+    return rows
+
+
+def _origin_age_seconds(origin_state: dict) -> float | None:
+    if not isinstance(origin_state, dict):
+        return None
+
+    ts = origin_state.get("ts")
+    if not ts or not isinstance(ts, str):
+        return None
+
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    return max((datetime.now(timezone.utc) - dt).total_seconds(), 0.0)
+
+
+def _origin_metric_rows(origin_state: dict) -> list[dict]:
+    if not isinstance(origin_state, dict) or not origin_state:
+        return []
+
+    return [
+        {
+            "ws_state": origin_state.get("ws_state"),
+            "snapshot_to_live_ms": origin_state.get("snapshot_to_live_ms"),
+            "resync_occurred": origin_state.get("resync_occurred"),
+            "pre_snapshot_delta_drop_count": origin_state.get("pre_snapshot_delta_drop_count"),
+            "origin_age_sec": _origin_age_seconds(origin_state),
+            "last_event_name": origin_state.get("last_event_name"),
+            "reason": origin_state.get("reason"),
+            "channel": origin_state.get("channel"),
+        }
+    ]
+
+
+def _origin_stale_status(origin_state: dict, stale_sec: float = 30.0) -> tuple[str, str]:
+    age = _origin_age_seconds(origin_state)
+    ws_state = None
+    if isinstance(origin_state, dict):
+        ws_state = origin_state.get("ws_state")
+
+    if not isinstance(origin_state, dict) or not origin_state:
+        return ("UNKNOWN", "origin_status unavailable")
+
+    if ws_state != "LIVE":
+        return ("STALE", f"ws_state={ws_state or 'unknown'}")
+
+    if age is None:
+        return ("UNKNOWN", "origin ts unavailable")
+
+    if age > stale_sec:
+        return ("STALE", f"origin_age_sec>{stale_sec:.0f}")
+
+    return ("LIVE", "origin_status fresh")
+
+
+def _status_age_seconds(status_state: dict) -> float | None:
+    if not isinstance(status_state, dict):
+        return None
+
+    ts = status_state.get("ts")
+    if not ts or not isinstance(ts, str):
+        return None
+
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+    return max((datetime.now(timezone.utc) - dt).total_seconds(), 0.0)
+
+
+def _status_continuity_freshness(status_state: dict, stale_sec: float = 120.0) -> tuple[str, str]:
+    age = _status_age_seconds(status_state)
+    origin = status_state.get("origin_continuity") if isinstance(status_state, dict) else {}
+    ws_state = origin.get("ws_state") if isinstance(origin, dict) else None
+
+    if not isinstance(status_state, dict) or not status_state:
+        return ("UNKNOWN", "status.json unavailable")
+
+    if ws_state != "LIVE":
+        return ("STALE", f"ws_state={ws_state or 'unknown'}")
+
+    if age is None:
+        return ("UNKNOWN", "status ts unavailable")
+
+    if age > stale_sec:
+        return ("STALE", f"status_age_sec>{stale_sec:.0f}")
+
+    return ("LIVE", "status.json fresh")
+
+
+def _origin_audit_summary(events: list[dict]) -> dict:
+    summary = {
+        "gap_detected": 0,
+        "resync_started": 0,
+        "resync_completed": 0,
+        "resync_complete_ratio": None,
+    }
+
+    for row in events:
+        event_name = row.get("event")
+        if event_name == "origin.stream_gap_detected":
+            summary["gap_detected"] += 1
+        elif event_name == "origin.stream_resync_started":
+            summary["resync_started"] += 1
+        elif event_name == "origin.stream_resync_completed":
+            summary["resync_completed"] += 1
+
+    started = summary["resync_started"]
+    completed = summary["resync_completed"]
+    if started > 0:
+        summary["resync_complete_ratio"] = completed / started
+
+    return summary
+
+
+def _audit_rows_for_ui(events: list[dict]) -> list[dict]:
+    rows: list[dict] = []
+    for row in events:
+        payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+
+        rows.append(
+            {
+                "ts": row.get("ts"),
+                "event": row.get("event"),
+                "level": row.get("level"),
+                "feature": row.get("feature"),
+                "reason": row.get("reason") or payload.get("reason"),
+                "exchange": row.get("exchange") or payload.get("exchange"),
+                "topic": row.get("topic") or payload.get("topic"),
+                "stream_session_id": row.get("stream_session_id") or payload.get("stream_session_id"),
+                "session_id": row.get("session_id") or payload.get("session_id"),
+                "ok": row.get("ok"),
+                "latency_ms": row.get("latency_ms"),
+                "bytes": row.get("bytes"),
+                "payload_preview": json.dumps(payload, ensure_ascii=False)[:240] if payload else "",
+            }
+        )
+    return rows
+
+
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
@@ -43,11 +216,15 @@ def render():
     runtime = collector_runtime_snapshot()
     live_summary = runtime["live_summary"]
 
-    # Collector state files (rate / origin / daemon health)
     collector_state = load_state()
     rate_state = collector_state.get("rate", {})
     origin_state = collector_state.get("origin", {})
     daemon_state = collector_state.get("health", {})
+    status_state = collector_state.get("status", {})
+    origin_continuity = status_state.get("origin_continuity", {}) if isinstance(status_state, dict) else {}
+    state_dir_info = collector_state.get("state_dir", {})
+    recent_audit_events = read_recent_audit_events(lines=200)
+    origin_audit_summary = _origin_audit_summary(recent_audit_events)
 
     col1, col2, col3 = st.columns(3)
     col1.metric("総合状態", _overall_status_label(live_summary["overall_state"]))
@@ -59,7 +236,11 @@ def render():
         f"live_mode={runtime['mode']} / "
         f"health={runtime['health_status']} / "
         f"daemon={live_summary['daemon_status']} / "
-        f"last_sequence_id={runtime.get('last_sequence_id')}"
+        f"cycle_last_sequence_id={runtime.get('last_sequence_id')}"
+    )
+
+    st.caption(
+        "note=last_sequence_id は smoke 1サイクル内の最終 sequence を示します（global sequence ではありません）"
     )
 
     st.caption(
@@ -69,58 +250,103 @@ def render():
         f"checkpoint={live_summary['checkpoint_age_label']}"
     )
 
-    st.markdown("## Live Operations")
+    st.caption(f"state_dir={state_dir_info.get('path', '-')}")
 
+    st.markdown("## Live Operations")
     st.markdown("### Collector Runtime State")
+
+    st.markdown("### Rate Control Summary")
+    rate_rows = _rate_rows(rate_state)
+    if rate_rows:
+        st.dataframe(rate_rows, width="stretch")
+    else:
+        st.info("rate_state.json not available")
 
     col_r1, col_r2 = st.columns(2)
 
     with col_r1:
-        st.caption("Rate Control State")
+        st.caption("WS Continuity (origin_status)")
+
+        origin_rows = _origin_metric_rows(origin_state)
+        if origin_rows:
+            metric = origin_rows[0]
+            stale_label, stale_reason = _origin_stale_status(origin_state)
+
+            c0, c1, c2, c3, c4, c5 = st.columns(6)
+            c0.metric("Continuity Status", stale_label)
+            c1.metric("WS State", metric.get("ws_state") or "-")
+            c2.metric("Snapshot→LIVE (ms)", metric.get("snapshot_to_live_ms") or "-")
+            c3.metric("Resync Occurred", metric.get("resync_occurred"))
+            c4.metric("Dropped Pre-Snapshot Deltas", metric.get("pre_snapshot_delta_drop_count") or 0)
+            c5.metric("Origin Age (sec)", metric.get("origin_age_sec") or "-")
+
+            if stale_label == "LIVE":
+                st.success(f"WS continuity status: {stale_label} / {stale_reason}")
+            elif stale_label == "STALE":
+                st.warning(f"WS continuity status: {stale_label} / {stale_reason}")
+            else:
+                st.info(f"WS continuity status: {stale_label} / {stale_reason}")
+
+        if origin_state:
+            with st.expander("Raw origin_status JSON"):
+                st.json(origin_state)
+        else:
+            st.info("origin_status.json not available")
+
+    with col_r2:
+        st.caption("Daemon Health")
+        if daemon_state:
+            st.json(daemon_state)
+        else:
+            st.info("daemon health state not available")
+
+    with st.expander("Raw Rate State JSON"):
         if rate_state:
             st.json(rate_state)
         else:
             st.info("rate_state.json not available")
 
-    with col_r2:
-        st.caption("WS Continuity (origin_status)")
-        if origin_state:
-            st.json(origin_state)
-        else:
-            st.info("origin_status.json not available")
-
-    st.caption("Daemon Health")
-    if daemon_state:
-        st.json(daemon_state)
-    else:
-        st.info("daemon_health.json not available")
-
     st.caption(
-        "このページは Collector vNext の state.json / health.json / "
-        "checkpoint.json / audit.jsonl を基に、現在の live 運転状態のみを表示します。"
+        "このページは Collector vNext の state / health / checkpoint / audit を基に、"
+        "現在の live 運転状態と週間テスト前に必要な観測項目を表示します。"
     )
+
+    st.markdown("### Origin Continuity Summary (status.json)")
+    status_freshness_label, status_freshness_reason = _status_continuity_freshness(status_state)
+    status_age = _status_age_seconds(status_state)
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Status Freshness", status_freshness_label)
+    c2.metric("Status Age (sec)", status_age or "-")
+    c3.metric("Origin WS State", origin_continuity.get("ws_state") or "-")
+    c4.metric("Origin Snapshot→LIVE (ms)", origin_continuity.get("snapshot_to_live_ms") or "-")
+    c5.metric("Origin Pre-Snapshot Drops", origin_continuity.get("pre_snapshot_delta_drop_count") or 0)
+
+    if origin_continuity:
+        if status_freshness_label == "LIVE":
+            st.caption(f"origin_continuity=status.json / {status_freshness_reason}")
+        elif status_freshness_label == "STALE":
+            st.warning(f"origin_continuity=status.json / {status_freshness_reason}")
+        else:
+            st.info(f"origin_continuity=status.json / {status_freshness_reason}")
+    else:
+        st.info("status.json origin_continuity not available")
+
+    st.markdown("### Origin Continuity Audit Summary (recent 200 lines)")
+    a1, a2, a3, a4 = st.columns(4)
+    a1.metric("Gap Detected", origin_audit_summary.get("gap_detected") or 0)
+    a2.metric("Resync Started", origin_audit_summary.get("resync_started") or 0)
+    a3.metric("Resync Completed", origin_audit_summary.get("resync_completed") or 0)
+    a4.metric("Resync Complete Ratio", origin_audit_summary.get("resync_complete_ratio") or "-")
 
     system_stats.render()
     execution_feed_panel.render()
 
     st.subheader(get_text(lang, "collector_recent_events"))
 
-    events = read_recent_audit_events(lines=30)
+    events = recent_audit_events[:30]
     if events:
-        localized_events = []
-        for row in events:
-            localized_events.append(
-                {
-                    get_text(lang, "event_col_time"): row.get("ts"),
-                    get_text(lang, "event_col_event"): row.get("event"),
-                    get_text(lang, "event_col_exchange"): row.get("exchange"),
-                    get_text(lang, "event_col_topic"): row.get("topic"),
-                    get_text(lang, "event_col_latency"): row.get("latency_ms"),
-                    get_text(lang, "event_col_bytes"): row.get("bytes"),
-                    "stream_session_id": row.get("stream_session_id"),
-                    "source": row.get("source"),
-                }
-            )
-        st.dataframe(localized_events, width="stretch")
+        ui_rows = _audit_rows_for_ui(events)
+        st.dataframe(ui_rows, width="stretch")
     else:
         st.warning("live audit event がまだありません。")
