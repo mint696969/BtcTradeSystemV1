@@ -26,7 +26,7 @@ def render():
     c4.metric("Active Topics", runtime["active_topics"])
 
     c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Last Sequence ID", runtime.get("last_sequence_id") or "-")
+    c5.metric("Cycle Last Sequence ID", runtime.get("last_sequence_id") or "-")
     c6.metric("Audit Rows", len(runtime["audit_rows"]))
     c7.metric("Stream Sessions", runtime["stream_sessions"])
     c8.metric("Feed State", runtime["feed_state"])

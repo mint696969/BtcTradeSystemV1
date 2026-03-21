@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from btcts.market_engine.assembler.core.assembler_engine import AssemblerEngine
+from btcts.market_engine.assembler.core.interpretation_engine import InterpretationEngine
 from btcts.market_engine.assembler.profiles.bitflyer import BitflyerProfile
 from btcts.market_engine.config import MarketEngineConfig, load_market_engine_config
 from btcts.market_engine.market_state.projector import MarketStateProjector
@@ -25,6 +26,7 @@ class MarketEngineRuntime:
         self._cfg = cfg or load_market_engine_config()
         self._profile = BitflyerProfile()
         self._engine = AssemblerEngine(self._profile)
+        self._interpretation = InterpretationEngine()
         self._projector = MarketStateProjector()
         self._writer = MarketStateWriter()
         self._current_series = None
@@ -40,6 +42,17 @@ class MarketEngineRuntime:
             current_book=self._current_book,
             normalized_event=normalized_event,
         )
+        interpretation = self._interpretation.evaluate(
+            trust_state=result.book_state.trust_state,
+            boundary_reason=result.book_state.boundary_reason,
+            continuity_state=result.book_state.continuity_state,
+            review_policy=self._profile.review_policy(),
+        )
+
+        result.book_state.interpretation_bucket = interpretation.bucket
+        result.book_state.interpretation_reason = interpretation.reason
+        result.book_state.interpretation_policy = dict(interpretation.policy)
+
         self._current_series = result.series_state
         self._current_book = result.book_state
 

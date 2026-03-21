@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/liquidity_pressure_panel.py
-# desc: Replay board signal から壁と流動性圧力を表示する WarRoom パネル
+# desc: Live canonical 優先、replay fallback で壁と流動性圧力を表示する WarRoom パネル
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from btcts.apps.operator_ui.components.research_bridge import (
 )
 from btcts.apps.operator_ui.ui_text import get_text
 
+from btcts.apps.operator_ui.components.live_bridge import latest_live_board_metrics
 
 def _badge_class(value: str) -> str:
     if value in ("BUY", "買い"):
@@ -28,8 +29,45 @@ def render():
 
     st.markdown(f"### {get_text(lang, 'liquidity_pressure_title')}")
 
-    replay_payload = load_latest_replay_payload()
-    board = board_signal_metrics(latest_board_row(replay_payload))
+    live_board = latest_live_board_metrics()
+    source_label = "replay_board_fallback"
+
+    board = None
+
+    if live_board:
+        bid_depth = live_board.get("bid_depth")
+        ask_depth = live_board.get("ask_depth")
+
+        wall_ratio = None
+        wall_side = None
+
+        if bid_depth is not None and ask_depth is not None:
+            try:
+                bid_depth_f = float(bid_depth)
+                ask_depth_f = float(ask_depth)
+                denom = bid_depth_f + ask_depth_f
+                if denom > 0:
+                    wall_ratio = (bid_depth_f - ask_depth_f) / denom
+                    if wall_ratio > 0.05:
+                        wall_side = "bid"
+                    elif wall_ratio < -0.05:
+                        wall_side = "ask"
+            except Exception:
+                wall_ratio = None
+                wall_side = None
+
+        board = {
+            "bid_wall_size": bid_depth,
+            "ask_wall_size": ask_depth,
+            "wall_ratio": wall_ratio,
+            "wall_side": wall_side,
+            "event_ts": live_board.get("event_ts"),
+        }
+        source_label = "live_canonical"
+
+    if not board:
+        replay_payload = load_latest_replay_payload()
+        board = board_signal_metrics(latest_board_row(replay_payload))
 
     if not board:
         st.warning(get_text(lang, "liquidity_pressure_not_found"))
@@ -72,5 +110,7 @@ def render():
         """,
         unsafe_allow_html=True,
     )
+
+    st.caption(f"source={source_label}")
 
     st.divider()

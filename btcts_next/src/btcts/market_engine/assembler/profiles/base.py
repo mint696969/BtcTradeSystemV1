@@ -66,4 +66,21 @@ class ExchangeProfile(ABC):
     def audit_policy(self) -> dict[str, Any]:
         """Return profile hints for onboarding/audit bridges."""
         return self.review_policy()
-        
+
+    def build_snapshot_drift_review_summary(
+        self,
+        normalized_events: list[dict[str, Any]],
+        *,
+        profile_name_hint: str,
+    ) -> dict[str, Any] | None:
+        """Return venue-specific snapshot drift review summary for onboarding."""
+        return None
+
+    def build_rebuild_review(
+        self,
+        *,
+        normalized_events: list[dict[str, Any]],
+        profile_name_hint: str,
+    ) -> dict[str, Any] | None:
+        """Return venue-specific rebuild review for onboarding."""
+        return None

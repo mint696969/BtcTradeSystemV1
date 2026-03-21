@@ -8,6 +8,10 @@ from pathlib import Path
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.live_bridge import (
+    latest_live_board_metrics,
+    recent_live_tradeflow_metrics,
+)
 from btcts.apps.operator_ui.components.research_bridge import (
     board_signal_metrics,
     latest_best_strategy_name,
@@ -141,7 +145,135 @@ def _severity_label(lang: str, severity: str) -> str:
     return mapping.get(severity, severity)
 
 
+def _build_live_alerts(lang: str) -> list[dict]:
+    live_board = latest_live_board_metrics()
+    live_flow = recent_live_tradeflow_metrics(lines=80)
+    experiment_payload = load_latest_experiment_payload()
+
+    spread = live_board.get("spread")
+    bid_depth = live_board.get("bid_depth")
+    ask_depth = live_board.get("ask_depth")
+    delta = live_flow.get("delta")
+    alert_ts = live_flow.get("event_ts") or live_board.get("event_ts")
+    regime = latest_regime_name(experiment_payload)
+    best_strategy = latest_best_strategy_name(experiment_payload)
+
+    imbalance = None
+    if bid_depth is not None and ask_depth is not None:
+        try:
+            bid_depth_f = float(bid_depth)
+            ask_depth_f = float(ask_depth)
+            denom = bid_depth_f + ask_depth_f
+            if denom > 0:
+                imbalance = (bid_depth_f - ask_depth_f) / denom
+        except Exception:
+            imbalance = None
+
+    pressure_bias = "neutral_bias"
+    if isinstance(imbalance, (int, float)):
+        if imbalance > 0.2:
+            pressure_bias = "buy_pressure"
+        elif imbalance < -0.2:
+            pressure_bias = "sell_pressure"
+
+    if spread is None:
+        return []
+
+    if delta is None:
+        delta = 0.0
+
+    latency = _recent_audit_latency()
+    risk_score = _risk_score(spread, imbalance, delta, None, latency)
+    risk_level = _risk_level(risk_score)
+
+    alerts: list[dict] = []
+
+    current_spread_state = _spread_state(spread)
+    prev_spread_state = st.session_state.get("warroom_live_prev_spread_state")
+    if prev_spread_state != current_spread_state and current_spread_state is not None:
+        _append_alert(
+            alerts,
+            "warning" if current_spread_state == "wide" else "info",
+            "spread_state_change",
+            get_text(lang, "warroom_alert_spread_state_changed").format(
+                state=get_text(lang, f"warroom_alert_value_{current_spread_state}")
+            ),
+            ts=str(alert_ts) if alert_ts else None,
+        )
+    st.session_state.warroom_live_prev_spread_state = current_spread_state
+
+    prev_pressure = st.session_state.get("warroom_live_prev_pressure")
+    if prev_pressure != pressure_bias:
+        _append_alert(
+            alerts,
+            "warning",
+            "pressure_flip",
+            get_text(lang, "warroom_alert_pressure_changed").format(
+                state=get_text(lang, f"warroom_alert_value_{pressure_bias}")
+            ),
+            ts=str(alert_ts) if alert_ts else None,
+        )
+    st.session_state.warroom_live_prev_pressure = pressure_bias
+
+    decision = _decision_label(regime, imbalance, delta)
+    prev_decision = st.session_state.get("warroom_prev_decision")
+    if prev_decision != decision:
+        _append_alert(
+            alerts,
+            "info",
+            "ai_decision_change",
+            get_text(lang, "warroom_alert_ai_decision_changed").format(
+                state=get_text(lang, f"warroom_alert_value_{decision}")
+            ),
+            ts=str(alert_ts) if alert_ts else None,
+        )
+    st.session_state.warroom_prev_decision = decision
+
+    prev_risk_level = st.session_state.get("warroom_prev_risk_level")
+    if prev_risk_level != risk_level and risk_level == "high":
+        _append_alert(
+            alerts,
+            "critical",
+            "risk_spike",
+            get_text(lang, "warroom_alert_risk_spike"),
+            ts=str(alert_ts) if alert_ts else None,
+        )
+    st.session_state.warroom_prev_risk_level = risk_level
+
+    strategy_label = best_strategy if best_strategy not in {None, "", "unknown"} else "live_active"
+
+    _append_alert(
+        alerts,
+        "info",
+        "strategy_snapshot",
+        get_text(lang, "warroom_alert_strategy_snapshot").format(strategy=strategy_label),
+        ts=str(alert_ts) if alert_ts else None,
+    )
+
+    severity_order = {
+        "critical": 0,
+        "warning": 1,
+        "info": 2,
+    }
+    alerts.sort(key=lambda x: severity_order.get(x["severity"], 9))
+
+    if not alerts:
+        _append_alert(
+            alerts,
+            "info",
+            "live_probe",
+            f"[live_probe] spread={spread} delta={delta} best_strategy={best_strategy} regime={regime}",
+            ts=str(alert_ts) if alert_ts else None,
+        )
+
+    return alerts[:6]
+
+
 def _build_alerts(lang: str) -> list[dict]:
+
+    live_alerts = _build_live_alerts(lang)
+    return live_alerts
+
     replay_payload = load_latest_replay_payload()
     experiment_payload = load_latest_experiment_payload()
 
@@ -264,6 +396,16 @@ def _build_alerts(lang: str) -> list[dict]:
         "info": 2,
     }
     alerts.sort(key=lambda x: severity_order.get(x["severity"], 9))
+
+    if not alerts and best_strategy != "unknown":
+        _append_alert(
+            alerts,
+            "info",
+            "strategy_snapshot",
+            get_text(lang, "warroom_alert_strategy_snapshot").format(strategy=best_strategy),
+            ts=str(alert_ts) if alert_ts else None,
+        )
+
     return alerts[:6]
 
 
@@ -299,5 +441,5 @@ def render():
                     st.session_state.ui_selected_page = get_text(lang, "page_replay")
                     st.rerun()
 
-    st.caption(get_text(lang, "warroom_alert_caption"))
+    st.caption("アラートは live_canonical / research_experiment / 直近監査レイテンシを基に生成しています。")
     st.divider()

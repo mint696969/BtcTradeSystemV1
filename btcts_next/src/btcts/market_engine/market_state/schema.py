@@ -19,6 +19,9 @@ class MarketStateRecord:
     trust_state: TrustState
     boundary_reason: BoundaryReason
     continuity_state: str | None
+    interpretation_bucket: str | None
+    interpretation_reason: str | None
+    interpretation_policy: dict[str, Any]
     best_bid: float | None
     best_ask: float | None
     spread: float | None
@@ -42,6 +45,9 @@ class MarketStateRecord:
             "trust_state": self.trust_state.value,
             "boundary_reason": self.boundary_reason.value,
             "continuity_state": self.continuity_state,
+            "interpretation_bucket": self.interpretation_bucket,
+            "interpretation_reason": self.interpretation_reason,
+            "interpretation_policy": self.interpretation_policy,
             "best_bid": self.best_bid,
             "best_ask": self.best_ask,
             "spread": self.spread,

@@ -1,10 +1,11 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/ai_operator_panel.py
-# desc: War Room 向けの AI Operator パネル。現在の市場状態を要約し、推奨アクションを提示する。
+# desc: War Room 向けの AI Operator パネル。live canonical 優先で現在の市場状態を要約し、research 補助付きで推奨アクションを提示する。
 
 from __future__ import annotations
 
 import streamlit as st
 from btcts.apps.operator_ui.decision_log_store import append_decision
+from btcts.apps.operator_ui.watch_store import append_watch
 from btcts.apps.operator_ui.ai_memory_store import (
     append_memory,
     load_recent_memory,
@@ -23,13 +24,54 @@ from btcts.apps.operator_ui.components.research_bridge import (
     load_latest_replay_payload,
     tradeflow_metrics,
 )
+
 from btcts.apps.operator_ui.ui_text import get_text
 
+from btcts.apps.operator_ui.components.live_bridge import (
+    latest_live_board_metrics,
+    recent_live_tradeflow_metrics,
+)
 
 def _analyze_state():
-    replay_payload = load_latest_replay_payload()
+    live_board = latest_live_board_metrics()
+    live_flow = recent_live_tradeflow_metrics(lines=80)
     experiment_payload = load_latest_experiment_payload()
 
+    fallback_regime = latest_regime_name(experiment_payload)
+    fallback_best_strategy = latest_best_strategy_name(experiment_payload)
+
+    live_spread = live_board.get("spread")
+    live_delta = live_flow.get("delta")
+
+    if live_spread is not None and live_delta is not None:
+        bid_depth = live_board.get("bid_depth")
+        ask_depth = live_board.get("ask_depth")
+
+        imbalance = None
+        if bid_depth is not None and ask_depth is not None:
+            try:
+                bid_depth_f = float(bid_depth)
+                ask_depth_f = float(ask_depth)
+                denom = bid_depth_f + ask_depth_f
+                if denom > 0:
+                    imbalance = (bid_depth_f - ask_depth_f) / denom
+            except Exception:
+                imbalance = None
+
+        if imbalance is not None:
+            return {
+                "spread": float(live_spread),
+                "imbalance": float(imbalance),
+                "delta": float(live_delta),
+                "wall_ratio": 0.0,
+                "regime": fallback_regime if fallback_regime != "unknown" else "live_canonical",
+                "best_strategy": fallback_best_strategy,
+                "pressure_bias": "live_orderbook",
+                "event_ts": live_flow.get("event_ts") or live_board.get("event_ts"),
+                "data_source": "live_canonical",
+            }
+
+    replay_payload = load_latest_replay_payload()
     board = board_signal_metrics(latest_board_row(replay_payload))
     flow = tradeflow_metrics(latest_trade_row(replay_payload))
 
@@ -49,10 +91,11 @@ def _analyze_state():
         "imbalance": float(imbalance),
         "delta": float(delta),
         "wall_ratio": float(wall_ratio),
-        "regime": latest_regime_name(experiment_payload),
-        "best_strategy": latest_best_strategy_name(experiment_payload),
+        "regime": fallback_regime,
+        "best_strategy": fallback_best_strategy,
         "pressure_bias": board.get("pressure_bias"),
         "event_ts": flow.get("event_ts") or board.get("event_ts"),
+        "data_source": "replay_research",
     }
 
 
@@ -191,11 +234,6 @@ def render():
         "risk": risk,
     }
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric(get_text(lang, "ai_operator_action"), _operator_action_label(lang, action))
-    c2.metric(get_text(lang, "ai_operator_risk"), _operator_risk_label(lang, risk))
-    c3.metric(get_text(lang, "ai_operator_mode"), st.session_state.ai_operator_mode)
-
     operator_prompt = get_text(lang, "ai_operator_prompt")
     answer, runtime_source = generate_answer(
         mode=st.session_state.ai_operator_mode,
@@ -227,28 +265,47 @@ def render():
     st.session_state.ai_operator_decision_log = merged_decisions
     st.session_state.ai_operator_decision_persisted = persisted
 
-    if runtime_source == "fallback-local":
-        st.warning(answer)
+    display_ai_mode = st.session_state.ai_operator_mode
+    if state.get("data_source") == "live_canonical" and runtime_source == "fallback-local":
+        display_ai_mode = "live-local"
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric(get_text(lang, "ai_operator_action"), _operator_action_label(lang, action))
+    c2.metric(get_text(lang, "ai_operator_risk"), _operator_risk_label(lang, risk))
+    c3.metric(get_text(lang, "ai_operator_mode"), display_ai_mode)
+
+    is_live_market = state.get("data_source") == "live_canonical"
+
+    display_answer = answer
+    if is_live_market and runtime_source == "fallback-local":
+        answer_lines = answer.splitlines()
+        body_lines = answer_lines[2:] if len(answer_lines) >= 2 else answer_lines
+        display_answer = (
+            "local AI mode active: live_canonical を基にローカル要約を生成しています\n\n"
+            + "\n".join(body_lines).lstrip()
+        )
+
+    if runtime_source == "fallback-local" and not is_live_market:
+        st.warning(display_answer)
     else:
-        st.info(answer)
+        st.info(display_answer)
 
     st.caption(
         f"regime={state['regime']} / best_strategy={state['best_strategy']} / "
-        f"pressure_bias={state['pressure_bias']} / ts={state['event_ts']} / "
-        f"{get_text(lang, 'ai_runtime_source')}={runtime_source}"
+        f"pressure_bias={state['pressure_bias']} / ts={state['event_ts']}"
     )
+    if is_live_market:
+        st.caption(
+            f"{get_text(lang, 'ai_runtime_source')}=live-local / "
+            f"market_source={state.get('data_source', 'unknown')}"
+        )
+    else:
+        st.caption(
+            f"{get_text(lang, 'ai_runtime_source')}={runtime_source} / "
+            f"market_source={state.get('data_source', 'unknown')}"
+        )
 
     b1, b2, b3, b4 = st.columns(4)
-
-    with b1:
-        if st.button(
-            get_text(lang, "ai_operator_send_to_replay"),
-            key="ai_operator_send_to_replay",
-        ):
-            if operator_context.get("event_ts"):
-                st.session_state.replay_jump_ts = str(operator_context["event_ts"])
-            st.session_state.ui_selected_page = get_text(lang, "page_replay")
-            st.rerun()
 
     with b2:
         if st.button(
@@ -285,16 +342,24 @@ def render():
             get_text(lang, "ai_operator_mark_as_watch"),
             key="ai_operator_mark_watch",
         ):
-            st.session_state.ai_operator_watch_note = {
+            watch_item = {
                 "ts": operator_context.get("event_ts"),
                 "regime": operator_context.get("regime"),
                 "action": operator_context.get("suggested_action"),
                 "risk": operator_context.get("risk"),
             }
-            st.success(get_text(lang, "ai_operator_watch_saved"))
+            merged, persisted = append_watch(
+                watch_item,
+                max_items_hint=12,
+            )
+            st.session_state.ai_operator_watch_list = merged
+            st.session_state.ai_operator_watch_persisted = persisted
+            st.session_state.ai_operator_watch_note = watch_item
+            st.session_state.ui_selected_page = get_text(lang, "page_warroom")
+            st.rerun()
 
     watch_note = st.session_state.get("ai_operator_watch_note")
-    if watch_note:
+    if watch_note and not is_live_market:
         st.caption(
             f"watch ts={watch_note.get('ts')} / "
             f"regime={watch_note.get('regime')} / "

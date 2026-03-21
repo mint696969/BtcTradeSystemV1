@@ -18,6 +18,17 @@ from .run_smoke import build_status
 from .state import write_daemon_health, write_status
 
 
+def _load_runtime_status(cfg) -> dict:
+    path = Path(cfg.roots()["state"]) / "status.json"
+    if not path.exists():
+        return {}
+
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def _load_runtime_health(cfg) -> dict:
     path = Path(cfg.roots()["state"]) / "health.json"
     if not path.exists():
@@ -114,6 +125,7 @@ def _emit_loop_status(
     last_success_ts: str | None = None,
     ws_trades_warn_streak: int = 0,
     rate_summary: dict | None = None,
+    origin_continuity: dict | None = None,
 ) -> None:
     if consecutive_failures > 0:
         mode = "RECOVERING"
@@ -143,6 +155,7 @@ def _emit_loop_status(
             last_success_ts=last_success_ts,
             ws_trades_warn_streak=ws_trades_warn_streak,
             rate_control=rate_summary or {},
+            origin_continuity=origin_continuity or {},
         ),
     )
 
@@ -205,10 +218,12 @@ def run_forever() -> int:
                 if exit_code != 0:
                     raise RuntimeError(f"collector_vnext app exited with code={exit_code}")
 
+                runtime_status = _load_runtime_status(cfg)
                 health = _load_runtime_health(cfg)
                 rate_state = _load_rate_state(cfg)
                 rate_summary = _summarize_rate_state(rate_state)
                 checks = health.get("checks") or []
+                origin_continuity = runtime_status.get("origin_continuity") or {}
 
                 ws_trade_warn = any(
                     check.get("name") == "bitflyer_ws_executions"
@@ -238,9 +253,13 @@ def run_forever() -> int:
                     last_success_ts=last_success_ts,
                     ws_trades_warn_streak=ws_trades_warn_streak,
                     rate_summary=rate_summary,
+                    origin_continuity=origin_continuity,
                 )
 
             except KeyboardInterrupt:
+                runtime_status = _load_runtime_status(cfg)
+                origin_continuity = runtime_status.get("origin_continuity") or {}
+
                 write_status(
                     cfg,
                     build_status(
@@ -253,6 +272,7 @@ def run_forever() -> int:
                         last_success_ts=last_success_ts,
                         ws_trades_warn_streak=ws_trades_warn_streak,
                         rate_control=rate_summary or {},
+                        origin_continuity=origin_continuity,
                     ),
                 )
                 write_daemon_health(
@@ -277,6 +297,8 @@ def run_forever() -> int:
             except Exception as exc:
                 consecutive_failures += 1
                 last_error = str(exc)
+                runtime_status = _load_runtime_status(cfg)
+                origin_continuity = runtime_status.get("origin_continuity") or {}
 
                 write_status(
                     cfg,
@@ -293,6 +315,7 @@ def run_forever() -> int:
                         last_success_ts=last_success_ts,
                         ws_trades_warn_streak=ws_trades_warn_streak,
                         rate_control=rate_summary or {},
+                        origin_continuity=origin_continuity,
                     ),
                 )
                 write_daemon_health(
@@ -343,6 +366,7 @@ def run_forever() -> int:
                             last_success_ts=last_success_ts,
                             ws_trades_warn_streak=ws_trades_warn_streak,
                             rate_control=rate_summary or {},
+                            origin_continuity=origin_continuity,
                         ),
                     )
                     return 1

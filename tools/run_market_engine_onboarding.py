@@ -49,6 +49,12 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _resolve_profile(profile_name_hint: str):
+    if profile_name_hint == "bitflyer":
+        return BitflyerProfile()
+    return None
+
+
 def main() -> int:
     input_default = str(REPO_ROOT / "tmp" / "market_engine_onboarding_input.jsonl")
     input_path = Path(_env_str("BTCTS_ONBOARDING_INPUT_JSONL", input_default)).resolve()
@@ -60,9 +66,7 @@ def main() -> int:
 
     normalized_events = _load_jsonl(input_path)
 
-    profile = None
-    if profile_name_hint == "bitflyer":
-        profile = BitflyerProfile()
+    profile = _resolve_profile(profile_name_hint)
 
     result = run_onboarding(
         normalized_events=normalized_events,

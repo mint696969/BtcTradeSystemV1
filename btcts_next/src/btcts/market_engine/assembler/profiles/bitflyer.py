@@ -290,3 +290,35 @@ class BitflyerProfile(ExchangeProfile):
             "review_allow_best_gap_abs": self.review_allow_best_gap_abs,
             "review_observe_best_gap_abs": self.review_observe_best_gap_abs,
         }
+
+    def build_snapshot_drift_review_summary(
+        self,
+        normalized_events: list[dict[str, Any]],
+        *,
+        profile_name_hint: str,
+    ) -> dict[str, Any] | None:
+        from btcts.market_engine.onboarding.bitflyer_snapshot_drift_review import (
+            build_bitflyer_snapshot_drift_review_summary,
+        )
+
+        return build_bitflyer_snapshot_drift_review_summary(
+            normalized_events,
+            profile_name_hint=profile_name_hint,
+            review_policy=self.review_policy(),
+        )
+
+    def build_rebuild_review(
+        self,
+        *,
+        normalized_events: list[dict[str, Any]],
+        profile_name_hint: str,
+    ) -> dict[str, Any] | None:
+        from btcts.market_engine.onboarding.bitflyer_rebuild_review import (
+            build_bitflyer_rebuild_review,
+        )
+
+        return build_bitflyer_rebuild_review(
+            normalized_events=normalized_events,
+            profile_name_hint=profile_name_hint,
+            review_policy=self.review_policy(),
+        )

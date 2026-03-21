@@ -9,7 +9,7 @@ from statistics import mean
 from typing import Any
 
 from btcts.collector_vnext.orderbook.book_rebuilder import OrderBookRebuilder
-from btcts.market_engine.onboarding.bitflyer_review_policy import evaluate_bitflyer_rebuild_case
+from btcts.market_engine.onboarding.review_policy import evaluate_rebuild_case
 from btcts.market_engine.onboarding.rebuild_validator import RebuildValidator
 from btcts.market_engine.onboarding.stream_classifier import StreamClassifier
 
@@ -244,6 +244,7 @@ def build_bitflyer_rebuild_review(
     *,
     normalized_events: list[dict[str, Any]],
     profile_name_hint: str,
+    review_policy: dict[str, Any],
 ) -> dict[str, Any]:
     classifier = StreamClassifier()
     validator = RebuildValidator()
@@ -330,7 +331,7 @@ def build_bitflyer_rebuild_review(
                     best_ask_gap_abs,
                 )
 
-                review_decision = evaluate_bitflyer_rebuild_case(
+                review_decision = evaluate_rebuild_case(
                     {
                         "top_of_book_ok": top_of_book_result.ok,
                         "not_crossed_ok": not_crossed_result.ok,
@@ -339,7 +340,8 @@ def build_bitflyer_rebuild_review(
                         "dominant_gap_side": dominant_gap_side,
                         "bid_overlap_top50": bid_overlap_top50,
                         "ask_overlap_top50": ask_overlap_top50,
-                    }
+                    },
+                    policy=review_policy,
                 )
 
                 compare_cases.append(

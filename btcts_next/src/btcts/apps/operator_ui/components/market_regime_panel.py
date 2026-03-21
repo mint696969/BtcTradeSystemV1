@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/market_regime_panel.py
-# desc: Replay / Research artifact から市場レジームを表示する WarRoom パネル
+# desc: Live canonical 優先、research regime 補助、replay fallback で市場レジームを表示する WarRoom パネル
 
 from __future__ import annotations
 
@@ -12,7 +12,9 @@ from btcts.apps.operator_ui.components.research_bridge import (
     load_latest_experiment_payload,
     load_latest_replay_payload,
 )
+
 from btcts.apps.operator_ui.ui_text import get_text
+from btcts.apps.operator_ui.components.live_bridge import latest_live_board_metrics
 
 
 def _spread_state(spread: float | None, lang: str) -> str:
@@ -53,10 +55,47 @@ def render():
 
     st.markdown(f"### {get_text(lang, 'market_regime_title')}")
 
-    replay_payload = load_latest_replay_payload()
     experiment_payload = load_latest_experiment_payload()
 
-    board = board_signal_metrics(latest_board_row(replay_payload))
+    live_board = latest_live_board_metrics()
+    board = None
+    source_label = "replay_board + research_experiment"
+
+    if live_board:
+        bid_depth = live_board.get("bid_depth")
+        ask_depth = live_board.get("ask_depth")
+        spread = live_board.get("spread")
+
+        imbalance = None
+        pressure_bias = "neutral"
+
+        if bid_depth is not None and ask_depth is not None:
+            try:
+                bid_depth_f = float(bid_depth)
+                ask_depth_f = float(ask_depth)
+                denom = bid_depth_f + ask_depth_f
+                if denom > 0:
+                    imbalance = (bid_depth_f - ask_depth_f) / denom
+                    if imbalance > 0.2:
+                        pressure_bias = "buy_pressure"
+                    elif imbalance < -0.2:
+                        pressure_bias = "sell_pressure"
+            except Exception:
+                imbalance = None
+                pressure_bias = "neutral"
+
+        board = {
+            "spread": spread,
+            "imbalance": imbalance,
+            "pressure_bias": pressure_bias,
+            "event_ts": live_board.get("event_ts"),
+        }
+        source_label = "live_canonical + research_experiment"
+
+    if not board:
+        replay_payload = load_latest_replay_payload()
+        board = board_signal_metrics(latest_board_row(replay_payload))
+
     if not board:
         st.warning(get_text(lang, "market_regime_missing_data"))
         return
@@ -80,8 +119,10 @@ def render():
     c4.metric(get_text(lang, "market_regime_flow_agreement"), flow_agreement)
 
     st.caption(
-        f"Replay ts={board.get('event_ts')} / spread={board.get('spread')} / "
+        f"ts={board.get('event_ts')} / spread={board.get('spread')} / "
         f"imbalance={board.get('imbalance')}"
     )
+
+    st.caption(f"source={source_label}")
 
     st.divider()

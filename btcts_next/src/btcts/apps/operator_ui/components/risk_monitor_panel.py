@@ -14,18 +14,30 @@ from btcts.apps.operator_ui.components.research_bridge import (
     load_latest_replay_payload,
     tradeflow_metrics,
 )
+
+import os
+from btcts.apps.operator_ui.components.live_bridge import (
+    latest_live_board_metrics,
+    recent_live_tradeflow_metrics,
+)
+
+
 from btcts.apps.operator_ui.ui_text import get_text
 
 
-AUDIT_LOG = Path(r"E:\btc_ts\logs\audit.jsonl")
+def _audit_log_path() -> Path:
+    logs_dir = os.environ.get("BTC_TS_LOGS_DIR", r"E:\btc_ts\logs")
+    return Path(logs_dir) / "audit.jsonl"
 
 
 def _recent_audit_latency(lines: int = 40):
 
-    if not AUDIT_LOG.exists():
+    audit_log = _audit_log_path()
+
+    if not audit_log.exists():
         return None
 
-    with open(AUDIT_LOG, "rb") as f:
+    with open(audit_log, "rb") as f:
 
         f.seek(0, 2)
         size = f.tell()
@@ -104,15 +116,50 @@ def render():
 
     st.markdown(f"### {get_text(lang, 'risk_monitor_title')}")
 
-    replay_payload = load_latest_replay_payload()
+    live_board = latest_live_board_metrics()
+    live_flow = recent_live_tradeflow_metrics(lines=80)
 
-    board = board_signal_metrics(
-        latest_board_row(replay_payload)
-    )
+    source_label = "replay_board+tradeflow + audit_latency"
 
-    flow = tradeflow_metrics(
-        latest_trade_row(replay_payload)
-    )
+    board = None
+    flow = None
+
+    live_spread = live_board.get("spread")
+    live_delta = live_flow.get("delta")
+
+    if live_spread is not None and live_delta is not None:
+        bid_depth = live_board.get("bid_depth")
+        ask_depth = live_board.get("ask_depth")
+
+        imbalance = None
+        if bid_depth is not None and ask_depth is not None:
+            try:
+                bid_depth_f = float(bid_depth)
+                ask_depth_f = float(ask_depth)
+                denom = bid_depth_f + ask_depth_f
+                if denom > 0:
+                    imbalance = (bid_depth_f - ask_depth_f) / denom
+            except Exception:
+                imbalance = None
+
+        board = {
+            "spread": float(live_spread),
+            "imbalance": imbalance,
+            "wall_ratio": None,
+        }
+        flow = {
+            "trade_delta": float(live_delta),
+        }
+        source_label = "live_canonical + audit_latency"
+
+    if not board or not flow:
+        replay_payload = load_latest_replay_payload()
+        board = board_signal_metrics(
+            latest_board_row(replay_payload)
+        )
+        flow = tradeflow_metrics(
+            latest_trade_row(replay_payload)
+        )
 
     if not board or not flow:
         st.warning(get_text(lang, "risk_monitor_missing_data"))
@@ -159,7 +206,8 @@ def render():
     )
 
     st.caption(
-        f"imbalance={imbalance} / delta={delta} / wall_ratio={wall_ratio}"
+        f"imbalance={imbalance} / delta={delta} / wall_ratio={wall_ratio} / "
+        f"source={source_label}"
     )
 
     st.divider()

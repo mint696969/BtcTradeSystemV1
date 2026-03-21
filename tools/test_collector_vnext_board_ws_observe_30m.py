@@ -16,7 +16,9 @@ import websocket
 
 
 WS_URL = "wss://ws.lightstream.bitflyer.com/json-rpc"
-CHANNEL = "lightning_board_BTC_JPY"
+SYMBOL = "BTC_JPY"
+SNAPSHOT_CHANNEL = f"lightning_board_snapshot_{SYMBOL}"
+DIFF_CHANNEL = f"lightning_board_{SYMBOL}"
 
 MAX_SECONDS = 1800.0
 MAX_COMPARE_COUNT = 200
@@ -29,6 +31,17 @@ DISTANCE_BUCKETS_BPS = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def subscribe_message(channel: str) -> str:
+    return json.dumps(
+        {
+            "method": "subscribe",
+            "params": {
+                "channel": channel,
+            },
+        }
+    )
 
 
 def round_bps(distance_ratio: float) -> float:
@@ -85,13 +98,12 @@ def parse_levels(levels: Any) -> List[Tuple[float, float]]:
     return out
 
 
-def message_kind(board: Dict[str, Any]) -> str:
-    bids = parse_levels(board.get("bids"))
-    asks = parse_levels(board.get("asks"))
-    # bitFlyerのsnapshotは通常かなり深い。diffは更新価格だけ。
-    if len(bids) >= 100 and len(asks) >= 100:
+def message_kind(channel: str) -> str:
+    if channel == SNAPSHOT_CHANNEL:
         return "snapshot"
-    return "diff"
+    if channel == DIFF_CHANNEL:
+        return "diff"
+    return "unknown"
 
 
 def snapshot_to_maps(board: Dict[str, Any]) -> Dict[str, Dict[float, float]]:
@@ -200,7 +212,8 @@ def observe_board_ws() -> Dict[str, Any]:
             else {"cert_reqs": ssl.CERT_NONE, "check_hostname": False}
         ),
     )
-    ws.send(json.dumps({"method": "subscribe", "params": {"channel": CHANNEL}}))
+    ws.send(subscribe_message(SNAPSHOT_CHANNEL))
+    ws.send(subscribe_message(DIFF_CHANNEL))
 
     message_count = 0
     snapshot_count = 0
@@ -242,14 +255,15 @@ def observe_board_ws() -> Dict[str, Any]:
         params = obj.get("params")
         if not isinstance(params, dict):
             continue
-        if params.get("channel") != CHANNEL:
+
+        channel = params.get("channel")
+        kind = message_kind(str(channel or ""))
+        if kind == "unknown":
             continue
 
         board = params.get("message")
         if not isinstance(board, dict):
             continue
-
-        kind = message_kind(board)
         order_counter[kind] += 1
 
         if len(first_orders) < 20:
@@ -389,7 +403,10 @@ def observe_board_ws() -> Dict[str, Any]:
 
     result = {
         "symbol": "BTC_JPY",
-        "channel": CHANNEL,
+        "channels": {
+            "snapshot": SNAPSHOT_CHANNEL,
+            "diff": DIFF_CHANNEL,
+        },
         "ssl_verify": SSL_VERIFY,
         "started_at": utc_now_iso(),
         "max_seconds": MAX_SECONDS,

@@ -5,6 +5,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.live_bridge import (
+    latest_live_board_metrics,
+    recent_live_tradeflow_metrics,
+)
 from btcts.apps.operator_ui.components.research_bridge import (
     board_signal_metrics,
     latest_best_strategy_name,
@@ -90,29 +94,80 @@ def _conclusion(lang: str, regime: str, imbalance, delta, wall_ratio) -> str:
     return get_text(lang, "ai_reasoning_conclusion_wait")
 
 
+def _analyze_live_or_fallback():
+    live_board = latest_live_board_metrics()
+    live_flow = recent_live_tradeflow_metrics(lines=80)
+    experiment_payload = load_latest_experiment_payload()
+
+    fallback_regime = latest_regime_name(experiment_payload)
+    fallback_best_strategy = latest_best_strategy_name(experiment_payload)
+
+    live_spread = live_board.get("spread")
+    live_delta = live_flow.get("delta")
+
+    if live_spread is not None and live_delta is not None:
+        bid_depth = live_board.get("bid_depth")
+        ask_depth = live_board.get("ask_depth")
+
+        imbalance = None
+        if bid_depth is not None and ask_depth is not None:
+            try:
+                bid_depth_f = float(bid_depth)
+                ask_depth_f = float(ask_depth)
+                denom = bid_depth_f + ask_depth_f
+                if denom > 0:
+                    imbalance = (bid_depth_f - ask_depth_f) / denom
+            except Exception:
+                imbalance = None
+
+        return {
+            "spread": float(live_spread),
+            "imbalance": None if imbalance is None else float(imbalance),
+            "delta": float(live_delta),
+            "wall_ratio": None,
+            "pressure_bias": "live_orderbook",
+            "regime": fallback_regime if fallback_regime != "unknown" else "live_canonical",
+            "best_strategy": fallback_best_strategy,
+            "source": "live_canonical + research_experiment",
+        }
+
+    replay_payload = load_latest_replay_payload()
+    board = board_signal_metrics(latest_board_row(replay_payload))
+    flow = tradeflow_metrics(latest_trade_row(replay_payload))
+
+    if not board or not flow:
+        return None
+
+    return {
+        "spread": board.get("spread"),
+        "imbalance": board.get("imbalance"),
+        "delta": flow.get("trade_delta"),
+        "wall_ratio": board.get("wall_ratio"),
+        "pressure_bias": board.get("pressure_bias"),
+        "regime": latest_regime_name(experiment_payload),
+        "best_strategy": latest_best_strategy_name(experiment_payload),
+        "source": "replay_board+tradeflow + research_experiment",
+    }
+
+
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
     st.markdown(f"### {get_text(lang, 'ai_reasoning_title')}")
 
-    replay_payload = load_latest_replay_payload()
-    experiment_payload = load_latest_experiment_payload()
-
-    board = board_signal_metrics(latest_board_row(replay_payload))
-    flow = tradeflow_metrics(latest_trade_row(replay_payload))
-
-    if not board or not flow:
+    state = _analyze_live_or_fallback()
+    if not state:
         st.warning(get_text(lang, "ai_reasoning_missing_data"))
         return
 
-    spread = board.get("spread")
-    imbalance = board.get("imbalance")
-    pressure_bias = board.get("pressure_bias")
-    wall_ratio = board.get("wall_ratio")
-    delta = flow.get("trade_delta")
+    spread = state.get("spread")
+    imbalance = state.get("imbalance")
+    pressure_bias = state.get("pressure_bias")
+    wall_ratio = state.get("wall_ratio")
+    delta = state.get("delta")
 
-    regime = latest_regime_name(experiment_payload)
-    best_strategy = latest_best_strategy_name(experiment_payload)
+    regime = state.get("regime") or "unknown"
+    best_strategy = state.get("best_strategy") or "-"
 
     st.info(_headline(lang, regime, imbalance, delta, pressure_bias))
 
@@ -168,5 +223,6 @@ def render():
 
     st.markdown(f"**{get_text(lang, 'ai_reasoning_conclusion')}**")
     st.success(_conclusion(lang, regime, imbalance, delta, wall_ratio))
-
+    st.caption(f"source={state.get('source', 'unknown')}")
+    
     st.divider()

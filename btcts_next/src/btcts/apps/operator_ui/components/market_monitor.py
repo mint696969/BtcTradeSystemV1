@@ -61,6 +61,11 @@ def render():
             "ask_depth": ask_depth,
             "imbalance": imbalance,
             "event_ts": live_board.get("event_ts"),
+            "trust_state": None,
+            "boundary_reason": None,
+            "continuity_state": None,
+            "interpretation_bucket": None,
+            "interpretation_reason": None,
         }
         source_label = "live_canonical"
 
@@ -98,10 +103,21 @@ def render():
 
     st.caption(f"source={source_label}")
 
+    interpretation_bucket = board.get("interpretation_bucket")
+    interpretation_reason = board.get("interpretation_reason")
+    if interpretation_bucket or interpretation_reason:
+        st.caption(
+            f"interpretation_bucket={interpretation_bucket or '-'} / "
+            f"interpretation_reason={interpretation_reason or '-'}"
+        )
+
     if state:
         freshness = market_state_freshness_label(state)
         age = market_state_age_seconds(state)
         st.caption(market_state_status_caption(state))
-        st.caption(f"market_state_freshness={freshness} / market_state_age_sec={'-' if age is None else round(float(age), 1)}")
+        st.caption(
+            f"market_state_freshness={freshness} / "
+            f"market_state_age_sec={'-' if age is None else round(float(age), 1)}"
+        )
 
     st.divider()

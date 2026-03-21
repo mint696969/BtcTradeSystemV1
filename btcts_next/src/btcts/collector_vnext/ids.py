@@ -44,6 +44,23 @@ class SequenceManager:
         return int(self._current)
 
 
-def make_record_id(collector_id: str, record_type: str, sequence_id: int) -> str:
-    safe_type = record_type.replace(".", "-").replace("/", "-")
-    return f"{collector_id}-{safe_type}-{sequence_id:012d}"
+def make_record_id(
+    *,
+    exchange: str,
+    stream: str,
+    stream_session_id: str,
+    event_type: str,
+    sequence_id: int,
+) -> str:
+    """
+    Canonical record_id
+
+    Format:
+        {exchange}:{stream}:{stream_session_id}:{event_type}:{sequence_id}
+
+    Guarantees:
+        - globally unique across canonical records
+        - monotonic within a stream_session when sequence_id is monotonic
+        - human-readable and traceable
+    """
+    return f"{exchange}:{stream}:{stream_session_id}:{event_type}:{sequence_id}"

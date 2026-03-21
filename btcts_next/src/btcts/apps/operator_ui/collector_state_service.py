@@ -1,11 +1,25 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/collector_state_service.py
 # desc: Load collector vNext status, health, rate, and origin state files for the operator UI.
 
+from __future__ import annotations
+
 from pathlib import Path
 import json
 from typing import Dict, Any
 
-STATE_DIR = Path("var/collector_vnext/state/collector_vnext")
+from btcts.core import paths as core_paths
+
+
+def _state_dir() -> Path:
+    r"""
+    Collector vNext の state 正本を解決する。
+
+    現在の運用では logs_dir の兄弟に state/collector_vnext を置く。
+    例:
+      D:\btc_ts_hot\logs -> D:\btc_ts_hot\state\collector_vnext
+      E:\btc_ts\logs     -> E:\btc_ts\state\collector_vnext
+    """
+    return core_paths.logs_dir(ensure=False).parent / "state" / "collector_vnext"
 
 
 def _safe_read(path: Path) -> Dict[str, Any]:
@@ -19,10 +33,26 @@ def _safe_read(path: Path) -> Dict[str, Any]:
         return {}
 
 
+def _safe_read_first(paths: list[Path]) -> Dict[str, Any]:
+    for path in paths:
+        data = _safe_read(path)
+        if data:
+            return data
+    return {}
+
+
 def load_state() -> Dict[str, Any]:
+    state_dir = _state_dir()
     return {
-        "status": _safe_read(STATE_DIR / "status.json"),
-        "health": _safe_read(STATE_DIR / "daemon_health.json"),
-        "rate": _safe_read(STATE_DIR / "rate_state.json"),
-        "origin": _safe_read(STATE_DIR / "origin_status.json"),
+        "status": _safe_read(state_dir / "status.json"),
+        "health": _safe_read_first(
+            [
+                state_dir / "daemon_health.json",
+                state_dir / "health.json",
+            ]
+        ),
+        "rate": _safe_read(state_dir / "rate_state.json"),
+        "origin": _safe_read(state_dir / "origin_status.json"),
+        "checkpoint": _safe_read(state_dir / "checkpoint.json"),
+        "state_dir": {"path": str(state_dir)},
     }

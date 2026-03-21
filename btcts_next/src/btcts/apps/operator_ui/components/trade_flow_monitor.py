@@ -12,14 +12,32 @@ from btcts.apps.operator_ui.components.research_bridge import (
 )
 from btcts.apps.operator_ui.ui_text import get_text
 
+from btcts.apps.operator_ui.components.live_bridge import (
+    recent_live_tradeflow_metrics,
+)
+
 
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
     st.markdown(f"### {get_text(lang, 'trade_flow_title')}")
 
-    replay_payload = load_latest_replay_payload()
-    flow = tradeflow_metrics(latest_trade_row(replay_payload))
+    live_flow = recent_live_tradeflow_metrics(lines=80)
+    source_label = "live_canonical"
+
+    if live_flow:
+        flow = {
+            "buy_volume": live_flow.get("buy_size"),
+            "sell_volume": live_flow.get("sell_size"),
+            "trade_delta": live_flow.get("delta"),
+            "trade_count": live_flow.get("trade_count"),
+            "event_ts": live_flow.get("event_ts"),
+            "micro_event_names": [],
+        }
+    else:
+        replay_payload = load_latest_replay_payload()
+        flow = tradeflow_metrics(latest_trade_row(replay_payload))
+        source_label = "replay_tradeflow"
 
     if not flow:
         st.warning(get_text(lang, "trade_flow_not_found"))
@@ -37,6 +55,8 @@ def render():
     c3.metric(get_text(lang, "trade_flow_delta"), "-" if delta is None else round(float(delta), 4))
 
     st.caption(f"{get_text(lang, 'trade_flow_recent_count')}: {trade_count}")
+
+    st.caption(f"source={source_label} / ts={flow.get('event_ts')}")
 
     micro_names = flow.get("micro_event_names") or []
     if micro_names:

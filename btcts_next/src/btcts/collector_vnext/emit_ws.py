@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import time
+
 from typing import Dict, List, Optional
 
 from .config import load_config
@@ -197,16 +199,23 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
 
     raw_path: Optional[str] = None
     canonical_path: Optional[str] = None
+    snapshot_canonical_path: Optional[str] = None
+    delta_canonical_path: Optional[str] = None
     event_type: Optional[str] = None
     saw_snapshot = False
     saw_delta = False
-
     board_event_no = 0
     last_board_event_id: Optional[str] = None
     current_base_snapshot_id: Optional[str] = None
     resync_pending = False
     gap_open = False
     resync_started_emitted = False
+    skip_canonical = False
+    ws_state = "SYNCING"
+    sync_started_monotonic = time.monotonic()
+    snapshot_to_live_ms: Optional[float] = None
+    resync_occurred = False
+    pre_snapshot_delta_drop_count = 0
 
     def _write_control_event(
         *,
@@ -277,6 +286,10 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
             first_uncertain_event_id=first_uncertain_event_id,
             provider=provider_name,
             transport="websocket",
+            ws_state=ws_state,
+            snapshot_to_live_ms=snapshot_to_live_ms,
+            resync_occurred=resync_occurred,
+            pre_snapshot_delta_drop_count=pre_snapshot_delta_drop_count,
             error_class=error_class,
             error_message=error_message,
         )
@@ -300,6 +313,8 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
         )
 
         for msg in stream:
+            skip_canonical = False
+
             message_kind = board_adapter.classify_board_message_kind(
                 channel=msg.channel,
                 payload=msg.payload,
@@ -372,6 +387,8 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
                 if resync_pending or gap_open:
                     continuity_state = "resynced"
                     canonical_payload["is_resync"] = True
+                    ws_state = "LIVE"
+                    snapshot_to_live_ms = round((time.monotonic() - sync_started_monotonic) * 1000.0, 1)
 
                     _write_control_event(
                         record_type=EventType.STREAM_RESYNC_COMPLETED,
@@ -390,7 +407,9 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
                     gap_open = False
                     resync_started_emitted = False
                 else:
-                    continuity_state = "continuous" if saw_snapshot else "unknown"
+                    continuity_state = "continuous"
+                    ws_state = "LIVE"
+                    snapshot_to_live_ms = round((time.monotonic() - sync_started_monotonic) * 1000.0, 1) if saw_snapshot else "unknown"
 
             else:
                 current_event_id = (
@@ -402,6 +421,9 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
                 if current_base_snapshot_id is None:
                     resync_pending = True
                     continuity_state = "gap_detected"
+                    ws_state = "STALE"
+                    resync_occurred = True
+                    pre_snapshot_delta_drop_count += 1
 
                     if not gap_open:
                         _write_control_event(
@@ -435,129 +457,138 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
                         )
                         resync_started_emitted = True
 
-            canonical_payload["snapshot_id"] = snapshot_id
-            canonical_payload["base_snapshot_id"] = current_base_snapshot_id
-            canonical_payload["prev_event_id"] = last_board_event_id
-            canonical_payload["continuity_state"] = continuity_state
-            canonical_payload["rebuild_required"] = current_base_snapshot_id is None and not is_snapshot
-            canonical_payload["is_gap_fill"] = False
-            canonical_payload["is_resync"] = bool(canonical_payload.get("is_resync", False))
+                    skip_canonical = True
 
-            canonical_payload["integration_hint"] = {
-                "integration_domain": "board_continuity_series",
-                "transport_role": "stream_snapshot" if is_snapshot else "stream_delta",
-                "series_key_hint": (
-                    f"ws:{stream_session_id}:{current_base_snapshot_id}"
-                    if current_base_snapshot_id is not None
-                    else f"ws:{stream_session_id}:unknown_base"
-                ),
-                "unified_view_policy": "series_based_not_event_dedupe",
-            }
-            canonical_payload["dedupe_hint"] = {
-                "entity_kind": "board",
-                "event_dedupe_key": {
-                    "exchange": "bitflyer",
-                    "instrument_id": f"bitflyer.spot.{cfg.symbol}",
-                    "channel": "board_ws",
-                    "source_event_id": current_event_id,
-                },
-                "series_key": {
-                    "exchange": "bitflyer",
-                    "instrument_id": f"bitflyer.spot.{cfg.symbol}",
-                    "channel": "board_ws",
-                    "base_snapshot_id": current_base_snapshot_id,
-                    "stream_session_id": stream_session_id,
-                },
-                "continuity_policy": {
-                    "mode": "conservative",
-                    "mix_unknown": False,
-                    "split_on_gap": True,
-                    "split_on_resync": True,
-                    "continuous_only_when": continuity_state == "continuous",
-                },
-            }
+            if not skip_canonical:
+                canonical_payload["snapshot_id"] = snapshot_id
+                canonical_payload["base_snapshot_id"] = current_base_snapshot_id
+                canonical_payload["prev_event_id"] = last_board_event_id
+                canonical_payload["continuity_state"] = continuity_state
+                canonical_payload["rebuild_required"] = current_base_snapshot_id is None and not is_snapshot
+                canonical_payload["is_gap_fill"] = False
+                canonical_payload["is_resync"] = bool(canonical_payload.get("is_resync", False))
 
-            canonical_payload["completeness_hint"] = {
-                "evaluation_unit": "board_series",
-                "completeness": (
-                    "complete"
-                    if continuity_state == "continuous" and current_base_snapshot_id is not None and not canonical_payload.get("is_resync", False)
-                    else "mostly_complete"
-                    if continuity_state == "resynced" and current_base_snapshot_id is not None
-                    else "gap_detected"
-                    if continuity_state == "gap_detected"
-                    else "unknown"
-                ),
-                "confidence_hint": (
-                    "high"
-                    if continuity_state == "continuous" and current_base_snapshot_id is not None and not canonical_payload.get("is_resync", False)
-                    else "medium_high"
-                    if continuity_state == "resynced" and current_base_snapshot_id is not None
-                    else "low"
-                ),
-                "completeness_basis": {
-                    "base_snapshot_id_present": current_base_snapshot_id is not None,
-                    "stream_session_id_present": bool(stream_session_id),
-                    "source_event_id_present": current_event_id is not None,
-                    "continuity_state": continuity_state,
-                    "is_resync": bool(canonical_payload.get("is_resync", False)),
+                canonical_payload["integration_hint"] = {
+                    "integration_domain": "board_continuity_series",
                     "transport_role": "stream_snapshot" if is_snapshot else "stream_delta",
-                },
-                "policy_note": "board completeness is evaluated conservatively by continuity series, not by single event",
-            }
+                    "series_key_hint": (
+                        f"ws:{stream_session_id}:{current_base_snapshot_id}"
+                        if current_base_snapshot_id is not None
+                        else f"ws:{stream_session_id}:unknown_base"
+                    ),
+                    "unified_view_policy": "series_based_not_event_dedupe",
+                }
+                canonical_payload["dedupe_hint"] = {
+                    "entity_kind": "board",
+                    "event_dedupe_key": {
+                        "exchange": "bitflyer",
+                        "instrument_id": f"bitflyer.spot.{cfg.symbol}",
+                        "channel": "board_ws",
+                        "source_event_id": current_event_id,
+                    },
+                    "series_key": {
+                        "exchange": "bitflyer",
+                        "instrument_id": f"bitflyer.spot.{cfg.symbol}",
+                        "channel": "board_ws",
+                        "base_snapshot_id": current_base_snapshot_id,
+                        "stream_session_id": stream_session_id,
+                    },
+                    "continuity_policy": {
+                        "mode": "conservative",
+                        "mix_unknown": False,
+                        "split_on_gap": True,
+                        "split_on_resync": True,
+                        "continuous_only_when": continuity_state == "continuous",
+                    },
+                }
 
-            canonical_payload["origin_hint"] = {
-                "source_layer": "collector",
-                "provider": "bitflyer_ws_board",
-                "transport": "websocket",
-                "endpoint_or_channel": "board_ws",
-                "origin_role": "realtime_orderbook_stream",
-                "collector_id": cfg.collector_id,
-                "stream_session_id": stream_session_id,
-                "description": "realtime board snapshot/diff stream",
-            }
+                canonical_payload["completeness_hint"] = {
+                    "evaluation_unit": "board_series",
+                    "completeness": (
+                        "complete"
+                        if continuity_state == "continuous" and current_base_snapshot_id is not None and not canonical_payload.get("is_resync", False)
+                        else "mostly_complete"
+                        if continuity_state == "resynced" and current_base_snapshot_id is not None
+                        else "gap_detected"
+                        if continuity_state == "gap_detected"
+                        else "unknown"
+                    ),
+                    "confidence_hint": (
+                        "high"
+                        if continuity_state == "continuous" and current_base_snapshot_id is not None and not canonical_payload.get("is_resync", False)
+                        else "medium_high"
+                        if continuity_state == "resynced" and current_base_snapshot_id is not None
+                        else "low"
+                    ),
+                    "completeness_basis": {
+                        "base_snapshot_id_present": current_base_snapshot_id is not None,
+                        "stream_session_id_present": bool(stream_session_id),
+                        "source_event_id_present": current_event_id is not None,
+                        "continuity_state": continuity_state,
+                        "is_resync": bool(canonical_payload.get("is_resync", False)),
+                        "transport_role": "stream_snapshot" if is_snapshot else "stream_delta",
+                    },
+                    "policy_note": "board completeness is evaluated conservatively by continuity series, not by single event",
+                }
 
-            canonical_ctx = EnvelopeContext(
-                config=cfg,
-                schema_version="collector.vnext.canonical",
-                record_type=record_type,
-                channel="board_ws",
-                transport="websocket",
-                sequence_id=seq.next(),
-                session_id=session_id,
-                stream_session_id=stream_session_id,
-                exchange="bitflyer",
-                exchange_ts=msg.received_ts,
-                source_event_id=current_event_id,
-                source_sequence=msg.source_sequence,
-            )
+                canonical_payload["origin_hint"] = {
+                    "source_layer": "collector",
+                    "provider": "bitflyer_ws_board",
+                    "transport": "websocket",
+                    "endpoint_or_channel": "board_ws",
+                    "origin_role": "realtime_orderbook_stream",
+                    "collector_id": cfg.collector_id,
+                    "stream_session_id": stream_session_id,
+                    "description": "realtime board snapshot/diff stream",
+                }
 
-            canonical_record = make_record(
-                canonical_ctx,
-                canonical_payload,
-            )
+                canonical_ctx = EnvelopeContext(
+                    config=cfg,
+                    schema_version="collector.vnext.canonical",
+                    record_type=record_type,
+                    channel="board_ws",
+                    transport="websocket",
+                    sequence_id=seq.next(),
+                    session_id=session_id,
+                    stream_session_id=stream_session_id,
+                    exchange="bitflyer",
+                    exchange_ts=None,  # WSは取引所時刻不明のためNone
+                    source_event_id=current_event_id,
+                    source_sequence=msg.source_sequence,
+                    continuity_sequence=board_event_no,
+                )
 
-            out = write_canonical(
-                cfg,
-                exchange="bitflyer",
-                symbol=cfg.symbol,
-                channel="board_ws",
-                record_type=record_type,
-                record=canonical_record,
-            )
-            canonical_path = str(out)
+                canonical_record = make_record(
+                    canonical_ctx,
+                    canonical_payload,
+                )
 
-            last_board_event_id = current_event_id
+                out = write_canonical(
+                    cfg,
+                    exchange="bitflyer",
+                    symbol=cfg.symbol,
+                    channel="board_ws",
+                    record_type=record_type,
+                    record=canonical_record,
+                )
+                canonical_path = str(out)
 
-            event_type = canonical_payload["event_type"]
+                if is_snapshot:
+                    snapshot_canonical_path = canonical_path
+                else:
+                    delta_canonical_path = canonical_path
 
-            if is_snapshot:
-                saw_snapshot = True
-            else:
-                saw_delta = True
+                last_board_event_id = current_event_id
 
-            if saw_snapshot and saw_delta:
-                break
+                event_type = canonical_payload["event_type"]
+
+                if is_snapshot:
+                    saw_snapshot = True
+                else:
+                    saw_delta = True
+
+                if saw_snapshot and saw_delta:
+                    break
 
     except Exception as exc:
         _write_control_event(
@@ -604,12 +635,21 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
         )
         raise
 
+    preferred_canonical_path = snapshot_canonical_path or canonical_path
+    preferred_event_type = "snapshot" if snapshot_canonical_path else event_type
+
     return {
         "raw_path": raw_path,
-        "canonical_path": canonical_path,
-        "event_type": event_type,
+        "canonical_path": preferred_canonical_path,
+        "event_type": preferred_event_type,
+        "snapshot_canonical_path": snapshot_canonical_path,
+        "delta_canonical_path": delta_canonical_path,
         "saw_snapshot": saw_snapshot,
         "saw_delta": saw_delta,
+        "ws_state": ws_state,
+        "snapshot_to_live_ms": snapshot_to_live_ms,
+        "resync_occurred": resync_occurred,
+        "pre_snapshot_delta_drop_count": pre_snapshot_delta_drop_count,
         "stream_session_id": stream_session_id,
         "ssl_verify": cfg.ws_ssl_verify,
     }

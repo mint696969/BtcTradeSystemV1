@@ -9,6 +9,21 @@ $pythonExe = Join-Path $repoRoot '.venv\Scripts\python.exe'
 
 $env:PYTHONPATH = $srcRoot
 
+if (-not $env:BTCTS_DATA_ROOT) {
+    $env:BTCTS_DATA_ROOT = 'D:\btc_ts_hot\data'
+}
+
+if (-not $env:BTCTS_LOGS_ROOT) {
+    $env:BTCTS_LOGS_ROOT = 'D:\btc_ts_hot\logs'
+}
+
+if (-not $env:BTCTS_STATE_ROOT) {
+    $env:BTCTS_STATE_ROOT = 'D:\btc_ts_hot\state'
+}
+
+$env:BTC_TS_DATA_DIR = $env:BTCTS_DATA_ROOT
+$env:BTC_TS_LOGS_DIR = $env:BTCTS_LOGS_ROOT
+
 if (-not $env:BTCTS_WS_SSL_VERIFY) {
     $env:BTCTS_WS_SSL_VERIFY = 'false'
 }

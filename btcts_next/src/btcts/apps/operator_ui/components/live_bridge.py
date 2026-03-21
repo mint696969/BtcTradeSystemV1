@@ -67,6 +67,25 @@ def _utc_today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+def _latest_available_date_dir(base_dir: Path) -> Optional[str]:
+    if not base_dir.exists() or not base_dir.is_dir():
+        return None
+
+    candidates: list[str] = []
+    try:
+        for child in base_dir.iterdir():
+            if child.is_dir() and child.name.startswith("date="):
+                candidates.append(child.name.removeprefix("date="))
+    except Exception:
+        return None
+
+    if not candidates:
+        return None
+
+    candidates.sort()
+    return candidates[-1]
+
+
 def _market_type_path(
     *,
     exchange: str,
@@ -74,16 +93,20 @@ def _market_type_path(
     record_type: str,
     date: str | None = None,
 ) -> Path:
-    target_date = date or _utc_today()
-    return (
+    type_root = (
         data_root()
         / "market_data"
         / f"exchange={exchange}"
         / f"symbol={symbol}"
         / f"type={record_type}"
-        / f"date={target_date}"
-        / "part-00001.jsonl"
     )
+
+    target_date = date
+    if not target_date:
+        latest_date = _latest_available_date_dir(type_root)
+        target_date = latest_date or _utc_today()
+
+    return type_root / f"date={target_date}" / "part-00001.jsonl"
 
 
 def load_status() -> Optional[dict]:

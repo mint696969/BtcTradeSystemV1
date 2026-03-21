@@ -89,7 +89,10 @@ def build_local_answer(lang: str, prompt: str, state: dict, memory: list[Dict[st
     spread = state["spread"]
     imbalance = state["imbalance"]
     delta = state["delta"]
-    wall_ratio = state["wall_ratio"]
+
+    raw_wall_ratio = state.get("wall_ratio")
+    wall_ratio = raw_wall_ratio if raw_wall_ratio is not None else 0.0
+    wall_ratio_text = "-" if raw_wall_ratio is None else f"{float(raw_wall_ratio):.3f}"
 
     memory_comment = ""
     if memory:
@@ -147,7 +150,7 @@ def build_local_answer(lang: str, prompt: str, state: dict, memory: list[Dict[st
             return (
                 f"入力内容を受け取りました: 「{prompt}」。"
                 f" 現在の市場は板バランス {imbalance:.3f}、約定デルタ {delta:.3f}、"
-                f"スプレッド {spread:.1f}、壁比率 {wall_ratio:.3f} です。"
+                f"スプレッド {spread:.1f}、壁比率 {wall_ratio_text} です。"
                 " この質問に対しては、板とフローの一致度を優先して解釈するのが妥当です。"
                 f"{memory_comment}"
             )
@@ -182,7 +185,7 @@ def build_local_answer(lang: str, prompt: str, state: dict, memory: list[Dict[st
         return (
             f"Received prompt: '{prompt}'. "
             f"Current state is imbalance {imbalance:.3f}, delta {delta:.3f}, "
-            f"spread {spread:.1f}, wall ratio {wall_ratio:.3f}. "
+            f"spread {spread:.1f}, wall ratio {wall_ratio_text}. "
             f"Interpretation should prioritize alignment between orderbook and trade flow.{memory_comment}"
         )
 

@@ -17,6 +17,11 @@ from btcts.apps.operator_ui.components.research_bridge import (
 )
 from btcts.apps.operator_ui.ui_text import get_text
 
+from btcts.apps.operator_ui.components.live_bridge import (
+    latest_live_board_metrics,
+    recent_live_tradeflow_metrics,
+)
+
 
 def _badge_class(value: str) -> str:
     if value in ("LONG BIAS", "ロング寄り"):
@@ -36,11 +41,54 @@ def render():
 
     st.markdown(f"### {get_text(lang, 'ai_signal_title')}")
 
-    replay_payload = load_latest_replay_payload()
     experiment_payload = load_latest_experiment_payload()
 
-    board = board_signal_metrics(latest_board_row(replay_payload))
-    flow = tradeflow_metrics(latest_trade_row(replay_payload))
+    live_board = latest_live_board_metrics()
+    live_flow = recent_live_tradeflow_metrics(lines=80)
+
+    source_label = "replay_board+tradeflow + research_experiment"
+    replay_ts = None
+
+    board = None
+    flow = None
+
+    live_spread = live_board.get("spread")
+    live_delta = live_flow.get("delta")
+
+    if live_spread is not None and live_delta is not None:
+        bid_depth = live_board.get("bid_depth")
+        ask_depth = live_board.get("ask_depth")
+
+        imbalance = None
+        if bid_depth is not None and ask_depth is not None:
+            try:
+                bid_depth_f = float(bid_depth)
+                ask_depth_f = float(ask_depth)
+                denom = bid_depth_f + ask_depth_f
+                if denom > 0:
+                    imbalance = (bid_depth_f - ask_depth_f) / denom
+            except Exception:
+                imbalance = None
+
+        board = {
+            "spread": float(live_spread),
+            "imbalance": imbalance,
+            "pressure_bias": "live_orderbook",
+            "wall_ratio": None,
+            "event_ts": live_board.get("event_ts"),
+        }
+        flow = {
+            "trade_delta": float(live_delta),
+            "event_ts": live_flow.get("event_ts"),
+        }
+        source_label = "live_canonical + research_experiment"
+        replay_ts = flow.get("event_ts")
+
+    if not board or not flow:
+        replay_payload = load_latest_replay_payload()
+        board = board_signal_metrics(latest_board_row(replay_payload))
+        flow = tradeflow_metrics(latest_trade_row(replay_payload))
+        replay_ts = flow.get("event_ts") if flow else None
 
     if not board or not flow:
         st.warning(get_text(lang, "ai_signal_missing_data"))
@@ -100,6 +148,9 @@ def render():
         unsafe_allow_html=True,
     )
 
-    st.caption(f"best_strategy={best_strategy} / replay_ts={flow.get('event_ts')}")
+    st.caption(
+        f"best_strategy={best_strategy} / replay_ts={replay_ts} / "
+        f"source={source_label}"
+    )
 
     st.divider()

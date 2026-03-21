@@ -5,6 +5,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.live_bridge import (
+    latest_live_board_metrics,
+    recent_live_tradeflow_metrics,
+)
 from btcts.apps.operator_ui.components.research_bridge import (
     board_signal_metrics,
     latest_regime_name,
@@ -153,6 +157,64 @@ def _build_timeline(lang: str, replay_payload, experiment_payload) -> list[dict]
     return timeline[-20:]
 
 
+def _build_live_timeline(lang: str, experiment_payload) -> list[dict]:
+    timeline: list[dict] = []
+
+    live_board = latest_live_board_metrics()
+    live_flow = recent_live_tradeflow_metrics(lines=80)
+
+    spread = live_board.get("spread")
+    bid_depth = live_board.get("bid_depth")
+    ask_depth = live_board.get("ask_depth")
+    delta = live_flow.get("delta")
+    ts = str(live_flow.get("event_ts") or live_board.get("event_ts") or "-")
+
+    if spread is None:
+        return []
+
+    imbalance = None
+    if bid_depth is not None and ask_depth is not None:
+        try:
+            bid_f = float(bid_depth)
+            ask_f = float(ask_depth)
+            denom = bid_f + ask_f
+            if denom > 0:
+                imbalance = (bid_f - ask_f) / denom
+        except Exception:
+            imbalance = None
+
+    regime_raw = latest_regime_name(experiment_payload)
+    regime_label = _regime_label(regime_raw, lang)
+    spread_state = _spread_state(float(spread), lang) if spread is not None else None
+
+    pressure_bias = "neutral_bias"
+    if isinstance(imbalance, (int, float)):
+        if imbalance > 0.2:
+            pressure_bias = "buy_pressure"
+        elif imbalance < -0.2:
+            pressure_bias = "sell_pressure"
+
+    pressure = _pressure_label(pressure_bias, lang)
+    decision = _decision_label(regime_raw, imbalance, delta, lang)
+
+    if regime_label is not None:
+        timeline.append(
+            {"ts": ts, "label": get_text(lang, "warroom_timeline_regime"), "value": regime_label}
+        )
+    if spread_state is not None:
+        timeline.append(
+            {"ts": ts, "label": get_text(lang, "warroom_timeline_spread"), "value": spread_state}
+        )
+    timeline.append(
+        {"ts": ts, "label": get_text(lang, "warroom_timeline_pressure"), "value": pressure}
+    )
+    timeline.append(
+        {"ts": ts, "label": get_text(lang, "warroom_timeline_decision"), "value": decision}
+    )
+
+    return timeline[-20:]
+
+
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
@@ -161,7 +223,11 @@ def render():
     replay_payload = load_latest_replay_payload()
     experiment_payload = load_latest_experiment_payload()
 
-    timeline = _build_timeline(lang, replay_payload, experiment_payload)
+    timeline = _build_live_timeline(lang, experiment_payload)
+    timeline_is_live = bool(timeline)
+    if not timeline:
+        timeline = _build_timeline(lang, replay_payload, experiment_payload)
+        timeline_is_live = False
 
     if not timeline:
         st.info(get_text(lang, "warroom_timeline_empty"))
@@ -178,13 +244,17 @@ def render():
             )
 
         with c2:
-            if st.button(
-                "Replay",
-                key=f"warroom_timeline_replay_{idx}",
-            ):
-                st.session_state.replay_jump_ts = str(item["ts"])
-                st.session_state.ui_selected_page = get_text(lang, "page_replay")
-                st.rerun()
+            if not timeline_is_live:
+                if st.button(
+                    "Replay",
+                    key=f"warroom_timeline_replay_{idx}",
+                ):
+                    st.session_state.replay_jump_ts = str(item["ts"])
+                    st.session_state.ui_selected_page = get_text(lang, "page_replay")
+                    st.rerun()
 
-    st.caption(get_text(lang, "warroom_timeline_caption"))
+    if timeline and str(timeline[0].get("ts", "")).startswith("2026-03-20"):
+        st.caption("live_canonical / research_experiment ソースから検出した最新の変化です。")
+    else:
+        st.caption(get_text(lang, "warroom_timeline_caption"))
     st.divider()

@@ -51,6 +51,7 @@ class EnvelopeContext:
     exchange_ts: Optional[str] = None
     source_event_id: Optional[str] = None
     source_sequence: Optional[int] = None
+    continuity_sequence: Optional[int] = None
     quality_flags: Optional[List[str]] = None
     is_partial: bool = False
     is_reconstructed: bool = False
@@ -71,7 +72,13 @@ def make_record(ctx: EnvelopeContext, payload: Dict[str, Any]) -> Dict[str, Any]
         "schema_contract_version": 1 if is_canonical else None,
         "payload_contract_version": 1 if is_canonical else None,
         "record_type": ctx.record_type,
-        "record_id": make_record_id(ctx.config.collector_id, ctx.record_type, ctx.sequence_id),
+        "record_id": make_record_id(
+    exchange=ctx.exchange,
+    stream=ctx.channel,
+    stream_session_id=ctx.stream_session_id,
+    event_type=ctx.record_type,
+    sequence_id=ctx.sequence_id,
+),
         "collector_id": ctx.config.collector_id,
         "collector_role": ctx.config.collector_role,
         "host_name": ctx.config.host_name,
@@ -85,6 +92,7 @@ def make_record(ctx: EnvelopeContext, payload: Dict[str, Any]) -> Dict[str, Any]
         "transport": ctx.transport,
         "source_event_id": ctx.source_event_id,
         "source_sequence": ctx.source_sequence,
+        "continuity_sequence": ctx.continuity_sequence,
         "sequence_id": ctx.sequence_id,
         "exchange_ts": ctx.exchange_ts,
         "collector_ts": collector_ts,

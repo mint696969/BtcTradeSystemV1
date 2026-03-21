@@ -24,6 +24,9 @@ class BookState:
     exchange_ts: str | None = None
     trust_state: TrustState = TrustState.PROVISIONAL
     boundary_reason: BoundaryReason = BoundaryReason.NONE
+    interpretation_bucket: str | None = None
+    interpretation_reason: str | None = None
+    interpretation_policy: dict[str, Any] = field(default_factory=dict)
     anchor_event_id: str | None = None
     last_source_event_id: str | None = None
     source_stream_session_id: str | None = None

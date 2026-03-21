@@ -16,7 +16,7 @@ from btcts.apps.operator_ui.watch_store import append_watch
 
 def _ensure_decision_log():
     if "ai_operator_decision_log" not in st.session_state:
-        st.session_state.ai_operator_decision_log = load_recent_decisions(max_items=20)
+        st.session_state.ai_operator_decision_log = load_recent_decisions(max_items=5)
 
 
 def render():
@@ -26,7 +26,7 @@ def render():
 
     st.markdown(f"### {get_text(lang, 'decision_log_title')}")
 
-    rows = st.session_state.ai_operator_decision_log
+    rows = st.session_state.ai_operator_decision_log[:5]
     persisted_flag = st.session_state.get("ai_operator_decision_persisted")
 
     if persisted_flag is False:
@@ -46,86 +46,88 @@ def render():
         st.divider()
         return
 
-    for idx, item in enumerate(rows):
-        c1, c2, c3, c4, c5 = st.columns([4, 1, 1, 1, 1])
+    with st.expander(f"{get_text(lang, 'decision_log_title')} (latest 5)", expanded=False):
+        for real_idx, item in enumerate(st.session_state.ai_operator_decision_log[:5]):
+            c1, c2, c3, c4, c5 = st.columns([4, 1, 1, 1, 1])
 
-        with c1:
-            st.markdown(
-                f"**ts**={item.get('ts') or '-'} / "
-                f"regime={item.get('regime') or '-'} / "
-                f"spread={item.get('spread_state') or '-'} / "
-                f"imbalance={item.get('imbalance_state') or '-'} / "
-                f"delta={item.get('delta_state') or '-'} / "
-                f"wall={item.get('wall_state') or '-'} / "
-                f"action={item.get('action') or '-'} / "
-                f"risk={item.get('risk') or '-'} / "
-                f"src={item.get('runtime_source') or '-'}"
-            )
-
-        with c2:
-            if st.button(
-                get_text(lang, "decision_log_replay"),
-                key=f"decision_log_replay_{idx}",
-            ):
-                if item.get("ts"):
-                    st.session_state.replay_jump_ts = str(item["ts"])
-                st.session_state.ui_selected_page = get_text(lang, "page_replay")
-                st.rerun()
-
-        with c3:
-            if st.button(
-                get_text(lang, "decision_log_research"),
-                key=f"decision_log_research_{idx}",
-            ):
-                st.session_state.research_replay_context = {
-                    "session_name": "ai_operator_decision_log",
-                    "start_ts": "",
-                    "end_ts": "",
-                    "jump_ts": item.get("ts") or "",
-                    "kind_filter": "all",
-                    "event_filter": item.get("action") or "",
-                    "filtered_rows": 1,
-                }
-                st.session_state.ui_selected_page = get_text(lang, "page_research")
-                st.rerun()
-
-        with c4:
-            if st.button(
-                get_text(lang, "decision_log_watch"),
-                key=f"decision_log_watch_{idx}",
-            ):
-                watch_row = {
-                    "ts": item.get("ts"),
-                    "regime": item.get("regime"),
-                    "action": item.get("action"),
-                    "risk": item.get("risk"),
-                }
-                merged_watch, persisted = append_watch(
-                    watch_row,
-                    max_items_hint=12,
+            with c1:
+                st.markdown(
+                    f"**ts**={item.get('ts') or '-'} / "
+                    f"regime={item.get('regime') or '-'} / "
+                    f"spread={item.get('spread_state') or '-'} / "
+                    f"imbalance={item.get('imbalance_state') or '-'} / "
+                    f"delta={item.get('delta_state') or '-'} / "
+                    f"wall={item.get('wall_state') or '-'} / "
+                    f"action={item.get('action') or '-'} / "
+                    f"risk={item.get('risk') or '-'} / "
+                    f"src={item.get('runtime_source') or '-'}"
                 )
-                st.session_state.ai_operator_watch_list = merged_watch
-                st.session_state.ai_operator_watch_persisted = persisted
-                st.success(get_text(lang, "decision_log_watch_added"))
 
-        with c5:
-            if st.button(
-                get_text(lang, "decision_log_remove"),
-                key=f"decision_log_remove_{idx}",
-            ):
-                new_rows = rows[:idx] + rows[idx + 1 :]
-                st.session_state.ai_operator_decision_log = new_rows
-                ok = overwrite_decisions(new_rows)
-                st.session_state.ai_operator_decision_persisted = ok
-                st.rerun()
+            with c2:
+                if st.button(
+                    get_text(lang, "decision_log_replay"),
+                    key=f"decision_log_replay_{real_idx}",
+                ):
+                    if item.get("ts"):
+                        st.session_state.replay_jump_ts = str(item["ts"])
+                    st.session_state.ui_selected_page = get_text(lang, "page_replay")
+                    st.rerun()
 
-    if st.button(
-        get_text(lang, "decision_log_clear_all"),
-        key="decision_log_clear_all_button",
-    ):
-        st.session_state.ai_operator_decision_log = []
-        ok = overwrite_decisions([])
-        st.session_state.ai_operator_decision_persisted = ok
-        st.rerun()
+            with c3:
+                if st.button(
+                    get_text(lang, "decision_log_research"),
+                    key=f"decision_log_research_{real_idx}",
+                ):
+                    st.session_state.research_replay_context = {
+                        "session_name": "ai_operator_decision_log",
+                        "start_ts": "",
+                        "end_ts": "",
+                        "jump_ts": item.get("ts") or "",
+                        "kind_filter": "all",
+                        "event_filter": item.get("action") or "",
+                        "filtered_rows": 1,
+                    }
+                    st.session_state.ui_selected_page = get_text(lang, "page_research")
+                    st.rerun()
+
+            with c4:
+                if st.button(
+                    get_text(lang, "decision_log_watch"),
+                    key=f"decision_log_watch_{real_idx}",
+                ):
+                    watch_row = {
+                        "ts": item.get("ts"),
+                        "regime": item.get("regime"),
+                        "action": item.get("action"),
+                        "risk": item.get("risk"),
+                    }
+                    merged_watch, persisted = append_watch(
+                        watch_row,
+                        max_items_hint=12,
+                    )
+                    st.session_state.ai_operator_watch_list = merged_watch
+                    st.session_state.ai_operator_watch_persisted = persisted
+                    st.success(get_text(lang, "decision_log_watch_added"))
+
+            with c5:
+                if st.button(
+                    get_text(lang, "decision_log_remove"),
+                    key=f"decision_log_remove_{real_idx}",
+                ):
+                    original_rows = st.session_state.ai_operator_decision_log
+                    new_rows = original_rows[:real_idx] + original_rows[real_idx + 1 :]
+                    st.session_state.ai_operator_decision_log = new_rows
+                    ok = overwrite_decisions(new_rows)
+                    st.session_state.ai_operator_decision_persisted = ok
+                    st.rerun()
+
+        if st.button(
+            get_text(lang, "decision_log_clear_all"),
+            key="decision_log_clear_all_button",
+        ):
+            st.session_state.ai_operator_decision_log = []
+            ok = overwrite_decisions([])
+            st.session_state.ai_operator_decision_persisted = ok
+            st.rerun()
 
     st.divider()

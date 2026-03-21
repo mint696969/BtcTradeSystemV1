@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/ai_conversation_panel.py
-# desc: Replay / Research artifact を基に定型質問へ回答する WarRoom 会話パネル
+# desc: Live canonical を優先し、足りない場合のみ Replay / Research artifact にフォールバックする WarRoom 会話パネル
 
 from __future__ import annotations
 
@@ -13,6 +13,10 @@ from btcts.apps.operator_ui.ai_runtime import (
     default_mode,
     generate_answer,
     supported_modes,
+)
+from btcts.apps.operator_ui.components.live_bridge import (
+    latest_live_board_metrics,
+    recent_live_tradeflow_metrics,
 )
 from btcts.apps.operator_ui.components.research_bridge import (
     board_signal_metrics,
@@ -29,8 +33,45 @@ from btcts.apps.operator_ui.ui_text import get_text
 
 def _analyze_state():
 
-    replay_payload = load_latest_replay_payload()
+    live_board = latest_live_board_metrics()
+    live_flow = recent_live_tradeflow_metrics(lines=80)
+
     experiment_payload = load_latest_experiment_payload()
+    fallback_regime = latest_regime_name(experiment_payload)
+    fallback_best_strategy = latest_best_strategy_name(experiment_payload)
+    live_spread = live_board.get("spread")
+    live_delta = live_flow.get("delta")
+
+    if live_spread is not None and live_delta is not None:
+        bid_depth = live_board.get("bid_depth")
+        ask_depth = live_board.get("ask_depth")
+
+        imbalance = None
+        if bid_depth is not None and ask_depth is not None:
+            try:
+                bid_depth_f = float(bid_depth)
+                ask_depth_f = float(ask_depth)
+                denom = bid_depth_f + ask_depth_f
+                if denom > 0:
+                    imbalance = (bid_depth_f - ask_depth_f) / denom
+            except Exception:
+                imbalance = None
+
+        if imbalance is not None:
+            return {
+                "spread": float(live_spread),
+                "imbalance": float(imbalance),
+                "delta": float(live_delta),
+                "wall_ratio": None,
+                "regime": fallback_regime if fallback_regime != "unknown" else "live_canonical",
+                "best_strategy": fallback_best_strategy,
+                "pressure_bias": "live_orderbook",
+                "event_ts": live_flow.get("event_ts") or live_board.get("event_ts"),
+                "data_source": "live_canonical",
+                "runtime_note": "live board/trade canonical",
+            }
+
+    replay_payload = load_latest_replay_payload()
 
     board = board_signal_metrics(latest_board_row(replay_payload))
     flow = tradeflow_metrics(latest_trade_row(replay_payload))
@@ -55,6 +96,8 @@ def _analyze_state():
         "best_strategy": latest_best_strategy_name(experiment_payload),
         "pressure_bias": board.get("pressure_bias"),
         "event_ts": flow.get("event_ts") or board.get("event_ts"),
+        "data_source": "replay_research",
+        "runtime_note": "fallback replay/research snapshot",
     }
 
 
@@ -171,7 +214,7 @@ def render():
         "spread": state["spread"],
         "imbalance": state["imbalance"],
         "delta": state["delta"],
-        "wall_ratio": state["wall_ratio"],
+        "wall_ratio": float(state.get("wall_ratio") or 0.0),
     }
 
     memory = st.session_state.ai_market_memory
@@ -190,11 +233,20 @@ def render():
     c1.metric(get_text(lang, "ai_conversation_state_spread"), round(state["spread"], 1))
     c2.metric(get_text(lang, "ai_conversation_state_imbalance"), round(state["imbalance"], 3))
     c3.metric(get_text(lang, "ai_conversation_state_delta"), round(state["delta"], 3))
-    c4.metric(get_text(lang, "ai_conversation_state_wall_ratio"), round(state["wall_ratio"], 3))
+
+    wall_ratio = state.get("wall_ratio")
+    c4.metric(
+        get_text(lang, "ai_conversation_state_wall_ratio"),
+        "-" if wall_ratio is None else round(float(wall_ratio), 3),
+    )
 
     st.caption(
         f"regime={state['regime']} / best_strategy={state['best_strategy']} / "
         f"pressure_bias={state['pressure_bias']} / ts={state['event_ts']}"
+    )
+    st.caption(
+        f"source={state.get('data_source', 'unknown')} / "
+        f"note={state.get('runtime_note', '-')}"
     )
 
     final_prompt = custom_prompt.strip() if custom_prompt.strip() else prompt

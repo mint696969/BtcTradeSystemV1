@@ -77,6 +77,9 @@ def market_monitor_metrics(state: dict[str, Any] | None) -> dict[str, Any]:
         "event_ts": state.get("exchange_ts") or state.get("collector_ts"),
         "trust_state": state.get("trust_state"),
         "boundary_reason": state.get("boundary_reason"),
+        "continuity_state": state.get("continuity_state"),
+        "interpretation_bucket": state.get("interpretation_bucket"),
+        "interpretation_reason": state.get("interpretation_reason"),
     }
 
 
@@ -86,9 +89,15 @@ def market_state_status_caption(state: dict[str, Any] | None) -> str:
 
     trust = state.get("trust_state") or "-"
     boundary = state.get("boundary_reason") or "-"
+    continuity = state.get("continuity_state") or "-"
+    interpretation = state.get("interpretation_bucket") or "-"
     series_id = state.get("source_series_id") or "-"
     freshness = market_state_freshness_label(state)
     age = market_state_age_seconds(state)
 
     age_text = "-" if age is None else f"{age:.1f}s"
-    return f"freshness={freshness} / age={age_text} / trust={trust} / boundary={boundary} / series={series_id}"
+    return (
+        f"freshness={freshness} / age={age_text} / trust={trust} / "
+        f"boundary={boundary} / continuity={continuity} / "
+        f"interpretation={interpretation} / series={series_id}"
+    )
