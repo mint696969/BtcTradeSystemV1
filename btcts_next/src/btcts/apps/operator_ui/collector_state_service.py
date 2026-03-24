@@ -43,16 +43,41 @@ def _safe_read_first(paths: list[Path]) -> Dict[str, Any]:
 
 def load_state() -> Dict[str, Any]:
     state_dir = _state_dir()
+
+    status = _safe_read_first(
+        [
+            state_dir / "exploration_status.json",
+            state_dir / "status.json",
+        ]
+    )
+    health = _safe_read_first(
+        [
+            state_dir / "exploration_daemon_health.json",
+            state_dir / "exploration_health.json",
+            state_dir / "daemon_health.json",
+            state_dir / "health.json",
+        ]
+    )
+    rate = _safe_read_first(
+        [
+            state_dir / "exploration_rate_state.json",
+            state_dir / "rate_state.json",
+        ]
+    )
+    checkpoint = _safe_read_first(
+        [
+            state_dir / "exploration_checkpoint.json",
+            state_dir / "checkpoint.json",
+        ]
+    )
+
     return {
-        "status": _safe_read(state_dir / "status.json"),
-        "health": _safe_read_first(
-            [
-                state_dir / "daemon_health.json",
-                state_dir / "health.json",
-            ]
-        ),
-        "rate": _safe_read(state_dir / "rate_state.json"),
+        "status": status,
+        "health": health,
+        "rate": rate,
         "origin": _safe_read(state_dir / "origin_status.json"),
-        "checkpoint": _safe_read(state_dir / "checkpoint.json"),
+        "checkpoint": checkpoint,
+        "exploration_daemon_status": _safe_read(state_dir / "exploration_daemon_status.json"),
+        "exploration_scheduler_state": _safe_read(state_dir / "exploration_scheduler_state.json"),
         "state_dir": {"path": str(state_dir)},
     }

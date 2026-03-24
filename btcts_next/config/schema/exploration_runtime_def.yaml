@@ -1,0 +1,46 @@
+# path: ./btcts_next/config/schema/exploration_runtime_def.yaml
+# desc: Exploration Runtime 用の venue別制御設定（本番主役 runtime 正準）
+
+defaults:
+  exchanges:
+    bitflyer:
+      enabled: true
+
+      limits:
+        window_300s: 500
+        window_60s_ip: 500
+
+      control:
+        target_utilization: 0.95
+        warn_utilization: 0.95
+        hard_cap_utilization: 0.98
+
+        crit_floor_ratio: 0.50
+        crit_trigger_429_count: 2
+        crit_trigger_window_sec: 30
+        crit_cooldown_sec: 60
+
+        recovery_start_after_sec: 180
+        recovery_step_count: 5
+        recovery_step_interval_sec: 180
+        recovery_policy: time_based
+        recovery_curve: linear
+        recovery_steps: []
+
+      request_priority:
+        - board_snapshot
+        - rest_trades
+
+      request_classes:
+        board_snapshot:
+          enabled: true
+          weight: 1.0
+          min_share: 0.50
+
+        rest_trades:
+          enabled: true
+          weight: 0.8
+          min_share: 0.30
+
+keys:
+  - exchanges
