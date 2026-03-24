@@ -26,6 +26,7 @@ from btcts.apps.operator_ui.components.research_bridge import (
 )
 
 from btcts.apps.operator_ui.ui_text import get_text
+from btcts.apps.operator_ui.ui_time import format_ui_ts
 
 from btcts.apps.operator_ui.components.live_bridge import (
     latest_live_board_metrics,
@@ -281,7 +282,7 @@ def render():
         answer_lines = answer.splitlines()
         body_lines = answer_lines[2:] if len(answer_lines) >= 2 else answer_lines
         display_answer = (
-            "local AI mode active: live_canonical を基にローカル要約を生成しています\n\n"
+            f"{get_text(lang, 'ai_operator_live_local_prefix')}\n\n"
             + "\n".join(body_lines).lstrip()
         )
 
@@ -292,7 +293,7 @@ def render():
 
     st.caption(
         f"regime={state['regime']} / best_strategy={state['best_strategy']} / "
-        f"pressure_bias={state['pressure_bias']} / ts={state['event_ts']}"
+        f"pressure_bias={state['pressure_bias']} / ts={format_ui_ts(state['event_ts'], lang)}"
     )
     if is_live_market:
         st.caption(
@@ -321,7 +322,7 @@ def render():
                 "event_filter": operator_context.get("pressure_bias") or "",
                 "filtered_rows": 1,
             }
-            st.session_state.ui_selected_page = get_text(lang, "page_research")
+            st.session_state.ui_selected_page_key = "research"
             st.rerun()
 
     with b3:
@@ -334,7 +335,7 @@ def render():
                 if lang == "en"
                 else "なぜ今この推奨アクションになるのか説明してください。"
             )
-            st.session_state.ui_selected_page = get_text(lang, "page_warroom")
+
             st.rerun()
 
     with b4:
@@ -355,7 +356,7 @@ def render():
             st.session_state.ai_operator_watch_list = merged
             st.session_state.ai_operator_watch_persisted = persisted
             st.session_state.ai_operator_watch_note = watch_item
-            st.session_state.ui_selected_page = get_text(lang, "page_warroom")
+            st.session_state.ui_selected_page_key = "warroom"
             st.rerun()
 
     watch_note = st.session_state.get("ai_operator_watch_note")

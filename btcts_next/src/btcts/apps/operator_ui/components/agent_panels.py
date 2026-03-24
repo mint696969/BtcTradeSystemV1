@@ -77,9 +77,9 @@ def _analyst_view(lang, regime, spread, pressure_bias):
     if regime in {"trend_up", "trend_down"}:
         regime_label = get_text(lang, "agent_value_trend")
     elif regime == "absorption_zone":
-        regime_label = "Absorption Zone"
+        regime_label = get_text(lang, "warroom_value_absorption")
     elif regime == "liquidity_vacuum":
-        regime_label = "Liquidity Vacuum"
+        regime_label = get_text(lang, "warroom_value_liquidity_vacuum")
 
     pressure = get_text(lang, "agent_value_neutral")
     if pressure_bias == "buy_pressure":

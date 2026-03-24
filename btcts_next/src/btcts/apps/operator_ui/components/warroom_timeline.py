@@ -18,6 +18,7 @@ from btcts.apps.operator_ui.components.research_bridge import (
     tradeflow_metrics,
 )
 from btcts.apps.operator_ui.ui_text import get_text
+from btcts.apps.operator_ui.ui_time import format_ui_ts
 
 
 def _append_if_changed(timeline: list[dict], ts: str, label: str, value: str | float | None, previous):
@@ -239,7 +240,7 @@ def render():
 
         with c1:
             st.markdown(
-                f"**{item['ts']}**  "
+                f"**{format_ui_ts(item['ts'], lang)}**  "
                 f"{item['label']} → `{item['value']}`"
             )
 
@@ -250,11 +251,8 @@ def render():
                     key=f"warroom_timeline_replay_{idx}",
                 ):
                     st.session_state.replay_jump_ts = str(item["ts"])
-                    st.session_state.ui_selected_page = get_text(lang, "page_replay")
+                    st.session_state.ui_selected_page_key = "replay"
                     st.rerun()
 
-    if timeline and str(timeline[0].get("ts", "")).startswith("2026-03-20"):
-        st.caption("live_canonical / research_experiment ソースから検出した最新の変化です。")
-    else:
-        st.caption(get_text(lang, "warroom_timeline_caption"))
+    st.caption(get_text(lang, "warroom_timeline_caption"))
     st.divider()

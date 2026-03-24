@@ -103,9 +103,9 @@ def render():
     if regime in {"trend_up", "trend_down"}:
         regime_label = get_text(lang, "ai_signal_value_trend")
     elif regime == "liquidity_vacuum":
-        regime_label = "Liquidity Vacuum"
+        regime_label = get_text(lang, "warroom_value_liquidity_vacuum")
     elif regime == "absorption_zone":
-        regime_label = "Absorption Zone"
+        regime_label = get_text(lang, "warroom_value_absorption")
 
     decision = get_text(lang, "ai_signal_value_wait")
 

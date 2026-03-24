@@ -12,12 +12,14 @@ from btcts.apps.operator_ui.components.market_state_bridge import (
     market_state_freshness_label,
     market_state_status_caption,
 )
+from btcts.apps.operator_ui.market_state_service import market_state_diagnostics
 from btcts.apps.operator_ui.components.research_bridge import (
     board_signal_metrics,
     latest_board_row,
     load_latest_replay_payload,
 )
 from btcts.apps.operator_ui.ui_text import get_text
+from btcts.apps.operator_ui.ui_time import format_ui_ts
 
 
 from btcts.apps.operator_ui.components.live_bridge import (
@@ -32,6 +34,7 @@ def render():
 
     live_board = latest_live_board_metrics()
     state = load_market_overview()
+    state_diag = market_state_diagnostics()
     board = {}
     source_label = "unknown"
 
@@ -86,6 +89,9 @@ def render():
     bid_depth = board.get("bid_depth")
     ask_depth = board.get("ask_depth")
     imbalance = board.get("imbalance")
+    trust_state = board.get("trust_state") or (state.get("trust_state") if state else None)
+    continuity_state = board.get("continuity_state") or (state.get("continuity_state") if state else None)
+    interpretation_bucket = board.get("interpretation_bucket") or (state.get("interpretation_bucket") if state else None)
 
     c1, c2, c3 = st.columns(3)
     c1.metric(get_text(lang, "market_monitor_spread"), "-" if spread is None else round(float(spread), 2))
@@ -97,16 +103,30 @@ def render():
         "-" if imbalance is None else round(float(imbalance), 3),
     )
 
+    p1, p2, p3 = st.columns(3)
+    p1.metric("Trust", trust_state or "-")
+    p2.metric("Continuity", continuity_state or "-")
+    p3.metric("Interpretation", interpretation_bucket or "-")
+
     st.caption(
-        f"best_bid={board.get('best_bid')} / best_ask={board.get('best_ask')} / ts={board.get('event_ts')}"
+        f"best_bid={board.get('best_bid')} / "
+        f"best_ask={board.get('best_ask')} / "
+        f"ts={format_ui_ts(board.get('event_ts'), lang)}"
     )
 
-    st.caption(f"source={source_label}")
+    preferred_freshness = state_diag.get("preferred_row_freshness") or "-"
+    st.caption(
+        f"board_source={source_label} / "
+        f"state_source={'market_state_preferred' if state else '-'} / "
+        f"preferred_state_freshness={preferred_freshness}"
+    )
 
-    interpretation_bucket = board.get("interpretation_bucket")
-    interpretation_reason = board.get("interpretation_reason")
-    if interpretation_bucket or interpretation_reason:
+    interpretation_bucket = board.get("interpretation_bucket") or (state.get("interpretation_bucket") if state else None)
+    interpretation_reason = board.get("interpretation_reason") or (state.get("interpretation_reason") if state else None)
+    continuity_state = board.get("continuity_state") or (state.get("continuity_state") if state else None)
+    if interpretation_bucket or interpretation_reason or continuity_state:
         st.caption(
+            f"continuity_state={continuity_state or '-'} / "
             f"interpretation_bucket={interpretation_bucket or '-'} / "
             f"interpretation_reason={interpretation_reason or '-'}"
         )
@@ -119,5 +139,10 @@ def render():
             f"market_state_freshness={freshness} / "
             f"market_state_age_sec={'-' if age is None else round(float(age), 1)}"
         )
+
+        if state_diag.get("preferred_row_is_stale") and trust_state == "trusted":
+            st.caption(
+                "state posture is stale; live board remains primary while last trusted interpretation is retained"
+            )
 
     st.divider()

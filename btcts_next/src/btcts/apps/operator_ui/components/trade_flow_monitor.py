@@ -11,6 +11,7 @@ from btcts.apps.operator_ui.components.research_bridge import (
     tradeflow_metrics,
 )
 from btcts.apps.operator_ui.ui_text import get_text
+from btcts.apps.operator_ui.ui_time import format_ui_ts
 
 from btcts.apps.operator_ui.components.live_bridge import (
     recent_live_tradeflow_metrics,
@@ -56,7 +57,9 @@ def render():
 
     st.caption(f"{get_text(lang, 'trade_flow_recent_count')}: {trade_count}")
 
-    st.caption(f"source={source_label} / ts={flow.get('event_ts')}")
+    st.caption(
+        f"source={source_label} / ts={format_ui_ts(flow.get('event_ts'), lang)}"
+    )
 
     micro_names = flow.get("micro_event_names") or []
     if micro_names:

@@ -14,6 +14,8 @@ from btcts.apps.operator_ui.components.live_bridge import (
 )
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.collector_state_service import load_state
+from btcts.apps.operator_ui.market_state_service import market_state_diagnostics
+from btcts.core import paths as core_paths
 
 
 def _exchange_status_label(value: str) -> str:
@@ -223,13 +225,14 @@ def render():
     status_state = collector_state.get("status", {})
     origin_continuity = status_state.get("origin_continuity", {}) if isinstance(status_state, dict) else {}
     state_dir_info = collector_state.get("state_dir", {})
+    market_state_info = market_state_diagnostics()
     recent_audit_events = read_recent_audit_events(lines=200)
     origin_audit_summary = _origin_audit_summary(recent_audit_events)
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("総合状態", _overall_status_label(live_summary["overall_state"]))
-    col2.metric("取引所", _exchange_status_label(runtime["exchange_state"]))
-    col3.metric("Feed", runtime["feed_state"])
+    col1.metric(get_text(lang, "collector_metric_status"), _overall_status_label(live_summary["overall_state"]))
+    col2.metric(get_text(lang, "collector_metric_exchange"), _exchange_status_label(runtime["exchange_state"]))
+    col3.metric(get_text(lang, "collector_metric_feed"), runtime["feed_state"])
 
     st.caption(
         f"reason={live_summary['overall_reason']} / "
@@ -239,9 +242,7 @@ def render():
         f"cycle_last_sequence_id={runtime.get('last_sequence_id')}"
     )
 
-    st.caption(
-        "note=last_sequence_id は smoke 1サイクル内の最終 sequence を示します（global sequence ではありません）"
-    )
+    st.caption(get_text(lang, "collector_note_sequence"))
 
     st.caption(
         f"age status={live_summary['status_age_label']} / "
@@ -251,6 +252,14 @@ def render():
     )
 
     st.caption(f"state_dir={state_dir_info.get('path', '-')}")
+    st.caption(
+        f"ui_data_root={core_paths.data_dir(ensure=False)} / "
+        f"ui_logs_root={core_paths.logs_dir(ensure=False)} / "
+        f"ui_market_state_root={market_state_info.get('market_state_root')}"
+    )
+
+    with st.expander("UI / MarketState Root Diagnostics"):
+        st.json(market_state_info)
 
     st.markdown("## Live Operations")
     st.markdown("### Collector Runtime State")
@@ -258,6 +267,37 @@ def render():
     st.markdown("### Rate Control Summary")
     rate_rows = _rate_rows(rate_state)
     if rate_rows:
+        first_rate = rate_rows[0]
+
+        engaged = bool(first_rate.get("engaged"))
+        last_429_ts = first_rate.get("last_429_ts")
+        rate_posture = "THROTTLED" if engaged else "NORMAL"
+        recent_429 = "YES" if last_429_ts else "NO"
+
+        r1, r2, r3, r4, r5, r6 = st.columns(6)
+        r1.metric("Rate Posture", rate_posture)
+        r2.metric("Recent 429", recent_429)
+        r3.metric("Rate Summary", first_rate.get("summary_state") or "-")
+        r4.metric("Wait (ms)", first_rate.get("wait_ms") or 0)
+        r5.metric("Util Ratio", first_rate.get("util_ratio") or 0)
+        r6.metric("Recovery", first_rate.get("recovery_phase") or "-")
+
+        if engaged:
+            st.warning(
+                f"rate control engaged / reason={first_rate.get('reason') or '-'} / "
+                f"hold_until_ts={first_rate.get('hold_until_ts') or '-'}"
+            )
+        elif last_429_ts:
+            st.info(
+                f"recent 429 detected / last_429_ts={last_429_ts} / "
+                f"recovery_phase={first_rate.get('recovery_phase') or '-'}"
+            )
+        else:
+            st.caption(
+                f"rate posture normal / reason={first_rate.get('reason') or '-'} / "
+                f"backoff_sec={first_rate.get('backoff_sec') or '-'}"
+            )
+
         st.dataframe(rate_rows, width="stretch")
     else:
         st.info("rate_state.json not available")
@@ -306,10 +346,7 @@ def render():
         else:
             st.info("rate_state.json not available")
 
-    st.caption(
-        "このページは Collector vNext の state / health / checkpoint / audit を基に、"
-        "現在の live 運転状態と週間テスト前に必要な観測項目を表示します。"
-    )
+    st.caption(get_text(lang, "collector_page_caption"))
 
     st.markdown("### Origin Continuity Summary (status.json)")
     status_freshness_label, status_freshness_reason = _status_continuity_freshness(status_state)
@@ -349,4 +386,4 @@ def render():
         ui_rows = _audit_rows_for_ui(events)
         st.dataframe(ui_rows, width="stretch")
     else:
-        st.warning("live audit event がまだありません。")
+        st.warning(get_text(lang, "collector_audit_empty"))

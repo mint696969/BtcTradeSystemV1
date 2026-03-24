@@ -6,6 +6,7 @@ from __future__ import annotations
 import streamlit as st
 
 from btcts.apps.operator_ui.ui_text import get_text
+from btcts.apps.operator_ui.ui_time import format_ui_ts
 from btcts.apps.operator_ui.watch_store import (
     append_watch,
     load_recent_watch_list,
@@ -78,7 +79,7 @@ def render():
 
         with c1:
             st.markdown(
-                f"**ts**={item.get('ts') or '-'} / "
+                f"**ts**={format_ui_ts(item.get('ts'), lang)} / "
                 f"regime={item.get('regime') or '-'} / "
                 f"action={item.get('action') or '-'} / "
                 f"risk={item.get('risk') or '-'}"
@@ -91,7 +92,7 @@ def render():
             ):
                 if item.get("ts"):
                     st.session_state.replay_jump_ts = str(item["ts"])
-                st.session_state.ui_selected_page = get_text(lang, "page_replay")
+                st.session_state.ui_selected_page_key = "replay"
                 st.rerun()
 
         with c3:
@@ -108,7 +109,7 @@ def render():
                     "event_filter": item.get("action") or "",
                     "filtered_rows": 1,
                 }
-                st.session_state.ui_selected_page = get_text(lang, "page_research")
+                st.session_state.ui_selected_page_key = "research"
                 st.rerun()
 
         with c4:

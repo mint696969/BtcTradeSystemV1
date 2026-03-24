@@ -45,7 +45,7 @@ def _regime_label(regime: str, lang: str) -> str:
         "trend_down": get_text(lang, "market_regime_value_trend"),
         "liquidity_vacuum": get_text(lang, "market_regime_value_liquidity_vacuum"),
         "sweep_risk": get_text(lang, "market_regime_value_volatility_expansion"),
-        "absorption_zone": "Absorption Zone",
+        "absorption_zone": get_text(lang, "warroom_value_absorption"),
     }
     return mapping.get(regime, regime)
 

@@ -22,7 +22,7 @@ def render():
 
     events = read_recent_audit_events(lines=80)
     if not events:
-        st.warning("live execution feed がまだありません。")
+        st.warning(get_text(lang, "execution_feed_empty"))
         st.divider()
         return
 
@@ -62,16 +62,16 @@ def render():
     )
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("総イベント数", total_events)
-    c2.metric("平均サイクル遅延(ms)", "-" if avg_latency is None else avg_latency)
-    c3.metric("最大サイクル遅延(ms)", round(max_latency, 1))
-    c4.metric("Feed状態", feed_state)
+    c1.metric(get_text(lang, "execution_feed_total"), total_events)
+    c2.metric(get_text(lang, "execution_feed_avg_latency"), "-" if avg_latency is None else avg_latency)
+    c3.metric(get_text(lang, "execution_feed_max_latency"), round(max_latency, 1))
+    c4.metric(get_text(lang, "execution_feed_status"), feed_state)
 
     c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Orderbook件数", board_count)
-    c6.metric("Trades件数", trades_count)
+    c5.metric(get_text(lang, "execution_feed_orderbook"), board_count)
+    c6.metric(get_text(lang, "execution_feed_trades"), trades_count)
     c7.metric("Smoke Cycles", smoke_cycles)
-    c8.metric("処理負荷", load_state)
+    c8.metric(get_text(lang, "execution_feed_load"), load_state)
 
     latest = latest_event(events) or {}
     latest_text = (

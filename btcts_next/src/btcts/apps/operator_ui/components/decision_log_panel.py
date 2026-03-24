@@ -11,6 +11,7 @@ from btcts.apps.operator_ui.decision_log_store import (
     overwrite_decisions,
 )
 from btcts.apps.operator_ui.ui_text import get_text
+from btcts.apps.operator_ui.ui_time import format_ui_ts
 from btcts.apps.operator_ui.watch_store import append_watch
 
 
@@ -52,7 +53,7 @@ def render():
 
             with c1:
                 st.markdown(
-                    f"**ts**={item.get('ts') or '-'} / "
+                    f"**ts**={format_ui_ts(item.get('ts'), lang)} / "
                     f"regime={item.get('regime') or '-'} / "
                     f"spread={item.get('spread_state') or '-'} / "
                     f"imbalance={item.get('imbalance_state') or '-'} / "
@@ -70,7 +71,7 @@ def render():
                 ):
                     if item.get("ts"):
                         st.session_state.replay_jump_ts = str(item["ts"])
-                    st.session_state.ui_selected_page = get_text(lang, "page_replay")
+                    st.session_state.ui_selected_page_key = "replay"
                     st.rerun()
 
             with c3:
@@ -87,7 +88,7 @@ def render():
                         "event_filter": item.get("action") or "",
                         "filtered_rows": 1,
                     }
-                    st.session_state.ui_selected_page = get_text(lang, "page_research")
+                    st.session_state.ui_selected_page_key = "research"
                     st.rerun()
 
             with c4:

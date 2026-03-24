@@ -43,6 +43,7 @@ class VNextRateRuntime:
     cfg: CollectorConfig
     rc: RateController
     requests_sent: Dict[str, List[float]] = field(default_factory=dict)
+    requests_sent_by_class: Dict[str, Dict[str, List[float]]] = field(default_factory=dict)
     rate_cfg: dict = field(default_factory=dict)
 
     @classmethod
@@ -100,6 +101,7 @@ class VNextRateRuntime:
             cfg=cfg,
             rc=rc,
             requests_sent={},
+            requests_sent_by_class={},
             rate_cfg=rate_cfg if isinstance(rate_cfg, dict) else {},
         )
         runtime.write_snapshot()
@@ -111,10 +113,16 @@ class VNextRateRuntime:
         except KeyError:
             return True, 0
 
-    def note_request_sent(self, exchange: str) -> None:
+    def note_request_sent(self, exchange: str, request_class: str | None = None) -> None:
         now = time.time()
         q = self.requests_sent.setdefault(exchange, [])
         q.append(now)
+
+        if request_class:
+            cls_map = self.requests_sent_by_class.setdefault(exchange, {})
+            cls_q = cls_map.setdefault(str(request_class), [])
+            cls_q.append(now)
+
         self._trim(exchange, now)
         self._update_util(exchange, now)
         self.write_snapshot()
@@ -135,13 +143,31 @@ class VNextRateRuntime:
     def _current_backoff_sec(self, exchange: str) -> float:
         return float(self.rc._crit_backoff_sec.get(exchange, 0.0) or 0.0)
 
+    def _count_requests_in_window(self, exchange: str, window_sec: float) -> int:
+        now = time.time()
+        q = self.requests_sent.get(exchange, [])
+        cut = now - max(window_sec, 0.0)
+        return sum(1 for ts in q if ts >= cut)
+
+    def _count_requests_in_window_by_class(
+        self,
+        exchange: str,
+        request_class: str,
+        window_sec: float,
+    ) -> int:
+        now = time.time()
+        cls_map = self.requests_sent_by_class.get(exchange, {})
+        q = cls_map.get(request_class, [])
+        cut = now - max(window_sec, 0.0)
+        return sum(1 for ts in q if ts >= cut)
+
     def _current_util_ratio(self, exchange: str, eff_max_rps: float) -> float:
         if eff_max_rps <= 0.0:
             return 0.0
 
         window = _safe_float(self.rate_cfg.get("util_window_warn_sec"), 10.0)
-        q = self.requests_sent.get(exchange, [])
-        return min(1.0, max(0.0, len(q) / max(eff_max_rps * window, 1e-9)))
+        current_count = self._count_requests_in_window(exchange, window)
+        return min(1.0, max(0.0, current_count / max(eff_max_rps * window, 1e-9)))
 
     def _current_recovery_phase(
         self,
@@ -193,6 +219,10 @@ class VNextRateRuntime:
             hold_until_ts=hold_until_ts,
         )
 
+        requests_10s = self._count_requests_in_window(exchange, 10.0)
+        requests_60s = self._count_requests_in_window(exchange, 60.0)
+        requests_300s = self._count_requests_in_window(exchange, 300.0)
+
         return {
             "exchange": exchange,
             "summary_state": mode,
@@ -212,6 +242,19 @@ class VNextRateRuntime:
             "hold_until_ts": hold_until_ts,
             "backoff_sec": backoff_sec,
             "recovery_phase": recovery_phase,
+            "requests_10s": requests_10s,
+            "requests_60s": requests_60s,
+            "requests_300s": requests_300s,
+            "request_classes": {
+                "board_snapshot": {
+                    "requests_60s": self._count_requests_in_window_by_class(exchange, "board_snapshot", 60.0),
+                    "requests_300s": self._count_requests_in_window_by_class(exchange, "board_snapshot", 300.0),
+                },
+                "rest_trades": {
+                    "requests_60s": self._count_requests_in_window_by_class(exchange, "rest_trades", 60.0),
+                    "requests_300s": self._count_requests_in_window_by_class(exchange, "rest_trades", 300.0),
+                },
+            },
             "ts": _safe_iso_from_unix(item.get("ts")) or _safe_iso_from_unix(time.time()),
         }
 
@@ -242,10 +285,15 @@ class VNextRateRuntime:
         write_json_state(self.cfg, "rate_state.json", self.snapshot())
 
     def _trim(self, exchange: str, now: float) -> None:
-        window = _safe_float(self.rate_cfg.get("util_window_warn_sec"), 10.0)
+        keep_window = max(_safe_float(self.rate_cfg.get("util_window_warn_sec"), 10.0), 300.0)
+
         q = self.requests_sent.setdefault(exchange, [])
-        cut = now - window
+        cut = now - keep_window
         self.requests_sent[exchange] = [ts for ts in q if ts >= cut]
+
+        cls_map = self.requests_sent_by_class.setdefault(exchange, {})
+        for request_class, cls_q in list(cls_map.items()):
+            cls_map[request_class] = [ts for ts in cls_q if ts >= cut]
 
     def _update_util(self, exchange: str, now: float) -> None:
         snap = self.snapshot()
@@ -259,7 +307,7 @@ class VNextRateRuntime:
             return
 
         window = _safe_float(self.rate_cfg.get("util_window_warn_sec"), 10.0)
-        q = self.requests_sent.get(exchange, [])
-        util = min(1.0, max(0.0, len(q) / max(eff * window, 1e-9)))
+        current_count = self._count_requests_in_window(exchange, window)
+        util = min(1.0, max(0.0, current_count / max(eff * window, 1e-9)))
         self.rc.set_mode_by_util(exchange, util)
         self.write_snapshot()

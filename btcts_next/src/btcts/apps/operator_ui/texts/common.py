@@ -1,0 +1,43 @@
+# path: ./btcts_next/src/btcts/apps/operator_ui/texts/common.py
+# desc: Shared Operator UI text keys used across sidebar, navigation, and common controls.
+
+COMMON_TEXTS = {
+    "en": {
+        "app_title": "BTC Trade System",
+        "app_subtitle": "Project Chimera Operator Console",
+        "sidebar_title": "Operator Panel",
+        "sidebar_nav": "Navigate",
+        "lang_label": "Language",
+        "scale_label": "Font Scale",
+        "refresh_label": "Auto Refresh",
+        "refresh_interval_label": "Refresh Interval (sec)",
+        "refresh_status_on": "Auto refresh ON",
+        "refresh_status_off": "Auto refresh OFF",
+        "page_collector": "Collector",
+        "page_health": "Health",
+        "page_logs": "Logs",
+        "page_config": "Config",
+        "page_research": "Research",
+        "page_replay": "Replay",
+        "page_warroom": "War Room",
+    },
+    "ja": {
+        "app_title": "BTC Trade System",
+        "app_subtitle": "Project Chimera オペレーターコンソール",
+        "sidebar_title": "操作パネル",
+        "sidebar_nav": "移動",
+        "lang_label": "表示言語",
+        "scale_label": "文字サイズ",
+        "refresh_label": "自動更新",
+        "refresh_interval_label": "更新間隔(秒)",
+        "refresh_status_on": "自動更新 ON",
+        "refresh_status_off": "自動更新 OFF",
+        "page_collector": "Collector",
+        "page_health": "Health",
+        "page_logs": "Logs",
+        "page_config": "Config",
+        "page_research": "Research",
+        "page_replay": "Replay",
+        "page_warroom": "War Room",
+    },
+}

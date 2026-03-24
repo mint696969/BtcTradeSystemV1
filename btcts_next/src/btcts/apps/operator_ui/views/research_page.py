@@ -199,7 +199,7 @@ def render():
             ):
                 if replay_ctx.get("jump_ts"):
                     st.session_state.replay_jump_ts = replay_ctx.get("jump_ts")
-                st.session_state.ui_selected_page = get_text(lang, "page_replay")
+                st.session_state.ui_selected_page_key = "replay"
                 st.rerun()
 
         with a2:
@@ -207,7 +207,7 @@ def render():
                 "Back to War Room",
                 key="research_back_to_warroom",
             ):
-                st.session_state.ui_selected_page = get_text(lang, "page_warroom")
+                st.session_state.ui_selected_page_key = "warroom"
                 st.rerun()
 
         with a3:

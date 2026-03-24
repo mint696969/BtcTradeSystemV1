@@ -259,6 +259,43 @@ Collector は現状 bitFlyer BTC だが、最終的に FX / 株 / その他の�
 - [x] GPT が「派生サマリ中心」で品質判断できる（derived + quality の入口が揃った）
 - [ ] `BTC_TS_MODE` が `NORMAL/DEBUG/BOOST` で差が出る（差分の受け入れ条件は次フェーズで明確化）
 
+## 11.6 追記（2026-03-19 / Collector hot運用・smoke常駐の運用意味）
+
+### hot tier の正本
+Collector vNext の hot 運用では、以下を正本とする。
+
+- data: `D:\btc_ts_hot\data`
+- logs: `D:\btc_ts_hot\logs`
+- state: `D:\btc_ts_hot\state`
+
+`tools/run_collector_vnext.ps1` および `tools/run_collector_vnext_daemon.ps1` では、`BTCTS_*` と `BTC_TS_*` を橋渡しし、Collector本体・core audit・Operator UI が同じ hot root を参照することを前提とする。
+
+### smoke常駐の運転モデル
+現行の daemon 導線は「常時 1 プロセスで 1 本の websocket を維持し続ける」モデルではなく、**15秒間隔の smoke cycle を繰り返すモデル** である。
+
+各 cycle では以下を実行する。
+
+1. bootstrap / rest board / rest trades
+2. websocket trade smoke
+3. websocket board smoke
+4. status / health / checkpoint / audit の更新
+
+このため、board websocket では cycle ごとに接続が張り直され、監査ログ上は次の流れが繰り返し出力されやすい。
+
+- `origin.stream_started`
+- `origin.stream_gap_detected`
+- `origin.stream_resync_started`
+- `origin.stream_resync_completed`
+
+現時点ではこれは異常ではなく、**現行 smoke 常駐モデルを反映した正常挙動** として扱う。
+
+### `last_sequence_id` の定義
+`last_sequence_id` は Collector 全体のグローバル通番ではない。
+
+`run_smoke()` は cycle ごとに `SequenceManager.start(1)` で開始するため、`last_sequence_id` は **smoke 1 サイクル内で採番された最終 sequence** を示す。
+
+したがって cycle 間で値が上下して見えても異常とは限らない。UI 上では誤解防止のため `Cycle Last Sequence ID` と表記する。
+
 ---
 
 ## 12. 追記（2026-03-06）

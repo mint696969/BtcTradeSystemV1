@@ -22,6 +22,7 @@ from btcts.apps.operator_ui.components.research_bridge import (
     tradeflow_metrics,
 )
 from btcts.apps.operator_ui.ui_text import get_text
+from btcts.apps.operator_ui.ui_time import format_ui_ts
 
 
 AUDIT_LOG = Path(r"E:\btc_ts\logs\audit.jsonl")
@@ -426,7 +427,7 @@ def render():
         c1, c2 = st.columns([6, 1])
 
         with c1:
-            ts_text = f" ({alert['ts']})" if alert.get("ts") else ""
+            ts_text = f" ({format_ui_ts(alert['ts'], lang)})" if alert.get("ts") else ""
             st.markdown(
                 f"**[{severity_label}]** {alert['message']}{ts_text}",
             )
@@ -438,8 +439,8 @@ def render():
                     key=f"warroom_alert_replay_{idx}",
                 ):
                     st.session_state.replay_jump_ts = str(alert["ts"])
-                    st.session_state.ui_selected_page = get_text(lang, "page_replay")
+                    st.session_state.ui_selected_page_key = "replay"
                     st.rerun()
 
-    st.caption("アラートは live_canonical / research_experiment / 直近監査レイテンシを基に生成しています。")
+    st.caption(get_text(lang, "warroom_alert_runtime_caption"))
     st.divider()

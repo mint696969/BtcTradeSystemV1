@@ -37,6 +37,7 @@ SCHEMA_MAP: Dict[str, str] = {
     "monitoring": "monitoring_def",
     "health": "health_def",
     "rate_control": "rate_control_def",
+    "exploration_runtime": "exploration_runtime_def",
     # ui/dash
     "dash": "dash_def",
     "tabs": "tabs_def",

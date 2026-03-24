@@ -110,6 +110,23 @@ def _record_type_of(row: dict[str, Any]) -> str:
     return str(row.get("record_type") or "")
 
 
+def _event_time_key(row: dict[str, Any]) -> tuple[str, int]:
+    payload = row.get("payload")
+    payload_dict = payload if isinstance(payload, dict) else {}
+
+    ts = str(
+        row.get("collector_ts")
+        or row.get("exchange_ts")
+        or payload_dict.get("collector_ts")
+        or payload_dict.get("exchange_ts")
+        or ""
+    )
+
+    record_type = _record_type_of(row)
+    priority = 0 if record_type == "market.orderbook.snapshot" else 1
+    return (ts, priority)
+
+
 def main() -> int:
     cfg = load_market_engine_config()
     runtime = MarketEngineRuntime(cfg)
@@ -147,23 +164,22 @@ def main() -> int:
         processed += 1
         seeded = True
 
-    # 起動時点以降に追記される diff だけを処理する
+    # 起動時点以降に追記される snapshot / diff の両方を追う
+    snapshot_pos = snapshot_file.stat().st_size if snapshot_file.exists() else 0
     diff_pos = diff_file.stat().st_size if diff_file.exists() else 0
 
     started = time.monotonic()
-    while (time.monotonic() - started) < max_seconds:
+    while True:
+        if max_seconds > 0:
+            if (time.monotonic() - started) >= max_seconds:
+                break
         # 日付ローテや part 切替にも追従
         latest_snapshot_file = _latest_part_file(snapshot_dir)
         latest_diff_file = _latest_part_file(diff_dir)
 
         if latest_snapshot_file is not None and latest_snapshot_file != snapshot_file:
             snapshot_file = latest_snapshot_file
-            snapshot_seed = _read_last_json(snapshot_file)
-            if isinstance(snapshot_seed, dict) and _record_type_of(snapshot_seed) == "market.orderbook.snapshot":
-                result = runtime.step(snapshot_seed)
-                last_output_path = result.output_path
-                processed += 1
-                seeded = True
+            snapshot_pos = 0
 
         if latest_diff_file is not None and latest_diff_file != diff_file:
             diff_file = latest_diff_file
@@ -176,11 +192,22 @@ def main() -> int:
                 last_output_path = result.output_path
                 processed += 1
                 seeded = True
+                snapshot_pos = snapshot_file.stat().st_size if snapshot_file.exists() else 0
 
-        rows, diff_pos = _iter_new_jsonl(diff_file, diff_pos)
-        for row in rows:
-            if _record_type_of(row) != "market.orderbook.diff":
-                continue
+        snapshot_rows, snapshot_pos = _iter_new_jsonl(snapshot_file, snapshot_pos)
+        diff_rows, diff_pos = _iter_new_jsonl(diff_file, diff_pos)
+
+        pending_rows: list[dict[str, Any]] = []
+        for row in snapshot_rows:
+            if _record_type_of(row) == "market.orderbook.snapshot":
+                pending_rows.append(row)
+        for row in diff_rows:
+            if _record_type_of(row) == "market.orderbook.diff":
+                pending_rows.append(row)
+
+        pending_rows.sort(key=_event_time_key)
+
+        for row in pending_rows:
             result = runtime.step(row)
             last_output_path = result.output_path
             processed += 1

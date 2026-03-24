@@ -29,6 +29,7 @@ def file_lock(target_path: Path, *, timeout_sec: float = 10.0, stale_sec: float 
     - 既存 lock が stale_sec より古ければ回収（削除）して取り直す
     """
     lock_path = Path(str(target_path) + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
     deadline = time.time() + float(timeout_sec)
 
     while True:

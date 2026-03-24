@@ -48,7 +48,7 @@ def render():
 
     payload = load_latest_experiment_payload()
     if not payload:
-        st.warning("Research artifact がまだありません。")
+        st.warning(get_text(lang, "strategy_state_artifact_missing"))
         return
 
     summary = payload.get("summary") or {}
@@ -114,11 +114,12 @@ def render():
     )
 
     st.info(
-        f"Research 推奨: regime={regime} / best={recommended_archetype} / "
+        f"{get_text(lang, 'strategy_state_research_summary')}: "
+        f"regime={regime} / best={recommended_archetype} / "
         f"PnL={round(total_pnl, 2)} / wins={wins} / losses={losses} / trades={trade_count}"
     )
 
-    with st.expander("Latest Research Strategy Artifact"):
+    with st.expander(get_text(lang, "strategy_state_artifact_title")):
         st.json(
             {
                 "summary": summary,

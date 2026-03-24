@@ -377,7 +377,7 @@ def render():
                         "event_filter": event_filter,
                         "filtered_rows": int(len(results_df)),
                     }
-                    st.session_state.ui_selected_page = get_text(lang, "page_research")
+                    st.session_state.ui_selected_page_key = "research"
                     st.rerun()
 
         st.divider()

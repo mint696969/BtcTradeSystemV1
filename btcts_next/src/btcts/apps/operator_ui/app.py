@@ -13,6 +13,7 @@ from btcts.apps.operator_ui.views import (
     replay_page,
     warroom_page,
 )
+from btcts.apps.operator_ui.ui_state_store import load_ui_state, save_ui_state
 
 from btcts.apps.operator_ui.ui_text import get_text
 
@@ -112,20 +113,22 @@ st.set_page_config(
     layout="wide",
 )
 
+persisted_ui_state = load_ui_state()
+
 if "ui_lang" not in st.session_state:
-    st.session_state.ui_lang = "ja"
+    st.session_state.ui_lang = persisted_ui_state.get("ui_lang", "en")
 
 if "ui_scale" not in st.session_state:
-    st.session_state.ui_scale = "100%"
+    st.session_state.ui_scale = persisted_ui_state.get("ui_scale", "100%")
 
 if "ui_auto_refresh" not in st.session_state:
-    st.session_state.ui_auto_refresh = True
+    st.session_state.ui_auto_refresh = persisted_ui_state.get("ui_auto_refresh", True)
 
 if "ui_refresh_interval" not in st.session_state:
-    st.session_state.ui_refresh_interval = 5
+    st.session_state.ui_refresh_interval = persisted_ui_state.get("ui_refresh_interval", 5)
 
-if "ui_selected_page" not in st.session_state:
-    st.session_state.ui_selected_page = None
+if "ui_selected_page_key" not in st.session_state:
+    st.session_state.ui_selected_page_key = persisted_ui_state.get("ui_selected_page_key", "collector")
 
 st.session_state.ui_lang = st.sidebar.selectbox(
     get_text(st.session_state.ui_lang, "lang_label"),
@@ -161,40 +164,59 @@ apply_ui_scale(st.session_state.ui_scale)
 st.title(get_text(lang, "app_title"))
 st.subheader(get_text(lang, "app_subtitle"))
 
-pages = {
-    get_text(lang, "page_collector"): collector_page,
-    get_text(lang, "page_warroom"): warroom_page,
-    get_text(lang, "page_health"): health_page,
-    get_text(lang, "page_logs"): logs_page,
-    get_text(lang, "page_config"): config_page,
-    get_text(lang, "page_research"): research_page,
-    get_text(lang, "page_replay"): replay_page,
-}
+page_defs = [
+    ("collector", get_text(lang, "page_collector"), collector_page),
+    ("warroom", get_text(lang, "page_warroom"), warroom_page),
+    ("health", get_text(lang, "page_health"), health_page),
+    ("logs", get_text(lang, "page_logs"), logs_page),
+    ("config", get_text(lang, "page_config"), config_page),
+    ("research", get_text(lang, "page_research"), research_page),
+    ("replay", get_text(lang, "page_replay"), replay_page),
+]
 
-page_names = list(pages.keys())
+page_keys = [page_key for page_key, _, _ in page_defs]
+page_labels = [page_label for _, page_label, _ in page_defs]
+page_label_to_key = {page_label: page_key for page_key, page_label, _ in page_defs}
+pages = {page_key: page_module for page_key, _, page_module in page_defs}
 
-if st.session_state.ui_selected_page not in page_names:
-    st.session_state.ui_selected_page = page_names[0]
+if st.session_state.ui_selected_page_key not in page_keys:
+    st.session_state.ui_selected_page_key = page_keys[0]
+
+selected_page_label = next(
+    page_label
+    for page_key, page_label, _ in page_defs
+    if page_key == st.session_state.ui_selected_page_key
+)
 
 st.sidebar.title(get_text(lang, "sidebar_title"))
 
 selection = st.sidebar.radio(
     get_text(lang, "sidebar_nav"),
-    page_names,
-    index=page_names.index(st.session_state.ui_selected_page),
+    page_labels,
+    index=page_labels.index(selected_page_label),
     key="ui_sidebar_page_radio",
 )
 
-st.session_state.ui_selected_page = selection
+st.session_state.ui_selected_page_key = page_label_to_key[selection]
+
+save_ui_state(
+    {
+        "ui_lang": st.session_state.ui_lang,
+        "ui_selected_page_key": st.session_state.ui_selected_page_key,
+        "ui_scale": st.session_state.ui_scale,
+        "ui_auto_refresh": st.session_state.ui_auto_refresh,
+        "ui_refresh_interval": st.session_state.ui_refresh_interval,
+    }
+)
 
 auto_refresh_pages = {
-    get_text(lang, "page_collector"),
-    get_text(lang, "page_warroom"),
-    get_text(lang, "page_health"),
-    get_text(lang, "page_logs"),
+    "collector",
+    "warroom",
+    "health",
+    "logs",
 }
 
-is_auto_refresh_target = selection in auto_refresh_pages
+is_auto_refresh_target = st.session_state.ui_selected_page_key in auto_refresh_pages
 
 if st.session_state.ui_auto_refresh and is_auto_refresh_target:
     st.sidebar.caption(
@@ -203,7 +225,7 @@ if st.session_state.ui_auto_refresh and is_auto_refresh_target:
 else:
     st.sidebar.caption(get_text(lang, "refresh_status_off"))
 
-page_module = pages[selection]
+page_module = pages[st.session_state.ui_selected_page_key]
 page_module.render()
 
 # Auto refresh は live / monitor 系ページに限定する

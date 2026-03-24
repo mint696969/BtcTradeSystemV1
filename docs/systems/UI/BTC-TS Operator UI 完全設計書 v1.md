@@ -332,6 +332,41 @@ Replay
 E:\btc_ts\replay
 Research
 E:\btc_ts\research
+
+18.5 Collector hot運用（2026-03-19 時点）
+
+### 参照ルート
+Operator UI の Collector 監視は、hot 運用時に以下を正本として参照する。
+
+- `BTC_TS_DATA_DIR = D:\btc_ts_hot\data`
+- `BTC_TS_LOGS_DIR = D:\btc_ts_hot\logs`
+
+また、state は `D:\btc_ts_hot\state\collector_vnext` を参照する。
+
+### 表示解釈
+現行の Collector daemon は 15 秒間隔の smoke cycle を実行する。
+そのため websocket board 系では cycle ごとに接続が張り直され、監査ログでは以下のイベントが繰り返し現れやすい。
+
+- `origin.stream_started`
+- `origin.stream_gap_detected`
+- `origin.stream_resync_started`
+- `origin.stream_resync_completed`
+
+これは現時点では異常ではなく、現行の smoke 常駐運転モデルを反映したものとして扱う。
+
+### `Cycle Last Sequence ID`
+UI の `Cycle Last Sequence ID` は global sequence ではなく、smoke 1 サイクル内の最終 sequence を表す。
+そのためサイクルごとに値が上下して見えても異常とは限らない。
+
+### 最小CC項目
+Collector hot運用の最小CCは以下とする。
+
+1. 総合状態が `正常稼働`
+2. Feed が `LIVE`
+3. `daemon=healthy` かつ `health=healthy`
+4. `D:\btc_ts_hot\logs\audit.jsonl` に `collector_vnext.run_smoke.completed` と `origin.stream_*` が継続追記される
+5. UI の `最新イベント` と audit.jsonl の末尾が整合する
+
 19. Persistence Layer
 
 保存データ

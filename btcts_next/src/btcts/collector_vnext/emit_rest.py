@@ -17,6 +17,19 @@ from .transforms.raw_to_canonical_trades import canonical_trades
 from .writer import write_canonical, write_raw
 
 
+class RestRequestFailedError(RuntimeError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int = 0,
+        retry_after_sec: float = 0.0,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = int(status_code or 0)
+        self.retry_after_sec = float(retry_after_sec or 0.0)
+
+
 def _rate_acquire(rate_runtime: VNextRateRuntime | None, exchange: str) -> None:
     if rate_runtime is None:
         return
@@ -38,12 +51,16 @@ def emit_rest_board_snapshot(
     res = fetch_board(product_code=cfg.symbol, timeout_sec=10.0)
 
     if rate_runtime is not None:
-        rate_runtime.note_request_sent("bitflyer")
+        rate_runtime.note_request_sent("bitflyer", "board_snapshot")
 
     if not res.ok:
         if rate_runtime is not None and res.status_code == 429:
             rate_runtime.on_429("bitflyer", res.retry_after_sec)
-        raise RuntimeError(f"bitflyer fetch_board failed: {res.error}")
+        raise RestRequestFailedError(
+            f"bitflyer fetch_board failed: {res.error}",
+            status_code=res.status_code,
+            retry_after_sec=res.retry_after_sec,
+        )
 
     if rate_runtime is not None:
         rate_runtime.on_success("bitflyer")
@@ -215,12 +232,16 @@ def emit_rest_trades(
     )
 
     if rate_runtime is not None:
-        rate_runtime.note_request_sent("bitflyer")
+        rate_runtime.note_request_sent("bitflyer", "rest_trades")
 
     if not res.ok:
         if rate_runtime is not None and res.status_code == 429:
             rate_runtime.on_429("bitflyer", res.retry_after_sec)
-        raise RuntimeError(f"bitflyer executions failed: {res.error}")
+        raise RestRequestFailedError(
+            f"bitflyer executions failed: {res.error}",
+            status_code=res.status_code,
+            retry_after_sec=res.retry_after_sec,
+        )
 
     if rate_runtime is not None:
         rate_runtime.on_success("bitflyer")
