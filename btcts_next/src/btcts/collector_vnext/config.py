@@ -14,6 +14,14 @@ def _env_str(name: str, default: str) -> str:
     return v if v else default
 
 
+def _env_str_fallback(names: List[str], default: str) -> str:
+    for name in names:
+        v = os.getenv(name, "").strip()
+        if v:
+            return v
+    return default
+
+
 def _env_int(name: str, default: int) -> int:
     raw = os.getenv(name, "").strip()
     if not raw:
@@ -70,9 +78,24 @@ class CollectorConfig:
 
 
 def load_config() -> CollectorConfig:
-    data_root = Path(_env_str("BTCTS_DATA_ROOT", r"E:\btc_ts\data"))
-    logs_root = Path(_env_str("BTCTS_LOGS_ROOT", r"E:\btc_ts\logs"))
-    state_root = Path(_env_str("BTCTS_STATE_ROOT", r"E:\btc_ts\state"))
+    data_root = Path(
+        _env_str_fallback(
+            ["BTC_TS_DATA_DIR", "BTCTS_DATA_ROOT"],
+            r"E:\\btc_ts\\data",
+        )
+    )
+    logs_root = Path(
+        _env_str_fallback(
+            ["BTC_TS_LOGS_DIR", "BTCTS_LOGS_ROOT"],
+            r"E:\\btc_ts\\logs",
+        )
+    )
+    state_root = Path(
+        _env_str_fallback(
+            ["BTCTS_STATE_ROOT"],
+            r"E:\\btc_ts\\state",
+        )
+    )
 
     collector_id = _env_str("BTCTS_COLLECTOR_ID", "collector_main")
     collector_role = _env_str("BTCTS_COLLECTOR_ROLE", "production")

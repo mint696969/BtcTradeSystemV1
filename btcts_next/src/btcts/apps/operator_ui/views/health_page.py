@@ -47,6 +47,12 @@ def _api_summary_label(rate_item: dict, lang: str) -> str:
 
 def _ws_summary_label(origin_payload: dict, lang: str) -> str:
     ws_state = str(origin_payload.get("ws_state") or "").upper()
+    age_sec = _ws_age_seconds(origin_payload.get("ts"))
+
+    if age_sec is not None and age_sec > 300:
+        return get_text(lang, "health_value_broken")
+    if age_sec is not None and age_sec > 30:
+        return get_text(lang, "health_value_caution")
 
     if ws_state == "LIVE":
         return get_text(lang, "health_value_healthy")
@@ -78,6 +84,63 @@ def _format_optional_ts(value: str | None, lang: str) -> str:
     if not value:
         return "-"
     return format_ui_ts(value, lang=lang)
+
+
+def _format_age_seconds(value: str | None) -> str:
+    if not value:
+        return "-"
+
+    dt = _parse_ui_ts(value)
+    if dt is None:
+        return "-"
+
+    now = pd.Timestamp.utcnow()
+    if getattr(now, "tzinfo", None) is None:
+        now = now.tz_localize("UTC")
+
+    age_sec = max(0.0, (now.to_pydatetime() - dt).total_seconds())
+    return str(int(round(age_sec)))
+
+
+def _ws_age_seconds(value: str | None) -> float | None:
+    if not value:
+        return None
+
+    dt = _parse_ui_ts(value)
+    if dt is None:
+        return None
+
+    now = pd.Timestamp.utcnow()
+    if getattr(now, "tzinfo", None) is None:
+        now = now.tz_localize("UTC")
+
+    return max(0.0, (now.to_pydatetime() - dt).total_seconds())
+
+
+def _ws_freshness_label(origin_payload: dict, lang: str) -> str:
+    age_sec = _ws_age_seconds(origin_payload.get("ts"))
+    if age_sec is None:
+        return "-"
+
+    if age_sec <= 5:
+        return get_text(lang, "health_value_live_freshness")
+    if age_sec <= 30:
+        return get_text(lang, "health_value_quiet_freshness")
+    if age_sec <= 300:
+        return get_text(lang, "health_value_stale_freshness")
+    return get_text(lang, "health_value_broken_freshness")
+
+
+def _parse_ui_ts(value: str | None):
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        if raw.endswith("Z"):
+            return pd.Timestamp(raw.replace("Z", "+00:00")).to_pydatetime()
+        return pd.Timestamp(raw).to_pydatetime()
+    except Exception:
+        return None
 
 
 def _format_metric_number(
@@ -180,6 +243,13 @@ def _health_event_label(value: str | None, lang: str) -> str:
     text_key = key_map.get(raw)
     if text_key:
         return get_text(lang, text_key)
+
+    if raw.startswith("collector_vnext.exploration.") and raw.endswith(".completed"):
+        return get_text(lang, "health_event_exploration_request_completed")
+
+    if raw.startswith("collector_vnext.exploration.") and raw.endswith(".failed"):
+        return get_text(lang, "health_event_exploration_request_failed")
+
     return raw
 
 
@@ -532,19 +602,33 @@ def render():
     )
     m5.metric(
         get_text(lang, "health_metric_hold_until"),
-        _format_optional_ts(bitflyer_rate.get("hold_until_ts"), lang),
+        _format_optional_ts(bitflyer_rate.get("hold_until_ts"), lang)
+        if exploration_mode == "CRIT"
+        else "-",
     )
 
-    n1, n2, n3, n4 = st.columns(4)
+    n1, n2, n3, n4, n5, n6, n7 = st.columns(7)
     n1.metric(
         get_text(lang, "health_metric_ws_state"),
         _health_value_label(origin_payload.get("ws_state"), lang),
     )
     n2.metric(
+        get_text(lang, "health_metric_ws_freshness"),
+        _ws_freshness_label(origin_payload, lang),
+    )
+    n3.metric(
+        get_text(lang, "health_metric_ws_last_update"),
+        _format_optional_ts(origin_payload.get("ts"), lang),
+    )
+    n4.metric(
+        get_text(lang, "health_metric_ws_age_sec"),
+        _format_age_seconds(origin_payload.get("ts")),
+    )
+    n5.metric(
         get_text(lang, "health_metric_snapshot_to_live"),
         _format_metric_number(origin_payload.get("snapshot_to_live_ms")),
     )
-    n3.metric(
+    n6.metric(
         get_text(lang, "health_metric_resync"),
         "-" if exploration_active_target_ratio is None else _format_metric_number(
             exploration_active_target_ratio,
@@ -552,7 +636,7 @@ def render():
             percent=True,
         ),
     )
-    n4.metric(
+    n7.metric(
         get_text(lang, "health_metric_last_sequence_id"),
         _format_metric_number(checkpoint_payload.get("last_sequence_id")),
     )

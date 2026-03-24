@@ -63,13 +63,17 @@ def _classify_row(row: dict[str, Any]) -> dict[str, bool]:
 
     text = " ".join([event, topic, provider, reason, error])
 
-    is_rest = ("rest" in text) or ("http" in text)
+    is_exploration = event.startswith("collector_vnext.exploration.")
+    is_rest = ("rest" in text) or ("http" in text) or is_exploration
     is_ws = ("ws" in text) or ("websocket" in text)
     is_429 = "429" in text or "retry_after" in text
     is_gap = "gap" in text
     is_resync = "resync" in text
     is_warn_or_error = any(word in text for word in ["warn", "error", "failed", "exception"])
-    is_rate_mode = any(word in text for word in ["crit", "recovery", "throttle", "utilization"])
+    is_rate_mode = is_exploration and (
+        event.endswith(".mode.changed")
+        or any(word in text for word in ["crit", "recovery", "throttle", "utilization"])
+    )
 
     return {
         "is_rest": is_rest,
@@ -126,7 +130,7 @@ def build_recent_api_ws_series(*, window_minutes: int = 60) -> list[dict[str, An
             per_minute[bucket]["gap_events"] += 1.0
         if flags["is_resync"]:
             per_minute[bucket]["resync_events"] += 1.0
-        if flags["is_warn_or_error"]:
+        if flags["is_warn_or_error"] or flags["is_rate_mode"]:
             per_minute[bucket]["warn_error_events"] += 1.0
 
         elapsed_ms = payload.get("elapsed_ms")
@@ -299,7 +303,7 @@ def _build_continuity_rail(
             per_minute[bucket]["gap_events"] += 1.0
         if flags["is_resync"]:
             per_minute[bucket]["resync_events"] += 1.0
-        if flags["is_warn_or_error"]:
+        if flags["is_warn_or_error"] or flags["is_rate_mode"]:
             per_minute[bucket]["warn_error_events"] += 1.0
 
     cells: list[dict[str, Any]] = []

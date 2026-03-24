@@ -168,6 +168,22 @@ def _build_status_payload(
     }
 
 
+def _extract_rate_mode(snapshot: dict | None, exchange: str) -> str:
+    if not isinstance(snapshot, dict):
+        return "NORMAL"
+    items = snapshot.get("items") or {}
+    item = items.get(exchange) or {}
+    return str(item.get("mode") or "NORMAL")
+
+
+def _extract_scheduler_mode(state_payload: dict | None, exchange: str) -> str:
+    if not isinstance(state_payload, dict):
+        return "NORMAL"
+    items = state_payload.get("items") or {}
+    item = items.get(exchange) or {}
+    return str(item.get("mode") or "NORMAL")
+
+
 def _build_health_payload(
     *,
     exchange: str,
@@ -217,12 +233,37 @@ class ExplorationRuntime:
             raise RuntimeError("exploration runtime is not enabled for bitflyer")
 
         started_at = time.perf_counter()
+        before_mode = _extract_scheduler_mode(
+            self.scheduler.export_state(),
+            self.exchange,
+        )
+
         dispatch = self.scheduler.next_dispatch(self.exchange)
 
         if dispatch is None:
             snapshot = self.scheduler.snapshot()
+            scheduler_state = self.scheduler.export_state()
+            after_mode = _extract_scheduler_mode(scheduler_state, self.exchange)
+
             write_exploration_rate_state(self.cfg, snapshot)
-            write_exploration_scheduler_state(self.cfg, self.scheduler.export_state())
+            write_exploration_scheduler_state(self.cfg, scheduler_state)
+
+            if after_mode != before_mode:
+                _emit_runtime_audit(
+                    "collector_vnext.exploration.mode.changed",
+                    collector_id=self.cfg.collector_id,
+                    collector_role=self.cfg.collector_role,
+                    symbol=self.cfg.symbol,
+                    session_id=self.session_id,
+                    topic=after_mode.lower(),
+                    ok=True,
+                    extra={
+                        "from_mode": before_mode,
+                        "to_mode": after_mode,
+                        "exchange": self.exchange,
+                        "idle": True,
+                    },
+                )
             write_exploration_status(
                 self.cfg,
                 _build_status_payload(
@@ -311,9 +352,11 @@ class ExplorationRuntime:
 
         elapsed_ms = round((time.perf_counter() - started_at) * 1000.0, 1)
         snapshot = self.scheduler.snapshot()
+        scheduler_state = self.scheduler.export_state()
+        after_mode = _extract_scheduler_mode(scheduler_state, self.exchange)
 
         write_exploration_rate_state(self.cfg, snapshot)
-        write_exploration_scheduler_state(self.cfg, self.scheduler.export_state())
+        write_exploration_scheduler_state(self.cfg, scheduler_state)
         write_exploration_status(
             self.cfg,
             _build_status_payload(
@@ -361,6 +404,25 @@ class ExplorationRuntime:
             elapsed_ms=elapsed_ms,
             extra=last_result or {},
         )
+
+        if after_mode != before_mode:
+            _emit_runtime_audit(
+                "collector_vnext.exploration.mode.changed",
+                collector_id=self.cfg.collector_id,
+                collector_role=self.cfg.collector_role,
+                symbol=self.cfg.symbol,
+                session_id=self.session_id,
+                topic=after_mode.lower(),
+                ok=True,
+                extra={
+                    "from_mode": before_mode,
+                    "to_mode": after_mode,
+                    "exchange": self.exchange,
+                    "request_class": dispatch,
+                    "status_code": status_code,
+                    "retry_after_sec": retry_after_sec,
+                },
+            )
 
         print(
             json.dumps(
