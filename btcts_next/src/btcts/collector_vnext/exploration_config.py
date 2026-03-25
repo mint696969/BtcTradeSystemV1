@@ -114,6 +114,7 @@ class ExplorationRequestClassConfig:
     enabled: bool = True
     weight: float = 1.0
     min_share: float = 0.0
+    domain: str = "market_data"
 
 
 @dataclass(frozen=True)
@@ -154,6 +155,7 @@ def _normalize_request_classes(raw: dict) -> Dict[str, ExplorationRequestClassCo
             enabled=_as_bool(item.get("enabled"), True),
             weight=max(0.0, _as_float(item.get("weight"), 1.0)),
             min_share=max(0.0, min(1.0, _as_float(item.get("min_share"), 0.0))),
+            domain=str(item.get("domain") or "market_data").strip() or "market_data",
         )
 
     return out

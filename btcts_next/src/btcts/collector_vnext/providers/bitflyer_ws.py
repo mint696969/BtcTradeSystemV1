@@ -80,41 +80,173 @@ def connect_and_stream_executions(
             try:
                 msg = json.loads(raw)
             except Exception:
-                continue
-
-            params = msg.get("params")
-            if not params:
-                continue
-
-            if params.get("channel") != channel:
-                continue
-
-            data = params.get("message")
-            if not isinstance(data, list):
-                continue
-
-            for item in data:
-                if not isinstance(item, dict):
-                    continue
-
                 yield WSMessage(
-                    provider="bitflyer_ws_executions",
+                    provider="bitflyer_ws_executions_meta",
                     exchange="bitflyer",
                     transport="websocket",
                     channel=channel,
-                    payload=item,
+                    payload={
+                        "_meta_event": "json_decode_failed",
+                        "_raw_preview": str(raw)[:500],
+                    },
                     received_ts=received_ts,
                     subscription_id=None,
                     message_id=None,
                     source_sequence=None,
                     raw_message_meta={
-                        "raw_channel": params.get("channel"),
+                        "raw_channel": None,
                         "subscription_channel": channel,
                         "recv_timeout_sec": recv_timeout_sec,
                         "ssl_verify": ssl_verify,
                         "socket_url": WS_URL,
                     },
                 )
+                continue
+
+            params = msg.get("params")
+            if not params:
+                yield WSMessage(
+                    provider="bitflyer_ws_executions_meta",
+                    exchange="bitflyer",
+                    transport="websocket",
+                    channel=channel,
+                    payload={
+                        "_meta_event": "params_missing",
+                        "_message_keys": sorted(list(msg.keys())) if isinstance(msg, dict) else None,
+                        "_raw_message": msg,
+                    },
+                    received_ts=received_ts,
+                    subscription_id=None,
+                    message_id=None,
+                    source_sequence=None,
+                    raw_message_meta={
+                        "raw_channel": None,
+                        "subscription_channel": channel,
+                        "recv_timeout_sec": recv_timeout_sec,
+                        "ssl_verify": ssl_verify,
+                        "socket_url": WS_URL,
+                    },
+                )
+                continue
+
+            raw_channel = params.get("channel")
+            if raw_channel != channel:
+                yield WSMessage(
+                    provider="bitflyer_ws_executions_meta",
+                    exchange="bitflyer",
+                    transport="websocket",
+                    channel=str(raw_channel or channel),
+                    payload={
+                        "_meta_event": "unexpected_channel",
+                        "_expected_channel": channel,
+                        "_actual_channel": raw_channel,
+                        "_raw_message": msg,
+                    },
+                    received_ts=received_ts,
+                    subscription_id=None,
+                    message_id=None,
+                    source_sequence=None,
+                    raw_message_meta={
+                        "raw_channel": raw_channel,
+                        "subscription_channel": channel,
+                        "recv_timeout_sec": recv_timeout_sec,
+                        "ssl_verify": ssl_verify,
+                        "socket_url": WS_URL,
+                    },
+                )
+                continue
+
+            data = params.get("message")
+            if isinstance(data, list):
+                for item in data:
+                    if not isinstance(item, dict):
+                        yield WSMessage(
+                            provider="bitflyer_ws_executions_meta",
+                            exchange="bitflyer",
+                            transport="websocket",
+                            channel=channel,
+                            payload={
+                                "_meta_event": "non_dict_trade_item",
+                                "_item_type": type(item).__name__,
+                                "_raw_item": item,
+                            },
+                            received_ts=received_ts,
+                            subscription_id=None,
+                            message_id=None,
+                            source_sequence=None,
+                            raw_message_meta={
+                                "raw_channel": raw_channel,
+                                "subscription_channel": channel,
+                                "recv_timeout_sec": recv_timeout_sec,
+                                "ssl_verify": ssl_verify,
+                                "socket_url": WS_URL,
+                            },
+                        )
+                        continue
+
+                    yield WSMessage(
+                        provider="bitflyer_ws_executions",
+                        exchange="bitflyer",
+                        transport="websocket",
+                        channel=channel,
+                        payload=item,
+                        received_ts=received_ts,
+                        subscription_id=None,
+                        message_id=None,
+                        source_sequence=None,
+                        raw_message_meta={
+                            "raw_channel": raw_channel,
+                            "subscription_channel": channel,
+                            "recv_timeout_sec": recv_timeout_sec,
+                            "ssl_verify": ssl_verify,
+                            "socket_url": WS_URL,
+                        },
+                    )
+                continue
+
+            if isinstance(data, dict):
+                yield WSMessage(
+                    provider="bitflyer_ws_executions",
+                    exchange="bitflyer",
+                    transport="websocket",
+                    channel=channel,
+                    payload=data,
+                    received_ts=received_ts,
+                    subscription_id=None,
+                    message_id=None,
+                    source_sequence=None,
+                    raw_message_meta={
+                        "raw_channel": raw_channel,
+                        "subscription_channel": channel,
+                        "recv_timeout_sec": recv_timeout_sec,
+                        "ssl_verify": ssl_verify,
+                        "socket_url": WS_URL,
+                    },
+                )
+                continue
+
+            yield WSMessage(
+                provider="bitflyer_ws_executions_meta",
+                exchange="bitflyer",
+                transport="websocket",
+                channel=channel,
+                payload={
+                    "_meta_event": "unsupported_message_shape",
+                    "_message_type": type(data).__name__,
+                    "_raw_message": msg,
+                },
+                received_ts=received_ts,
+                subscription_id=None,
+                message_id=None,
+                source_sequence=None,
+                raw_message_meta={
+                    "raw_channel": raw_channel,
+                    "subscription_channel": channel,
+                    "recv_timeout_sec": recv_timeout_sec,
+                    "ssl_verify": ssl_verify,
+                    "socket_url": WS_URL,
+                },
+            )
     finally:
         try:
             ws.close()

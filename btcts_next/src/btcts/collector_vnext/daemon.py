@@ -181,7 +181,7 @@ def _emit_loop_status(
 def run_forever() -> int:
     cfg = load_config()
 
-    locked, lock_info = acquire_daemon_lock(cfg)
+    locked, lock_info = acquire_daemon_lock(cfg, runtime_family="smoke")
     if not locked:
         print(
             json.dumps(
@@ -376,7 +376,7 @@ def run_forever() -> int:
 
             time.sleep(interval_sec)
     finally:
-        release_daemon_lock(cfg)
+        release_daemon_lock(cfg, runtime_family="smoke")
 
 
 if __name__ == "__main__":

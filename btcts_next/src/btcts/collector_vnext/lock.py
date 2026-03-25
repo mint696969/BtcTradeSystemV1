@@ -24,26 +24,43 @@ def _state_dir(cfg: CollectorConfig | None = None) -> Path:
     return state_dir
 
 
-def daemon_lock_path(cfg: CollectorConfig | None = None) -> Path:
-    return _state_dir(cfg) / "daemon.lock.json"
+def daemon_lock_path(
+    cfg: CollectorConfig | None = None,
+    *,
+    runtime_family: str = "smoke",
+) -> Path:
+    family = str(runtime_family or "smoke").strip().lower() or "smoke"
+    return _state_dir(cfg) / f"{family}_daemon.lock.json"
 
 
 def _now_unix() -> float:
     return time.time()
 
 
-def _lock_payload() -> dict:
+def _lock_payload(*, runtime_family: str = "smoke") -> dict:
+    family = str(runtime_family or "smoke").strip().lower() or "smoke"
+    command_map = {
+        "smoke": "python -m btcts.collector_vnext.daemon",
+        "exploration": "python -m btcts.collector_vnext.exploration_daemon",
+        "unified": "python -m btcts.collector_vnext.unified_daemon",
+    }
+
     return {
         "pid": os.getpid(),
         "hostname": socket.gethostname(),
         "started_at_unix": _now_unix(),
         "started_at_iso": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "command": "python -m btcts.collector_vnext.daemon",
+        "runtime_family": family,
+        "command": command_map.get(family, f"python -m btcts.collector_vnext.{family}_daemon"),
     }
 
 
-def read_lock_info(cfg: CollectorConfig | None = None) -> dict | None:
-    path = daemon_lock_path(cfg)
+def read_lock_info(
+    cfg: CollectorConfig | None = None,
+    *,
+    runtime_family: str = "smoke",
+) -> dict | None:
+    path = daemon_lock_path(cfg, runtime_family=runtime_family)
     if not path.exists():
         return None
 
@@ -88,8 +105,8 @@ def is_pid_alive(pid: int | None) -> bool:
         return False
 
 
-def _write_lock_file(path: Path) -> dict:
-    payload = _lock_payload()
+def _write_lock_file(path: Path, *, runtime_family: str = "smoke") -> dict:
+    payload = _lock_payload(runtime_family=runtime_family)
     data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
     fd = os.open(str(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
@@ -101,22 +118,27 @@ def _write_lock_file(path: Path) -> dict:
     return payload
 
 
-def acquire_daemon_lock(cfg: CollectorConfig | None = None) -> tuple[bool, dict]:
-    path = daemon_lock_path(cfg)
+def acquire_daemon_lock(
+    cfg: CollectorConfig | None = None,
+    *,
+    runtime_family: str = "smoke",
+) -> tuple[bool, dict]:
+    path = daemon_lock_path(cfg, runtime_family=runtime_family)
 
     while True:
         try:
-            current = _write_lock_file(path)
+            current = _write_lock_file(path, runtime_family=runtime_family)
             return True, current
 
         except FileExistsError:
-            existing = read_lock_info(cfg)
+            existing = read_lock_info(cfg, runtime_family=runtime_family)
             if not existing:
                 try:
                     path.unlink(missing_ok=True)
                 except Exception:
                     return False, {
                         "pid": None,
+                        "runtime_family": runtime_family,
                         "error": "lock_exists_but_unreadable",
                         "path": str(path),
                     }
@@ -131,6 +153,7 @@ def acquire_daemon_lock(cfg: CollectorConfig | None = None) -> tuple[bool, dict]
             except Exception:
                 return False, {
                     **existing,
+                    "runtime_family": runtime_family,
                     "error": "stale_lock_unlink_failed",
                     "path": str(path),
                 }
@@ -139,14 +162,19 @@ def acquire_daemon_lock(cfg: CollectorConfig | None = None) -> tuple[bool, dict]
         except Exception as exc:
             return False, {
                 "pid": None,
+                "runtime_family": runtime_family,
                 "error": f"lock_write_failed: {exc}",
                 "path": str(path),
             }
 
 
-def release_daemon_lock(cfg: CollectorConfig | None = None) -> None:
-    path = daemon_lock_path(cfg)
-    existing = read_lock_info(cfg)
+def release_daemon_lock(
+    cfg: CollectorConfig | None = None,
+    *,
+    runtime_family: str = "smoke",
+) -> None:
+    path = daemon_lock_path(cfg, runtime_family=runtime_family)
+    existing = read_lock_info(cfg, runtime_family=runtime_family)
     if not existing:
         return
 

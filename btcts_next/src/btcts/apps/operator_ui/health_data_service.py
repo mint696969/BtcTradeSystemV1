@@ -64,13 +64,28 @@ def _classify_row(row: dict[str, Any]) -> dict[str, bool]:
     text = " ".join([event, topic, provider, reason, error])
 
     is_exploration = event.startswith("collector_vnext.exploration.")
-    is_rest = ("rest" in text) or ("http" in text) or is_exploration
-    is_ws = ("ws" in text) or ("websocket" in text)
+    is_unified = event.startswith("collector_vnext.unified.")
+    is_unified_ws = event.startswith("collector_vnext.unified.ws_board.") or event.startswith(
+        "collector_vnext.unified.ws_executions."
+    )
+    is_exploration_ws = event.startswith("collector_vnext.exploration.ws.")
+    is_rest = (
+        ("rest" in text)
+        or ("http" in text)
+        or (is_exploration and not is_exploration_ws)
+        or (is_unified and not is_unified_ws)
+    )
+    is_ws = ("ws" in text) or ("websocket" in text) or is_unified_ws or is_exploration_ws
     is_429 = "429" in text or "retry_after" in text
     is_gap = "gap" in text
     is_resync = "resync" in text
     is_warn_or_error = any(word in text for word in ["warn", "error", "failed", "exception"])
-    is_rate_mode = is_exploration and (
+    is_ws_exec = (
+        "ws_executions" in text
+        or "executions_ws" in text
+        or event.startswith("collector_vnext.unified.ws_executions.")
+    )
+    is_rate_mode = (is_exploration or is_unified) and (
         event.endswith(".mode.changed")
         or any(word in text for word in ["crit", "recovery", "throttle", "utilization"])
     )
@@ -78,6 +93,7 @@ def _classify_row(row: dict[str, Any]) -> dict[str, bool]:
     return {
         "is_rest": is_rest,
         "is_ws": is_ws,
+        "is_ws_exec": is_ws_exec,
         "is_429": is_429,
         "is_gap": is_gap,
         "is_resync": is_resync,
@@ -94,6 +110,7 @@ def build_recent_api_ws_series(*, window_minutes: int = 60) -> list[dict[str, An
         lambda: {
             "api_events": 0.0,
             "ws_events": 0.0,
+            "ws_exec_events": 0.0,
             "events_429": 0.0,
             "gap_events": 0.0,
             "resync_events": 0.0,
@@ -124,6 +141,8 @@ def build_recent_api_ws_series(*, window_minutes: int = 60) -> list[dict[str, An
             per_minute[bucket]["api_events"] += 1.0
         if flags["is_ws"]:
             per_minute[bucket]["ws_events"] += 1.0
+        if flags["is_ws_exec"]:
+            per_minute[bucket]["ws_exec_events"] += 1.0
         if flags["is_429"]:
             per_minute[bucket]["events_429"] += 1.0
         if flags["is_gap"]:
@@ -163,6 +182,7 @@ def build_recent_api_ws_series(*, window_minutes: int = 60) -> list[dict[str, An
                 "events_429": item["events_429"],
                 "events_429_marker": 500.0 if item["events_429"] > 0 else None,
                 "ws_events": item["ws_events"],
+                "ws_exec_events": item["ws_exec_events"],
                 "gap_events": item["gap_events"],
                 "resync_events": item["resync_events"],
                 "warn_error_events": item["warn_error_events"],
@@ -177,17 +197,20 @@ def build_rate_limit_overlay(*, window_minutes: int = 60) -> list[dict[str, Any]
     state = load_state()
     rate_items = (state.get("rate") or {}).get("items") or {}
     bitflyer = rate_items.get("bitflyer") or {}
+    rate_domains = (bitflyer.get("domains") or {}) if isinstance(bitflyer, dict) else {}
+    market_data_rate = (rate_domains.get("market_data") or {}) if isinstance(rate_domains, dict) else {}
+    rate_view = market_data_rate or bitflyer
 
-    budget = bitflyer.get("budget") or {}
+    budget = rate_view.get("budget") or {}
     budget_60s = budget.get("budget_60s")
     budget_300s = budget.get("budget_300s")
 
-    requests_60s = bitflyer.get("requests_60s")
-    requests_300s = bitflyer.get("requests_300s")
-    utilization = bitflyer.get("utilization")
-    active_target_ratio = bitflyer.get("active_target_ratio")
-    target_utilization = bitflyer.get("target_utilization")
-    hard_cap_utilization = bitflyer.get("hard_cap_utilization")
+    requests_60s = rate_view.get("requests_60s")
+    requests_300s = rate_view.get("requests_300s")
+    utilization = rate_view.get("utilization")
+    active_target_ratio = rate_view.get("active_target_ratio")
+    target_utilization = rate_view.get("target_utilization")
+    hard_cap_utilization = rate_view.get("hard_cap_utilization")
 
     buckets = _empty_minute_buckets(window_minutes)
     out: list[dict[str, Any]] = []
@@ -397,7 +420,7 @@ def _build_continuity_rail(
 def build_api_continuity_rail(*, window_minutes: int = 60) -> list[dict[str, Any]]:
     return _build_continuity_rail(
         window_minutes=window_minutes,
-        venue="bitflyer_api",
+        venue="bitflyer_api_market_data",
         use_api=True,
         use_ws=False,
         use_gap=False,
@@ -409,7 +432,7 @@ def build_api_continuity_rail(*, window_minutes: int = 60) -> list[dict[str, Any
 def build_ws_continuity_rail(*, window_minutes: int = 60) -> list[dict[str, Any]]:
     return _build_continuity_rail(
         window_minutes=window_minutes,
-        venue="bitflyer_ws",
+        venue="bitflyer_ws_market_data",
         use_api=False,
         use_ws=True,
         use_gap=True,
@@ -458,6 +481,7 @@ def load_health_snapshot() -> dict[str, Any]:
 
     return {
         "collector_state": state,
+        "rate_domains": state.get("rate_domains") or {},
         "market_latest": market_latest,
         "market_diag": market_diag,
         "api_ws_series_1h": build_recent_api_ws_series(window_minutes=60),

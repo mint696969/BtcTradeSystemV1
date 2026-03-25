@@ -131,6 +131,20 @@ def _ws_freshness_label(origin_payload: dict, lang: str) -> str:
     return get_text(lang, "health_value_broken_freshness")
 
 
+def _ws_freshness_label_from_ts(value: str | None, lang: str) -> str:
+    age_sec = _ws_age_seconds(value)
+    if age_sec is None:
+        return "-"
+
+    if age_sec <= 5:
+        return get_text(lang, "health_value_live_freshness")
+    if age_sec <= 30:
+        return get_text(lang, "health_value_quiet_freshness")
+    if age_sec <= 300:
+        return get_text(lang, "health_value_stale_freshness")
+    return get_text(lang, "health_value_broken_freshness")
+
+
 def _parse_ui_ts(value: str | None):
     raw = str(value or "").strip()
     if not raw:
@@ -240,14 +254,38 @@ def _health_event_label(value: str | None, lang: str) -> str:
         "None": "health_table_empty_value",
     }
 
+    if raw == "collector_vnext.unified.mode.changed":
+        return get_text(lang, "health_event_exploration_normal")
+
+    if raw == "collector_vnext.unified.ws_executions.started":
+        return "ws executions started"
+    if raw == "collector_vnext.unified.ws_executions.connected":
+        return "ws executions connected"
+    if raw == "collector_vnext.unified.ws_executions.reconnected":
+        return "ws executions reconnected"
+    if raw == "collector_vnext.unified.ws_executions.message.received":
+        return "ws executions message received"
+    if raw == "collector_vnext.unified.ws_executions.message.skipped":
+        return "ws executions message skipped"
+    if raw == "collector_vnext.unified.ws_executions.message.meta":
+        return "ws executions meta event"
+    if raw == "collector_vnext.unified.ws_executions.trade.written":
+        return "ws executions trade written"
+
     text_key = key_map.get(raw)
     if text_key:
         return get_text(lang, text_key)
 
-    if raw.startswith("collector_vnext.exploration.") and raw.endswith(".completed"):
+    if (
+        raw.startswith("collector_vnext.exploration.")
+        or raw.startswith("collector_vnext.unified.")
+    ) and raw.endswith(".completed"):
         return get_text(lang, "health_event_exploration_request_completed")
 
-    if raw.startswith("collector_vnext.exploration.") and raw.endswith(".failed"):
+    if (
+        raw.startswith("collector_vnext.exploration.")
+        or raw.startswith("collector_vnext.unified.")
+    ) and raw.endswith(".failed"):
         return get_text(lang, "health_event_exploration_request_failed")
 
     return raw
@@ -338,8 +376,20 @@ def render():
     rate_payload = collector_state.get("rate") or {}
     origin_payload = collector_state.get("origin") or {}
     checkpoint_payload = collector_state.get("checkpoint") or {}
-    daemon_status_payload = collector_state.get("exploration_daemon_status") or {}
+    executions_payload = collector_state.get("executions") or {}
+    daemon_status_payload = (
+        collector_state.get("daemon_status")
+        or collector_state.get("exploration_daemon_status")
+        or {}
+    )
     daemon_health_payload = collector_state.get("health") or {}
+
+    runtime_kind = str(
+        status_payload.get("runtime_kind")
+        or daemon_status_payload.get("runtime_kind")
+        or health_payload.get("runtime_kind")
+        or ""
+    ).lower()
 
     rate_items = rate_payload.get("items") or {}
     bitflyer_rate = rate_items.get("bitflyer") or {}
@@ -347,9 +397,36 @@ def render():
     bitflyer_rate_snapshot = bitflyer_rate_classes.get("board_snapshot") or {}
     bitflyer_rate_trades = bitflyer_rate_classes.get("rest_trades") or {}
 
-    exploration_mode = str(bitflyer_rate.get("mode") or bitflyer_rate.get("summary_state") or "")
-    exploration_active_target_ratio = bitflyer_rate.get("active_target_ratio")
-    exploration_utilization = bitflyer_rate.get("utilization")
+    runtime_mode = str(bitflyer_rate.get("mode") or bitflyer_rate.get("summary_state") or "")
+    runtime_active_target_ratio = bitflyer_rate.get("active_target_ratio")
+    runtime_utilization = bitflyer_rate.get("utilization")
+
+    ws_board_lane = status_payload.get("ws_board_lane") or {}
+    ws_executions_lane = status_payload.get("ws_executions_lane") or {}
+
+    ws_board_state = str(
+        ws_board_lane.get("state")
+        or origin_payload.get("lane_state")
+        or origin_payload.get("ws_state")
+        or ""
+    )
+    ws_board_last_error = str(
+        ws_board_lane.get("last_error")
+        or origin_payload.get("last_error")
+        or ""
+    )
+
+    ws_executions_state = str(
+        ws_executions_lane.get("state")
+        or executions_payload.get("lane_state")
+        or executions_payload.get("ws_state")
+        or ""
+    )
+    ws_executions_last_error = str(
+        ws_executions_lane.get("last_error")
+        or executions_payload.get("last_error")
+        or ""
+    )
 
     market_latest = snapshot.get("market_latest") or {}
     market_diag = snapshot.get("market_diag") or {}
@@ -511,12 +588,14 @@ def render():
         ws_chart_df = ws_df.set_index("ts")[
             [
                 "ws_events",
+                "ws_exec_events",
                 "gap_events",
                 "resync_events",
             ]
         ].rename(
             columns={
                 "ws_events": get_text(lang, "health_chart_ws_events"),
+                "ws_exec_events": "WS Exec Events",
                 "gap_events": get_text(lang, "health_chart_gap_events"),
                 "resync_events": get_text(lang, "health_chart_resync_events"),
             }
@@ -583,15 +662,16 @@ def render():
     m1.metric(
         get_text(lang, "health_metric_status"),
         _health_value_label(status_payload.get("mode"), lang),
+        runtime_kind.upper() if runtime_kind else None,
     )
     m2.metric(
         get_text(lang, "health_metric_wait_ms"),
-        "-" if not bitflyer_rate else _health_value_label(exploration_mode, lang),
+        "-" if not bitflyer_rate else _health_value_label(runtime_mode, lang),
     )
     m3.metric(
         get_text(lang, "health_metric_util_ratio"),
         "-" if not bitflyer_rate else _format_metric_number(
-            exploration_utilization if exploration_utilization is not None else bitflyer_rate.get("util_ratio"),
+            runtime_utilization if runtime_utilization is not None else bitflyer_rate.get("util_ratio"),
             decimals=1,
             percent=True,
         ),
@@ -603,40 +683,118 @@ def render():
     m5.metric(
         get_text(lang, "health_metric_hold_until"),
         _format_optional_ts(bitflyer_rate.get("hold_until_ts"), lang)
-        if exploration_mode == "CRIT"
+        if runtime_mode == "CRIT"
         else "-",
     )
 
-    n1, n2, n3, n4, n5, n6, n7 = st.columns(7)
+    st.markdown("##### WS Board / WS Executions")
+
+    nb1, nb2, nb3, nb4, nb5 = st.columns(5)
+    nb1.metric(
+        "WS Board State",
+        _health_value_label(
+            ws_board_lane.get("ws_state") or origin_payload.get("ws_state"),
+            lang,
+        ),
+        ws_board_state if ws_board_state else None,
+    )
+    nb2.metric(
+        "WS Board Freshness",
+        _health_value_label(
+            ws_board_lane.get("ws_freshness")
+            or _ws_freshness_label_from_ts(
+                ws_board_lane.get("last_event_ts") or origin_payload.get("ts"),
+                lang,
+            ),
+            lang,
+        ),
+    )
+    nb3.metric(
+        "WS Board Last Update",
+        _format_optional_ts(
+            ws_board_lane.get("last_event_ts") or origin_payload.get("ts"),
+            lang,
+        ),
+    )
+    nb4.metric(
+        "WS Board Age Sec",
+        _format_age_seconds(
+            ws_board_lane.get("last_event_ts") or origin_payload.get("ts"),
+        ),
+    )
+    nb5.metric(
+        "WS Board Restart",
+        _format_metric_number(ws_board_lane.get("restart_count")),
+        ws_board_last_error if ws_board_last_error else None,
+    )
+
+    ne1, ne2, ne3, ne4, ne5 = st.columns(5)
+    ne1.metric(
+        "WS Exec State",
+        _health_value_label(
+            ws_executions_lane.get("ws_state") or executions_payload.get("ws_state"),
+            lang,
+        ),
+        ws_executions_state if ws_executions_state else None,
+    )
+    ne2.metric(
+        "WS Exec Freshness",
+        _health_value_label(
+            ws_executions_lane.get("ws_freshness")
+            or health_payload.get("ws_executions_freshness")
+            or _ws_freshness_label_from_ts(
+                ws_executions_lane.get("last_event_ts")
+                or ws_executions_lane.get("connected_ts")
+                or executions_payload.get("last_event_ts")
+                or executions_payload.get("connected_ts")
+                or executions_payload.get("ts"),
+                lang,
+            ),
+            lang,
+        ),
+    )
+    ne3.metric(
+        "WS Exec Last Update",
+        _format_optional_ts(
+            ws_executions_lane.get("last_event_ts")
+            or ws_executions_lane.get("connected_ts")
+            or executions_payload.get("last_event_ts")
+            or executions_payload.get("connected_ts")
+            or executions_payload.get("ts"),
+            lang,
+        ),
+    )
+    ne4.metric(
+        "WS Exec Age Sec",
+        _format_age_seconds(
+            ws_executions_lane.get("last_event_ts")
+            or ws_executions_lane.get("connected_ts")
+            or executions_payload.get("last_event_ts")
+            or executions_payload.get("connected_ts")
+            or executions_payload.get("ts"),
+        ),
+    )
+    ne5.metric(
+        "WS Exec Trades",
+        _format_metric_number(
+            ws_executions_lane.get("trade_count")
+            if ws_executions_lane
+            else executions_payload.get("trade_count"),
+        ),
+        ws_executions_last_error if ws_executions_last_error else None,
+    )
+
+    n1, n2, n3 = st.columns(3)
     n1.metric(
-        get_text(lang, "health_metric_ws_state"),
-        _health_value_label(origin_payload.get("ws_state"), lang),
-    )
-    n2.metric(
-        get_text(lang, "health_metric_ws_freshness"),
-        _ws_freshness_label(origin_payload, lang),
-    )
-    n3.metric(
-        get_text(lang, "health_metric_ws_last_update"),
-        _format_optional_ts(origin_payload.get("ts"), lang),
-    )
-    n4.metric(
-        get_text(lang, "health_metric_ws_age_sec"),
-        _format_age_seconds(origin_payload.get("ts")),
-    )
-    n5.metric(
         get_text(lang, "health_metric_snapshot_to_live"),
         _format_metric_number(origin_payload.get("snapshot_to_live_ms")),
     )
-    n6.metric(
+    n2.metric(
         get_text(lang, "health_metric_resync"),
-        "-" if exploration_active_target_ratio is None else _format_metric_number(
-            exploration_active_target_ratio,
-            decimals=1,
-            percent=True,
-        ),
+        str(origin_payload.get("resync_active") or False),
+        str(origin_payload.get("gap_detected") or False),
     )
-    n7.metric(
+    n3.metric(
         get_text(lang, "health_metric_last_sequence_id"),
         _format_metric_number(checkpoint_payload.get("last_sequence_id")),
     )
@@ -661,6 +819,7 @@ def render():
     p4.metric(
         get_text(lang, "health_metric_daemon_last_error"),
         str(daemon_status_payload.get("last_error") or "-"),
+        ws_board_last_error if ws_board_last_error else None,
     )
     p5.metric(
         get_text(lang, "health_metric_daemon_failures"),
@@ -673,6 +832,7 @@ def render():
     p6.metric(
         get_text(lang, "health_metric_daemon_last_success"),
         _format_optional_ts(daemon_health_payload.get("last_success_ts"), lang),
+        _format_optional_ts(origin_payload.get("ts"), lang),
     )
 
     st.markdown(f"#### {get_text(lang, 'health_section_recent_events')}")

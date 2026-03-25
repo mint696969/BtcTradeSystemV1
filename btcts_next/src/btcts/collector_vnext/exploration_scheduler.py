@@ -633,7 +633,12 @@ class ExplorationScheduler:
             request_classes: Dict[str, dict] = {}
             for request_class in exchange_cfg.request_priority:
                 stats = self._request_stats_for(exchange, request_class)
+                class_cfg = exchange_cfg.request_classes.get(request_class)
+                if class_cfg is None:
+                    class_cfg = ExplorationRequestClassConfig()
+
                 request_classes[request_class] = {
+                    "domain": class_cfg.domain,
                     "requests_60s": self._request_count(stats.sent_ts, ts, 60.0),
                     "requests_300s": self._request_count(stats.sent_ts, ts, 300.0),
                     "success_60s": self._request_count(stats.success_ts, ts, 60.0),
@@ -662,6 +667,28 @@ class ExplorationScheduler:
                 "hold_until_ts": _iso_utc_from_unix(state.hold_until_ts),
                 "last_mode_change_ts": _iso_utc_from_unix(state.last_mode_change_ts),
                 "budget": budget,
+                "domains": {
+                    "market_data": {
+                        "mode": mode,
+                        "engaged": mode in {"WARN", "CRIT", "RECOVERY"},
+                        "target_utilization": exchange_cfg.control.target_utilization,
+                        "active_target_ratio": state.active_target_ratio,
+                        "warn_utilization": exchange_cfg.control.warn_utilization,
+                        "hard_cap_utilization": exchange_cfg.control.hard_cap_utilization,
+                        "crit_floor_ratio": exchange_cfg.control.crit_floor_ratio,
+                        "requests_60s": self._requests_60s(exchange, ts),
+                        "requests_300s": self._requests_300s(exchange, ts),
+                        "utilization_60s": util_60s,
+                        "utilization_300s": util_300s,
+                        "utilization": max(util_60s, util_300s),
+                        "last_429_ts": _iso_utc_from_unix(state.last_429_ts),
+                        "crit_entered_ts": _iso_utc_from_unix(state.crit_entered_ts),
+                        "recovery_started_ts": _iso_utc_from_unix(state.recovery_started_ts),
+                        "hold_until_ts": _iso_utc_from_unix(state.hold_until_ts),
+                        "last_mode_change_ts": _iso_utc_from_unix(state.last_mode_change_ts),
+                        "budget": budget,
+                    }
+                },
                 "request_classes": request_classes,
                 "ts": _iso_utc_from_unix(ts),
             }

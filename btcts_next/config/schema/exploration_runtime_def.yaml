@@ -36,11 +36,15 @@ defaults:
           enabled: true
           weight: 1.0
           min_share: 0.50
+          domain: market_data
 
         rest_trades:
           enabled: true
           weight: 0.8
           min_share: 0.30
+          domain: market_data
+
+
 
 keys:
   - exchanges
