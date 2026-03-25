@@ -123,6 +123,8 @@ class ExplorationExchangeConfig:
     enabled: bool
     limits: ExplorationLimits
     control: ExplorationControl
+    domains: Dict[str, dict] = field(default_factory=dict)
+    shared_ip: dict = field(default_factory=dict)
     request_priority: List[str] = field(default_factory=list)
     request_classes: Dict[str, ExplorationRequestClassConfig] = field(default_factory=dict)
 
@@ -170,6 +172,8 @@ def _normalize_exchange(exchange: str, raw: dict) -> ExplorationExchangeConfig:
     raw_request_classes = (
         raw.get("request_classes") if isinstance(raw.get("request_classes"), dict) else {}
     )
+    raw_domains = raw.get("domains") if isinstance(raw.get("domains"), dict) else {}
+    raw_shared_ip = raw.get("shared_ip") if isinstance(raw.get("shared_ip"), dict) else {}
 
     request_priority = _as_str_list(
         raw.get("request_priority"),
@@ -273,6 +277,8 @@ def _normalize_exchange(exchange: str, raw: dict) -> ExplorationExchangeConfig:
             recovery_curve=recovery_curve,
             recovery_steps=recovery_steps,
         ),
+        domains=dict(raw_domains),
+        shared_ip=dict(raw_shared_ip),
         request_priority=request_priority,
         request_classes=request_classes,
     )

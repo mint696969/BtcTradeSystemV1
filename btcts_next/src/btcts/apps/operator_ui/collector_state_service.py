@@ -91,12 +91,16 @@ def load_state() -> Dict[str, Any]:
     rate_items = (rate.get("items") or {}) if isinstance(rate, dict) else {}
     bitflyer_rate = rate_items.get("bitflyer") or {}
     rate_domains = (bitflyer_rate.get("domains") or {}) if isinstance(bitflyer_rate, dict) else {}
+    domain_names = list(bitflyer_rate.get("domain_names") or []) if isinstance(bitflyer_rate, dict) else []
+    shared_ip = (bitflyer_rate.get("shared_ip") or {}) if isinstance(bitflyer_rate, dict) else {}
 
     return {
         "status": status,
         "health": health,
         "rate": rate,
         "rate_domains": rate_domains,
+        "domain_names": domain_names,
+        "shared_ip": shared_ip,
         "origin": origin,
         "executions": _safe_read(state_dir / "unified_executions_status.json"),
         "checkpoint": checkpoint,

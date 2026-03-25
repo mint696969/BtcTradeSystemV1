@@ -27,6 +27,13 @@ defaults:
         recovery_curve: linear
         recovery_steps: []
 
+      domains:
+        market_data: {}
+        order: {}
+        cancel: {}
+
+      shared_ip: {}
+
       request_priority:
         - board_snapshot
         - rest_trades

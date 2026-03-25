@@ -651,6 +651,7 @@ class ExplorationScheduler:
                 "enabled": exchange_cfg.enabled,
                 "mode": mode,
                 "engaged": mode in {"WARN", "CRIT", "RECOVERY"},
+                "domain_names": ["market_data", *[name for name in exchange_cfg.domains.keys() if name != "market_data"]],
                 "target_utilization": exchange_cfg.control.target_utilization,
                 "active_target_ratio": state.active_target_ratio,
                 "warn_utilization": exchange_cfg.control.warn_utilization,
@@ -687,8 +688,14 @@ class ExplorationScheduler:
                         "hold_until_ts": _iso_utc_from_unix(state.hold_until_ts),
                         "last_mode_change_ts": _iso_utc_from_unix(state.last_mode_change_ts),
                         "budget": budget,
-                    }
+                    },
+                    **{
+                        name: {}
+                        for name in exchange_cfg.domains.keys()
+                        if name != "market_data"
+                    },
                 },
+                "shared_ip": dict(exchange_cfg.shared_ip),
                 "request_classes": request_classes,
                 "ts": _iso_utc_from_unix(ts),
             }
