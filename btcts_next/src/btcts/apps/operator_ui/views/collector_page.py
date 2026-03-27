@@ -4,6 +4,7 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 import json
+from uuid import uuid4
 import streamlit as st
 
 from btcts.apps.operator_ui.components import execution_feed_panel
@@ -15,6 +16,8 @@ from btcts.apps.operator_ui.components.live_bridge import (
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.collector_state_service import load_state
 from btcts.apps.operator_ui.market_state_service import market_state_diagnostics
+from btcts.collector_vnext.config import load_config
+from btcts.collector_vnext.unified_state import write_unified_supervisor_request
 from btcts.core import paths as core_paths
 
 
@@ -185,6 +188,64 @@ def _origin_audit_summary(events: list[dict]) -> dict:
     return summary
 
 
+def _request_unified_restart() -> tuple[bool, str]:
+    try:
+        cfg = load_config()
+        request_id = uuid4().hex
+        write_unified_supervisor_request(
+            cfg,
+            {
+                "request_id": request_id,
+                "action": "restart",
+                "requested_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                "requested_by": "operator_ui",
+                "reason": "manual_code_apply",
+            },
+        )
+        return True, f"restart request file written request_id={request_id}"
+    except Exception as exc:
+        return False, str(exc)
+
+
+def _supervisor_status_rows(supervisor_status: dict, supervisor_request: dict) -> list[dict]:
+    if not isinstance(supervisor_status, dict) and not isinstance(supervisor_request, dict):
+        return []
+
+    return [
+        {
+            "supervisor_mode": (supervisor_status or {}).get("mode"),
+            "started_at": (supervisor_status or {}).get("started_at"),
+            "last_seen_ts": (supervisor_status or {}).get("last_seen_ts"),
+            "uptime_sec": (supervisor_status or {}).get("uptime_sec"),
+            "last_action": (supervisor_status or {}).get("last_action"),
+            "last_requested_at": (supervisor_status or {}).get("last_requested_at"),
+            "last_completed_at": (supervisor_status or {}).get("last_completed_at"),
+            "last_error": (supervisor_status or {}).get("last_error"),
+            "request_ack_ts": (supervisor_status or {}).get("request_ack_ts"),
+            "acked_request_id": (supervisor_status or {}).get("acked_request_id"),
+            "daemon_pid": (supervisor_status or {}).get("daemon_pid"),
+            "supervisor_pid": (supervisor_status or {}).get("supervisor_pid"),
+            "pending_request_id": (supervisor_request or {}).get("request_id"),
+            "pending_action": (supervisor_request or {}).get("action"),
+            "pending_reason": (supervisor_request or {}).get("reason"),
+            "pending_requested_at": (supervisor_request or {}).get("requested_at"),
+            "pending_requested_by": (supervisor_request or {}).get("requested_by"),
+        }
+    ]
+
+
+def _is_restart_request_pending(supervisor_request: dict) -> bool:
+    if not isinstance(supervisor_request, dict):
+        return False
+    return str(supervisor_request.get("action") or "").strip().lower() == "restart"
+
+
+def _is_supervisor_running(supervisor_status: dict) -> bool:
+    if not isinstance(supervisor_status, dict):
+        return False
+    return str(supervisor_status.get("mode") or "").strip().upper() == "RUNNING"
+
+
 def _audit_rows_for_ui(events: list[dict]) -> list[dict]:
     rows: list[dict] = []
     for row in events:
@@ -222,7 +283,10 @@ def render():
     rate_state = collector_state.get("rate", {})
     origin_state = collector_state.get("origin", {})
     daemon_state = collector_state.get("health", {})
+    supervisor_status = collector_state.get("supervisor_status", {})
+    supervisor_request = collector_state.get("supervisor_request", {})
     status_state = collector_state.get("status", {})
+    daemon_stop_request = collector_state.get("daemon_stop_request", {})
     origin_continuity = status_state.get("origin_continuity", {}) if isinstance(status_state, dict) else {}
     state_dir_info = collector_state.get("state_dir", {})
     market_state_info = market_state_diagnostics()
@@ -241,6 +305,24 @@ def render():
         f"daemon={live_summary['daemon_status']} / "
         f"cycle_last_sequence_id={runtime.get('last_sequence_id')}"
     )
+
+    if supervisor_status:
+        st.caption(
+            f"supervisor_mode={supervisor_status.get('mode', '-')} / "
+            f"last_action={supervisor_status.get('last_action', '-')} / "
+            f"last_error={supervisor_status.get('last_error', '-')}"
+        )
+    if supervisor_request:
+        st.caption(
+            f"pending_request={supervisor_request.get('action', '-')} / "
+            f"requested_by={supervisor_request.get('requested_by', '-')} / "
+            f"reason={supervisor_request.get('reason', '-')}"
+        )
+    if daemon_stop_request:
+        st.caption(
+            f"daemon_stop_request={daemon_stop_request.get('action', '-')} / "
+            f"requested_by={daemon_stop_request.get('requested_by', '-')}"
+        )
 
     st.caption(get_text(lang, "collector_note_sequence"))
 
@@ -262,6 +344,51 @@ def render():
         st.json(market_state_info)
 
     st.markdown("## Live Operations")
+    st.markdown("### Unified Supervisor Control")
+
+    supervisor_running = _is_supervisor_running(supervisor_status)
+    restart_pending = _is_restart_request_pending(supervisor_request)
+
+    if not supervisor_running:
+        st.warning("watchdog is not RUNNING. request file can be written, but restart may not execute yet.")
+
+    if restart_pending:
+        st.info("restart request is already pending. wait for watchdog to consume it before reissuing.")
+
+    sup_col1, sup_col2, sup_col3, sup_col4 = st.columns([1.2, 1, 1, 1])
+    with sup_col1:
+        if st.button(
+            "Restart Unified Collector",
+            use_container_width=True,
+            disabled=restart_pending,
+        ):
+            ok, msg = _request_unified_restart()
+            if ok:
+                st.success(f"restart request accepted for queueing: {msg}")
+            else:
+                st.error(f"restart request failed: {msg}")
+
+    with sup_col2:
+        st.metric("Supervisor Mode", supervisor_status.get("mode") or "-")
+
+    with sup_col3:
+        st.metric("Pending Request", supervisor_request.get("action") or "-")
+
+    with sup_col4:
+        st.metric("Supervisor Uptime (sec)", supervisor_status.get("uptime_sec") or "-")
+
+    if supervisor_status:
+        st.caption(
+            f"supervisor_started_at={supervisor_status.get('started_at', '-')} / "
+            f"last_seen_ts={supervisor_status.get('last_seen_ts', '-')}"
+        )
+
+    supervisor_rows = _supervisor_status_rows(supervisor_status, supervisor_request)
+    if supervisor_rows:
+        st.dataframe(supervisor_rows, width="stretch")
+    else:
+        st.info("unified supervisor status not available")
+
     st.markdown("### Collector Runtime State")
 
     st.markdown("### Rate Control Summary")
@@ -334,9 +461,15 @@ def render():
             st.info("origin_status.json not available")
 
     with col_r2:
-        st.caption("Daemon Health")
-        if daemon_state:
-            st.json(daemon_state)
+        st.caption("Daemon / Supervisor Health")
+        if daemon_state or supervisor_status or supervisor_request:
+            st.json(
+                {
+                    "daemon_health": daemon_state,
+                    "supervisor_status": supervisor_status,
+                    "supervisor_request": supervisor_request,
+                }
+            )
         else:
             st.info("daemon health state not available")
 

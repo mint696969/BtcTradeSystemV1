@@ -43,3 +43,40 @@ def write_unified_executions_status(cfg: CollectorConfig, payload: Dict[str, Any
 
 def write_unified_checkpoint(cfg: CollectorConfig, payload: Dict[str, Any]):
     return write_json_state(cfg, "unified_checkpoint.json", payload)
+
+
+def read_unified_state(cfg: CollectorConfig, filename: str) -> Dict[str, Any]:
+    path = cfg.roots()["state"] / filename
+    if not path.exists():
+        return {}
+
+    try:
+        return path.read_text(encoding="utf-8") and __import__("json").loads(
+            path.read_text(encoding="utf-8")
+        )
+    except Exception:
+        return {}
+
+
+def write_unified_supervisor_request(cfg: CollectorConfig, payload: Dict[str, Any]):
+    return write_json_state(cfg, "unified_supervisor_request.json", payload)
+
+
+def read_unified_supervisor_request(cfg: CollectorConfig) -> Dict[str, Any]:
+    return read_unified_state(cfg, "unified_supervisor_request.json")
+
+
+def write_unified_supervisor_status(cfg: CollectorConfig, payload: Dict[str, Any]):
+    return write_json_state(cfg, "unified_supervisor_status.json", payload)
+
+
+def read_unified_supervisor_status(cfg: CollectorConfig) -> Dict[str, Any]:
+    return read_unified_state(cfg, "unified_supervisor_status.json")
+
+
+def write_unified_daemon_stop_request(cfg: CollectorConfig, payload: Dict[str, Any]):
+    return write_json_state(cfg, "unified_daemon_stop_request.json", payload)
+
+
+def read_unified_daemon_stop_request(cfg: CollectorConfig) -> Dict[str, Any]:
+    return read_unified_state(cfg, "unified_daemon_stop_request.json")

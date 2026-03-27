@@ -14,6 +14,7 @@ from .events import now_iso_utc
 from .lock import acquire_daemon_lock, release_daemon_lock
 from .unified_runtime import run_once
 from .unified_state import (
+    read_unified_daemon_stop_request,
     write_unified_daemon_health,
     write_unified_daemon_status,
 )
@@ -39,6 +40,137 @@ def _env_int(name: str, default: int) -> int:
         return int(raw)
     except Exception:
         return default
+
+
+def _active_stop_request(cfg) -> dict:
+    payload = read_unified_daemon_stop_request(cfg)
+    if not isinstance(payload, dict):
+        return {}
+
+    action = str(payload.get("action") or "").strip().lower()
+    if action != "stop":
+        return {}
+
+    return payload
+
+
+def _write_stopping_state(
+    cfg,
+    *,
+    cycle_no: int,
+    reason: str,
+    requested_by: str,
+    last_error: str | None,
+    last_success_ts: str | None,
+) -> None:
+    ts = now_iso_utc()
+
+    write_unified_daemon_status(
+        cfg,
+        {
+            "ts": ts,
+            "collector_id": cfg.collector_id,
+            "collector_role": cfg.collector_role,
+            "mode": "STOPPING",
+            "message": f"collector_vnext unified daemon stopping reason={reason}",
+            "runtime_kind": "unified",
+            "daemon": True,
+            "cycle_no": cycle_no,
+            "lane_health": {
+                "rest_lane": "stopping",
+                "ws_board_lane": "stopping",
+                "ws_executions_lane": "stopping",
+            },
+            "stop_requested": True,
+            "stop_reason": reason,
+            "stop_requested_by": requested_by,
+            "consecutive_failures": 0,
+            "last_error": last_error,
+            "last_success_ts": last_success_ts,
+        },
+    )
+    write_unified_daemon_health(
+        cfg,
+        {
+            "ts": ts,
+            "ok": False,
+            "status": "stopping",
+            "runtime_kind": "unified",
+            "daemon": True,
+            "cycle_no": cycle_no,
+            "stopping": True,
+            "reason": reason,
+            "requested_by": requested_by,
+            "lane_failures": {
+                "rest_lane": 0,
+                "ws_board_lane": 0,
+                "ws_executions_lane": 0,
+            },
+            "consecutive_failures": 0,
+            "last_error": last_error,
+            "last_success_ts": last_success_ts,
+        },
+    )
+
+
+def _write_stopped_state(
+    cfg,
+    *,
+    cycle_no: int,
+    reason: str,
+    requested_by: str,
+    last_error: str | None,
+    last_success_ts: str | None,
+    consecutive_failures: int,
+) -> None:
+    ts = now_iso_utc()
+
+    write_unified_daemon_status(
+        cfg,
+        {
+            "ts": ts,
+            "collector_id": cfg.collector_id,
+            "collector_role": cfg.collector_role,
+            "mode": "STOPPED",
+            "message": f"collector_vnext unified daemon stopped reason={reason}",
+            "runtime_kind": "unified",
+            "daemon": True,
+            "cycle_no": cycle_no,
+            "lane_health": {
+                "rest_lane": "stopped",
+                "ws_board_lane": "stopped",
+                "ws_executions_lane": "stopped",
+            },
+            "stop_requested": True,
+            "stop_reason": reason,
+            "stop_requested_by": requested_by,
+            "consecutive_failures": consecutive_failures,
+            "last_error": last_error,
+            "last_success_ts": last_success_ts,
+        },
+    )
+    write_unified_daemon_health(
+        cfg,
+        {
+            "ts": ts,
+            "ok": False,
+            "status": "stopped",
+            "runtime_kind": "unified",
+            "daemon": True,
+            "stopped": True,
+            "reason": reason,
+            "requested_by": requested_by,
+            "cycle_no": cycle_no,
+            "lane_failures": {
+                "rest_lane": 0,
+                "ws_board_lane": 0,
+                "ws_executions_lane": 0,
+            },
+            "consecutive_failures": consecutive_failures,
+            "last_error": last_error,
+            "last_success_ts": last_success_ts,
+        },
+    )
 
 
 def run_forever() -> int:
@@ -69,6 +201,8 @@ def run_forever() -> int:
     consecutive_failures = 0
     last_error: str | None = None
     last_success_ts: str | None = None
+    stop_reason: str | None = None
+    stop_requested_by: str = "unknown"
 
     ws_board_lane = UnifiedWsBoardLane()
     ws_executions_lane = UnifiedWsExecutionsLane()
@@ -92,6 +226,21 @@ def run_forever() -> int:
 
     try:
         while True:
+            pending_stop = _active_stop_request(cfg)
+            if pending_stop:
+                stop_reason = str(pending_stop.get("reason") or "watchdog_requested")
+                stop_requested_by = str(pending_stop.get("requested_by") or "watchdog")
+                stop_event.set()
+                _write_stopping_state(
+                    cfg,
+                    cycle_no=cycle_no,
+                    reason=stop_reason,
+                    requested_by=stop_requested_by,
+                    last_error=last_error,
+                    last_success_ts=last_success_ts,
+                )
+                break
+
             cycle_no += 1
 
             try:
@@ -125,6 +274,7 @@ def run_forever() -> int:
                             "ws_board_lane": ws_board_snapshot.get("lane_state") or "unknown",
                             "ws_executions_lane": ws_executions_snapshot.get("lane_state") or "unknown",
                         },
+                        "stop_requested": False,
                         "consecutive_failures": consecutive_failures,
                         "last_error": last_error,
                         "last_success_ts": last_success_ts,
@@ -151,49 +301,18 @@ def run_forever() -> int:
                 )
 
             except KeyboardInterrupt:
+                stop_reason = "keyboard_interrupt"
+                stop_requested_by = "console"
                 stop_event.set()
-
-                write_unified_daemon_status(
+                _write_stopping_state(
                     cfg,
-                    {
-                        "ts": now_iso_utc(),
-                        "collector_id": cfg.collector_id,
-                        "collector_role": cfg.collector_role,
-                        "mode": "STOPPED",
-                        "message": "collector_vnext unified daemon stopped by keyboard interrupt",
-                        "runtime_kind": "unified",
-                        "daemon": True,
-                        "cycle_no": cycle_no,
-                        "lane_health": {
-                            "rest_lane": "stopped",
-                            "ws_board_lane": "stopped",
-                        },
-                        "consecutive_failures": consecutive_failures,
-                        "last_error": last_error,
-                        "last_success_ts": last_success_ts,
-                    },
+                    cycle_no=cycle_no,
+                    reason=stop_reason,
+                    requested_by=stop_requested_by,
+                    last_error=last_error,
+                    last_success_ts=last_success_ts,
                 )
-                write_unified_daemon_health(
-                    cfg,
-                    {
-                        "ts": now_iso_utc(),
-                        "ok": False,
-                        "status": "stopped",
-                        "runtime_kind": "unified",
-                        "daemon": True,
-                        "stopped": True,
-                        "reason": "keyboard_interrupt",
-                        "cycle_no": cycle_no,
-                        "lane_failures": {
-                            "rest_lane": 0,
-                            "ws_board_lane": 0,
-                        },
-                        "consecutive_failures": consecutive_failures,
-                        "last_error": last_error,
-                        "last_success_ts": last_success_ts,
-                    },
-                )
-                return 0
+                break
 
             except Exception as exc:
                 consecutive_failures += 1
@@ -278,7 +397,8 @@ def run_forever() -> int:
                             "cycle_no": cycle_no,
                             "lane_health": {
                                 "rest_lane": "stopped",
-                                "ws_board_lane": "not_started",
+                                "ws_board_lane": "stopped",
+                                "ws_executions_lane": "stopped",
                             },
                             "consecutive_failures": consecutive_failures,
                             "last_error": last_error,
@@ -291,6 +411,17 @@ def run_forever() -> int:
                 continue
 
             time.sleep(loop_sleep_sec)
+
+        _write_stopped_state(
+            cfg,
+            cycle_no=cycle_no,
+            reason=stop_reason or "unknown",
+            requested_by=stop_requested_by,
+            last_error=last_error,
+            last_success_ts=last_success_ts,
+            consecutive_failures=consecutive_failures,
+        )
+        return 0
 
     finally:
         stop_event.set()
