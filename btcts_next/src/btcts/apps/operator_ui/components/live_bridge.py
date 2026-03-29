@@ -12,7 +12,11 @@ from btcts.core import paths as core_paths
 
 
 def logs_path() -> Path:
-    return core_paths.logs_dir(ensure=False) / "audit.jsonl"
+    logs_root = core_paths.logs_dir(ensure=False)
+    collector_vnext_path = logs_root / "collector_vnext" / "audit.jsonl"
+    if collector_vnext_path.exists():
+        return collector_vnext_path
+    return logs_root / "audit.jsonl"
 
 
 def data_root() -> Path:
@@ -30,6 +34,14 @@ def _read_json(path: Path) -> Optional[dict]:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return None
+
+
+def _read_json_first(paths: list[Path]) -> Optional[dict]:
+    for path in paths:
+        data = _read_json(path)
+        if data:
+            return data
+    return None
 
 
 def _read_recent_jsonl_objects(path: Path, *, lines: int = 80) -> list[dict[str, Any]]:
@@ -110,26 +122,49 @@ def _market_type_path(
 
 
 def load_status() -> Optional[dict]:
-    return _read_json(state_root() / "status.json")
+    return _read_json_first(
+        [
+            state_root() / "unified_status.json",
+            state_root() / "exploration_status.json",
+            state_root() / "status.json",
+        ]
+    )
 
 
 def load_health() -> Optional[dict]:
-    return _read_json(state_root() / "health.json")
+    return _read_json_first(
+        [
+            state_root() / "unified_daemon_health.json",
+            state_root() / "unified_health.json",
+            state_root() / "exploration_daemon_health.json",
+            state_root() / "exploration_health.json",
+            state_root() / "daemon_health.json",
+            state_root() / "health.json",
+        ]
+    )
 
 
 def load_daemon_health() -> Optional[dict]:
-    for path in [
-        state_root() / "daemon_health.json",
-        state_root() / "health.json",
-    ]:
-        data = _read_json(path)
-        if data:
-            return data
-    return None
+    return _read_json_first(
+        [
+            state_root() / "unified_daemon_health.json",
+            state_root() / "unified_health.json",
+            state_root() / "exploration_daemon_health.json",
+            state_root() / "exploration_health.json",
+            state_root() / "daemon_health.json",
+            state_root() / "health.json",
+        ]
+    )
 
 
 def load_checkpoint() -> Optional[dict]:
-    return _read_json(state_root() / "checkpoint.json")
+    return _read_json_first(
+        [
+            state_root() / "unified_checkpoint.json",
+            state_root() / "exploration_checkpoint.json",
+            state_root() / "checkpoint.json",
+        ]
+    )
 
 
 def read_recent_audit_events(lines: int = 80) -> list[dict]:

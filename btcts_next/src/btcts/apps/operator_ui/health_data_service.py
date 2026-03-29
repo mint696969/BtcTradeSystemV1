@@ -482,12 +482,27 @@ def load_health_snapshot() -> dict[str, Any]:
     rate_domains = state.get("rate_domains") or {}
     domain_names = list(state.get("domain_names") or [])
     shared_ip = state.get("shared_ip") or {}
+    shared_ip_budget = state.get("shared_ip_budget") or {}
+    shared_ip_remaining_60s = int(shared_ip_budget.get("remaining_60s") or 0)
+    domain_counts = {
+        name: {
+            "requests_60s": int((rate_domains.get(name) or {}).get("requests_60s") or 0),
+            "requests_300s": int((rate_domains.get(name) or {}).get("requests_300s") or 0),
+            "success_60s": int((rate_domains.get(name) or {}).get("success_60s") or 0),
+            "fail_60s": int((rate_domains.get(name) or {}).get("fail_60s") or 0),
+            "status_429_300s": int((rate_domains.get(name) or {}).get("status_429_300s") or 0),
+        }
+        for name in domain_names
+    }
 
     return {
         "collector_state": state,
         "rate_domains": rate_domains,
         "domain_names": domain_names,
+        "domain_counts": domain_counts,
         "shared_ip": shared_ip,
+        "shared_ip_budget": shared_ip_budget,
+        "shared_ip_remaining_60s": shared_ip_remaining_60s,
         "market_latest": market_latest,
         "market_diag": market_diag,
         "api_ws_series_1h": build_recent_api_ws_series(window_minutes=60),

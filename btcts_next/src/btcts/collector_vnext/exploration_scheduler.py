@@ -414,6 +414,47 @@ class ExplorationScheduler:
     def current_mode(self, exchange: str, now: float | None = None) -> str:
         return self._refresh_mode(exchange, now)
 
+    def current_shared_ip_budget(
+        self,
+        exchange: str,
+        now: float | None = None,
+    ) -> dict:
+        ts = time.time() if now is None else float(now)
+        base_budget = self.current_budget(exchange, ts)
+        return {
+            "target_ratio": base_budget.get("target_ratio"),
+            "budget_60s": int(base_budget.get("budget_60s") or 0),
+            "budget_300s": 0,
+            "used_60s": int(self._requests_60s(exchange, ts)),
+            "used_300s": 0,
+            "remaining_60s": max(0, int(base_budget.get("budget_60s") or 0) - int(self._requests_60s(exchange, ts))),
+            "remaining_300s": 0,
+            "allowed_now": bool(base_budget.get("remaining_60s", 0) > 0),
+        }
+
+    def current_domain_budget(
+        self,
+        exchange: str,
+        domain: str,
+        now: float | None = None,
+    ) -> dict:
+        ts = time.time() if now is None else float(now)
+        base_budget = self.current_budget(exchange, ts)
+
+        if domain == "market_data":
+            return dict(base_budget)
+
+        return {
+            "target_ratio": base_budget.get("target_ratio"),
+            "budget_60s": 0,
+            "budget_300s": 0,
+            "used_60s": 0,
+            "used_300s": 0,
+            "remaining_60s": 0,
+            "remaining_300s": 0,
+            "allowed_now": False,
+        }
+
     def current_budget(self, exchange: str, now: float | None = None) -> dict:
         ts = time.time() if now is None else float(now)
         exchange_cfg = self._exchange_cfg(exchange)
@@ -557,6 +598,32 @@ class ExplorationScheduler:
             return None
         return float(stats.sent_ts[-1])
 
+    def _class_domain_budget(
+        self,
+        exchange: str,
+        request_class: str,
+        now: float | None = None,
+    ) -> dict:
+        exchange_cfg = self._exchange_cfg(exchange)
+        if exchange_cfg is None:
+            return {
+                "target_ratio": 0.0,
+                "budget_60s": 0,
+                "budget_300s": 0,
+                "used_60s": 0,
+                "used_300s": 0,
+                "remaining_60s": 0,
+                "remaining_300s": 0,
+                "allowed_now": False,
+            }
+
+        class_cfg = exchange_cfg.request_classes.get(request_class)
+        if class_cfg is None:
+            class_cfg = ExplorationRequestClassConfig()
+
+        domain = class_cfg.domain or "market_data"
+        return self.current_domain_budget(exchange, domain, now)
+
     def next_dispatch(
         self,
         exchange: str,
@@ -569,6 +636,10 @@ class ExplorationScheduler:
 
         budget = self.current_budget(exchange, ts)
         if not budget.get("allowed_now"):
+            return None
+
+        shared_ip_budget = self.current_shared_ip_budget(exchange, ts)
+        if not shared_ip_budget.get("allowed_now"):
             return None
 
         candidates = self._enabled_priority_classes(exchange)
@@ -588,6 +659,10 @@ class ExplorationScheduler:
             class_cfg = exchange_cfg.request_classes.get(request_class)
             if class_cfg is None:
                 class_cfg = ExplorationRequestClassConfig()
+
+            domain_budget = self._class_domain_budget(exchange, request_class, ts)
+            if not domain_budget.get("allowed_now"):
+                continue
 
             score = self._share_score(exchange, request_class, ts, class_cfg)
             last_sent_ts = self._last_sent_ts(exchange, request_class, ts)
@@ -620,6 +695,78 @@ class ExplorationScheduler:
 
         return best_class
 
+    def _domain_count_view(
+        self,
+        domain_rollups: Dict[str, dict],
+        domain: str,
+    ) -> dict:
+        rollup = domain_rollups.get(domain) or {}
+        return {
+            "requests_60s": int(rollup.get("requests_60s") or 0),
+            "requests_300s": int(rollup.get("requests_300s") or 0),
+            "success_60s": int(rollup.get("success_60s") or 0),
+            "fail_60s": int(rollup.get("fail_60s") or 0),
+            "status_429_300s": int(rollup.get("status_429_300s") or 0),
+        }
+
+    def _domain_snapshot(
+        self,
+        *,
+        exchange_cfg: ExplorationExchangeConfig,
+        state: ExplorationExchangeState,
+        domain: str,
+        mode: str,
+        budget: dict,
+        util_60s: float,
+        util_300s: float,
+        domain_rollups: Dict[str, dict],
+    ) -> dict:
+        counts = self._domain_count_view(domain_rollups, domain)
+
+        domain_budget = self.current_domain_budget(exchange_cfg.exchange, domain)
+
+        if domain == "market_data":
+            return {
+                "mode": mode,
+                "engaged": mode in {"WARN", "CRIT", "RECOVERY"},
+                "target_utilization": exchange_cfg.control.target_utilization,
+                "active_target_ratio": state.active_target_ratio,
+                "warn_utilization": exchange_cfg.control.warn_utilization,
+                "hard_cap_utilization": exchange_cfg.control.hard_cap_utilization,
+                "crit_floor_ratio": exchange_cfg.control.crit_floor_ratio,
+                "requests_60s": counts["requests_60s"],
+                "requests_300s": counts["requests_300s"],
+                "success_60s": counts["success_60s"],
+                "fail_60s": counts["fail_60s"],
+                "status_429_300s": counts["status_429_300s"],
+                "utilization_60s": util_60s,
+                "utilization_300s": util_300s,
+                "utilization": max(util_60s, util_300s),
+                "last_429_ts": _iso_utc_from_unix(state.last_429_ts),
+                "crit_entered_ts": _iso_utc_from_unix(state.crit_entered_ts),
+                "recovery_started_ts": _iso_utc_from_unix(state.recovery_started_ts),
+                "hold_until_ts": _iso_utc_from_unix(state.hold_until_ts),
+                "last_mode_change_ts": _iso_utc_from_unix(state.last_mode_change_ts),
+                "budget": domain_budget,
+            }
+
+        return {
+            **counts,
+            "budget": domain_budget,
+        }
+
+    def _shared_ip_snapshot(
+        self,
+        exchange: str,
+        exchange_cfg: ExplorationExchangeConfig,
+        now: float | None = None,
+    ) -> dict:
+        ts = time.time() if now is None else float(now)
+        return {
+            **dict(exchange_cfg.shared_ip),
+            "budget": self.current_shared_ip_budget(exchange, ts),
+        }
+
     def snapshot(self, now: float | None = None) -> dict:
         ts = time.time() if now is None else float(now)
         items: Dict[str, dict] = {}
@@ -630,6 +777,9 @@ class ExplorationScheduler:
             budget = self.current_budget(exchange, ts)
             util_60s, util_300s = self._utilization_pair(exchange, ts)
 
+            domain_names = ["market_data", *[name for name in exchange_cfg.domains.keys() if name != "market_data"]]
+            domain_rollups: Dict[str, dict] = {name: {} for name in domain_names}
+
             request_classes: Dict[str, dict] = {}
             for request_class in exchange_cfg.request_priority:
                 stats = self._request_stats_for(exchange, request_class)
@@ -637,21 +787,38 @@ class ExplorationScheduler:
                 if class_cfg is None:
                     class_cfg = ExplorationRequestClassConfig()
 
+                class_domain = class_cfg.domain or "market_data"
+                if class_domain not in domain_rollups:
+                    domain_rollups[class_domain] = {}
+
+                requests_60s = self._request_count(stats.sent_ts, ts, 60.0)
+                requests_300s = self._request_count(stats.sent_ts, ts, 300.0)
+                success_60s = self._request_count(stats.success_ts, ts, 60.0)
+                fail_60s = self._request_count(stats.fail_ts, ts, 60.0)
+                status_429_300s = self._request_count(stats.status_429_ts, ts, 300.0)
+
                 request_classes[request_class] = {
-                    "domain": class_cfg.domain,
-                    "requests_60s": self._request_count(stats.sent_ts, ts, 60.0),
-                    "requests_300s": self._request_count(stats.sent_ts, ts, 300.0),
-                    "success_60s": self._request_count(stats.success_ts, ts, 60.0),
-                    "fail_60s": self._request_count(stats.fail_ts, ts, 60.0),
-                    "status_429_300s": self._request_count(stats.status_429_ts, ts, 300.0),
+                    "domain": class_domain,
+                    "requests_60s": requests_60s,
+                    "requests_300s": requests_300s,
+                    "success_60s": success_60s,
+                    "fail_60s": fail_60s,
+                    "status_429_300s": status_429_300s,
                 }
+
+                rollup = domain_rollups[class_domain]
+                rollup["requests_60s"] = int(rollup.get("requests_60s") or 0) + requests_60s
+                rollup["requests_300s"] = int(rollup.get("requests_300s") or 0) + requests_300s
+                rollup["success_60s"] = int(rollup.get("success_60s") or 0) + success_60s
+                rollup["fail_60s"] = int(rollup.get("fail_60s") or 0) + fail_60s
+                rollup["status_429_300s"] = int(rollup.get("status_429_300s") or 0) + status_429_300s
 
             items[exchange] = {
                 "exchange": exchange,
                 "enabled": exchange_cfg.enabled,
                 "mode": mode,
                 "engaged": mode in {"WARN", "CRIT", "RECOVERY"},
-                "domain_names": ["market_data", *[name for name in exchange_cfg.domains.keys() if name != "market_data"]],
+                "domain_names": domain_names,
                 "target_utilization": exchange_cfg.control.target_utilization,
                 "active_target_ratio": state.active_target_ratio,
                 "warn_utilization": exchange_cfg.control.warn_utilization,
@@ -669,33 +836,19 @@ class ExplorationScheduler:
                 "last_mode_change_ts": _iso_utc_from_unix(state.last_mode_change_ts),
                 "budget": budget,
                 "domains": {
-                    "market_data": {
-                        "mode": mode,
-                        "engaged": mode in {"WARN", "CRIT", "RECOVERY"},
-                        "target_utilization": exchange_cfg.control.target_utilization,
-                        "active_target_ratio": state.active_target_ratio,
-                        "warn_utilization": exchange_cfg.control.warn_utilization,
-                        "hard_cap_utilization": exchange_cfg.control.hard_cap_utilization,
-                        "crit_floor_ratio": exchange_cfg.control.crit_floor_ratio,
-                        "requests_60s": self._requests_60s(exchange, ts),
-                        "requests_300s": self._requests_300s(exchange, ts),
-                        "utilization_60s": util_60s,
-                        "utilization_300s": util_300s,
-                        "utilization": max(util_60s, util_300s),
-                        "last_429_ts": _iso_utc_from_unix(state.last_429_ts),
-                        "crit_entered_ts": _iso_utc_from_unix(state.crit_entered_ts),
-                        "recovery_started_ts": _iso_utc_from_unix(state.recovery_started_ts),
-                        "hold_until_ts": _iso_utc_from_unix(state.hold_until_ts),
-                        "last_mode_change_ts": _iso_utc_from_unix(state.last_mode_change_ts),
-                        "budget": budget,
-                    },
-                    **{
-                        name: {}
-                        for name in exchange_cfg.domains.keys()
-                        if name != "market_data"
-                    },
+                    name: self._domain_snapshot(
+                        exchange_cfg=exchange_cfg,
+                        state=state,
+                        domain=name,
+                        mode=mode,
+                        budget=budget,
+                        util_60s=util_60s,
+                        util_300s=util_300s,
+                        domain_rollups=domain_rollups,
+                    )
+                    for name in domain_names
                 },
-                "shared_ip": dict(exchange_cfg.shared_ip),
+                "shared_ip": self._shared_ip_snapshot(exchange, exchange_cfg, ts),
                 "request_classes": request_classes,
                 "ts": _iso_utc_from_unix(ts),
             }

@@ -287,6 +287,10 @@ def render():
     supervisor_request = collector_state.get("supervisor_request", {})
     status_state = collector_state.get("status", {})
     daemon_stop_request = collector_state.get("daemon_stop_request", {})
+    archive_copy_state = collector_state.get("archive_copy_state", {})
+    archive_gc_state = collector_state.get("archive_gc_state", {})
+    archive_recent = collector_state.get("archive_recent", {})
+    archive_hot_remaining_files = collector_state.get("archive_hot_remaining_files", [])
     origin_continuity = status_state.get("origin_continuity", {}) if isinstance(status_state, dict) else {}
     state_dir_info = collector_state.get("state_dir", {})
     market_state_info = market_state_diagnostics()
@@ -478,6 +482,47 @@ def render():
             st.json(rate_state)
         else:
             st.info("rate_state.json not available")
+
+    with st.expander("Archive / Retention Diagnostics", expanded=False):
+        ac1, ac2, ac3, ac4, ac5 = st.columns(5)
+        ac1.metric("Copy Mode", archive_copy_state.get("mode") or "-")
+        ac2.metric("GC Mode", archive_gc_state.get("mode") or "-")
+        ac3.metric("GC Enabled", archive_gc_state.get("enabled") if archive_gc_state else "-")
+        ac4.metric("GC Dry Run", archive_gc_state.get("dry_run") if archive_gc_state else "-")
+        ac5.metric("Remaining Hot Files", len(archive_hot_remaining_files))
+
+        st.caption(
+            f"archive_started_at={archive_copy_state.get('started_at', '-')} / "
+            f"copy_last_scan_ts={archive_copy_state.get('last_scan_ts', '-')} / "
+            f"gc_last_scan_ts={archive_gc_state.get('last_scan_ts', '-')}"
+        )
+        st.caption(
+            f"copy_last_plan_count={archive_copy_state.get('last_plan_count', '-')} / "
+            f"copy_last_copied_files={archive_copy_state.get('last_copied_files', '-')} / "
+            f"gc_last_plan_count={archive_gc_state.get('last_plan_count', '-')} / "
+            f"gc_last_deleted_files={archive_gc_state.get('last_deleted_files', '-')}"
+        )
+        st.caption(f"archive_audit_path={archive_recent.get('audit_path', '-')}")
+
+        st.markdown("#### Latest Copy 5")
+        copy_rows = archive_recent.get("copy_rows", []) if isinstance(archive_recent, dict) else []
+        if copy_rows:
+            st.dataframe(copy_rows, width="stretch")
+        else:
+            st.info("latest copy history not available")
+
+        st.markdown("#### Latest Delete 5")
+        delete_rows = archive_recent.get("delete_rows", []) if isinstance(archive_recent, dict) else []
+        if delete_rows:
+            st.dataframe(delete_rows, width="stretch")
+        else:
+            st.info("latest delete history not available")
+
+        st.markdown("#### Hot D drive remaining data files (latest 50)")
+        if archive_hot_remaining_files:
+            st.dataframe(archive_hot_remaining_files, width="stretch")
+        else:
+            st.info("hot remaining data files not available")
 
     st.caption(get_text(lang, "collector_page_caption"))
 

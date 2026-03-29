@@ -1,362 +1,345 @@
-Supervisor（Watchdog）正式仕様書（Collector）
+# vNext Unified Watchdog 正式仕様書ドラフト
 
-（BtcTradeSystem NEXT / Phase1 確定版・統合版）
+Last updated: 2026-03-27
+Owner: GTP Partner New
+Status: Draft / ready for operator review
 
-0. この文書の目的
+---
 
-本書は、Collector を 24/7で安定稼働させるための外部監視プロセス Supervisor（= Watchdog） の仕様を、他のGPT・他メンバーが読んでも運用と改修がブレない形で固定する。
+## 0. 文書の位置づけ
+本書は、旧 `Supervisor（Watchdog）正式仕様書` の思想を継承しつつ、
+Collector vNext Unified runtime 向けに再定義した Watchdog 正式仕様ドラフトである。
 
-1. 役割と責務境界（最重要）
-1.1 Watchdog の責務
+本書が継承するのは主に以下の思想である。
 
-Collector の起動（ダミー/実）
+- Watchdog は Collector 本体の外側に置く
+- Collector と Watchdog の責務境界を明確に分ける
+- 監視判断は内部メモリではなく、外から見える state を根拠にする
+- 多重起動防止を前提にする
+- supervisor 視点の audit を残す
+- 安全側判定を優先する
+- 「止めないために、止める」を許容する
 
-環境変数注入（子プロセスへ明示的に渡す）
+一方で、旧仕様の具体実装はそのまま引き継がない。
+とくに以下は vNext 向けに upgrade 対象とする。
 
-進捗監視（status.json の ts_unix/ts）
+- `status.json` 単独依存
+- 即 kill 中心の停止モデル
+- stale lock の広い掃除
+- 文字列 message 解析による no_data 判定
+- 単一 collector 前提の粗い監視モデル
 
-ハング検知（停滞）
+---
 
-異常時の kill → backoff → 再起動
+## 1. 対象範囲
+対象は Unified Collector runtime である。
 
-多重起動防止（watchdog.lock）
+vNext Unified runtime は少なくとも以下の要素を含む。
 
-ディスク安全弁（logs ドライブ残量）
+- REST lane
+- WS Board lane
+- WS Executions lane
+- unified daemon
+- unified scheduler / rate state / origin state / checkpoint
+- supervisor request / supervisor status / daemon stop request
 
-監査ログ（supervisor_collector.log / .jsonl）
+本書は、この Unified runtime に対する supervisor としての Watchdog を定義する。
 
-Phase1 テスト再現手順の固定（collector_watchdog_test.ps1）
+---
 
-1.2 Collector の責務
+## 2. 設計目的
+Watchdog の目的は、Collector 本体に自己回復責務を持たせすぎず、
+外部 supervisor として監視・停止・再起動・単一起動保証を担うことである。
 
-データ収集ロジック（API/取引所/エンドポイント）
+主要目的は以下。
 
-status.json の生成/更新（進捗の唯一の根拠）
+1. Unified daemon の単一起動保証
+2. manual restart request の安全な実行
+3. graceful stop を優先した restart orchestration
+4. supervisor 視点の status / audit 可視化
+5. stale request や起動競合による誤動作の抑制
 
-audit.jsonl 等の生成（Collector視点の監査）
+---
 
-2. ファイル配置（正準）
-2.1 実体
+## 3. 責務分離
+### 3.1 Watchdog の責務
+Watchdog は以下を担う。
 
-Watchdog本体
-./scripts/watchdog_collector.ps1
+- Unified daemon の起動
+- Unified daemon の生存監視
+- restart request の受理と実行
+- graceful stop request の daemon への伝達
+- timeout 時のみ force kill fallback
+- backoff / max_failures に基づく supervisor 側の防御
+- supervisor lock による単一起動保証
+- supervisor status 出力
+- supervisor audit 出力
+- stale request の保守的無視
 
-Phase1 検証ワンショット（運用ではなくテスト用）
-./scripts/collector_watchdog_test.ps1
+### 3.2 Collector daemon の責務
+Unified daemon は以下を担う。
 
-ダミーCollectorエントリ（Phase1）
-./tools/test_collector_entry.py
+- REST / WS 収集の実行
+- structured state の更新
+- daemon status / daemon health の更新
+- daemon stop request に対する graceful stop 応答
+- lane 側 stop_event 伝播
 
-2.2 監視対象（Collector進捗）
+### 3.3 UI の責務
+UI は以下のみを担う。
+
+- restart request を request file として書く
+- supervisor status / request / daemon stop request を表示する
+- pending request 中の再押下防止
+- supervisor 非 RUNNING 時の warning 表示
+
+UI は kill / start / restart 実行主体にならない。
 
-"<BTC_TS_DATA_DIR>\collector\status.json"
+---
 
-3. 起動と停止（正準）
-3.1 必須環境変数（正準）
+## 4. 起動モデル
+### 4.1 正規起動主体
+Unified Collector の正規起動主体は Watchdog とする。
+
+運用上の正規コマンドは以下。
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\BtcTradeSystem\tools\run_collector_vnext_unified_watchdog.ps1
+```
+
+### 4.2 非推奨起動
+以下は常用しない。
+
+- `unified_daemon` の単独常用起動
+- UI からの直接プロセス制御
+- watchdog と standalone daemon の混在運用
+
+理由は ownership 競合と lock 競合を避けるためである。
+
+---
+
+## 5. 多重起動防止
+### 5.1 supervisor lock
+Watchdog は `unified_supervisor.lock.json` を用いて単一起動を保証する。
+
+### 5.2 daemon lock
+Unified daemon は runtime family=`unified` の daemon lock を用いて単一起動を保証する。
+
+### 5.3 stale lock の扱い
+stale lock は PID 非生存が確認できた場合のみ最小限に掃除する。
+Watchdog が広く lock を掃除する設計は採用しない。
+
+---
+
+## 6. state / request / status 契約
+### 6.1 supervisor request
+`unified_supervisor_request.json`
+
+用途:
+- UI など外部から watchdog に restart request を伝える
+
+代表項目:
+- `request_id`
+- `action` (`restart`)
+- `requested_at`
+- `requested_by`
+- `reason`
+
+### 6.2 supervisor status
+`unified_supervisor_status.json`
+
+用途:
+- watchdog の現在状態と直近 action を外部可視化する
 
-BTC_TS_CONFIG_DIR = <config root>
+代表項目:
+- `mode`
+- `last_action`
+- `last_requested_at`
+- `last_completed_at`
+- `last_error`
+- `daemon_pid`
+- `request_ack_ts`
+- `acked_request_id`
+- `started_at`
+- `last_seen_ts`
+- `uptime_sec`
+- `supervisor_pid`
+- `runtime_family`
+- `host_name`
 
-BTC_TS_DATA_DIR = <data root>
+### 6.3 daemon stop request
+`unified_daemon_stop_request.json`
 
-BTC_TS_LOGS_DIR = <logs root>
+用途:
+- watchdog から daemon へ graceful stop を要求する
 
-PYTHONPATH = <repo>\btcts_next\src
-
-3.2 起動コマンド
-
-実運用（Phase1: 実取引所で使用）
-pwsh -File .\scripts\watchdog_collector.ps1
-
-Phase1（ダミーCollectorで監視ロジック検証）
-pwsh -File .\scripts\watchdog_collector.ps1 -UseDummyCollector
-
-3.3 停止方法（Phase1 正準）
-
-Ctrl + C（常駐プロセスであるためこれが正しい）
-
-4. 多重起動防止（Lock / PID）
-4.1 watchdog.lock（OS排他）
-
-パス："<BTC_TS_LOGS_DIR>\watchdog.lock"
-
-方式：FileShare.None による OSレベル排他
-
-動作：ロック取得に失敗した場合は 「既に稼働中」 と判断して即終了
-
-例：lock busy: E:\btc_ts\logs\watchdog.lock
-
-4.2 watchdog.pid（参照用）
-
-パス："<BTC_TS_LOGS_DIR>\watchdog.pid"
-
-内容（最低限）
-
-watchdog の PID
-
-起動UTC
-
-python実体パス
-
-運用注意：watchdog.lock を手動削除する運用はしない。
-「起動し直したい」のに lock busy になる場合は、まず「Watchdogが本当に生きているか」を確認し、死んでいるのに残っているなら原因を確定してから処置する（後述）。
-
-5. 設定ファイル（watchdog.yaml）
-5.1 既定の探索
-
-ConfigPath が未指定なら："<BTC_TS_CONFIG_DIR>\watchdog.yaml"
-
-5.2 Phase1でサポートするキー（トップレベル scalar + inline list）
-
-schema_rev (int)
-
-interval_sec (int) 既定 5
-
-hang_timeout_sec (int) 既定 120
-
-max_failures (int) 既定 5
-
-backoff_sec (list) 既定 [10,30,60,120,300]
-
-no_data_fail_limit (int) 既定 5
-
-log_tail_lines (int) 既定 200（Phase1では保持のみ）
-
-free_gb_warn (number) 既定 20
-
-free_gb_stop (number) 既定 10
-
-6. Collector 起動仕様
-6.1 起動前チェック（Preflight）
-
-Python で import btcts を実行し import 可否を確認
-
-成功：preflight.btcts.ok
-
-失敗：preflight.btcts.ng をログし、Collector起動せず停止
-
-6.2 起動方式
-
-Phase1（ダミー）：./tools/test_collector_entry.py
-
-本番（実Collector）：btcts.collector.main を runpy.run_module で起動
-
-6.3 子プロセスへ渡す環境（明示固定）
-
-Watchdogは、子プロセスへ以下を 必ず明示注入する（手動起動との差を消すため）。
-
-PYTHONPATH
-
-BTC_TS_CONFIG_DIR
-
-BTC_TS_DATA_DIR
-
-BTC_TS_LOGS_DIR
-
-6.4 stdout/stderr の採取
-
-<BTC_TS_LOGS_DIR>\collector_stdout.log
-
-<BTC_TS_LOGS_DIR>\collector_stderr.log
-
-7. 監視ロジック（進捗・ハング検知）
-7.1 進捗判定キー（正準）
-
-status.json の ts_unix を優先
-
-無ければ ts
-
-どちらも無ければ「進捗判定不可」として ハング判定は行わない（安全側）
-
-7.2 age_sec の定義
-
-age_sec = now_utc - DateTime.UnixEpoch(ts_unix/ts)
-
-7.3 ハング判定
-
-age_sec >= hang_timeout_sec でハング扱い
-
-7.4 ハング時の挙動
-
-collector.hang をログ（age_sec, hang_sec, last_ok, fails）
-
-Collector を kill
-
-fails を +1
-
-backoff 待機
-
-再起動
-
-8. 再起動制御（Backoff / 失敗上限）
-8.1 backoff の決定
-
-fails に応じて backoff_sec テーブルから選択
-例：fails=1→10, 2→30, 3→60, 4→120, 5→300
-
-8.2 停止条件（上限）
-
-fails >= max_failures で Watchdog 自身が停止
-
-ログ：watchdog.stop.too_many_fails
-
-8.3 fails.reset（重要）
-
-age_sec < hang_timeout_sec を観測した瞬間、fails を 0 に戻す
-
-ログ：fails.reset prev=<n>
-
-目的：一時的な失敗が累積して勝手に停止する事故を防ぐ
-
-9. no_data 検知（補助）
-
-status.json の message に以下が含まれる場合にカウント
-
-no_data
-
-startup grace
-
-collector.no_data.detected をログ
-
-count >= no_data_fail_limit で停止（Collector kill → Watchdog停止）
-
-ログ：watchdog.stop.no_data_limit
-
-10. ディスク安全弁（logsドライブ）
-
-対象：BTC_TS_LOGS_DIR が属するドライブ残量
-
-free_gb_warn 未満：guard.disk.warn
-
-free_gb_stop 未満：Collector kill → Watchdog停止（guard.disk.stop）
-
-11. ログ仕様（Supervisor視点）
-11.1 出力
-
-テキスト：<logs>\supervisor_collector.log
-
-JSONL：<logs>\supervisor_collector.jsonl
-
-11.2 代表イベント（固定）
-
-watchdog.start
-
-preflight.btcts.ok / preflight.btcts.ng
-
-collector.start
-
-collector.start.dummy
-
-collector.start.real
-
-collector.exited
-
-collector.hang
-
-collector.kill
-
-fails.reset
-
-backoff.sleep
-
-watchdog.stop.too_many_fails
-
-watchdog.stop.no_data_limit
-
-guard.disk.warn / guard.disk.stop
-
-watchdog.exit
-
-12. stale lock（status.json.lock）の扱い（運用ルール固定）
-12.1 対象
-
-<BTC_TS_DATA_DIR>\collector\status.json.lock
-
-12.2 Watchdog起動時の処置（安全条件付き）
-
-起動時に 1回だけ stale 判定を行う
-
-status.json から ts_unix/ts を取得できる場合のみ age を計算
-
-age_sec >= hang_timeout_sec のときのみ lock を削除してよい
-
-ログ：lock.stale.removed
-
-status が読めない／tsが無い場合は削除しない（安全側）
-
-ログ：lock.stale.check.skip
-
-12.3 禁止事項
-
-稼働中の lock を手動削除することは禁止
-（多重起動、誤判定、ファイル破損の原因）
-
-13. Phase1 テスト手順（監視ロジック最終確認）
-13.1 目的
-
-実Collector（API/取引所/endpoint）が無い現時点でも、Watchdog の監視・自己修復ループが正しいことを証明する。
-
-13.2 正準コマンド（推奨）
-
-pwsh -File .\scripts\collector_watchdog_test.ps1 -Dummy
-
-13.3 期待ログ（合格判定）
-
-collector.start.dummy ...
-
-約120秒後に collector.hang ...
-
-collector.kill ...
-
-backoff.sleep sec=10（以降テーブル）
-
-再度 collector.start.dummy ...
-
-途中で fails.reset prev=1 が出る
-
-13.4 重要：停止方法
-
-Watchdog は常駐する。Ctrl + C で止めるのが正しい。
-
-14. lock busy が出る件（運用として仕様に明記）
-14.1 意味
-
-lock busy: <...>\watchdog.lock は 「Watchdogが既に稼働中」 を意味する。
-
-これは異常ではなく 多重起動防止が効いている正常動作。
-
-14.2 取るべき行動（順序固定）
-
-既に起動しているPowerShell（Watchdog）を探す（コンソールが残っていないか確認）
-
-本当に止めたいなら、そのプロセスを Ctrl+C で終了
-
-それでも起動できない場合のみ、watchdog.pid と実プロセスを突き合わせて原因を確定する
-（「ファイルだけ消す」は原則禁止）
-
-15. Phase1 完了定義（合格条件）
-
-ダミーCollectorでハング検知できる
-
-kill → backoff → 再起動が成立する
-
-fails.reset が機能する
-
-max_failures 未満なら自律運転が継続する
-
-Ctrl+C で安全停止できる
-
-supervisor_collector.log / jsonl が監査証跡として残る
-
-16. Phase2 への前提（範囲外の明記）
-
-「Phase2は複数取引所/サービス化/高度な運用拡張」として整理
-
-サービス化（Windows Service / Task Scheduler）は Phase2 以降
-
-Supervisor 自体の自己監視（Supervisor監視のSupervisor）は Phase2 以降
-
-結論（設計思想の固定）
-
-本Supervisorは 「Collectorを止めないために、止める」 を実装する。
-Phase1 のゴールは「bitFlyer 1取引所で、レート制御しつつ Collector が 24時間安定して収集し続ける」ことの実運用証明である。
-ダミー検証は Watchdog の監視・再起動ループの正当性確認であり、Phase1完了を意味しない。
+代表項目:
+- `action` (`stop`)
+- `requested_at`
+- `requested_by`
+- `reason`
+- `restart_requested`
+- `supervisor_request`
+
+### 6.4 daemon state
+Unified daemon は少なくとも以下を出す。
+
+- `unified_daemon_status.json`
+- `unified_daemon_health.json`
+- `unified_status.json`
+- `unified_health.json`
+- `unified_checkpoint.json`
+- `unified_origin_status.json`
+- `unified_executions_status.json`
+
+UI と Watchdog は、内部メモリではなく、これらの state を判断材料にする。
+
+---
+
+## 7. restart 実行フロー
+再起動は以下の順で行う。
+
+1. UI が `unified_supervisor_request.json` を書く
+2. Watchdog が request を検知する
+3. Watchdog が request を ack し、`supervisor_status` を更新する
+4. Watchdog が `unified_daemon_stop_request.json` を書く
+5. daemon が loop 境界で stop request を観測する
+6. daemon が STOPPING -> STOPPED を state に書いて終了する
+7. Watchdog が backoff を挟む
+8. Watchdog が新しい daemon を起動する
+9. Watchdog が `last_completed_at` を含む RUNNING 状態へ戻る
+10. request / stop request は最終的に残留させない
+
+---
+
+## 8. 停止モデル
+### 8.1 基本方針
+停止は `graceful-first` とする。
+
+### 8.2 force kill の条件
+以下のときのみ fallback として force kill を許容する。
+
+- graceful stop timeout 超過
+- daemon が停止に応答しない
+
+### 8.3 採用しない方針
+以下は中核にしない。
+
+- `kill -> backoff -> restart` を標準系にすること
+- 停止より先に kill を打つこと
+- 書き込み中イベントを考慮しない再起動
+
+---
+
+## 9. stale request 対策
+### 9.1 基本方針
+古すぎる restart request は誤爆防止のため無視可能とする。
+
+### 9.2 判定
+request の `requested_at` から age を計算し、
+`BTCTS_UNIFIED_REQUEST_MAX_AGE_SEC` を超える場合は stale とみなす。
+
+### 9.3 動作
+stale request は
+
+- audit に `watchdog.restart.request.stale_ignored` を残す
+- request file を消す
+- supervisor status に `last_error` と `request_ack_ts` を残す
+- restart は実行しない
+
+---
+
+## 10. supervisor mode 定義
+代表 mode は以下。
+
+- `STARTING`
+- `RUNNING`
+- `RESTART_REQUESTED`
+- `GRACEFUL_STOPPING`
+- `BACKOFF`
+- `FAILED`
+- `STOPPED`
+
+これらは UI から可視化される前提とする。
+
+---
+
+## 11. audit
+### 11.1 目的
+Collector 側 audit と別に、supervisor 視点の出来事を追跡可能にする。
+
+### 11.2 出力先
+`unified_supervisor_audit.jsonl`
+
+### 11.3 代表イベント
+- `watchdog.start`
+- `watchdog.start.daemon`
+- `watchdog.observe.daemon_exited`
+- `watchdog.restart.requested`
+- `watchdog.restart.graceful_begin`
+- `watchdog.restart.graceful_timeout`
+- `watchdog.restart.force_kill`
+- `watchdog.restart.completed`
+- `watchdog.restart.request.stale_ignored`
+- `watchdog.stop.too_many_fails`
+- `watchdog.exception`
+- `watchdog.exit`
+
+---
+
+## 12. UI 要件
+UI は少なくとも以下を満たす。
+
+1. restart button を持つ
+2. button は request file を書くだけ
+3. pending request 中は button を disable する
+4. supervisor 非 RUNNING 時は warning を出す
+5. request_id / ack / completed を可視化する
+6. `started_at / last_seen_ts / uptime_sec` を可視化する
+7. Collector タブ上段 summary は unified 正本に追従する
+
+---
+
+## 13. 実装済み到達点（2026-03-27 時点）
+現時点で以下は実動確認済みである。
+
+- watchdog を正規起動主体として起動できる
+- UI から restart request を発行できる
+- watchdog が request を受理できる
+- daemon が restart される
+- `daemon_pid` の切り替わりを確認済み
+- `last_completed_at` / `acked_request_id` を確認済み
+- pending request / daemon stop request が最終的に残留しない
+- Collector タブ上段 summary の unified 追従化を確認済み
+
+したがって、
+「watchdog と UI 上から安全に再起動できる状態」
+という今回の主ゴールは達成済みと判定する。
+
+---
+
+## 14. 未完了だが blocking ではない項目
+以下は optional hardening / polish とする。
+
+- disk guard
+- restart policy の更なる厳密化
+- API/WS イベント完全無欠損の深掘り証明
+- UI 文言 polish
+- health / daemon_health 責務の更なる整理
+- origin continuity summary の追加改善
+
+---
+
+## 15. 運用上の注意
+- standalone unified daemon と watchdog 起動を混在させない
+- UI は restart 実行主体にならない
+- stale request は残留運用しない
+- supervisor status を見てから操作判断する
+- 問題発生時は supervisor audit を優先確認する
+
+---
+
+## 16. 一文まとめ
+vNext Unified Watchdog は、Collector 本体の外に置かれる supervisor であり、
+UI から渡された restart request を安全側に処理し、graceful-first で Unified daemon を再起動し、
+その過程を state と audit で外部可視化する。
