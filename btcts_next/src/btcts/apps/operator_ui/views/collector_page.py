@@ -8,7 +8,15 @@ from uuid import uuid4
 import streamlit as st
 
 from btcts.apps.operator_ui.components import execution_feed_panel
+from btcts.apps.operator_ui.components import live_shell
+from btcts.apps.operator_ui.components.live_shell import get_registered_slots
 from btcts.apps.operator_ui.components import system_stats
+from btcts.apps.operator_ui.components.collector_top_panels import (
+    render_origin_continuity_summary_section,
+    render_overview_summary_panel,
+    render_rate_control_section,
+    render_supervisor_control_section,
+)
 from btcts.apps.operator_ui.components.live_bridge import (
     collector_runtime_snapshot,
     read_recent_audit_events,
@@ -274,7 +282,7 @@ def _audit_rows_for_ui(events: list[dict]) -> list[dict]:
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
-    st.title(get_text(lang, "collector_title"))
+    live_shell.render_compact_page_header(get_text(lang, "collector_title"))
 
     runtime = collector_runtime_snapshot()
     live_summary = runtime["live_summary"]
@@ -297,146 +305,107 @@ def render():
     recent_audit_events = read_recent_audit_events(lines=200)
     origin_audit_summary = _origin_audit_summary(recent_audit_events)
 
-    col1, col2, col3 = st.columns(3)
-    col1.metric(get_text(lang, "collector_metric_status"), _overall_status_label(live_summary["overall_state"]))
-    col2.metric(get_text(lang, "collector_metric_exchange"), _exchange_status_label(runtime["exchange_state"]))
-    col3.metric(get_text(lang, "collector_metric_feed"), runtime["feed_state"])
+    render_overview_summary_panel(
+        lang=lang,
+        live_summary=live_summary,
+        runtime=runtime,
+        get_text=get_text,
+        overall_status_label=_overall_status_label,
+        exchange_status_label=_exchange_status_label,
+    )
 
     st.caption(
-        f"reason={live_summary['overall_reason']} / "
-        f"live_mode={runtime['mode']} / "
-        f"health={runtime['health_status']} / "
-        f"daemon={live_summary['daemon_status']} / "
-        f"cycle_last_sequence_id={runtime.get('last_sequence_id')}"
+        get_text(lang, "collector_caption_reason_line").format(
+            reason=live_summary["overall_reason"],
+            live_mode=runtime["mode"],
+            health=runtime["health_status"],
+            daemon=live_summary["daemon_status"],
+            sequence_id=runtime.get("last_sequence_id"),
+        )
     )
 
     if supervisor_status:
         st.caption(
-            f"supervisor_mode={supervisor_status.get('mode', '-')} / "
-            f"last_action={supervisor_status.get('last_action', '-')} / "
-            f"last_error={supervisor_status.get('last_error', '-')}"
+            get_text(lang, "collector_caption_supervisor_line").format(
+                mode=supervisor_status.get("mode", "-"),
+                last_action=supervisor_status.get("last_action", "-"),
+                last_error=supervisor_status.get("last_error", "-"),
+            )
         )
     if supervisor_request:
         st.caption(
-            f"pending_request={supervisor_request.get('action', '-')} / "
-            f"requested_by={supervisor_request.get('requested_by', '-')} / "
-            f"reason={supervisor_request.get('reason', '-')}"
+            get_text(lang, "collector_caption_pending_request_line").format(
+                action=supervisor_request.get("action", "-"),
+                requested_by=supervisor_request.get("requested_by", "-"),
+                reason=supervisor_request.get("reason", "-"),
+            )
         )
     if daemon_stop_request:
         st.caption(
-            f"daemon_stop_request={daemon_stop_request.get('action', '-')} / "
-            f"requested_by={daemon_stop_request.get('requested_by', '-')}"
+            get_text(lang, "collector_caption_daemon_stop_line").format(
+                action=daemon_stop_request.get("action", "-"),
+                requested_by=daemon_stop_request.get("requested_by", "-"),
+            )
         )
 
     st.caption(get_text(lang, "collector_note_sequence"))
 
     st.caption(
-        f"age status={live_summary['status_age_label']} / "
-        f"health={live_summary['health_age_label']} / "
-        f"daemon={live_summary['daemon_age_label']} / "
-        f"checkpoint={live_summary['checkpoint_age_label']}"
+        get_text(lang, "collector_caption_age_line").format(
+            status_age=live_summary["status_age_label"],
+            health_age=live_summary["health_age_label"],
+            daemon_age=live_summary["daemon_age_label"],
+            checkpoint_age=live_summary["checkpoint_age_label"],
+        )
     )
 
-    st.caption(f"state_dir={state_dir_info.get('path', '-')}")
     st.caption(
-        f"ui_data_root={core_paths.data_dir(ensure=False)} / "
-        f"ui_logs_root={core_paths.logs_dir(ensure=False)} / "
-        f"ui_market_state_root={market_state_info.get('market_state_root')}"
+        get_text(lang, "collector_caption_state_dir_line").format(
+            path=state_dir_info.get("path", "-"),
+        )
+    )
+    st.caption(
+        get_text(lang, "collector_caption_ui_roots_line").format(
+            data_root=core_paths.data_dir(ensure=False),
+            logs_root=core_paths.logs_dir(ensure=False),
+            market_state_root=market_state_info.get("market_state_root"),
+        )
     )
 
-    with st.expander("UI / MarketState Root Diagnostics"):
+    with live_shell.render_folded_section("UI / MarketState Root Diagnostics", expanded=False):
         st.json(market_state_info)
 
-    st.markdown("## Live Operations")
-    st.markdown("### Unified Supervisor Control")
+    render_supervisor_control_section(
+        lang=lang,
+        get_text=get_text,
+        supervisor_status=supervisor_status,
+        supervisor_request=supervisor_request,
+        request_unified_restart=_request_unified_restart,
+        is_supervisor_running=_is_supervisor_running,
+        is_restart_request_pending=_is_restart_request_pending,
+        supervisor_status_rows=_supervisor_status_rows,
+    )
 
-    supervisor_running = _is_supervisor_running(supervisor_status)
-    restart_pending = _is_restart_request_pending(supervisor_request)
-
-    if not supervisor_running:
-        st.warning("watchdog is not RUNNING. request file can be written, but restart may not execute yet.")
-
-    if restart_pending:
-        st.info("restart request is already pending. wait for watchdog to consume it before reissuing.")
-
-    sup_col1, sup_col2, sup_col3, sup_col4 = st.columns([1.2, 1, 1, 1])
-    with sup_col1:
-        if st.button(
-            "Restart Unified Collector",
-            use_container_width=True,
-            disabled=restart_pending,
-        ):
-            ok, msg = _request_unified_restart()
-            if ok:
-                st.success(f"restart request accepted for queueing: {msg}")
-            else:
-                st.error(f"restart request failed: {msg}")
-
-    with sup_col2:
-        st.metric("Supervisor Mode", supervisor_status.get("mode") or "-")
-
-    with sup_col3:
-        st.metric("Pending Request", supervisor_request.get("action") or "-")
-
-    with sup_col4:
-        st.metric("Supervisor Uptime (sec)", supervisor_status.get("uptime_sec") or "-")
-
-    if supervisor_status:
-        st.caption(
-            f"supervisor_started_at={supervisor_status.get('started_at', '-')} / "
-            f"last_seen_ts={supervisor_status.get('last_seen_ts', '-')}"
+    with live_shell.render_folded_section(get_text(lang, "ui_label_collector_runtime_state"), expanded=False):
+        st.json(
+            {
+                "live_summary": live_summary,
+                "runtime": runtime,
+                "collector_state_keys": sorted(list(collector_state.keys())),
+            }
         )
 
-    supervisor_rows = _supervisor_status_rows(supervisor_status, supervisor_request)
-    if supervisor_rows:
-        st.dataframe(supervisor_rows, width="stretch")
-    else:
-        st.info("unified supervisor status not available")
-
-    st.markdown("### Collector Runtime State")
-
-    st.markdown("### Rate Control Summary")
-    rate_rows = _rate_rows(rate_state)
-    if rate_rows:
-        first_rate = rate_rows[0]
-
-        engaged = bool(first_rate.get("engaged"))
-        last_429_ts = first_rate.get("last_429_ts")
-        rate_posture = "THROTTLED" if engaged else "NORMAL"
-        recent_429 = "YES" if last_429_ts else "NO"
-
-        r1, r2, r3, r4, r5, r6 = st.columns(6)
-        r1.metric("Rate Posture", rate_posture)
-        r2.metric("Recent 429", recent_429)
-        r3.metric("Rate Summary", first_rate.get("summary_state") or "-")
-        r4.metric("Wait (ms)", first_rate.get("wait_ms") or 0)
-        r5.metric("Util Ratio", first_rate.get("util_ratio") or 0)
-        r6.metric("Recovery", first_rate.get("recovery_phase") or "-")
-
-        if engaged:
-            st.warning(
-                f"rate control engaged / reason={first_rate.get('reason') or '-'} / "
-                f"hold_until_ts={first_rate.get('hold_until_ts') or '-'}"
-            )
-        elif last_429_ts:
-            st.info(
-                f"recent 429 detected / last_429_ts={last_429_ts} / "
-                f"recovery_phase={first_rate.get('recovery_phase') or '-'}"
-            )
-        else:
-            st.caption(
-                f"rate posture normal / reason={first_rate.get('reason') or '-'} / "
-                f"backoff_sec={first_rate.get('backoff_sec') or '-'}"
-            )
-
-        st.dataframe(rate_rows, width="stretch")
-    else:
-        st.info("rate_state.json not available")
+    render_rate_control_section(
+        lang=lang,
+        get_text=get_text,
+        rate_state=rate_state,
+        rate_rows=_rate_rows,
+    )
 
     col_r1, col_r2 = st.columns(2)
 
     with col_r1:
-        st.caption("WS Continuity (origin_status)")
+        st.caption(get_text(lang, "ui_label_ws_continuity_origin_status"))
 
         origin_rows = _origin_metric_rows(origin_state)
         if origin_rows:
@@ -444,12 +413,12 @@ def render():
             stale_label, stale_reason = _origin_stale_status(origin_state)
 
             c0, c1, c2, c3, c4, c5 = st.columns(6)
-            c0.metric("Continuity Status", stale_label)
-            c1.metric("WS State", metric.get("ws_state") or "-")
-            c2.metric("Snapshot→LIVE (ms)", metric.get("snapshot_to_live_ms") or "-")
-            c3.metric("Resync Occurred", metric.get("resync_occurred"))
-            c4.metric("Dropped Pre-Snapshot Deltas", metric.get("pre_snapshot_delta_drop_count") or 0)
-            c5.metric("Origin Age (sec)", metric.get("origin_age_sec") or "-")
+            c0.metric(get_text(lang, "collector_metric_continuity_status"), stale_label)
+            c1.metric(get_text(lang, "collector_metric_ws_state"), metric.get("ws_state") or "-")
+            c2.metric(get_text(lang, "collector_metric_snapshot_to_live_ms"), metric.get("snapshot_to_live_ms") or "-")
+            c3.metric(get_text(lang, "collector_metric_resync_occurred"), metric.get("resync_occurred"))
+            c4.metric(get_text(lang, "collector_metric_dropped_pre_snapshot_deltas"), metric.get("pre_snapshot_delta_drop_count") or 0)
+            c5.metric(get_text(lang, "collector_metric_origin_age_sec"), metric.get("origin_age_sec") or "-")
 
             if stale_label == "LIVE":
                 st.success(f"WS continuity status: {stale_label} / {stale_reason}")
@@ -459,13 +428,13 @@ def render():
                 st.info(f"WS continuity status: {stale_label} / {stale_reason}")
 
         if origin_state:
-            with st.expander("Raw origin_status JSON"):
+            with live_shell.render_folded_section(get_text(lang, "ui_label_raw_origin_status_json"), expanded=False):
                 st.json(origin_state)
         else:
-            st.info("origin_status.json not available")
+            st.info(get_text(lang, "collector_msg_origin_status_unavailable"))
 
     with col_r2:
-        st.caption("Daemon / Supervisor Health")
+        st.caption(get_text(lang, "ui_label_daemon_supervisor_health"))
         if daemon_state or supervisor_status or supervisor_request:
             st.json(
                 {
@@ -475,93 +444,96 @@ def render():
                 }
             )
         else:
-            st.info("daemon health state not available")
+            st.info(get_text(lang, "collector_msg_daemon_health_unavailable"))
 
-    with st.expander("Raw Rate State JSON"):
+    with live_shell.render_folded_section(get_text(lang, "ui_label_raw_rate_state_json"), expanded=False):
         if rate_state:
             st.json(rate_state)
         else:
-            st.info("rate_state.json not available")
+            st.info(get_text(lang, "collector_msg_rate_state_unavailable"))
 
-    with st.expander("Archive / Retention Diagnostics", expanded=False):
+    with live_shell.render_folded_section(get_text(lang, "ui_label_archive_retention_diagnostics"), expanded=False):
         ac1, ac2, ac3, ac4, ac5 = st.columns(5)
-        ac1.metric("Copy Mode", archive_copy_state.get("mode") or "-")
-        ac2.metric("GC Mode", archive_gc_state.get("mode") or "-")
-        ac3.metric("GC Enabled", archive_gc_state.get("enabled") if archive_gc_state else "-")
-        ac4.metric("GC Dry Run", archive_gc_state.get("dry_run") if archive_gc_state else "-")
-        ac5.metric("Remaining Hot Files", len(archive_hot_remaining_files))
+        ac1.metric(get_text(lang, "collector_metric_copy_mode"), archive_copy_state.get("mode") or "-")
+        ac2.metric(get_text(lang, "collector_metric_gc_mode"), archive_gc_state.get("mode") or "-")
+        ac3.metric(get_text(lang, "collector_metric_gc_enabled"), archive_gc_state.get("enabled") if archive_gc_state else "-")
+        ac4.metric(get_text(lang, "collector_metric_gc_dry_run"), archive_gc_state.get("dry_run") if archive_gc_state else "-")
+        ac5.metric(get_text(lang, "collector_metric_remaining_hot_files"), len(archive_hot_remaining_files))
 
         st.caption(
-            f"archive_started_at={archive_copy_state.get('started_at', '-')} / "
-            f"copy_last_scan_ts={archive_copy_state.get('last_scan_ts', '-')} / "
-            f"gc_last_scan_ts={archive_gc_state.get('last_scan_ts', '-')}"
+            get_text(lang, "collector_caption_archive_started_line").format(
+                started_at=archive_copy_state.get("started_at", "-"),
+                copy_last_scan_ts=archive_copy_state.get("last_scan_ts", "-"),
+                gc_last_scan_ts=archive_gc_state.get("last_scan_ts", "-"),
+            )
         )
         st.caption(
-            f"copy_last_plan_count={archive_copy_state.get('last_plan_count', '-')} / "
-            f"copy_last_copied_files={archive_copy_state.get('last_copied_files', '-')} / "
-            f"gc_last_plan_count={archive_gc_state.get('last_plan_count', '-')} / "
-            f"gc_last_deleted_files={archive_gc_state.get('last_deleted_files', '-')}"
+            get_text(lang, "collector_caption_archive_counts_line").format(
+                copy_plan_count=archive_copy_state.get("last_plan_count", "-"),
+                copy_copied_files=archive_copy_state.get("last_copied_files", "-"),
+                gc_plan_count=archive_gc_state.get("last_plan_count", "-"),
+                gc_deleted_files=archive_gc_state.get("last_deleted_files", "-"),
+            )
         )
-        st.caption(f"archive_audit_path={archive_recent.get('audit_path', '-')}")
+        st.caption(
+            get_text(lang, "collector_caption_archive_audit_path_line").format(
+                audit_path=archive_recent.get("audit_path", "-"),
+            )
+        )
 
-        st.markdown("#### Latest Copy 5")
+        st.markdown(f"#### {get_text(lang, 'ui_label_archive_latest_copy')}")
         copy_rows = archive_recent.get("copy_rows", []) if isinstance(archive_recent, dict) else []
         if copy_rows:
             st.dataframe(copy_rows, width="stretch")
         else:
-            st.info("latest copy history not available")
+            st.info(get_text(lang, "collector_msg_latest_copy_unavailable"))
 
-        st.markdown("#### Latest Delete 5")
+        st.markdown(f"#### {get_text(lang, 'ui_label_archive_latest_delete')}")
         delete_rows = archive_recent.get("delete_rows", []) if isinstance(archive_recent, dict) else []
         if delete_rows:
             st.dataframe(delete_rows, width="stretch")
         else:
-            st.info("latest delete history not available")
+            st.info(get_text(lang, "collector_msg_latest_delete_unavailable"))
 
-        st.markdown("#### Hot D drive remaining data files (latest 50)")
+        st.markdown(f"#### {get_text(lang, 'ui_label_archive_hot_remaining')}")
         if archive_hot_remaining_files:
             st.dataframe(archive_hot_remaining_files, width="stretch")
         else:
-            st.info("hot remaining data files not available")
+            st.info(get_text(lang, "collector_msg_hot_remaining_unavailable"))
 
     st.caption(get_text(lang, "collector_page_caption"))
 
-    st.markdown("### Origin Continuity Summary (status.json)")
-    status_freshness_label, status_freshness_reason = _status_continuity_freshness(status_state)
-    status_age = _status_age_seconds(status_state)
+    render_origin_continuity_summary_section(
+        lang=lang,
+        get_text=get_text,
+        status_state=status_state,
+        origin_continuity=origin_continuity,
+        status_continuity_freshness=_status_continuity_freshness,
+        status_age_seconds=_status_age_seconds,
+    )
 
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Status Freshness", status_freshness_label)
-    c2.metric("Status Age (sec)", status_age or "-")
-    c3.metric("Origin WS State", origin_continuity.get("ws_state") or "-")
-    c4.metric("Origin Snapshot→LIVE (ms)", origin_continuity.get("snapshot_to_live_ms") or "-")
-    c5.metric("Origin Pre-Snapshot Drops", origin_continuity.get("pre_snapshot_delta_drop_count") or 0)
-
-    if origin_continuity:
-        if status_freshness_label == "LIVE":
-            st.caption(f"origin_continuity=status.json / {status_freshness_reason}")
-        elif status_freshness_label == "STALE":
-            st.warning(f"origin_continuity=status.json / {status_freshness_reason}")
-        else:
-            st.info(f"origin_continuity=status.json / {status_freshness_reason}")
-    else:
-        st.info("status.json origin_continuity not available")
-
-    st.markdown("### Origin Continuity Audit Summary (recent 200 lines)")
-    a1, a2, a3, a4 = st.columns(4)
-    a1.metric("Gap Detected", origin_audit_summary.get("gap_detected") or 0)
-    a2.metric("Resync Started", origin_audit_summary.get("resync_started") or 0)
-    a3.metric("Resync Completed", origin_audit_summary.get("resync_completed") or 0)
-    a4.metric("Resync Complete Ratio", origin_audit_summary.get("resync_complete_ratio") or "-")
+    with live_shell.panel_container(label=get_text(lang, "ui_label_origin_continuity_audit"), tone="primary"):
+        a1, a2, a3, a4 = st.columns(4)
+        a1.metric(get_text(lang, "collector_metric_gap_detected"), origin_audit_summary.get("gap_detected") or 0)
+        a2.metric(get_text(lang, "collector_metric_resync_started"), origin_audit_summary.get("resync_started") or 0)
+        a3.metric(get_text(lang, "collector_metric_resync_completed"), origin_audit_summary.get("resync_completed") or 0)
+        a4.metric(get_text(lang, "collector_metric_resync_complete_ratio"), origin_audit_summary.get("resync_complete_ratio") or "-")
 
     system_stats.render()
     execution_feed_panel.render()
 
-    st.subheader(get_text(lang, "collector_recent_events"))
+    with live_shell.render_folded_section(get_text(lang, "collector_recent_events"), expanded=False):
+        events = recent_audit_events[:30]
+        if events:
+            ui_rows = _audit_rows_for_ui(events)
+            st.dataframe(ui_rows, width="stretch")
+        else:
+            st.warning(get_text(lang, "collector_audit_empty"))
 
-    events = recent_audit_events[:30]
-    if events:
-        ui_rows = _audit_rows_for_ui(events)
-        st.dataframe(ui_rows, width="stretch")
-    else:
-        st.warning(get_text(lang, "collector_audit_empty"))
+    with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
+        st.caption(get_text(lang, "ui_slot_diagnostics_collector_caption"))
+        slot_rows = get_registered_slots("collector")
+        if slot_rows:
+            st.dataframe(slot_rows, width="stretch")
+        else:
+            st.info(get_text(lang, "ui_slot_registry_empty_collector"))

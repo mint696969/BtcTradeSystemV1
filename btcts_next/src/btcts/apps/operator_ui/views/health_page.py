@@ -6,6 +6,22 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
+from btcts.apps.operator_ui.components import live_shell
+from btcts.apps.operator_ui.components.live_shell import get_registered_slots
+from btcts.apps.operator_ui.components.health_chart_panels import (
+    render_api_chart_panel,
+    render_layer3_chart_panel,
+    render_ws_chart_panel,
+)
+from btcts.apps.operator_ui.components.health_detail_panels import (
+    render_current_state_section,
+    render_recent_events_section,
+)
+from btcts.apps.operator_ui.components.health_top_panels import (
+    render_continuity_panels,
+    render_overview_summary_panel,
+    render_read_guide_section,
+)
 from btcts.apps.operator_ui.health_data_service import load_health_snapshot
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.ui_time import format_ui_ts
@@ -212,29 +228,6 @@ def _health_value_label(value: str | None, lang: str) -> str:
     return raw
 
 
-def _continuity_cell_color(level: str) -> str:
-    if level == "green":
-        return "#22c55e"
-    if level == "yellow":
-        return "#facc15"
-    if level == "orange":
-        return "#f59e0b"
-    if level == "red":
-        return "#ef4444"
-    return "#6b7280"
-
-
-def _continuity_level_label(level: str, lang: str) -> str:
-    key_map = {
-        "green": "health_continuity_level_green",
-        "yellow": "health_continuity_level_yellow",
-        "orange": "health_continuity_level_orange",
-        "red": "health_continuity_level_red",
-        "gray": "health_continuity_level_gray",
-    }
-    return get_text(lang, key_map.get(level, "health_continuity_level_gray"))
-
-
 def _health_event_label(value: str | None, lang: str) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -258,19 +251,19 @@ def _health_event_label(value: str | None, lang: str) -> str:
         return get_text(lang, "health_event_exploration_normal")
 
     if raw == "collector_vnext.unified.ws_executions.started":
-        return "ws executions started"
+        return get_text(lang, "health_event_ws_exec_started")
     if raw == "collector_vnext.unified.ws_executions.connected":
-        return "ws executions connected"
+        return get_text(lang, "health_event_ws_exec_connected")
     if raw == "collector_vnext.unified.ws_executions.reconnected":
-        return "ws executions reconnected"
+        return get_text(lang, "health_event_ws_exec_reconnected")
     if raw == "collector_vnext.unified.ws_executions.message.received":
-        return "ws executions message received"
+        return get_text(lang, "health_event_ws_exec_message_received")
     if raw == "collector_vnext.unified.ws_executions.message.skipped":
-        return "ws executions message skipped"
+        return get_text(lang, "health_event_ws_exec_message_skipped")
     if raw == "collector_vnext.unified.ws_executions.message.meta":
-        return "ws executions meta event"
+        return get_text(lang, "health_event_ws_exec_meta")
     if raw == "collector_vnext.unified.ws_executions.trade.written":
-        return "ws executions trade written"
+        return get_text(lang, "health_event_ws_exec_trade_written")
 
     text_key = key_map.get(raw)
     if text_key:
@@ -291,84 +284,70 @@ def _health_event_label(value: str | None, lang: str) -> str:
     return raw
 
 
-def _render_continuity_rail(rail_rows: list[dict], lang: str):
-    st.markdown(
-        """
-        <style>
-        .health-continuity-row {
-            display: grid;
-            grid-template-columns: 110px 1fr;
-            gap: 0.75rem;
-            align-items: center;
-            margin-bottom: 0.45rem;
-        }
-        .health-continuity-venue {
-            font-weight: 700;
-        }
-        .health-continuity-cells {
-            display: grid;
-            grid-template-columns: repeat(60, minmax(8px, 1fr));
-            gap: 2px;
-        }
-        .health-continuity-cell {
-            height: 16px;
-            border-radius: 2px;
-        }
-        .health-continuity-reason {
-            min-height: 56px;
-            border: 1px solid rgba(128,128,128,0.25);
-            border-radius: 6px;
-            padding: 0.65rem 0.8rem;
-            margin-top: 0.4rem;
-            margin-bottom: 0.9rem;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
+def _range_label(range_key: str) -> str:
+    mapping = {
+        "1h": "1時間",
+        "24h": "24時間",
+        "1w": "1週間",
+    }
+    return mapping.get(range_key, range_key)
 
-    for row in rail_rows:
-        venue = str(row.get("venue") or "-")
-        cells = row.get("cells") or []
-        current_level = str(row.get("current_level") or "gray")
-        current_reason_key = str(row.get("current_reason") or "health_continuity_reason_none")
-        current_reason = get_text(lang, current_reason_key)
 
-        cells_html = "".join(
-            [
-                (
-                    f"<div class='health-continuity-cell' "
-                    f"style='background:{_continuity_cell_color(str(cell.get('level') or 'gray'))};' "
-                    f"title='{cell.get('ts', '')} / {get_text(lang, str(cell.get('reason') or 'health_continuity_reason_none'))}'></div>"
-                )
-                for cell in cells
-            ]
-        )
+def _section_title_with_range(title: str, range_key: str) -> str:
+    return f"{title}（{_range_label(range_key)}）"
 
-        st.markdown(
-            (
-                "<div class='health-continuity-row'>"
-                f"<div class='health-continuity-venue'>{venue}</div>"
-                f"<div class='health-continuity-cells'>{cells_html}</div>"
-                "</div>"
-            ),
-            unsafe_allow_html=True,
-        )
 
-        st.markdown(
-            (
-                "<div class='health-continuity-reason'>"
-                f"<strong>{get_text(lang, 'health_continuity_reason_title')}</strong><br>"
-                f"{_continuity_level_label(current_level, lang)} / {current_reason}"
-                "</div>"
-            ),
-            unsafe_allow_html=True,
-        )
+def _api_chart_columns_and_labels(api_df: pd.DataFrame, lang: str) -> tuple[list[str], dict[str, str]]:
+    if api_df.empty:
+        return [], {}
+
+    latest_row = api_df.iloc[-1].to_dict()
+    chart_fields = latest_row.get("api_chart_fields") or []
+
+    label_key_map = {
+        "api_events": "health_chart_api_events",
+        "api_rolling_5m": "health_chart_api_rolling_5m",
+        "api_limit_5m": "health_chart_api_limit_5m",
+        "events_429_marker": "health_chart_429_events",
+        "events_429": "health_chart_429_events",
+        "warn_error_events": "health_chart_warn_error_events",
+    }
+
+    labels: dict[str, str] = {}
+    columns: list[str] = []
+
+    for field in chart_fields:
+        if field not in api_df.columns:
+            continue
+        columns.append(field)
+        labels[field] = get_text(lang, label_key_map.get(field, field))
+
+    return columns, labels
 
 
 def render():
     lang = st.session_state.get("ui_lang", "en")
-    snapshot = load_health_snapshot()
+
+    range_options = {
+        "1h": get_text(lang, "health_range_1h"),
+        "24h": get_text(lang, "health_range_24h"),
+        "1w": get_text(lang, "health_range_1w"),
+    }
+    selected_range_key = st.session_state.get("health_selected_range_key", "1h")
+
+    live_shell.render_compact_page_header(get_text(lang, "health_title"))
+
+    range_cols = st.columns([1, 6])
+    with range_cols[0]:
+        st.session_state.health_selected_range_key = st.selectbox(
+            get_text(lang, "health_label_range_selector"),
+            options=["1h", "24h", "1w"],
+            index=["1h", "24h", "1w"].index(selected_range_key),
+            format_func=lambda key: range_options.get(key, key),
+            key="health_range_selector",
+        )
+
+    snapshot = load_health_snapshot(range_key=st.session_state.health_selected_range_key)
 
     collector_state = snapshot.get("collector_state") or {}
     status_payload = collector_state.get("status") or {}
@@ -431,435 +410,116 @@ def render():
     market_latest = snapshot.get("market_latest") or {}
     market_diag = snapshot.get("market_diag") or {}
 
-    api_ws_series = snapshot.get("api_ws_series_1h") or []
-    rate_overlay = snapshot.get("rate_overlay_1h") or []
-    layer3_series = snapshot.get("layer3_series_1h") or []
-    api_continuity_rail = snapshot.get("api_continuity_rail_1h") or []
-    ws_continuity_rail = snapshot.get("ws_continuity_rail_1h") or []
+    api_ws_series = snapshot.get("api_ws_series") or []
+    rate_overlay = snapshot.get("rate_overlay") or []
+    layer3_series = snapshot.get("layer3_series") or []
+    api_continuity_rail = snapshot.get("api_continuity_rail") or []
+    ws_continuity_rail = snapshot.get("ws_continuity_rail") or []
     recent_anomalies = snapshot.get("recent_anomalies") or []
 
-    st.header(get_text(lang, "health_title"))
-
-    st.markdown(f"#### {get_text(lang, 'health_section_read_guide')}")
-    st.caption(f"1. {get_text(lang, 'health_read_guide_line1')}")
-    st.caption(f"2. {get_text(lang, 'health_read_guide_line2')}")
-    st.caption(f"3. {get_text(lang, 'health_read_guide_line3')}")
-
-    st.markdown(f"#### {get_text(lang, 'health_section_continuity_api')}")
-    if api_continuity_rail:
-        _render_continuity_rail(api_continuity_rail, lang)
-        st.caption(get_text(lang, "health_continuity_caption_api"))
-    else:
-        st.info(get_text(lang, "health_value_no_data"))
-
-    st.markdown(f"#### {get_text(lang, 'health_section_continuity_ws')}")
-    if ws_continuity_rail:
-        _render_continuity_rail(ws_continuity_rail, lang)
-        st.caption(get_text(lang, "health_continuity_caption_ws"))
-    else:
-        st.info(get_text(lang, "health_value_no_data"))
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric(
-        get_text(lang, "health_summary_collector"),
-        _collector_summary_label(status_payload, health_payload, lang),
-    )
-    c2.metric(
-        get_text(lang, "health_summary_api"),
-        _api_summary_label(bitflyer_rate, lang),
-    )
-    c3.metric(
-        get_text(lang, "health_summary_ws"),
-        _ws_summary_label(origin_payload, lang),
-    )
-    c4.metric(
-        get_text(lang, "health_summary_layer3"),
-        _layer3_summary_label(market_latest, market_diag, lang),
+    render_read_guide_section(
+        lang=lang,
+        get_text=get_text,
     )
 
-    st.markdown(f"#### {get_text(lang, 'health_section_api_chart')}")
-    if api_ws_series:
-        api_df = pd.DataFrame(api_ws_series)
-        api_df["ts"] = pd.to_datetime(api_df["ts"], utc=True)
-
-        latest_api = api_df.iloc[-1].to_dict() if not api_df.empty else {}
-
-        a1, a2, a3, a4 = st.columns(4)
-        a1.metric(
-            get_text(lang, "health_metric_req_1m"),
-            "-" if not bitflyer_rate else _format_metric_number(bitflyer_rate.get("requests_60s")),
-        )
-        a2.metric(
-            get_text(lang, "health_metric_req_5m"),
-            "-" if not bitflyer_rate else _format_metric_number(bitflyer_rate.get("requests_300s")),
-        )
-        a3.metric(
-            get_text(lang, "health_metric_req_snapshot_1m"),
-            "-" if not bitflyer_rate_snapshot else _format_metric_number(bitflyer_rate_snapshot.get("requests_60s")),
-        )
-        a4.metric(
-            get_text(lang, "health_metric_req_trades_1m"),
-            "-" if not bitflyer_rate_trades else _format_metric_number(bitflyer_rate_trades.get("requests_60s")),
-        )
-
-        api_chart_df = api_df.set_index("ts")[
-            [
-                "api_events",
-                "api_rolling_5m",
-                "api_limit_5m",
-                "events_429_marker",
-            ]
-        ].rename(
-            columns={
-                "api_events": get_text(lang, "health_chart_api_events"),
-                "api_rolling_5m": get_text(lang, "health_chart_api_rolling_5m"),
-                "api_limit_5m": get_text(lang, "health_chart_api_limit_5m"),
-                "events_429_marker": get_text(lang, "health_chart_429_events"),
-            }
-        )
-        st.line_chart(api_chart_df, height=260, width="stretch")
-
-        if rate_overlay:
-            overlay_df = pd.DataFrame(rate_overlay)
-            overlay_df["ts"] = pd.to_datetime(overlay_df["ts"], utc=True)
-
-            o1, o2, o3, o4 = st.columns(4)
-            latest_overlay = overlay_df.iloc[-1].to_dict() if not overlay_df.empty else {}
-
-            o1.metric(
-                get_text(lang, "health_metric_budget_60s"),
-                _format_metric_number(latest_overlay.get("budget_60s")),
-            )
-            o2.metric(
-                get_text(lang, "health_metric_budget_300s"),
-                _format_metric_number(latest_overlay.get("budget_300s")),
-            )
-            o3.metric(
-                get_text(lang, "health_metric_target_ratio"),
-                _format_metric_number(latest_overlay.get("target_utilization"), decimals=1, percent=True),
-            )
-            o4.metric(
-                get_text(lang, "health_metric_hard_cap_ratio"),
-                _format_metric_number(latest_overlay.get("hard_cap_utilization"), decimals=1, percent=True),
-            )
-
-            overlay_chart_df = overlay_df.set_index("ts")[
-                [
-                    "utilization",
-                    "active_target_ratio",
-                    "target_utilization",
-                    "hard_cap_utilization",
-                ]
-            ].rename(
-                columns={
-                    "utilization": get_text(lang, "health_chart_current_utilization"),
-                    "active_target_ratio": get_text(lang, "health_chart_active_target_ratio"),
-                    "target_utilization": get_text(lang, "health_chart_target_utilization"),
-                    "hard_cap_utilization": get_text(lang, "health_chart_hard_cap_utilization"),
-                }
-            )
-            st.line_chart(overlay_chart_df, height=220, width="stretch")
-
-        st.caption(get_text(lang, "health_chart_api_caption"))
-    else:
-        st.info(get_text(lang, "health_value_no_data"))
-
-    st.markdown(f"#### {get_text(lang, 'health_section_ws_chart')}")
-    if api_ws_series:
-        ws_df = pd.DataFrame(api_ws_series)
-        ws_df["ts"] = pd.to_datetime(ws_df["ts"], utc=True)
-
-        latest_ws = ws_df.iloc[-1].to_dict() if not ws_df.empty else {}
-
-        w1, w2, w3 = st.columns(3)
-        w1.metric(
-            get_text(lang, "health_metric_ws_events_1m"),
-            "-" if not latest_ws else _format_metric_number(latest_ws.get("ws_events")),
-        )
-        w2.metric(
-            get_text(lang, "health_metric_gap_1m"),
-            "-" if not latest_ws else _format_metric_number(latest_ws.get("gap_events")),
-        )
-        w3.metric(
-            get_text(lang, "health_metric_resync_1m"),
-            "-" if not latest_ws else _format_metric_number(latest_ws.get("resync_events")),
-        )
-
-        ws_chart_df = ws_df.set_index("ts")[
-            [
-                "ws_events",
-                "ws_exec_events",
-                "gap_events",
-                "resync_events",
-            ]
-        ].rename(
-            columns={
-                "ws_events": get_text(lang, "health_chart_ws_events"),
-                "ws_exec_events": "WS Exec Events",
-                "gap_events": get_text(lang, "health_chart_gap_events"),
-                "resync_events": get_text(lang, "health_chart_resync_events"),
-            }
-        )
-        st.line_chart(ws_chart_df, height=220, width="stretch")
-        st.caption(get_text(lang, "health_chart_ws_caption"))
-    else:
-        st.info(get_text(lang, "health_value_no_data"))
-
-    st.markdown(f"#### {get_text(lang, 'health_section_layer3_chart')}")
-    if layer3_series:
-        l1, l2, l3, l4 = st.columns(4)
-        l1.metric(
-            get_text(lang, "health_metric_trust_state"),
-            _health_value_label(
-                market_latest.get("trust_state") or market_diag.get("preferred_row_trust_state"),
-                lang,
-            ),
-        )
-        l2.metric(
-            get_text(lang, "health_metric_continuity_state"),
-            _health_value_label(
-                market_latest.get("continuity_state") or market_diag.get("preferred_row_continuity_state"),
-                lang,
-            ),
-        )
-        l3.metric(
-            get_text(lang, "health_metric_interpretation"),
-            _health_value_label(
-                market_latest.get("interpretation_bucket")
-                or market_diag.get("preferred_row_interpretation_bucket"),
-                lang,
-            ),
-        )
-        l4.metric(
-            get_text(lang, "health_metric_freshness"),
-            _health_value_label(market_diag.get("preferred_row_freshness"), lang),
-        )
-
-        layer3_df = pd.DataFrame(layer3_series)
-        layer3_df["ts"] = pd.to_datetime(layer3_df["ts"], utc=True)
-        layer3_chart_df = layer3_df.set_index("ts")[
-            [
-                "trust_score",
-                "continuity_score",
-                "interpretation_score",
-                "freshness_score",
-            ]
-        ].rename(
-            columns={
-                "trust_score": get_text(lang, "health_chart_trust_score"),
-                "continuity_score": get_text(lang, "health_chart_continuity_score"),
-                "interpretation_score": get_text(lang, "health_chart_interpretation_score"),
-                "freshness_score": get_text(lang, "health_chart_freshness_score"),
-            }
-        )
-        st.line_chart(layer3_chart_df, height=220, width="stretch")
-        st.caption(get_text(lang, "health_chart_layer3_caption"))
-    else:
-        st.info(get_text(lang, "health_value_no_data"))
-
-    st.markdown(f"#### {get_text(lang, 'health_section_current_state')}")
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric(
-        get_text(lang, "health_metric_status"),
-        _health_value_label(status_payload.get("mode"), lang),
-        runtime_kind.upper() if runtime_kind else None,
-    )
-    m2.metric(
-        get_text(lang, "health_metric_wait_ms"),
-        "-" if not bitflyer_rate else _health_value_label(runtime_mode, lang),
-    )
-    m3.metric(
-        get_text(lang, "health_metric_util_ratio"),
-        "-" if not bitflyer_rate else _format_metric_number(
-            runtime_utilization if runtime_utilization is not None else bitflyer_rate.get("util_ratio"),
-            decimals=1,
-            percent=True,
-        ),
-    )
-    m4.metric(
-        get_text(lang, "health_metric_last_429"),
-        _format_optional_ts(bitflyer_rate.get("last_429_ts"), lang),
-    )
-    m5.metric(
-        get_text(lang, "health_metric_hold_until"),
-        _format_optional_ts(bitflyer_rate.get("hold_until_ts"), lang)
-        if runtime_mode == "CRIT"
-        else "-",
+    render_overview_summary_panel(
+        lang=lang,
+        status_payload=status_payload,
+        health_payload=health_payload,
+        bitflyer_rate=bitflyer_rate,
+        origin_payload=origin_payload,
+        market_latest=market_latest,
+        market_diag=market_diag,
+        get_text=get_text,
+        collector_summary_label=_collector_summary_label,
+        api_summary_label=_api_summary_label,
+        ws_summary_label=_ws_summary_label,
+        layer3_summary_label=_layer3_summary_label,
     )
 
-    st.markdown("##### WS Board / WS Executions")
-
-    nb1, nb2, nb3, nb4, nb5 = st.columns(5)
-    nb1.metric(
-        "WS Board State",
-        _health_value_label(
-            ws_board_lane.get("ws_state") or origin_payload.get("ws_state"),
-            lang,
-        ),
-        ws_board_state if ws_board_state else None,
-    )
-    nb2.metric(
-        "WS Board Freshness",
-        _health_value_label(
-            ws_board_lane.get("ws_freshness")
-            or _ws_freshness_label_from_ts(
-                ws_board_lane.get("last_event_ts") or origin_payload.get("ts"),
-                lang,
-            ),
-            lang,
-        ),
-    )
-    nb3.metric(
-        "WS Board Last Update",
-        _format_optional_ts(
-            ws_board_lane.get("last_event_ts") or origin_payload.get("ts"),
-            lang,
-        ),
-    )
-    nb4.metric(
-        "WS Board Age Sec",
-        _format_age_seconds(
-            ws_board_lane.get("last_event_ts") or origin_payload.get("ts"),
-        ),
-    )
-    nb5.metric(
-        "WS Board Restart",
-        _format_metric_number(ws_board_lane.get("restart_count")),
-        ws_board_last_error if ws_board_last_error else None,
+    render_continuity_panels(
+        lang=lang,
+        range_key=st.session_state.health_selected_range_key,
+        api_continuity_rail=api_continuity_rail,
+        ws_continuity_rail=ws_continuity_rail,
+        get_text=get_text,
+        section_title_with_range=_section_title_with_range,
     )
 
-    ne1, ne2, ne3, ne4, ne5 = st.columns(5)
-    ne1.metric(
-        "WS Exec State",
-        _health_value_label(
-            ws_executions_lane.get("ws_state") or executions_payload.get("ws_state"),
-            lang,
-        ),
-        ws_executions_state if ws_executions_state else None,
-    )
-    ne2.metric(
-        "WS Exec Freshness",
-        _health_value_label(
-            ws_executions_lane.get("ws_freshness")
-            or health_payload.get("ws_executions_freshness")
-            or _ws_freshness_label_from_ts(
-                ws_executions_lane.get("last_event_ts")
-                or ws_executions_lane.get("connected_ts")
-                or executions_payload.get("last_event_ts")
-                or executions_payload.get("connected_ts")
-                or executions_payload.get("ts"),
-                lang,
-            ),
-            lang,
-        ),
-    )
-    ne3.metric(
-        "WS Exec Last Update",
-        _format_optional_ts(
-            ws_executions_lane.get("last_event_ts")
-            or ws_executions_lane.get("connected_ts")
-            or executions_payload.get("last_event_ts")
-            or executions_payload.get("connected_ts")
-            or executions_payload.get("ts"),
-            lang,
-        ),
-    )
-    ne4.metric(
-        "WS Exec Age Sec",
-        _format_age_seconds(
-            ws_executions_lane.get("last_event_ts")
-            or ws_executions_lane.get("connected_ts")
-            or executions_payload.get("last_event_ts")
-            or executions_payload.get("connected_ts")
-            or executions_payload.get("ts"),
-        ),
-    )
-    ne5.metric(
-        "WS Exec Trades",
-        _format_metric_number(
-            ws_executions_lane.get("trade_count")
-            if ws_executions_lane
-            else executions_payload.get("trade_count"),
-        ),
-        ws_executions_last_error if ws_executions_last_error else None,
+    render_api_chart_panel(
+        lang=lang,
+        range_key=st.session_state.health_selected_range_key,
+        api_ws_series=api_ws_series,
+        rate_overlay=rate_overlay,
+        bitflyer_rate=bitflyer_rate,
+        bitflyer_rate_snapshot=bitflyer_rate_snapshot,
+        bitflyer_rate_trades=bitflyer_rate_trades,
+        get_text=get_text,
+        section_title_with_range=_section_title_with_range,
+        format_metric_number=_format_metric_number,
+        api_chart_columns_and_labels=_api_chart_columns_and_labels,
     )
 
-    n1, n2, n3 = st.columns(3)
-    n1.metric(
-        get_text(lang, "health_metric_snapshot_to_live"),
-        _format_metric_number(origin_payload.get("snapshot_to_live_ms")),
-    )
-    n2.metric(
-        get_text(lang, "health_metric_resync"),
-        str(origin_payload.get("resync_active") or False),
-        str(origin_payload.get("gap_detected") or False),
-    )
-    n3.metric(
-        get_text(lang, "health_metric_last_sequence_id"),
-        _format_metric_number(checkpoint_payload.get("last_sequence_id")),
+    render_ws_chart_panel(
+        lang=lang,
+        range_key=st.session_state.health_selected_range_key,
+        api_ws_series=api_ws_series,
+        get_text=get_text,
+        section_title_with_range=_section_title_with_range,
+        format_metric_number=_format_metric_number,
     )
 
-    p1, p2, p3, p4, p5, p6 = st.columns(6)
-    p1.metric(
-        get_text(lang, "health_metric_boundary_reason"),
-        _health_value_label(market_latest.get("boundary_reason"), lang),
-    )
-    p2.metric(
-        get_text(lang, "health_metric_interpretation"),
-        _health_value_label(
-            market_latest.get("interpretation_bucket")
-            or market_diag.get("preferred_row_interpretation_bucket"),
-            lang,
-        ),
-    )
-    p3.metric(
-        get_text(lang, "health_metric_daemon_status"),
-        _health_value_label(daemon_status_payload.get("mode"), lang),
-    )
-    p4.metric(
-        get_text(lang, "health_metric_daemon_last_error"),
-        str(daemon_status_payload.get("last_error") or "-"),
-        ws_board_last_error if ws_board_last_error else None,
-    )
-    p5.metric(
-        get_text(lang, "health_metric_daemon_failures"),
-        _format_metric_number(
-            daemon_health_payload.get("consecutive_failures")
-            if daemon_health_payload
-            else None
-        ),
-    )
-    p6.metric(
-        get_text(lang, "health_metric_daemon_last_success"),
-        _format_optional_ts(daemon_health_payload.get("last_success_ts"), lang),
-        _format_optional_ts(origin_payload.get("ts"), lang),
+    render_layer3_chart_panel(
+        lang=lang,
+        range_key=st.session_state.health_selected_range_key,
+        layer3_series=layer3_series,
+        market_latest=market_latest,
+        market_diag=market_diag,
+        get_text=get_text,
+        section_title_with_range=_section_title_with_range,
+        health_value_label=_health_value_label,
     )
 
-    st.markdown(f"#### {get_text(lang, 'health_section_recent_events')}")
-    if recent_anomalies:
-        events_df = pd.DataFrame(recent_anomalies)
+    render_current_state_section(
+        lang=lang,
+        status_payload=status_payload,
+        health_payload=health_payload,
+        bitflyer_rate=bitflyer_rate,
+        runtime_kind=runtime_kind,
+        runtime_mode=runtime_mode,
+        runtime_utilization=runtime_utilization,
+        origin_payload=origin_payload,
+        checkpoint_payload=checkpoint_payload,
+        ws_board_lane=ws_board_lane,
+        ws_executions_lane=ws_executions_lane,
+        executions_payload=executions_payload,
+        ws_board_state=ws_board_state,
+        ws_board_last_error=ws_board_last_error,
+        ws_executions_state=ws_executions_state,
+        ws_executions_last_error=ws_executions_last_error,
+        market_latest=market_latest,
+        market_diag=market_diag,
+        daemon_status_payload=daemon_status_payload,
+        daemon_health_payload=daemon_health_payload,
+        get_text=get_text,
+        health_value_label=_health_value_label,
+        format_optional_ts=_format_optional_ts,
+        format_age_seconds=_format_age_seconds,
+        format_metric_number=_format_metric_number,
+        ws_freshness_label_from_ts=_ws_freshness_label_from_ts,
+    )
 
-        if "ts" in events_df.columns:
-            events_df["ts"] = events_df["ts"].apply(lambda x: format_ui_ts(x, lang=lang))
-        if "event" in events_df.columns:
-            events_df["event"] = events_df["event"].apply(lambda x: _health_event_label(x, lang))
-        if "reason" in events_df.columns:
-            events_df["reason"] = events_df["reason"].apply(lambda x: _health_event_label(x, lang))
-        if "topic" in events_df.columns:
-            events_df["topic"] = events_df["topic"].apply(lambda x: _health_event_label(x, lang))
-        if "exchange" in events_df.columns:
-            events_df["exchange"] = events_df["exchange"].apply(lambda x: _health_event_label(x, lang))
+    render_recent_events_section(
+        lang=lang,
+        recent_anomalies=recent_anomalies,
+        get_text=get_text,
+        health_event_label=_health_event_label,
+    )
 
-        events_df = events_df.rename(
-            columns={
-                "ts": get_text(lang, "health_table_ts"),
-                "event": get_text(lang, "health_table_event"),
-                "topic": get_text(lang, "health_table_topic"),
-                "reason": get_text(lang, "health_table_reason"),
-                "exchange": get_text(lang, "health_table_exchange"),
-            }
-        )
-
-        st.dataframe(events_df, width="stretch", hide_index=True)
-    else:
-        st.info(get_text(lang, "health_value_no_data"))
+    with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
+        st.caption(get_text(lang, "ui_slot_diagnostics_health_caption"))
+        slot_rows = get_registered_slots("health")
+        if slot_rows:
+            st.dataframe(slot_rows, width="stretch")
+        else:
+            st.info(get_text(lang, "ui_slot_registry_empty_health"))
