@@ -9,7 +9,7 @@ import streamlit as st
 
 from btcts.apps.operator_ui.components import execution_feed_panel
 from btcts.apps.operator_ui.components import live_shell
-from btcts.apps.operator_ui.components.live_shell import get_registered_slots
+from btcts.apps.operator_ui.components.live_shell import get_registered_slots, make_slot_meta
 from btcts.apps.operator_ui.components import system_stats
 from btcts.apps.operator_ui.components.collector_top_panels import (
     render_origin_continuity_summary_section,
@@ -402,49 +402,48 @@ def render():
         rate_rows=_rate_rows,
     )
 
-    col_r1, col_r2 = st.columns(2)
+    with live_shell.render_folded_section(get_text(lang, "ui_label_ws_continuity_origin_status"), expanded=False):
+        col_r1, col_r2 = st.columns(2)
 
-    with col_r1:
-        st.caption(get_text(lang, "ui_label_ws_continuity_origin_status"))
+        with col_r1:
+            origin_rows = _origin_metric_rows(origin_state)
+            if origin_rows:
+                metric = origin_rows[0]
+                stale_label, stale_reason = _origin_stale_status(origin_state)
 
-        origin_rows = _origin_metric_rows(origin_state)
-        if origin_rows:
-            metric = origin_rows[0]
-            stale_label, stale_reason = _origin_stale_status(origin_state)
+                c0, c1, c2, c3, c4, c5 = st.columns(6)
+                c0.metric(get_text(lang, "collector_metric_continuity_status"), stale_label)
+                c1.metric(get_text(lang, "collector_metric_ws_state"), metric.get("ws_state") or "-")
+                c2.metric(get_text(lang, "collector_metric_snapshot_to_live_ms"), metric.get("snapshot_to_live_ms") or "-")
+                c3.metric(get_text(lang, "collector_metric_resync_occurred"), metric.get("resync_occurred"))
+                c4.metric(get_text(lang, "collector_metric_dropped_pre_snapshot_deltas"), metric.get("pre_snapshot_delta_drop_count") or 0)
+                c5.metric(get_text(lang, "collector_metric_origin_age_sec"), metric.get("origin_age_sec") or "-")
 
-            c0, c1, c2, c3, c4, c5 = st.columns(6)
-            c0.metric(get_text(lang, "collector_metric_continuity_status"), stale_label)
-            c1.metric(get_text(lang, "collector_metric_ws_state"), metric.get("ws_state") or "-")
-            c2.metric(get_text(lang, "collector_metric_snapshot_to_live_ms"), metric.get("snapshot_to_live_ms") or "-")
-            c3.metric(get_text(lang, "collector_metric_resync_occurred"), metric.get("resync_occurred"))
-            c4.metric(get_text(lang, "collector_metric_dropped_pre_snapshot_deltas"), metric.get("pre_snapshot_delta_drop_count") or 0)
-            c5.metric(get_text(lang, "collector_metric_origin_age_sec"), metric.get("origin_age_sec") or "-")
+                if stale_label == "LIVE":
+                    st.success(f"WS continuity status: {stale_label} / {stale_reason}")
+                elif stale_label == "STALE":
+                    st.warning(f"WS continuity status: {stale_label} / {stale_reason}")
+                else:
+                    st.info(f"WS continuity status: {stale_label} / {stale_reason}")
 
-            if stale_label == "LIVE":
-                st.success(f"WS continuity status: {stale_label} / {stale_reason}")
-            elif stale_label == "STALE":
-                st.warning(f"WS continuity status: {stale_label} / {stale_reason}")
+            if origin_state:
+                with live_shell.render_folded_section(get_text(lang, "ui_label_raw_origin_status_json"), expanded=False):
+                    st.json(origin_state)
             else:
-                st.info(f"WS continuity status: {stale_label} / {stale_reason}")
+                st.info(get_text(lang, "collector_msg_origin_status_unavailable"))
 
-        if origin_state:
-            with live_shell.render_folded_section(get_text(lang, "ui_label_raw_origin_status_json"), expanded=False):
-                st.json(origin_state)
-        else:
-            st.info(get_text(lang, "collector_msg_origin_status_unavailable"))
-
-    with col_r2:
-        st.caption(get_text(lang, "ui_label_daemon_supervisor_health"))
-        if daemon_state or supervisor_status or supervisor_request:
-            st.json(
-                {
-                    "daemon_health": daemon_state,
-                    "supervisor_status": supervisor_status,
-                    "supervisor_request": supervisor_request,
-                }
-            )
-        else:
-            st.info(get_text(lang, "collector_msg_daemon_health_unavailable"))
+        with col_r2:
+            st.caption(get_text(lang, "ui_label_daemon_supervisor_health"))
+            if daemon_state or supervisor_status or supervisor_request:
+                st.json(
+                    {
+                        "daemon_health": daemon_state,
+                        "supervisor_status": supervisor_status,
+                        "supervisor_request": supervisor_request,
+                    }
+                )
+            else:
+                st.info(get_text(lang, "collector_msg_daemon_health_unavailable"))
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_raw_rate_state_json"), expanded=False):
         if rate_state:
@@ -512,15 +511,48 @@ def render():
         status_age_seconds=_status_age_seconds,
     )
 
-    with live_shell.panel_container(label=get_text(lang, "ui_label_origin_continuity_audit"), tone="primary"):
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "collector",
+            "primary_live",
+            "origin_continuity_audit",
+            label=get_text(lang, "ui_label_origin_continuity_audit"),
+            tone="primary",
+            refresh_mode="poll_normal",
+            priority=70,
+        )
+    ):
         a1, a2, a3, a4 = st.columns(4)
         a1.metric(get_text(lang, "collector_metric_gap_detected"), origin_audit_summary.get("gap_detected") or 0)
         a2.metric(get_text(lang, "collector_metric_resync_started"), origin_audit_summary.get("resync_started") or 0)
         a3.metric(get_text(lang, "collector_metric_resync_completed"), origin_audit_summary.get("resync_completed") or 0)
         a4.metric(get_text(lang, "collector_metric_resync_complete_ratio"), origin_audit_summary.get("resync_complete_ratio") or "-")
 
-    system_stats.render()
-    execution_feed_panel.render()
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "collector",
+            "primary_live",
+            "system_stats",
+            label=None,
+            tone="primary",
+            refresh_mode="poll_normal",
+            priority=80,
+        )
+    ):
+        system_stats.render()
+
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "collector",
+            "primary_live",
+            "execution_feed",
+            label=None,
+            tone="primary",
+            refresh_mode="poll_fast",
+            priority=90,
+        )
+    ):
+        execution_feed_panel.render()
 
     with live_shell.render_folded_section(get_text(lang, "collector_recent_events"), expanded=False):
         events = recent_audit_events[:30]

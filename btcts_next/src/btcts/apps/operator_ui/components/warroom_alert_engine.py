@@ -3,121 +3,25 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import streamlit as st
-
-from btcts.apps.operator_ui.components.live_bridge import (
-    latest_live_board_metrics,
-    recent_live_tradeflow_metrics,
+from btcts.apps.operator_ui.components.warroom_alert_logic import (
+    decision_label,
+    risk_level,
+    risk_score,
+    spread_state,
 )
-from btcts.apps.operator_ui.components.research_bridge import (
-    board_signal_metrics,
-    latest_best_strategy_name,
-    latest_regime_name,
-    load_latest_experiment_payload,
-    load_latest_replay_payload,
-    replay_tail_rows,
-    tradeflow_metrics,
+from btcts.apps.operator_ui.components.warroom_alert_presenter import (
+    live_probe_message,
+    pressure_bias_from_imbalance,
+    severity_order_value,
+    strategy_label,
+)
+from btcts.apps.operator_ui.components.warroom_alert_state import (
+    build_live_alert_state,
+    build_replay_alert_state,
 )
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.ui_time import format_ui_ts
-
-
-AUDIT_LOG = Path(r"E:\btc_ts\logs\audit.jsonl")
-
-
-def _recent_audit_latency(lines: int = 40):
-    if not AUDIT_LOG.exists():
-        return None
-
-    with open(AUDIT_LOG, "rb") as f:
-        f.seek(0, 2)
-        size = f.tell()
-
-        block = 4096
-        data = b""
-
-        while size > 0 and data.count(b"\n") < lines:
-            step = min(block, size)
-            size -= step
-            f.seek(size)
-            data = f.read(step) + data
-
-    rows = []
-
-    for line in data.splitlines()[-lines:]:
-        try:
-            obj = json.loads(line)
-            payload = obj.get("payload", {})
-            if payload.get("elapsed_ms") is not None:
-                rows.append(float(payload["elapsed_ms"]))
-        except Exception:
-            continue
-
-    if not rows:
-        return None
-
-    return sum(rows) / len(rows)
-
-
-def _spread_state(spread: float | None) -> str | None:
-    if spread is None:
-        return None
-    if spread >= 7000:
-        return "wide"
-    if spread <= 3000:
-        return "tight"
-    return "normal"
-
-
-def _decision_label(regime: str | None, imbalance, delta) -> str:
-    if regime == "trend_up" and isinstance(imbalance, (int, float)) and isinstance(delta, (int, float)):
-        if imbalance > 0 and delta > 0:
-            return "long_bias"
-
-    if regime == "trend_down" and isinstance(imbalance, (int, float)) and isinstance(delta, (int, float)):
-        if imbalance < 0 and delta < 0:
-            return "short_bias"
-
-    return "wait"
-
-
-def _risk_score(spread, imbalance, delta, wall_ratio, latency):
-    score = 0
-
-    if isinstance(spread, (int, float)):
-        if spread > 7000:
-            score += 2
-        elif spread > 4500:
-            score += 1
-
-    if isinstance(imbalance, (int, float)) and isinstance(delta, (int, float)):
-        if (imbalance > 0.2 and delta < 0) or (imbalance < -0.2 and delta > 0):
-            score += 2
-
-    if isinstance(wall_ratio, (int, float)):
-        if abs(wall_ratio) > 0.45:
-            score += 2
-        elif abs(wall_ratio) > 0.25:
-            score += 1
-
-    if isinstance(latency, (int, float)):
-        if latency > 450:
-            score += 2
-        elif latency > 320:
-            score += 1
-
-    return score
-
-
-def _risk_level(score: int) -> str:
-    if score >= 6:
-        return "high"
-    if score >= 3:
-        return "medium"
-    return "low"
 
 
 def _append_alert(
@@ -147,49 +51,25 @@ def _severity_label(lang: str, severity: str) -> str:
 
 
 def _build_live_alerts(lang: str) -> list[dict]:
-    live_board = latest_live_board_metrics()
-    live_flow = recent_live_tradeflow_metrics(lines=80)
-    experiment_payload = load_latest_experiment_payload()
-
-    spread = live_board.get("spread")
-    bid_depth = live_board.get("bid_depth")
-    ask_depth = live_board.get("ask_depth")
-    delta = live_flow.get("delta")
-    alert_ts = live_flow.get("event_ts") or live_board.get("event_ts")
-    regime = latest_regime_name(experiment_payload)
-    best_strategy = latest_best_strategy_name(experiment_payload)
-
-    imbalance = None
-    if bid_depth is not None and ask_depth is not None:
-        try:
-            bid_depth_f = float(bid_depth)
-            ask_depth_f = float(ask_depth)
-            denom = bid_depth_f + ask_depth_f
-            if denom > 0:
-                imbalance = (bid_depth_f - ask_depth_f) / denom
-        except Exception:
-            imbalance = None
-
-    pressure_bias = "neutral_bias"
-    if isinstance(imbalance, (int, float)):
-        if imbalance > 0.2:
-            pressure_bias = "buy_pressure"
-        elif imbalance < -0.2:
-            pressure_bias = "sell_pressure"
-
-    if spread is None:
+    state = build_live_alert_state()
+    if not state:
         return []
 
-    if delta is None:
-        delta = 0.0
+    spread = state["spread"]
+    imbalance = state["imbalance"]
+    delta = state["delta"]
+    alert_ts = state["alert_ts"]
+    regime = state["regime"]
+    best_strategy = state["best_strategy"]
+    latency = state["latency"]
 
-    latency = _recent_audit_latency()
-    risk_score = _risk_score(spread, imbalance, delta, None, latency)
-    risk_level = _risk_level(risk_score)
+    pressure_bias = pressure_bias_from_imbalance(imbalance)
+    current_risk_score = risk_score(spread, imbalance, delta, None, latency)
+    current_risk_level = risk_level(current_risk_score)
 
     alerts: list[dict] = []
 
-    current_spread_state = _spread_state(spread)
+    current_spread_state = spread_state(spread)
     prev_spread_state = st.session_state.get("warroom_live_prev_spread_state")
     if prev_spread_state != current_spread_state and current_spread_state is not None:
         _append_alert(
@@ -216,7 +96,7 @@ def _build_live_alerts(lang: str) -> list[dict]:
         )
     st.session_state.warroom_live_prev_pressure = pressure_bias
 
-    decision = _decision_label(regime, imbalance, delta)
+    decision = decision_label(regime, imbalance, delta)
     prev_decision = st.session_state.get("warroom_prev_decision")
     if prev_decision != decision:
         _append_alert(
@@ -231,7 +111,7 @@ def _build_live_alerts(lang: str) -> list[dict]:
     st.session_state.warroom_prev_decision = decision
 
     prev_risk_level = st.session_state.get("warroom_prev_risk_level")
-    if prev_risk_level != risk_level and risk_level == "high":
+    if prev_risk_level != current_risk_level and current_risk_level == "high":
         _append_alert(
             alerts,
             "critical",
@@ -239,31 +119,26 @@ def _build_live_alerts(lang: str) -> list[dict]:
             get_text(lang, "warroom_alert_risk_spike"),
             ts=str(alert_ts) if alert_ts else None,
         )
-    st.session_state.warroom_prev_risk_level = risk_level
+    st.session_state.warroom_prev_risk_level = current_risk_level
 
-    strategy_label = best_strategy if best_strategy not in {None, "", "unknown"} else "live_active"
+    current_strategy_label = strategy_label(best_strategy)
 
     _append_alert(
         alerts,
         "info",
         "strategy_snapshot",
-        get_text(lang, "warroom_alert_strategy_snapshot").format(strategy=strategy_label),
+        get_text(lang, "warroom_alert_strategy_snapshot").format(strategy=current_strategy_label),
         ts=str(alert_ts) if alert_ts else None,
     )
 
-    severity_order = {
-        "critical": 0,
-        "warning": 1,
-        "info": 2,
-    }
-    alerts.sort(key=lambda x: severity_order.get(x["severity"], 9))
+    alerts.sort(key=lambda x: severity_order_value(x["severity"]))
 
     if not alerts:
         _append_alert(
             alerts,
             "info",
             "live_probe",
-            f"[live_probe] spread={spread} delta={delta} best_strategy={best_strategy} regime={regime}",
+            live_probe_message(spread, delta, best_strategy, regime),
             ts=str(alert_ts) if alert_ts else None,
         )
 
@@ -271,68 +146,37 @@ def _build_live_alerts(lang: str) -> list[dict]:
 
 
 def _build_alerts(lang: str) -> list[dict]:
+    # current runtime policy:
+    # warroom alert stream is live-first.
+    # replay/research alerts are preserved in _build_replay_alerts() for future switchback.
+    return _build_live_alerts(lang)
 
-    live_alerts = _build_live_alerts(lang)
-    return live_alerts
 
-    replay_payload = load_latest_replay_payload()
-    experiment_payload = load_latest_experiment_payload()
-
-    tail = replay_tail_rows(replay_payload, limit=20)
-    if not tail:
+def _build_replay_alerts(lang: str) -> list[dict]:
+    # reserved fallback path:
+    # currently not used by render(), kept for future replay-driven alert mode.
+    state = build_replay_alert_state()
+    if not state:
         return []
 
-    board_snapshots = []
-    trade_snapshots = []
-
-    for row in tail:
-        if not isinstance(row, dict):
-            continue
-
-        kind = row.get("kind")
-        if kind == "board":
-            board = board_signal_metrics(row)
-            if board:
-                board_snapshots.append(board)
-        elif kind == "trade":
-            flow = tradeflow_metrics(row)
-            if flow:
-                trade_snapshots.append(flow)
-
-    if not board_snapshots:
-        return []
-
-    latest_board = board_snapshots[-1]
-    previous_board = board_snapshots[-2] if len(board_snapshots) >= 2 else None
-
-    latest_flow = trade_snapshots[-1] if trade_snapshots else None
-
-    regime = latest_regime_name(experiment_payload)
-    best_strategy = latest_best_strategy_name(experiment_payload)
-
-    spread = latest_board.get("spread")
-    imbalance = latest_board.get("imbalance")
-    pressure_bias = latest_board.get("pressure_bias")
-    wall_ratio = latest_board.get("wall_ratio")
-    delta = latest_flow.get("trade_delta") if isinstance(latest_flow, dict) else None
-
-    alert_ts = (
-        str(latest_board.get("event_ts"))
-        if latest_board.get("event_ts")
-        else str(latest_flow.get("event_ts"))
-        if isinstance(latest_flow, dict) and latest_flow.get("event_ts")
-        else None
-    )
-
-    latency = _recent_audit_latency()
-    risk_score = _risk_score(spread, imbalance, delta, wall_ratio, latency)
-    risk_level = _risk_level(risk_score)
+    previous_board = state["previous_board"]
+    spread = state["spread"]
+    imbalance = state["imbalance"]
+    pressure_bias = state["pressure_bias"]
+    wall_ratio = state["wall_ratio"]
+    delta = state["delta"]
+    alert_ts = state["alert_ts"]
+    regime = state["regime"]
+    best_strategy = state["best_strategy"]
+    latency = state["latency"]
+    current_risk_score = risk_score(spread, imbalance, delta, wall_ratio, latency)
+    current_risk_level = risk_level(current_risk_score)
 
     alerts: list[dict] = []
 
     if previous_board:
-        prev_spread_state = _spread_state(previous_board.get("spread"))
-        current_spread_state = _spread_state(spread)
+        prev_spread_state = spread_state(previous_board.get("spread"))
+        current_spread_state = spread_state(spread)
 
         if prev_spread_state != current_spread_state and current_spread_state is not None:
             _append_alert(
@@ -357,7 +201,7 @@ def _build_alerts(lang: str) -> list[dict]:
                 ts=alert_ts,
             )
 
-    decision = _decision_label(regime, imbalance, delta)
+    decision = decision_label(regime, imbalance, delta)
     prev_decision = st.session_state.get("warroom_prev_decision")
     if prev_decision != decision:
         _append_alert(
@@ -372,7 +216,7 @@ def _build_alerts(lang: str) -> list[dict]:
     st.session_state.warroom_prev_decision = decision
 
     prev_risk_level = st.session_state.get("warroom_prev_risk_level")
-    if prev_risk_level != risk_level and risk_level == "high":
+    if prev_risk_level != current_risk_level and current_risk_level == "high":
         _append_alert(
             alerts,
             "critical",
@@ -380,7 +224,7 @@ def _build_alerts(lang: str) -> list[dict]:
             get_text(lang, "warroom_alert_risk_spike"),
             ts=alert_ts,
         )
-    st.session_state.warroom_prev_risk_level = risk_level
+    st.session_state.warroom_prev_risk_level = current_risk_level
 
     if best_strategy != "unknown":
         _append_alert(
@@ -391,12 +235,7 @@ def _build_alerts(lang: str) -> list[dict]:
             ts=alert_ts,
         )
 
-    severity_order = {
-        "critical": 0,
-        "warning": 1,
-        "info": 2,
-    }
-    alerts.sort(key=lambda x: severity_order.get(x["severity"], 9))
+    alerts.sort(key=lambda x: severity_order_value(x["severity"]))
 
     if not alerts and best_strategy != "unknown":
         _append_alert(

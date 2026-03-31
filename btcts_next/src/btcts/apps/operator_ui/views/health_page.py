@@ -7,7 +7,7 @@ import pandas as pd
 import streamlit as st
 
 from btcts.apps.operator_ui.components import live_shell
-from btcts.apps.operator_ui.components.live_shell import get_registered_slots
+from btcts.apps.operator_ui.components.live_shell import get_registered_slots, make_slot_meta
 from btcts.apps.operator_ui.components.health_chart_panels import (
     render_api_chart_panel,
     render_layer3_chart_panel,
@@ -417,11 +417,6 @@ def render():
     ws_continuity_rail = snapshot.get("ws_continuity_rail") or []
     recent_anomalies = snapshot.get("recent_anomalies") or []
 
-    render_read_guide_section(
-        lang=lang,
-        get_text=get_text,
-    )
-
     render_overview_summary_panel(
         lang=lang,
         status_payload=status_payload,
@@ -437,6 +432,136 @@ def render():
         layer3_summary_label=_layer3_summary_label,
     )
 
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "health",
+            "primary_live",
+            "api_chart_panel",
+            label=None,
+            tone="primary",
+            refresh_mode="poll_fast",
+            priority=50,
+        )
+    ):
+        render_api_chart_panel(
+            lang=lang,
+            range_key=st.session_state.health_selected_range_key,
+            api_ws_series=api_ws_series,
+            rate_overlay=rate_overlay,
+            bitflyer_rate=bitflyer_rate,
+            bitflyer_rate_snapshot=bitflyer_rate_snapshot,
+            bitflyer_rate_trades=bitflyer_rate_trades,
+            get_text=get_text,
+            section_title_with_range=_section_title_with_range,
+            format_metric_number=_format_metric_number,
+            api_chart_columns_and_labels=_api_chart_columns_and_labels,
+        )
+
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "health",
+            "primary_live",
+            "ws_chart_panel",
+            label=None,
+            tone="primary",
+            refresh_mode="poll_fast",
+            priority=60,
+        )
+    ):
+        render_ws_chart_panel(
+            lang=lang,
+            range_key=st.session_state.health_selected_range_key,
+            api_ws_series=api_ws_series,
+            get_text=get_text,
+            section_title_with_range=_section_title_with_range,
+            format_metric_number=_format_metric_number,
+        )
+
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "health",
+            "primary_live",
+            "layer3_chart_panel",
+            label=None,
+            tone="primary",
+            refresh_mode="poll_normal",
+            priority=70,
+        )
+    ):
+        render_layer3_chart_panel(
+            lang=lang,
+            range_key=st.session_state.health_selected_range_key,
+            layer3_series=layer3_series,
+            market_latest=market_latest,
+            market_diag=market_diag,
+            get_text=get_text,
+            section_title_with_range=_section_title_with_range,
+            health_value_label=_health_value_label,
+        )
+
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "health",
+            "detail",
+            "current_state_section",
+            label=None,
+            tone="primary",
+            refresh_mode="poll_normal",
+            priority=100,
+        )
+    ):
+        render_current_state_section(
+            lang=lang,
+            status_payload=status_payload,
+            health_payload=health_payload,
+            bitflyer_rate=bitflyer_rate,
+            runtime_kind=runtime_kind,
+            runtime_mode=runtime_mode,
+            runtime_utilization=runtime_utilization,
+            origin_payload=origin_payload,
+            checkpoint_payload=checkpoint_payload,
+            ws_board_lane=ws_board_lane,
+            ws_executions_lane=ws_executions_lane,
+            executions_payload=executions_payload,
+            ws_board_state=ws_board_state,
+            ws_board_last_error=ws_board_last_error,
+            ws_executions_state=ws_executions_state,
+            ws_executions_last_error=ws_executions_last_error,
+            market_latest=market_latest,
+            market_diag=market_diag,
+            daemon_status_payload=daemon_status_payload,
+            daemon_health_payload=daemon_health_payload,
+            get_text=get_text,
+            health_value_label=_health_value_label,
+            format_optional_ts=_format_optional_ts,
+            format_age_seconds=_format_age_seconds,
+            format_metric_number=_format_metric_number,
+            ws_freshness_label_from_ts=_ws_freshness_label_from_ts,
+        )
+
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "health",
+            "detail",
+            "recent_events_section",
+            label=None,
+            tone="neutral",
+            refresh_mode="poll_normal",
+            priority=110,
+        )
+    ):
+        render_recent_events_section(
+            lang=lang,
+            recent_anomalies=recent_anomalies,
+            get_text=get_text,
+            health_event_label=_health_event_label,
+        )
+
+    render_read_guide_section(
+        lang=lang,
+        get_text=get_text,
+    )
+
     render_continuity_panels(
         lang=lang,
         range_key=st.session_state.health_selected_range_key,
@@ -444,76 +569,6 @@ def render():
         ws_continuity_rail=ws_continuity_rail,
         get_text=get_text,
         section_title_with_range=_section_title_with_range,
-    )
-
-    render_api_chart_panel(
-        lang=lang,
-        range_key=st.session_state.health_selected_range_key,
-        api_ws_series=api_ws_series,
-        rate_overlay=rate_overlay,
-        bitflyer_rate=bitflyer_rate,
-        bitflyer_rate_snapshot=bitflyer_rate_snapshot,
-        bitflyer_rate_trades=bitflyer_rate_trades,
-        get_text=get_text,
-        section_title_with_range=_section_title_with_range,
-        format_metric_number=_format_metric_number,
-        api_chart_columns_and_labels=_api_chart_columns_and_labels,
-    )
-
-    render_ws_chart_panel(
-        lang=lang,
-        range_key=st.session_state.health_selected_range_key,
-        api_ws_series=api_ws_series,
-        get_text=get_text,
-        section_title_with_range=_section_title_with_range,
-        format_metric_number=_format_metric_number,
-    )
-
-    render_layer3_chart_panel(
-        lang=lang,
-        range_key=st.session_state.health_selected_range_key,
-        layer3_series=layer3_series,
-        market_latest=market_latest,
-        market_diag=market_diag,
-        get_text=get_text,
-        section_title_with_range=_section_title_with_range,
-        health_value_label=_health_value_label,
-    )
-
-    render_current_state_section(
-        lang=lang,
-        status_payload=status_payload,
-        health_payload=health_payload,
-        bitflyer_rate=bitflyer_rate,
-        runtime_kind=runtime_kind,
-        runtime_mode=runtime_mode,
-        runtime_utilization=runtime_utilization,
-        origin_payload=origin_payload,
-        checkpoint_payload=checkpoint_payload,
-        ws_board_lane=ws_board_lane,
-        ws_executions_lane=ws_executions_lane,
-        executions_payload=executions_payload,
-        ws_board_state=ws_board_state,
-        ws_board_last_error=ws_board_last_error,
-        ws_executions_state=ws_executions_state,
-        ws_executions_last_error=ws_executions_last_error,
-        market_latest=market_latest,
-        market_diag=market_diag,
-        daemon_status_payload=daemon_status_payload,
-        daemon_health_payload=daemon_health_payload,
-        get_text=get_text,
-        health_value_label=_health_value_label,
-        format_optional_ts=_format_optional_ts,
-        format_age_seconds=_format_age_seconds,
-        format_metric_number=_format_metric_number,
-        ws_freshness_label_from_ts=_ws_freshness_label_from_ts,
-    )
-
-    render_recent_events_section(
-        lang=lang,
-        recent_anomalies=recent_anomalies,
-        get_text=get_text,
-        health_event_label=_health_event_label,
     )
 
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):

@@ -8,6 +8,7 @@ from collections.abc import Callable
 import streamlit as st
 
 from btcts.apps.operator_ui.components import live_shell
+from btcts.apps.operator_ui.components.live_shell import make_slot_meta
 
 
 def render_overview_summary_panel(
@@ -23,14 +24,16 @@ def render_overview_summary_panel(
         col1, col2, col3 = live_shell.responsive_columns(3, compact=True)
 
         with col1:
-            with live_shell.slot_widget_container(
-                "collector",
-                "overview",
-                "status_summary",
-                label=get_text(lang, "collector_metric_status"),
-                tone="strong",
-                refresh_mode="poll_normal",
-                priority=10,
+            with live_shell.slot_widget_from_meta(
+                make_slot_meta(
+                    "collector",
+                    "overview",
+                    "status_summary",
+                    label=get_text(lang, "collector_metric_status"),
+                    tone="strong",
+                    refresh_mode="poll_normal",
+                    priority=10,
+                )
             ):
                 st.metric(
                     get_text(lang, "collector_metric_status"),
@@ -38,12 +41,16 @@ def render_overview_summary_panel(
                 )
 
         with col2:
-            with live_shell.slot_widget_container(
-                "collector",
-                "overview",
-                "exchange_summary",
-                label=get_text(lang, "collector_metric_exchange"),
-                tone="primary",
+            with live_shell.slot_widget_from_meta(
+                make_slot_meta(
+                    "collector",
+                    "overview",
+                    "exchange_summary",
+                    label=get_text(lang, "collector_metric_exchange"),
+                    tone="primary",
+                    refresh_mode="poll_normal",
+                    priority=20,
+                )
             ):
                 st.metric(
                     get_text(lang, "collector_metric_exchange"),
@@ -51,9 +58,16 @@ def render_overview_summary_panel(
                 )
 
         with col3:
-            with live_shell.widget_container(
-                label=get_text(lang, "collector_metric_feed"),
-                tone="neutral",
+            with live_shell.slot_widget_from_meta(
+                make_slot_meta(
+                    "collector",
+                    "overview",
+                    "feed_summary",
+                    label=get_text(lang, "collector_metric_feed"),
+                    tone="neutral",
+                    refresh_mode="poll_fast",
+                    priority=30,
+                )
             ):
                 st.metric(
                     get_text(lang, "collector_metric_feed"),
@@ -72,9 +86,16 @@ def render_supervisor_control_section(
     is_restart_request_pending: Callable[[dict], bool],
     supervisor_status_rows: Callable[[dict, dict], list[dict]],
 ) -> None:
-    with live_shell.zone_container(
-        label=get_text(lang, "ui_label_unified_supervisor"),
-        zone_kind="primary_live",
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "collector",
+            "primary_live",
+            "supervisor_control",
+            label=get_text(lang, "ui_label_unified_supervisor"),
+            tone="primary",
+            refresh_mode="poll_normal",
+            priority=40,
+        )
     ):
         supervisor_running = is_supervisor_running(supervisor_status)
         restart_pending = is_restart_request_pending(supervisor_request)
@@ -137,9 +158,16 @@ def render_rate_control_section(
     rate_state: dict,
     rate_rows: Callable[[dict], list[dict]],
 ) -> None:
-    with live_shell.zone_container(
-        label=get_text(lang, "ui_label_rate_control"),
-        zone_kind="primary_live",
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "collector",
+            "primary_live",
+            "rate_control",
+            label=get_text(lang, "ui_label_rate_control"),
+            tone="primary",
+            refresh_mode="poll_fast",
+            priority=50,
+        )
     ):
         rows = rate_rows(rate_state)
         if not rows:
@@ -200,9 +228,16 @@ def render_origin_continuity_summary_section(
     status_continuity_freshness: Callable[[dict], tuple[str, str]],
     status_age_seconds: Callable[[dict], float | None],
 ) -> None:
-    with live_shell.zone_container(
-        label=get_text(lang, "ui_label_origin_continuity"),
-        zone_kind="primary_live",
+    with live_shell.slot_widget_from_meta(
+        make_slot_meta(
+            "collector",
+            "primary_live",
+            "origin_continuity_summary",
+            label=get_text(lang, "ui_label_origin_continuity"),
+            tone="primary",
+            refresh_mode="poll_normal",
+            priority=60,
+        )
     ):
         status_freshness_label, status_freshness_reason = status_continuity_freshness(status_state)
         status_age = status_age_seconds(status_state)

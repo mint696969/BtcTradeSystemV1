@@ -4,34 +4,31 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from btcts.apps.operator_ui.collector_state_service import load_state
+from btcts.apps.operator_ui.health_ranges import (
+    HEALTH_RANGE_PRESETS,
+    bucket_end,
+    bucket_floor,
+    display_buckets,
+    range_config,
+    time_buckets,
+)
+from btcts.apps.operator_ui.health_truth import (
+    age_seconds_from_ts,
+    api_current_truth,
+    parse_ts,
+    ws_current_truth,
+)
 from btcts.apps.operator_ui.market_state_service import (
     load_latest_market_state,
     market_state_diagnostics,
 )
 from btcts.core import io
 from btcts.core import paths as core_paths
-
-
-def _now_utc() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _parse_ts(value: str | None) -> datetime | None:
-    if not isinstance(value, str) or not value.strip():
-        return None
-
-    text = value.strip()
-    try:
-        if text.endswith("Z"):
-            return datetime.fromisoformat(text.replace("Z", "+00:00"))
-        return datetime.fromisoformat(text)
-    except ValueError:
-        return None
 
 
 def _audit_log_path() -> Path:
@@ -43,14 +40,37 @@ def _read_recent_audit_rows(*, max_lines: int = 4000) -> list[dict[str, Any]]:
     return io.read_jsonl_tail(path, max_lines=max_lines)
 
 
-def _bucket_floor_minute(dt: datetime) -> datetime:
-    return dt.replace(second=0, microsecond=0)
+def _api_chart_spec(range_key: str) -> dict[str, Any]:
+    if range_key == "1h":
+        return {
+            "metric_mode": "short",
+            "chart_fields": [
+                "api_events",
+                "api_rolling_5m",
+                "api_limit_5m",
+                "events_429_marker",
+            ],
+            "chart_label_keys": {
+                "api_events": "health_chart_api_events",
+                "api_rolling_5m": "health_chart_api_rolling_5m",
+                "api_limit_5m": "health_chart_api_limit_5m",
+                "events_429_marker": "health_chart_429_events",
+            },
+        }
 
-
-def _empty_minute_buckets(window_minutes: int) -> list[datetime]:
-    now = _bucket_floor_minute(_now_utc())
-    start = now - timedelta(minutes=window_minutes - 1)
-    return [start + timedelta(minutes=i) for i in range(window_minutes)]
+    return {
+        "metric_mode": "long",
+        "chart_fields": [
+            "api_events",
+            "warn_error_events",
+            "events_429",
+        ],
+        "chart_label_keys": {
+            "api_events": "health_chart_api_events",
+            "warn_error_events": "health_chart_warn_error_events",
+            "events_429": "health_chart_429_events",
+        },
+    }
 
 
 def _classify_row(row: dict[str, Any]) -> dict[str, bool]:
@@ -102,11 +122,20 @@ def _classify_row(row: dict[str, Any]) -> dict[str, bool]:
     }
 
 
-def build_recent_api_ws_series(*, window_minutes: int = 60) -> list[dict[str, Any]]:
-    buckets = _empty_minute_buckets(window_minutes)
+def build_recent_api_ws_series(
+    *,
+    range_key: str = "1h",
+    include_in_progress: bool = False,
+) -> list[dict[str, Any]]:
+    cfg = range_config(range_key)
+    window_minutes = int(cfg["window_minutes"])
+    bucket_minutes = int(cfg["bucket_minutes"])
+
+    buckets = time_buckets(window_minutes, bucket_minutes)
+    target_buckets = display_buckets(buckets, include_in_progress=include_in_progress)
     rows = _read_recent_audit_rows(max_lines=4000)
 
-    per_minute: dict[datetime, dict[str, float]] = defaultdict(
+    per_bucket: dict[datetime, dict[str, float]] = defaultdict(
         lambda: {
             "api_events": 0.0,
             "ws_events": 0.0,
@@ -124,13 +153,14 @@ def build_recent_api_ws_series(*, window_minutes: int = 60) -> list[dict[str, An
     oldest = buckets[0]
 
     for row in rows:
-        dt = _parse_ts(row.get("ts"))
+        dt = parse_ts(row.get("ts"))
         if dt is None:
             continue
-        if dt < oldest:
+        dt_utc = dt.astimezone(timezone.utc)
+        if dt_utc < oldest:
             continue
 
-        bucket = _bucket_floor_minute(dt.astimezone(timezone.utc))
+        bucket = bucket_floor(dt_utc, bucket_minutes)
         if bucket not in bucket_set:
             continue
 
@@ -138,44 +168,57 @@ def build_recent_api_ws_series(*, window_minutes: int = 60) -> list[dict[str, An
         payload = row.get("payload") or {}
 
         if flags["is_rest"]:
-            per_minute[bucket]["api_events"] += 1.0
+            per_bucket[bucket]["api_events"] += 1.0
         if flags["is_ws"]:
-            per_minute[bucket]["ws_events"] += 1.0
+            per_bucket[bucket]["ws_events"] += 1.0
         if flags["is_ws_exec"]:
-            per_minute[bucket]["ws_exec_events"] += 1.0
+            per_bucket[bucket]["ws_exec_events"] += 1.0
         if flags["is_429"]:
-            per_minute[bucket]["events_429"] += 1.0
+            per_bucket[bucket]["events_429"] += 1.0
         if flags["is_gap"]:
-            per_minute[bucket]["gap_events"] += 1.0
+            per_bucket[bucket]["gap_events"] += 1.0
         if flags["is_resync"]:
-            per_minute[bucket]["resync_events"] += 1.0
+            per_bucket[bucket]["resync_events"] += 1.0
         if flags["is_warn_or_error"] or flags["is_rate_mode"]:
-            per_minute[bucket]["warn_error_events"] += 1.0
+            per_bucket[bucket]["warn_error_events"] += 1.0
 
         elapsed_ms = payload.get("elapsed_ms")
         if elapsed_ms is not None:
             try:
-                per_minute[bucket]["latency_ms_sum"] += float(elapsed_ms)
-                per_minute[bucket]["latency_ms_count"] += 1.0
+                per_bucket[bucket]["latency_ms_sum"] += float(elapsed_ms)
+                per_bucket[bucket]["latency_ms_count"] += 1.0
             except Exception:
                 pass
+
+    chart_spec = _api_chart_spec(range_key)
 
     out: list[dict[str, Any]] = []
     api_event_history: list[float] = []
 
-    for bucket in buckets:
-        item = dict(per_minute[bucket])
+    for bucket in target_buckets:
+        item = dict(per_bucket[bucket])
+
         avg_latency = None
         if item["latency_ms_count"] > 0:
             avg_latency = item["latency_ms_sum"] / item["latency_ms_count"]
 
         api_events = float(item["api_events"])
         api_event_history.append(api_events)
-        api_rolling_5m = sum(api_event_history[-5:])
+
+        buckets_per_5m = max(1, int(5 / bucket_minutes)) if bucket_minutes <= 5 else 1
+        api_rolling_5m = sum(api_event_history[-buckets_per_5m:])
 
         out.append(
             {
                 "ts": bucket.isoformat().replace("+00:00", "Z"),
+                "start_ts": bucket.isoformat().replace("+00:00", "Z"),
+                "end_ts": bucket_end(bucket, bucket_minutes).isoformat().replace("+00:00", "Z"),
+                "range_key": range_key,
+                "bucket_minutes": bucket_minutes,
+                "in_progress": False,
+                "source_kind": "audit_activity_series",
+                "api_metric_mode": chart_spec["metric_mode"],
+                "api_chart_fields": list(chart_spec["chart_fields"]),
                 "api_events": api_events,
                 "api_rolling_5m": api_rolling_5m,
                 "api_limit_5m": 500.0,
@@ -193,7 +236,11 @@ def build_recent_api_ws_series(*, window_minutes: int = 60) -> list[dict[str, An
     return out
 
 
-def build_rate_limit_overlay(*, window_minutes: int = 60) -> list[dict[str, Any]]:
+def build_rate_limit_overlay(
+    *,
+    range_key: str = "1h",
+    include_in_progress: bool = False,
+) -> list[dict[str, Any]]:
     state = load_state()
     rate_items = (state.get("rate") or {}).get("items") or {}
     bitflyer = rate_items.get("bitflyer") or {}
@@ -212,13 +259,25 @@ def build_rate_limit_overlay(*, window_minutes: int = 60) -> list[dict[str, Any]
     target_utilization = rate_view.get("target_utilization")
     hard_cap_utilization = rate_view.get("hard_cap_utilization")
 
-    buckets = _empty_minute_buckets(window_minutes)
+    cfg = range_config(range_key)
+    window_minutes = int(cfg["window_minutes"])
+    bucket_minutes = int(cfg["bucket_minutes"])
+
+    buckets = time_buckets(window_minutes, bucket_minutes)
+    target_buckets = display_buckets(buckets, include_in_progress=include_in_progress)
+
     out: list[dict[str, Any]] = []
 
-    for bucket in buckets:
+    for bucket in target_buckets:
         out.append(
             {
                 "ts": bucket.isoformat().replace("+00:00", "Z"),
+                "start_ts": bucket.isoformat().replace("+00:00", "Z"),
+                "end_ts": bucket_end(bucket, bucket_minutes).isoformat().replace("+00:00", "Z"),
+                "range_key": range_key,
+                "bucket_minutes": bucket_minutes,
+                "in_progress": False,
+                "source_kind": "rate_state_overlay",
                 "budget_60s": budget_60s,
                 "budget_300s": budget_300s,
                 "requests_60s": requests_60s,
@@ -233,7 +292,11 @@ def build_rate_limit_overlay(*, window_minutes: int = 60) -> list[dict[str, Any]
     return out
 
 
-def build_recent_layer3_series(*, window_minutes: int = 60) -> list[dict[str, Any]]:
+def build_recent_layer3_series(
+    *,
+    range_key: str = "1h",
+    include_in_progress: bool = False,
+) -> list[dict[str, Any]]:
     latest = load_latest_market_state()
     diagnostics = market_state_diagnostics()
 
@@ -260,13 +323,25 @@ def build_recent_layer3_series(*, window_minutes: int = 60) -> list[dict[str, An
     interpretation_score = 2 if interpretation_bucket == "allow_structural_use" else 0
     freshness_score = {"LIVE": 2, "QUIET": 1, "STALE": 0}.get(freshness, 0)
 
-    buckets = _empty_minute_buckets(window_minutes)
+    cfg = range_config(range_key)
+    window_minutes = int(cfg["window_minutes"])
+    bucket_minutes = int(cfg["bucket_minutes"])
+
+    buckets = time_buckets(window_minutes, bucket_minutes)
+    target_buckets = display_buckets(buckets, include_in_progress=include_in_progress)
+
     out: list[dict[str, Any]] = []
 
-    for bucket in buckets:
+    for bucket in target_buckets:
         out.append(
             {
                 "ts": bucket.isoformat().replace("+00:00", "Z"),
+                "start_ts": bucket.isoformat().replace("+00:00", "Z"),
+                "end_ts": bucket_end(bucket, bucket_minutes).isoformat().replace("+00:00", "Z"),
+                "range_key": range_key,
+                "bucket_minutes": bucket_minutes,
+                "in_progress": False,
+                "source_kind": "market_state_snapshot_overlay",
                 "trust_score": trust_score,
                 "continuity_score": continuity_score,
                 "interpretation_score": interpretation_score,
@@ -279,24 +354,24 @@ def build_recent_layer3_series(*, window_minutes: int = 60) -> list[dict[str, An
 
 def _build_continuity_rail(
     *,
-    window_minutes: int,
-    venue: str,
-    use_api: bool,
-    use_ws: bool,
-    use_gap: bool,
-    use_resync: bool,
-    use_warn: bool,
+    range_key: str,
+    row_specs: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     state = load_state()
     rows = _read_recent_audit_rows(max_lines=4000)
-    buckets = _empty_minute_buckets(window_minutes)
 
-    health_payload = state.get("health") or {}
+    cfg = range_config(range_key)
+    window_minutes = int(cfg["window_minutes"])
+    bucket_minutes = int(cfg["bucket_minutes"])
 
-    per_minute: dict[datetime, dict[str, float]] = defaultdict(
+    buckets = time_buckets(window_minutes, bucket_minutes)
+    target_buckets = display_buckets(buckets, include_in_progress=False)
+
+    per_bucket: dict[datetime, dict[str, float]] = defaultdict(
         lambda: {
             "api_events": 0.0,
             "ws_events": 0.0,
+            "ws_exec_events": 0.0,
             "gap_events": 0.0,
             "resync_events": 0.0,
             "warn_error_events": 0.0,
@@ -307,137 +382,164 @@ def _build_continuity_rail(
     oldest = buckets[0]
 
     for row in rows:
-        dt = _parse_ts(row.get("ts"))
+        dt = parse_ts(row.get("ts"))
         if dt is None:
             continue
-        if dt < oldest:
+
+        dt_utc = dt.astimezone(timezone.utc)
+        if dt_utc < oldest:
             continue
 
-        bucket = _bucket_floor_minute(dt.astimezone(timezone.utc))
+        bucket = bucket_floor(dt_utc, bucket_minutes)
         if bucket not in bucket_set:
             continue
 
         flags = _classify_row(row)
         if flags["is_rest"]:
-            per_minute[bucket]["api_events"] += 1.0
+            per_bucket[bucket]["api_events"] += 1.0
         if flags["is_ws"]:
-            per_minute[bucket]["ws_events"] += 1.0
+            per_bucket[bucket]["ws_events"] += 1.0
+        if flags["is_ws_exec"]:
+            per_bucket[bucket]["ws_exec_events"] += 1.0
         if flags["is_gap"]:
-            per_minute[bucket]["gap_events"] += 1.0
+            per_bucket[bucket]["gap_events"] += 1.0
         if flags["is_resync"]:
-            per_minute[bucket]["resync_events"] += 1.0
+            per_bucket[bucket]["resync_events"] += 1.0
         if flags["is_warn_or_error"] or flags["is_rate_mode"]:
-            per_minute[bucket]["warn_error_events"] += 1.0
+            per_bucket[bucket]["warn_error_events"] += 1.0
 
-    cells: list[dict[str, Any]] = []
+    out_rows: list[dict[str, Any]] = []
 
-    def _evaluate_bucket(idx: int) -> tuple[str, str]:
-        bucket = buckets[idx]
-        item = per_minute[bucket]
-        prev_item = per_minute[buckets[idx - 1]] if idx > 0 else None
+    for row_spec in row_specs:
+        venue = str(row_spec["venue"])
+        activity_key = str(row_spec["activity_key"])
+        use_gap = bool(row_spec.get("use_gap", False))
+        use_resync = bool(row_spec.get("use_resync", False))
+        use_warn = bool(row_spec.get("use_warn", False))
+        current_truth = row_spec["current_truth"]
 
-        level = "gray"
-        reason = "health_continuity_reason_no_data"
+        cells: list[dict[str, Any]] = []
 
-        gap_repeated = bool(
-            item["gap_events"] > 0 and prev_item and prev_item["gap_events"] > 0
-        )
-        warn_repeated = bool(
-            item["warn_error_events"] > 0 and prev_item and prev_item["warn_error_events"] > 0
-        )
+        for idx, bucket in enumerate(target_buckets):
+            item = per_bucket[bucket]
+            prev_item = per_bucket[target_buckets[idx - 1]] if idx > 0 else None
 
-        warn_count = item["warn_error_events"] if use_warn else 0.0
-        gap_count = item["gap_events"] if use_gap else 0.0
-        resync_count = item["resync_events"] if use_resync else 0.0
-        ws_count = item["ws_events"] if use_ws else 0.0
-        api_count = item["api_events"] if use_api else 0.0
+            activity_count = float(item.get(activity_key, 0.0))
+            gap_count = item["gap_events"] if use_gap else 0.0
+            resync_count = item["resync_events"] if use_resync else 0.0
+            warn_count = item["warn_error_events"] if use_warn else 0.0
 
-        gap_repeated = bool(
-            gap_count > 0
-            and prev_item
-            and ((prev_item["gap_events"] if use_gap else 0.0) > 0)
-        )
-        warn_repeated = bool(
-            warn_count > 0
-            and prev_item
-            and ((prev_item["warn_error_events"] if use_warn else 0.0) > 0)
-        )
+            gap_repeated = bool(
+                gap_count > 0
+                and prev_item
+                and ((prev_item["gap_events"] if use_gap else 0.0) > 0)
+            )
+            warn_repeated = bool(
+                warn_count > 0
+                and prev_item
+                and ((prev_item["warn_error_events"] if use_warn else 0.0) > 0)
+            )
 
-        if warn_count > 0:
-            level = "orange"
-            reason = "health_continuity_reason_warn_error"
-            if warn_repeated:
-                level = "red"
-        elif gap_count > 0:
-            level = "yellow"
-            reason = "health_continuity_reason_gap_single"
-            if gap_repeated:
+            level = "gray"
+            reason = "health_continuity_reason_no_data"
+
+            if warn_count > 0:
                 level = "orange"
-                reason = "health_continuity_reason_gap_repeated"
-        elif resync_count > 0:
-            level = "green"
-            reason = "health_continuity_reason_resync_recovered"
-        elif ws_count > 0 or api_count > 0:
-            level = "green"
-            reason = "health_continuity_reason_steady"
+                reason = "health_continuity_reason_warn_error"
+                if warn_repeated:
+                    level = "red"
+            elif gap_count > 0:
+                level = "yellow"
+                reason = "health_continuity_reason_gap_single"
+                if gap_repeated:
+                    level = "orange"
+                    reason = "health_continuity_reason_gap_repeated"
+            elif resync_count > 0:
+                level = "green"
+                reason = "health_continuity_reason_resync_recovered"
+            elif activity_count > 0:
+                level = "green"
+                reason = "health_continuity_reason_steady"
 
-        return level, reason
+            cells.append(
+                {
+                    "ts": bucket.isoformat().replace("+00:00", "Z"),
+                    "start_ts": bucket.isoformat().replace("+00:00", "Z"),
+                    "end_ts": bucket_end(bucket, bucket_minutes).isoformat().replace("+00:00", "Z"),
+                    "range_key": range_key,
+                    "bucket_minutes": bucket_minutes,
+                    "in_progress": False,
+                    "source_kind": "audit_continuity_rail",
+                    "level": level,
+                    "reason": reason,
+                }
+            )
 
-    display_bucket_count = len(buckets) - 1 if len(buckets) >= 2 else len(buckets)
+        current_level, current_reason = current_truth()
 
-    for idx, bucket in enumerate(buckets[:display_bucket_count]):
-        level, reason = _evaluate_bucket(idx)
-        cells.append(
+        out_rows.append(
             {
-                "ts": bucket.isoformat().replace("+00:00", "Z"),
-                "level": level,
-                "reason": reason,
+                "venue": venue,
+                "cells": cells,
+                "current_level": current_level,
+                "current_reason": current_reason,
             }
         )
 
-    latest_level = "gray"
-    latest_reason = "health_continuity_reason_no_data"
-
-    settled_idx = display_bucket_count - 1
-    if settled_idx >= 0:
-        latest_level, latest_reason = _evaluate_bucket(settled_idx)
-
-    ok = health_payload.get("ok")
-    if ok is False:
-        latest_level = "red"
-        latest_reason = "health_continuity_reason_health_not_ok"
-
-    return [
-        {
-            "venue": venue,
-            "cells": cells,
-            "current_level": latest_level,
-            "current_reason": latest_reason,
-        }
-    ]
+    return out_rows
 
 
-def build_api_continuity_rail(*, window_minutes: int = 60) -> list[dict[str, Any]]:
+def build_api_continuity_rail(*, range_key: str = "1h") -> list[dict[str, Any]]:
     return _build_continuity_rail(
-        window_minutes=window_minutes,
-        venue="bitflyer_api_market_data",
-        use_api=True,
-        use_ws=False,
-        use_gap=False,
-        use_resync=False,
-        use_warn=True,
+        range_key=range_key,
+        row_specs=[
+            {
+                "venue": "bitflyer_api_market_data",
+                "activity_key": "api_events",
+                "use_gap": False,
+                "use_resync": False,
+                "use_warn": True,
+                "current_truth": lambda: api_current_truth(load_state()),
+            }
+        ],
     )
 
 
-def build_ws_continuity_rail(*, window_minutes: int = 60) -> list[dict[str, Any]]:
+def build_ws_continuity_rail(*, range_key: str = "1h") -> list[dict[str, Any]]:
+    state = load_state()
+    status_payload = state.get("status") or {}
+    origin_payload = state.get("origin") or {}
+    executions_payload = state.get("executions") or {}
+
+    ws_board_lane = status_payload.get("ws_board_lane") or {}
+    ws_executions_lane = status_payload.get("ws_executions_lane") or {}
+
     return _build_continuity_rail(
-        window_minutes=window_minutes,
-        venue="bitflyer_ws_market_data",
-        use_api=False,
-        use_ws=True,
-        use_gap=True,
-        use_resync=True,
-        use_warn=True,
+        range_key=range_key,
+        row_specs=[
+            {
+                "venue": "bitflyer_ws_board",
+                "activity_key": "ws_events",
+                "use_gap": True,
+                "use_resync": True,
+                "use_warn": True,
+                "current_truth": lambda: ws_current_truth(
+                    lane_payload=ws_board_lane,
+                    fallback_payload=origin_payload,
+                ),
+            },
+            {
+                "venue": "bitflyer_ws_executions",
+                "activity_key": "ws_exec_events",
+                "use_gap": False,
+                "use_resync": False,
+                "use_warn": True,
+                "current_truth": lambda: ws_current_truth(
+                    lane_payload=ws_executions_lane,
+                    fallback_payload=executions_payload,
+                ),
+            },
+        ],
     )
 
 
@@ -474,7 +576,7 @@ def build_recent_anomaly_rows(*, max_items: int = 12) -> list[dict[str, Any]]:
     return out
 
 
-def load_health_snapshot() -> dict[str, Any]:
+def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
     state = load_state()
     market_latest = load_latest_market_state()
     market_diag = market_state_diagnostics()
@@ -505,11 +607,13 @@ def load_health_snapshot() -> dict[str, Any]:
         "shared_ip_remaining_60s": shared_ip_remaining_60s,
         "market_latest": market_latest,
         "market_diag": market_diag,
-        "api_ws_series_1h": build_recent_api_ws_series(window_minutes=60),
-        "rate_overlay_1h": build_rate_limit_overlay(window_minutes=60),
-        "layer3_series_1h": build_recent_layer3_series(window_minutes=60),
-        "api_continuity_rail_1h": build_api_continuity_rail(window_minutes=60),
-        "ws_continuity_rail_1h": build_ws_continuity_rail(window_minutes=60),
+        "selected_range_key": range_key,
+        "range_presets": HEALTH_RANGE_PRESETS,
+        "api_ws_series": build_recent_api_ws_series(range_key=range_key, include_in_progress=False),
+        "rate_overlay": build_rate_limit_overlay(range_key=range_key, include_in_progress=False),
+        "layer3_series": build_recent_layer3_series(range_key=range_key, include_in_progress=False),
+        "api_continuity_rail": build_api_continuity_rail(range_key=range_key),
+        "ws_continuity_rail": build_ws_continuity_rail(range_key=range_key),
         "recent_anomalies": build_recent_anomaly_rows(max_items=12),
         "paths": {
             "logs_dir": str(core_paths.logs_dir(ensure=False)),
