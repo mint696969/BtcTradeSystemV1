@@ -5,8 +5,10 @@ from __future__ import annotations
 
 from typing import Dict, List
 
-from btcts.collector_vnext.microstructure.absorption_detector import detect_absorption
-from btcts.collector_vnext.microstructure.sweep_detector import detect_sweep
+from btcts.processing.l3_market_semantics.microstructure import (
+    detect_absorption,
+    detect_sweep,
+)
 
 
 def detect_microstructure(signal_payload: Dict, trade_metrics_payload: Dict) -> List[Dict]:
