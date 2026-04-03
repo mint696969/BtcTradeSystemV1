@@ -6,8 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from btcts.market_engine.assembler.core.orderbook_engine import OrderbookEngine
-from btcts.processing.l3_market_semantics.continuity import SeriesEngine, TrustEngine
+from btcts.processing.l3_market_semantics.continuity import OrderbookEngine, SeriesEngine, TrustEngine
 from btcts.processing.l3_market_semantics.zone import ZoneEngine
 from btcts.market_engine.assembler.models.book_state import BookState
 from btcts.market_engine.assembler.models.series_state import SeriesState
