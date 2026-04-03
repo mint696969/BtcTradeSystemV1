@@ -11,9 +11,8 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.market_engine.assembler.core.orderbook_engine import OrderbookEngine
-from btcts.market_engine.assembler.core.series_engine import SeriesEngine
-from btcts.market_engine.assembler.core.trust_engine import TrustEngine
-from btcts.market_engine.assembler.core.zone_engine import ZoneEngine
+from btcts.processing.l3_market_semantics.continuity import SeriesEngine, TrustEngine
+from btcts.processing.l3_market_semantics.zone import ZoneEngine
 from btcts.market_engine.assembler.models.book_state import BookState
 from btcts.market_engine.assembler.models.series_state import SeriesState
 from btcts.market_engine.types import BoundaryReason, TrustState
