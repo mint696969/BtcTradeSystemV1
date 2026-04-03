@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from btcts.market_engine.assembler.core.assembler_engine import AssemblerEngine
+from btcts.market_engine.execution.assembler_engine import AssemblerEngine
 from btcts.market_engine.assembler.core.interpretation_engine import InterpretationEngine
 from btcts.market_engine.assembler.profiles.bitflyer import BitflyerProfile
 from btcts.market_engine.config import MarketEngineConfig, load_market_engine_config

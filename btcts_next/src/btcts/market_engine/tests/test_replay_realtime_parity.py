@@ -10,8 +10,8 @@ _SRC_ROOT = Path(__file__).resolve().parents[3]
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
-from btcts.market_engine.assembler.core.realtime_engine import RealtimeEngine
-from btcts.market_engine.assembler.core.replay_engine import ReplayEngine
+from btcts.market_engine.execution.realtime_engine import RealtimeEngine
+from btcts.market_engine.execution.replay_engine import ReplayEngine
 from btcts.market_engine.assembler.profiles.bitflyer import BitflyerProfile
 
 
