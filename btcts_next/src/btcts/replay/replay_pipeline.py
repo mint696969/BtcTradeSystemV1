@@ -6,10 +6,12 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from btcts.collector_vnext.events import EventType
-from btcts.collector_vnext.orderbook.book_rebuilder import OrderBookRebuilder
-from btcts.collector_vnext.orderbook.signal_events import build_signal_events
-from btcts.collector_vnext.orderbook.signal_pipeline import build_signal_payload
-from btcts.collector_vnext.orderbook.signal_state import SignalState
+from btcts.ingestion.l2_canonical.orderbook.book_rebuilder import OrderBookRebuilder
+from btcts.processing.l3_market_semantics.orderbook import (
+    SignalState,
+    build_liquidity_payload,
+    build_signal_events,
+)
 
 
 class ReplayPipeline:
@@ -32,7 +34,7 @@ class ReplayPipeline:
 
         prev_signal = self.signal_state.get()
 
-        signal_payload = build_signal_payload(
+        signal_payload = build_liquidity_payload(
             self.rebuilder,
             payload,
             levels=10,
