@@ -7,26 +7,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from btcts.ingestion.event_types import EventType
+
 from .config import CollectorConfig
 from .ids import make_record_id
-
-
-class EventType:
-    MARKET_TRADE = "market.trade"
-    MARKET_ORDERBOOK_SNAPSHOT = "market.orderbook.snapshot"
-    MARKET_ORDERBOOK_DIFF = "market.orderbook.diff"
-    MARKET_LIQUIDITY_SIGNAL = "market.liquidity.signal"
-
-    STREAM_STARTED = "stream.started"
-    STREAM_STOPPED = "stream.stopped"
-    STREAM_RECONNECTED = "stream.reconnected"
-    STREAM_HEARTBEAT = "stream.heartbeat"
-    STREAM_GAP_DETECTED = "stream.gap_detected"
-    STREAM_RESYNC_STARTED = "stream.resync_started"
-    STREAM_RESYNC_COMPLETED = "stream.resync_completed"
-
-    QUALITY_VALIDATION = "quality.validation"
-    SYSTEM_PROVIDER_ERROR = "system.provider_error"
 
 
 def now_iso_utc() -> str:

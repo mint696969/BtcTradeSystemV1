@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from btcts.collector_vnext.events import EventType
+from btcts.ingestion.event_types import EventType
 from btcts.processing.features.tradeflow import trade_metrics
 from btcts.processing.l3_market_semantics.tradeflow import trade_flow_events
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from btcts.collector_vnext.events import EventType
+from btcts.ingestion.event_types import EventType
 from .replay_microstructure import detect_microstructure
 from .replay_pipeline import ReplayPipeline
 from .replay_tradeflow import ReplayTradeFlow
