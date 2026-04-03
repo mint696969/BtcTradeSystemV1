@@ -10,8 +10,8 @@ _SRC_ROOT = Path(__file__).resolve().parents[3]
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
-from btcts.market_engine.assembler.models.book_state import BookState
-from btcts.market_engine.assembler.models.series_state import SeriesState
+from btcts.processing.l3_market_semantics.continuity.models import BookState
+from btcts.processing.l3_market_semantics.continuity.models import SeriesState
 from btcts.market_engine.assembler.profiles.bitflyer import BitflyerProfile
 from btcts.market_engine.types import BoundaryReason, MarketUID, SeriesID, StreamSessionID, TrustState
 

@@ -6,8 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from btcts.market_engine.assembler.models.boundary_state import BoundaryState
-from btcts.market_engine.assembler.models.series_state import SeriesState
+from btcts.processing.l3_market_semantics.continuity.models import BoundaryState
+from btcts.processing.l3_market_semantics.continuity.models import SeriesState
 from btcts.market_engine.types import BoundaryReason, MarketUID, SeriesID, StreamSessionID, TrustState
 
 

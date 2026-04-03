@@ -5,8 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from btcts.market_engine.assembler.models.book_state import BookState
-from btcts.market_engine.assembler.models.series_state import SeriesState
+from btcts.processing.l3_market_semantics.continuity.models import BookState
+from btcts.processing.l3_market_semantics.continuity.models import SeriesState
 from btcts.market_engine.config import MarketEngineConfig
 from btcts.market_engine.market_state.schema import MarketStateRecord
 
