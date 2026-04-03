@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, TypedDict
 
 import streamlit as st
 
@@ -12,7 +12,19 @@ PanelTone = Literal["neutral", "primary", "strong"]
 ZoneKind = Literal["overview", "primary_live", "secondary", "diagnostics"]
 WidgetTone = Literal["neutral", "primary", "strong", "danger"]
 SlotRefreshMode = Literal["static", "poll_fast", "poll_normal", "poll_slow", "stream"]
-SlotMeta = dict[str, str | int | None]
+
+
+class SlotMeta(TypedDict):
+    page_id: str
+    zone_id: str
+    widget_id: str
+    label: str | None
+    tone: WidgetTone
+    help_text: str | None
+    refresh_mode: SlotRefreshMode
+    priority: int
+    overlay_enabled: bool
+    partial_update_enabled: bool
 
 
 def _inject_live_shell_styles() -> None:
@@ -294,6 +306,8 @@ def register_slot_meta(
     *,
     refresh_mode: SlotRefreshMode = "static",
     priority: int = 0,
+    overlay_enabled: bool = False,
+    partial_update_enabled: bool = False,
 ) -> str:
     slot_key = build_slot_key(page_id, zone_id, widget_id)
     slot_registry = st.session_state.setdefault("_live_shell_slot_registry", {})
@@ -303,6 +317,8 @@ def register_slot_meta(
         "widget_id": widget_id,
         "refresh_mode": refresh_mode,
         "priority": priority,
+        "overlay_enabled": overlay_enabled,
+        "partial_update_enabled": partial_update_enabled,
     }
     return slot_key
 
@@ -317,6 +333,8 @@ def make_slot_meta(
     help_text: str | None = None,
     refresh_mode: SlotRefreshMode = "static",
     priority: int = 0,
+    overlay_enabled: bool = False,
+    partial_update_enabled: bool = False,
 ) -> SlotMeta:
     return {
         "page_id": page_id,
@@ -327,6 +345,8 @@ def make_slot_meta(
         "help_text": help_text,
         "refresh_mode": refresh_mode,
         "priority": priority,
+        "overlay_enabled": overlay_enabled,
+        "partial_update_enabled": partial_update_enabled,
     }
 
 
@@ -360,6 +380,8 @@ def render_slot_anchor(
     *,
     refresh_mode: SlotRefreshMode = "static",
     priority: int = 0,
+    overlay_enabled: bool = False,
+    partial_update_enabled: bool = False,
 ):
     slot_key = register_slot_meta(
         page_id,
@@ -367,6 +389,8 @@ def render_slot_anchor(
         widget_id,
         refresh_mode=refresh_mode,
         priority=priority,
+        overlay_enabled=overlay_enabled,
+        partial_update_enabled=partial_update_enabled,
     )
     return st.container(key=slot_key)
 
@@ -381,6 +405,8 @@ def slot_widget_container(
     help_text: str | None = None,
     refresh_mode: SlotRefreshMode = "static",
     priority: int = 0,
+    overlay_enabled: bool = False,
+    partial_update_enabled: bool = False,
 ):
     slot = render_slot_anchor(
         page_id,
@@ -388,6 +414,8 @@ def slot_widget_container(
         widget_id,
         refresh_mode=refresh_mode,
         priority=priority,
+        overlay_enabled=overlay_enabled,
+        partial_update_enabled=partial_update_enabled,
     )
 
     with slot:
@@ -409,10 +437,12 @@ def slot_widget_from_meta(meta: SlotMeta):
         help_text=_meta_optional_str(meta, "help_text"),
         refresh_mode=_meta_str(meta, "refresh_mode", "static"),
         priority=_meta_int(meta, "priority", 0),
+        overlay_enabled=bool(meta.get("overlay_enabled", False)),
+        partial_update_enabled=bool(meta.get("partial_update_enabled", False)),
     )
 
 
-def get_registered_slots(page_id: str | None = None) -> list[dict]:
+def get_registered_slots(page_id: str | None = None) -> list[dict[str, str | int | bool | None]]:
     slot_registry = st.session_state.get("_live_shell_slot_registry", {})
     if not isinstance(slot_registry, dict):
         return []
@@ -429,6 +459,8 @@ def get_registered_slots(page_id: str | None = None) -> list[dict]:
             "widget_id": row.get("widget_id"),
             "refresh_mode": row.get("refresh_mode"),
             "priority": row.get("priority"),
+            "overlay_enabled": row.get("overlay_enabled"),
+            "partial_update_enabled": row.get("partial_update_enabled"),
         }
         rows.append(normalized)
 

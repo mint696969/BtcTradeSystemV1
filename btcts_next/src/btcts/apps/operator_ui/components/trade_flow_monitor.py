@@ -12,14 +12,33 @@ from btcts.apps.operator_ui.components.research_bridge import (
 )
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.ui_time import format_ui_ts
+from btcts.apps.operator_ui.components.slot_definitions import (
+    overlay_contract_caption,
+    overlay_contract_metric_rows,
+)
 
 from btcts.apps.operator_ui.components.live_bridge import (
     recent_live_tradeflow_metrics,
 )
 
 
-def render():
+def render(
+    *,
+    overlay_contract: dict | None = None,
+):
     lang = st.session_state.get("ui_lang", "en")
+
+    if overlay_contract:
+        st.caption(overlay_contract_caption(overlay_contract))
+
+        metric_rows = overlay_contract_metric_rows(overlay_contract)
+        if metric_rows:
+            metric_cols = st.columns(len(metric_rows))
+            for col, (label, value) in zip(metric_cols, metric_rows):
+                col.metric(label, value)
+
+        with st.expander("Graph Overlay Contract", expanded=False):
+            st.json(overlay_contract)
 
     st.markdown(f"### {get_text(lang, 'trade_flow_title')}")
 

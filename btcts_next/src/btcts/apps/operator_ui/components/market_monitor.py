@@ -18,16 +18,35 @@ from btcts.apps.operator_ui.components.market_monitor_presenter import (
     interpretation_caption,
     source_caption,
 )
+from btcts.apps.operator_ui.components.slot_definitions import (
+    overlay_contract_caption,
+    overlay_contract_metric_rows,
+)
 from btcts.apps.operator_ui.components.market_monitor_state import (
     analyze_market_monitor_state,
 )
 from btcts.apps.operator_ui.ui_text import get_text
 
 
-def render():
+def render(
+    *,
+    overlay_contract: dict | None = None,
+):
     lang = st.session_state.get("ui_lang", "en")
 
     st.markdown(f"### {get_text(lang, 'market_monitor_title')}")
+
+    if overlay_contract:
+        st.caption(overlay_contract_caption(overlay_contract))
+
+        metric_rows = overlay_contract_metric_rows(overlay_contract)
+        if metric_rows:
+            metric_cols = st.columns(len(metric_rows))
+            for col, (label, value) in zip(metric_cols, metric_rows):
+                col.metric(label, value)
+
+        with st.expander("Graph Overlay Contract", expanded=False):
+            st.json(overlay_contract)
 
     state_bundle = analyze_market_monitor_state()
     if not state_bundle:
