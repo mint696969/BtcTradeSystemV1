@@ -8,7 +8,7 @@ from typing import Any
 
 from btcts.market_engine.execution.assembler_engine import AssemblerEngine
 from btcts.processing.l3_market_semantics.continuity import InterpretationEngine
-from btcts.market_engine.assembler.profiles.bitflyer import BitflyerProfile
+from btcts.market_engine.profiles import BitflyerProfile
 from btcts.market_engine.config import MarketEngineConfig, load_market_engine_config
 from btcts.market_engine.market_state.projector import MarketStateProjector
 from btcts.market_engine.market_state.schema import MarketStateRecord

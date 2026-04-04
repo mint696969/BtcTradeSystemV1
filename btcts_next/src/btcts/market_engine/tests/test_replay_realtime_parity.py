@@ -12,7 +12,7 @@ if str(_SRC_ROOT) not in sys.path:
 
 from btcts.market_engine.execution.realtime_engine import RealtimeEngine
 from btcts.market_engine.execution.replay_engine import ReplayEngine
-from btcts.market_engine.assembler.profiles.bitflyer import BitflyerProfile
+from btcts.market_engine.profiles import BitflyerProfile
 
 
 def _snapshot_event() -> dict:

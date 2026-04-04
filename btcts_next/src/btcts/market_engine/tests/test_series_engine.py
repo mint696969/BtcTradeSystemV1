@@ -11,7 +11,7 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.processing.l3_market_semantics.continuity import SeriesEngine
-from btcts.market_engine.assembler.profiles.bitflyer import BitflyerProfile
+from btcts.market_engine.profiles import BitflyerProfile
 from btcts.market_engine.types import BoundaryReason, TrustState
 
 

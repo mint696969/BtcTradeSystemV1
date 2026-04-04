@@ -12,7 +12,7 @@ if str(_SRC_ROOT) not in sys.path:
 
 from btcts.processing.l3_market_semantics.continuity.models import BookState
 from btcts.processing.l3_market_semantics.continuity.models import SeriesState
-from btcts.market_engine.assembler.profiles.bitflyer import BitflyerProfile
+from btcts.market_engine.profiles import BitflyerProfile
 from btcts.market_engine.types import BoundaryReason, MarketUID, SeriesID, StreamSessionID, TrustState
 
 
