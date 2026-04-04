@@ -1,4 +1,4 @@
-# path: ./btcts_next/src/btcts/market_engine/assembler/models/series_state.py
+# path: ./btcts_next/src/btcts/processing/l3_market_semantics/continuity/models/series_state.py
 # desc: Series state model for deterministic segmentation of normalized_capture streams.
 
 from __future__ import annotations

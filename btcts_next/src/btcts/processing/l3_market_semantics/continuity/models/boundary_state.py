@@ -1,4 +1,4 @@
-# path: ./btcts_next/src/btcts/market_engine/assembler/models/boundary_state.py
+# path: ./btcts_next/src/btcts/processing/l3_market_semantics/continuity/models/boundary_state.py
 # desc: Boundary state model describing series splits, trust breaks, and anchor replacement events.
 
 from __future__ import annotations

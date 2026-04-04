@@ -1,4 +1,4 @@
-# path: ./btcts_next/src/btcts/market_engine/assembler/models/trust_state.py
+# path: ./btcts_next/src/btcts/processing/l3_market_semantics/continuity/models/trust_state.py
 # desc: Trust state model for Market Engine assembly outputs and transitions.
 
 from __future__ import annotations

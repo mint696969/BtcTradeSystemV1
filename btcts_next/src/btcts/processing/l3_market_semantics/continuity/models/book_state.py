@@ -1,4 +1,4 @@
-# path: ./btcts_next/src/btcts/market_engine/assembler/models/book_state.py
+# path: ./btcts_next/src/btcts/processing/l3_market_semantics/continuity/models/book_state.py
 # desc: Book state model for assembled market truth with near/far zone separation and trust metadata.
 
 from __future__ import annotations
