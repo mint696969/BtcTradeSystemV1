@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from btcts.market_engine.assembler.profiles.bitflyer import BitflyerProfile
+from btcts.market_engine.profiles import BitflyerProfile
 from btcts.market_engine.onboarding.runner import run_onboarding
 
 
