@@ -1,7 +1,7 @@
 # path: ./scripts/run.ps1
-# desc: 起動ラッパ（ENV設定→ python -m / streamlit run）。Target で legacy/next/collector を切替、PYTHONPATH に btcts_next/src を必ず含める。
+# desc: 旧起動ラッパ。legacy UI と operator_ui のみを扱う。collector 正式起動は tools/run_collector_vnext_stack.ps1 を使う。
 param(
-  [ValidateSet('legacy','next','collector')]
+  [ValidateSet('legacy','next')]
   [string]$Target = 'next',
   [switch]$WhatIf
 )
@@ -25,7 +25,7 @@ $py = ".\.venv\Scripts\python.exe"; if (-not (Test-Path $py)) { $py = "python" }
 
 # --- 起動ターゲット ---------------------------------------------------------
 $dashLegacy = Join-Path $repoRoot "btc_trade_system\features\dash\dashboard.py"
-$dashNext   = Join-Path $repoRoot "btcts_next\src\btcts\ui\app.py"
+$dashNext   = Join-Path $repoRoot "btcts_next\src\btcts\apps\operator_ui\app.py"
 
 Write-Host "TARGET=$Target"
 Write-Host "DATA=$env:BTC_TS_DATA_DIR"
@@ -37,9 +37,7 @@ Write-Host "PYTHON=$py"
 if ($WhatIf) { Write-Host 'OK: 環境/パス検証のみ'; exit 0 }
 
 if ($Target -eq 'collector') {
-  Write-Host "RUN: $py -m btcts.collector.main"
-  & $py -m btcts.collector.main
-  exit $LASTEXITCODE
+  throw "collector target is retired. Use: powershell -ExecutionPolicy Bypass -File C:\BtcTradeSystem\tools\run_collector_vnext_stack.ps1"
 }
 
 if ($Target -eq 'legacy') {
@@ -48,7 +46,7 @@ if ($Target -eq 'legacy') {
   exit $LASTEXITCODE
 }
 
-# default: next
+# default: next (= operator_ui)
 Write-Host "DASH=$dashNext"
 & $py -m streamlit run $dashNext
 exit $LASTEXITCODE

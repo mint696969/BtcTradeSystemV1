@@ -8,8 +8,8 @@ from collections.abc import Callable
 import streamlit as st
 
 from btcts.apps.operator_ui.components import live_shell
-from btcts.apps.operator_ui.components.live_shell import make_slot_meta
 from btcts.apps.operator_ui.components.health_continuity import render_continuity_rail
+from btcts.apps.operator_ui.components.slot_definitions import health_widget_slot
 
 
 def render_read_guide_section(
@@ -45,15 +45,7 @@ def render_overview_summary_panel(
 
     with c1:
         with live_shell.slot_widget_from_meta(
-            make_slot_meta(
-                "health",
-                "overview",
-                "collector_summary",
-                label=None,
-                tone="strong",
-                refresh_mode="poll_normal",
-                priority=10,
-            )
+            health_widget_slot("collector_summary")
         ):
             st.metric(
                 get_text(lang, "health_summary_collector"),
@@ -62,15 +54,7 @@ def render_overview_summary_panel(
 
     with c2:
         with live_shell.slot_widget_from_meta(
-            make_slot_meta(
-                "health",
-                "overview",
-                "api_summary",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_fast",
-                priority=20,
-            )
+            health_widget_slot("api_summary")
         ):
             st.metric(
                 get_text(lang, "health_summary_api"),
@@ -79,15 +63,7 @@ def render_overview_summary_panel(
 
     with c3:
         with live_shell.slot_widget_from_meta(
-            make_slot_meta(
-                "health",
-                "overview",
-                "ws_summary",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_fast",
-                priority=30,
-            )
+            health_widget_slot("ws_summary")
         ):
             st.metric(
                 get_text(lang, "health_summary_ws"),
@@ -96,15 +72,7 @@ def render_overview_summary_panel(
 
     with c4:
         with live_shell.slot_widget_from_meta(
-            make_slot_meta(
-                "health",
-                "overview",
-                "layer3_summary",
-                label=None,
-                tone="neutral",
-                refresh_mode="poll_normal",
-                priority=40,
-            )
+            health_widget_slot("layer3_summary")
         ):
             st.metric(
                 get_text(lang, "health_summary_layer3"),
@@ -122,18 +90,7 @@ def render_continuity_panels(
     section_title_with_range: Callable[[str, str], str],
 ) -> None:
     with live_shell.slot_widget_from_meta(
-        make_slot_meta(
-            "health",
-            "primary_live",
-            "api_continuity_panel",
-            label=section_title_with_range(
-                get_text(lang, "health_section_continuity_api"),
-                range_key,
-            ),
-            tone="primary",
-            refresh_mode="poll_normal",
-            priority=80,
-        )
+        health_widget_slot("api_continuity_panel")
     ):
         if api_continuity_rail:
             render_continuity_rail(api_continuity_rail, lang)
@@ -142,18 +99,7 @@ def render_continuity_panels(
             st.info(get_text(lang, "health_value_no_data"))
 
     with live_shell.slot_widget_from_meta(
-        make_slot_meta(
-            "health",
-            "primary_live",
-            "ws_continuity_panel",
-            label=section_title_with_range(
-                get_text(lang, "health_section_continuity_ws"),
-                range_key,
-            ),
-            tone="primary",
-            refresh_mode="poll_normal",
-            priority=90,
-        )
+        health_widget_slot("ws_continuity_panel")
     ):
         if ws_continuity_rail:
             render_continuity_rail(ws_continuity_rail, lang)

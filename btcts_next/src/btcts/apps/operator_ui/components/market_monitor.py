@@ -45,7 +45,7 @@ def render(
             for col, (label, value) in zip(metric_cols, metric_rows):
                 col.metric(label, value)
 
-        with st.expander("Graph Overlay Contract", expanded=False):
+        with st.expander(get_text(lang, "graph_overlay_contract_title"), expanded=False):
             st.json(overlay_contract)
 
     state_bundle = analyze_market_monitor_state()

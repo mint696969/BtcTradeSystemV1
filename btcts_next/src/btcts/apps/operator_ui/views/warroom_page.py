@@ -26,19 +26,61 @@ from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
 from btcts.apps.operator_ui.components.live_shell import get_registered_slots
 from btcts.apps.operator_ui.components.slot_definitions import (
+    WarroomGraphWidgetBundle,
     warroom_chart_sensitive,
     warroom_chart_sensitive_count,
     warroom_graph_overlay_contract,
     warroom_graph_widget_bundle,
+    warroom_graph_widget_ids,
     warroom_layout_hints,
     warroom_overlay_contract_count,
     warroom_overlay_enabled,
     warroom_overlay_widget_ids,
     warroom_partial_update_enabled,
+    warroom_first_partial_redraw_candidate,
     warroom_refresh_mode_counts,
     warroom_refresh_policy,
-    warroom_slot,
+    warroom_rerender_scope_counts,
+    warroom_all_widget_ids,
+    warroom_widget_slot,
+    warroom_widget_zone_ids,
 )
+
+
+_GRAPH_WIDGET_RENDERERS = {
+    "market_monitor": market_monitor.render,
+    "liquidity_pressure": liquidity_pressure_panel.render,
+    "trade_flow_monitor": trade_flow_monitor.render,
+}
+
+
+def _render_graph_widget_bundle(bundle: WarroomGraphWidgetBundle) -> None:
+    renderer = _GRAPH_WIDGET_RENDERERS.get(str(bundle["widget_id"]))
+    if renderer is None:
+        return
+
+    with live_shell.slot_widget_from_meta(bundle["slot_meta"]):
+        renderer(
+            overlay_contract=bundle["overlay_contract"],
+        )
+
+
+def _expected_warroom_widget_ids() -> set[str]:
+    return set(warroom_all_widget_ids())
+
+
+def _missing_registered_widget_ids(slot_rows: list[dict]) -> list[str]:
+    actual_widget_ids = {str(row.get("widget_id")) for row in slot_rows}
+    return sorted(_expected_warroom_widget_ids().difference(actual_widget_ids))
+
+
+def _unexpected_registered_zone_ids(slot_rows: list[dict]) -> list[str]:
+    actual_zone_ids = {
+        str(row.get("zone_id"))
+        for row in slot_rows
+        if row.get("zone_id") is not None
+    }
+    return sorted(actual_zone_ids.difference(set(warroom_widget_zone_ids())))
 
 
 def render():
@@ -56,38 +98,17 @@ def render():
         zone_kind="overview",
     ):
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "overview",
-                "warroom_header",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_normal",
-                priority=10,
-            )
+            warroom_widget_slot("warroom_header")
         ):
             warroom_header.render()
 
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "overview",
-                "warroom_alert_engine",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_normal",
-                priority=20,
-            )
+            warroom_widget_slot("warroom_alert_engine")
         ):
             warroom_alert_engine.render()
 
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "overview",
-                "ai_operator_panel",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_slow",
-                priority=30,
-            )
+            warroom_widget_slot("ai_operator_panel")
         ):
             ai_operator_panel.render()
     with live_shell.zone_container(
@@ -95,38 +116,17 @@ def render():
         zone_kind="secondary",
     ):
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "secondary",
-                "decision_log_panel",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_slow",
-                priority=40,
-            )
+            warroom_widget_slot("decision_log_panel")
         ):
             decision_log_panel.render()
 
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "secondary",
-                "watch_list_panel",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_slow",
-                priority=50,
-            )
+            warroom_widget_slot("watch_list_panel")
         ):
             watch_list_panel.render()
 
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "secondary",
-                "warroom_timeline",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_normal",
-                priority=60,
-            )
+            warroom_widget_slot("warroom_timeline")
         ):
             warroom_timeline.render()
 
@@ -135,85 +135,34 @@ def render():
         zone_kind="primary_live",
     ):
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "primary_live",
-                "market_regime",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_normal",
-                priority=35,
-            )
+            warroom_widget_slot("market_regime")
         ):
             market_regime_panel.render()
 
-        def render_graph_widget_bundle(bundle):
-            graph_widget_renderers = {
-                "market_monitor": market_monitor.render,
-                "liquidity_pressure": liquidity_pressure_panel.render,
-                "trade_flow_monitor": trade_flow_monitor.render,
-            }
-            renderer = graph_widget_renderers.get(str(bundle["widget_id"]))
-            if renderer is None:
-                return
-
-            with live_shell.slot_widget_from_meta(bundle["slot_meta"]):
-                renderer(
-                    overlay_contract=bundle["overlay_contract"],
-                )
-
         graph_widget_bundles = [
-            warroom_graph_widget_bundle("market_monitor"),
-            warroom_graph_widget_bundle("liquidity_pressure"),
-            warroom_graph_widget_bundle("trade_flow_monitor"),
+            warroom_graph_widget_bundle(widget_id)
+            for widget_id in warroom_graph_widget_ids()
         ]
         for bundle in graph_widget_bundles:
-            render_graph_widget_bundle(bundle)
+            _render_graph_widget_bundle(bundle)
 
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "primary_live",
-                "ai_signal",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_normal",
-                priority=40,
-            )
+            warroom_widget_slot("ai_signal")
         ):
             ai_signal_panel.render()
 
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "primary_live",
-                "strategy_state",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_slow",
-                priority=45,
-            )
+            warroom_widget_slot("strategy_state")
         ):
             strategy_state_panel.render()
 
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "primary_live",
-                "risk_monitor",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_normal",
-                priority=50,
-            )
+            warroom_widget_slot("risk_monitor")
         ):
             risk_monitor_panel.render()
 
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "primary_live",
-                "agent_panels",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_slow",
-                priority=60,
-            )
+            warroom_widget_slot("agent_panels")
         ):
             agent_panels.render()
 
@@ -233,15 +182,41 @@ def render():
                 if row.get("partial_update_enabled")
             ]
             st.caption(
-                f"overlay-enabled widgets: {len(overlay_rows)} / {warroom_overlay_contract_count()}"
+                get_text(
+                    lang,
+                    "warroom_overlay_enabled_widgets_caption",
+                ).format(
+                    count=len(overlay_rows),
+                    total=warroom_overlay_contract_count(),
+                )
             )
             st.caption(
-                f"partial-update-enabled widgets: {len(partial_update_rows)} / {warroom_overlay_contract_count()}"
+                get_text(
+                    lang,
+                    "warroom_partial_update_enabled_widgets_caption",
+                ).format(
+                    count=len(partial_update_rows),
+                    total=warroom_overlay_contract_count(),
+                )
             )
+            missing_widget_ids = _missing_registered_widget_ids(slot_rows)
+            if missing_widget_ids:
+                st.warning(
+                    "missing slot registrations: " + ", ".join(missing_widget_ids)
+                )
+
+            unexpected_zone_ids = _unexpected_registered_zone_ids(slot_rows)
+            if unexpected_zone_ids:
+                st.warning(
+                    "unexpected zone ids: " + ", ".join(unexpected_zone_ids)
+                )
         else:
             st.info(get_text(lang, "ui_slot_registry_empty_warroom"))
 
-    with live_shell.render_folded_section("War Room Graph Overlay Diagnostics", expanded=False):
+    with live_shell.render_folded_section(
+        get_text(lang, "warroom_graph_overlay_diagnostics_title"),
+        expanded=False,
+    ):
         overlay_diag = {
             widget_id: {
                 "overlay_enabled": warroom_overlay_enabled(widget_id),
@@ -254,43 +229,57 @@ def render():
             for widget_id in warroom_overlay_widget_ids()
         }
         st.json(overlay_diag)
-        st.caption(f"overlay diagnostics targets: {warroom_overlay_contract_count()}")
-        st.caption(f"chart-sensitive widgets: {warroom_chart_sensitive_count()}")
-        st.caption(f"refresh modes: {warroom_refresh_mode_counts()}")
+        st.caption(
+            get_text(
+                lang,
+                "warroom_overlay_diagnostics_targets_caption",
+            ).format(
+                count=warroom_overlay_contract_count(),
+            )
+        )
+        st.caption(
+            get_text(
+                lang,
+                "warroom_chart_sensitive_widgets_caption",
+            ).format(
+                count=warroom_chart_sensitive_count(),
+            )
+        )
+        st.caption(
+            get_text(
+                lang,
+                "warroom_refresh_modes_caption",
+            ).format(
+                counts=warroom_refresh_mode_counts(),
+            )
+        )
+        st.caption(
+            "rerender scope counts: "
+            + str(warroom_rerender_scope_counts())
+        )
+        first_candidate = warroom_first_partial_redraw_candidate()
+        if first_candidate is not None:
+            st.caption(
+                "first partial redraw candidate: "
+                + first_candidate
+            )
+            if first_candidate == "market_monitor":
+                st.caption(
+                    "W3 entry fixed: market_monitor"
+                )
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_ai_diagnostics"), expanded=False):
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "ai_diagnostics",
-                "ai_reasoning_panel",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_slow",
-                priority=70,
-            )
+            warroom_widget_slot("ai_reasoning_panel")
         ):
             ai_reasoning_panel.render()
 
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "ai_diagnostics",
-                "ai_market_summary_panel",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_slow",
-                priority=80,
-            )
+            warroom_widget_slot("ai_market_summary_panel")
         ):
             ai_market_summary_panel.render()
 
         with live_shell.slot_widget_from_meta(
-            warroom_slot(
-                "ai_diagnostics",
-                "ai_conversation_panel",
-                label=None,
-                tone="primary",
-                refresh_mode="poll_slow",
-                priority=90,
-            )
+            warroom_widget_slot("ai_conversation_panel")
         ):
             ai_conversation_panel.render()

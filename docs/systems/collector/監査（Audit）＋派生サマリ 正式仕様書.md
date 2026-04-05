@@ -307,7 +307,7 @@ Phase3A 統合実行（Main PC 代替 collector 運用）
 
 主目的：
 
-scripts/watchdog_collector.ps1 による collector watchdog 実行
+tools/run_collector_vnext_stack.ps1 による collector watchdog 実行
 
 tools/phase2_run_derived.ps1 による derived / quality 実行
 
@@ -328,7 +328,7 @@ Phase3A 統合 runner の役割
 tools/phase3_run_main.ps1 は以下を統合して扱う。
 
 collector watchdog 起動・監視
-scripts/watchdog_collector.ps1 を起動し、collector の継続実行を担保する。
+tools/run_collector_vnext_stack.ps1 を起動し、collector_vnext の継続実行を担保する。
 
 derived / quality 起動・監視
 tools/phase2_run_derived.ps1 を起動し、以下を継続生成する。

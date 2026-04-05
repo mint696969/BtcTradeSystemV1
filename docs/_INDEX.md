@@ -1,3 +1,5 @@
+# path: ./docs/_INDEX.md
+# desc: Canonical documentation entrypoint for BTC Trade System docs.
 # BTC Trade System (BTC-TS)
 ## Documentation Index
 
@@ -15,6 +17,33 @@ Project Chimera の設計・仕様はここから参照します。
 
 - System Architecture  
   docs/architecture/SYSTEM_ARCHITECTURE.md
+
+- Layer Responsibility Runtime Spec  
+  docs/architecture/LAYER_RESPONSIBILITY_RUNTIME_SPEC_2026-04-04.md
+
+- L2/L3 Separation Lightweight Verification Spec  
+  docs/architecture/L2_L3_SEPARATION_LIGHTWEIGHT_VERIFICATION_SPEC_2026-04-04.md
+
+- L2/L3 Separation Lightweight Verification Checklist  
+  docs/architecture/L2_L3_SEPARATION_LIGHTWEIGHT_VERIFICATION_CHECKLIST_2026-04-04.md
+
+- L4 Shared-First Design Spec  
+  docs/architecture/L4_SHARED_FIRST_DESIGN_SPEC_2026-04-04.md
+
+- L4 Shared-First Migration Checklist  
+  docs/architecture/L4_SHARED_FIRST_MIGRATION_CHECKLIST_2026-04-04.md
+
+- UI Hub / Widget Architecture Spec  
+  docs/architecture/UI_HUB_WIDGET_ARCHITECTURE_SPEC_2026-04-04.md
+
+- L4 Market Summary Field Spec  
+  docs/architecture/L4_MARKET_SUMMARY_FIELD_SPEC_2026-04-04.md
+
+- L4 Market Summary Builder Skeleton Spec  
+  docs/architecture/L4_MARKET_SUMMARY_BUILDER_SKELETON_SPEC_2026-04-04.md
+
+- L4 Operator UI Adapter Spec  
+  docs/architecture/L4_OPERATOR_UI_ADAPTER_SPEC_2026-04-05.md
 
 - AI Architecture  
   docs/architecture/AI_ARCHITECTURE.md

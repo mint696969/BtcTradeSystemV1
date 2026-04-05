@@ -7,7 +7,12 @@ import pandas as pd
 import streamlit as st
 
 from btcts.apps.operator_ui.components import live_shell
-from btcts.apps.operator_ui.components.live_shell import get_registered_slots, make_slot_meta
+from btcts.apps.operator_ui.components.live_shell import get_registered_slots
+from btcts.apps.operator_ui.components.slot_definitions import (
+    health_widget_ids,
+    health_widget_slot,
+    health_widget_zone_ids,
+)
 from btcts.apps.operator_ui.components.health_chart_panels import (
     render_api_chart_panel,
     render_layer3_chart_panel,
@@ -325,17 +330,13 @@ def _api_chart_columns_and_labels(api_df: pd.DataFrame, lang: str) -> tuple[list
     return columns, labels
 
 
-def render():
-    lang = st.session_state.get("ui_lang", "en")
-
+def _render_health_range_selector(lang: str) -> str:
     range_options = {
         "1h": get_text(lang, "health_range_1h"),
         "24h": get_text(lang, "health_range_24h"),
         "1w": get_text(lang, "health_range_1w"),
     }
     selected_range_key = st.session_state.get("health_selected_range_key", "1h")
-
-    live_shell.render_compact_page_header(get_text(lang, "health_title"))
 
     range_cols = st.columns([1, 6])
     with range_cols[0]:
@@ -347,7 +348,16 @@ def render():
             key="health_range_selector",
         )
 
-    snapshot = load_health_snapshot(range_key=st.session_state.health_selected_range_key)
+    return str(st.session_state.health_selected_range_key)
+
+
+def render():
+    lang = st.session_state.get("ui_lang", "en")
+
+    live_shell.render_compact_page_header(get_text(lang, "health_title"))
+    selected_range_key = _render_health_range_selector(lang)
+
+    snapshot = load_health_snapshot(range_key=selected_range_key)
 
     collector_state = snapshot.get("collector_state") or {}
     status_payload = collector_state.get("status") or {}
@@ -433,19 +443,11 @@ def render():
     )
 
     with live_shell.slot_widget_from_meta(
-        make_slot_meta(
-            "health",
-            "primary_live",
-            "api_chart_panel",
-            label=None,
-            tone="primary",
-            refresh_mode="poll_fast",
-            priority=50,
-        )
+        health_widget_slot("api_chart_panel")
     ):
         render_api_chart_panel(
             lang=lang,
-            range_key=st.session_state.health_selected_range_key,
+            range_key=selected_range_key,
             api_ws_series=api_ws_series,
             rate_overlay=rate_overlay,
             bitflyer_rate=bitflyer_rate,
@@ -458,19 +460,11 @@ def render():
         )
 
     with live_shell.slot_widget_from_meta(
-        make_slot_meta(
-            "health",
-            "primary_live",
-            "ws_chart_panel",
-            label=None,
-            tone="primary",
-            refresh_mode="poll_fast",
-            priority=60,
-        )
+        health_widget_slot("ws_chart_panel")
     ):
         render_ws_chart_panel(
             lang=lang,
-            range_key=st.session_state.health_selected_range_key,
+            range_key=selected_range_key,
             api_ws_series=api_ws_series,
             get_text=get_text,
             section_title_with_range=_section_title_with_range,
@@ -478,19 +472,11 @@ def render():
         )
 
     with live_shell.slot_widget_from_meta(
-        make_slot_meta(
-            "health",
-            "primary_live",
-            "layer3_chart_panel",
-            label=None,
-            tone="primary",
-            refresh_mode="poll_normal",
-            priority=70,
-        )
+        health_widget_slot("layer3_chart_panel")
     ):
         render_layer3_chart_panel(
             lang=lang,
-            range_key=st.session_state.health_selected_range_key,
+            range_key=selected_range_key,
             layer3_series=layer3_series,
             market_latest=market_latest,
             market_diag=market_diag,
@@ -500,15 +486,7 @@ def render():
         )
 
     with live_shell.slot_widget_from_meta(
-        make_slot_meta(
-            "health",
-            "detail",
-            "current_state_section",
-            label=None,
-            tone="primary",
-            refresh_mode="poll_normal",
-            priority=100,
-        )
+        health_widget_slot("current_state_section")
     ):
         render_current_state_section(
             lang=lang,
@@ -540,15 +518,7 @@ def render():
         )
 
     with live_shell.slot_widget_from_meta(
-        make_slot_meta(
-            "health",
-            "detail",
-            "recent_events_section",
-            label=None,
-            tone="neutral",
-            refresh_mode="poll_normal",
-            priority=110,
-        )
+        health_widget_slot("recent_events_section")
     ):
         render_recent_events_section(
             lang=lang,
@@ -564,17 +534,43 @@ def render():
 
     render_continuity_panels(
         lang=lang,
-        range_key=st.session_state.health_selected_range_key,
+        range_key=selected_range_key,
         api_continuity_rail=api_continuity_rail,
         ws_continuity_rail=ws_continuity_rail,
         get_text=get_text,
         section_title_with_range=_section_title_with_range,
     )
 
+    _render_health_diagnostics(lang)
+
+def _render_health_diagnostics(lang: str) -> None:
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         st.caption(get_text(lang, "ui_slot_diagnostics_health_caption"))
         slot_rows = get_registered_slots("health")
         if slot_rows:
             st.dataframe(slot_rows, width="stretch")
+
+            expected_widget_ids = set(health_widget_ids())
+            actual_widget_ids = {str(row.get("widget_id")) for row in slot_rows}
+            missing_widget_ids = sorted(
+                expected_widget_ids.difference(actual_widget_ids)
+            )
+            if missing_widget_ids:
+                st.warning(
+                    "missing health slot registrations: " + ", ".join(missing_widget_ids)
+                )
+
+            actual_zone_ids = {
+                str(row.get("zone_id"))
+                for row in slot_rows
+                if row.get("zone_id") is not None
+            }
+            unexpected_zone_ids = sorted(
+                actual_zone_ids.difference(set(health_widget_zone_ids()))
+            )
+            if unexpected_zone_ids:
+                st.warning(
+                    "unexpected health zone ids: " + ", ".join(unexpected_zone_ids)
+                )
         else:
             st.info(get_text(lang, "ui_slot_registry_empty_health"))

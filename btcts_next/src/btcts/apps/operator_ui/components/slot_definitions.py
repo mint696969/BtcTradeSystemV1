@@ -72,6 +72,24 @@ class WidgetRefreshPolicy(TypedDict, total=False):
     notes: str | None
 
 
+class WarroomGraphWidgetSpec(TypedDict):
+    priority: int
+    refresh_policy: WidgetRefreshPolicy
+    overlay_contract: WidgetOverlayContract
+    layout_hints: WidgetLayoutHints
+
+
+class CommonWidgetSlotSpec(TypedDict):
+    zone_id: str
+    priority: int
+    refresh_mode: SlotRefreshMode
+    tone: WidgetTone
+
+
+def warroom_widget_zone_ids() -> list[str]:
+    return sorted({spec["zone_id"] for spec in _WARROOM_WIDGET_SLOT_SPECS.values()})
+
+
 def build_overlay_contract(
     *,
     enabled: bool = False,
@@ -104,6 +122,82 @@ def build_refresh_policy(
         "rerender_scope": rerender_scope,
         "notes": notes,
     }
+
+
+_WARROOM_GRAPH_WIDGET_SPECS: dict[str, WarroomGraphWidgetSpec] = {
+    "market_monitor": {
+        "priority": 30,
+        "refresh_policy": build_refresh_policy(
+            mode="poll_fast",
+            partial_update_enabled=True,
+            chart_sensitive=True,
+            rerender_scope="widget",
+            notes="first candidate for fragment/partial redraw validation",
+        ),
+        "overlay_contract": build_overlay_contract(
+            enabled=True,
+            base_series=["mid_price"],
+            overlay_series=["best_bid", "best_ask"],
+            threshold_lines=[],
+            event_markers=[],
+        ),
+        "layout_hints": build_layout_hints(
+            zone_id="primary_live",
+            preferred_w=6,
+            preferred_h=4,
+            min_w=4,
+            min_h=3,
+        ),
+    },
+    "liquidity_pressure": {
+        "priority": 20,
+        "refresh_policy": build_refresh_policy(
+            mode="poll_fast",
+            partial_update_enabled=True,
+            chart_sensitive=True,
+            rerender_scope="widget",
+            notes="orderbook-derived pressure changes frequently",
+        ),
+        "overlay_contract": build_overlay_contract(
+            enabled=True,
+            base_series=["liquidity_pressure"],
+            overlay_series=[],
+            threshold_lines=["neutral_band"],
+            event_markers=[],
+        ),
+        "layout_hints": build_layout_hints(
+            zone_id="primary_live",
+            preferred_w=6,
+            preferred_h=4,
+            min_w=4,
+            min_h=3,
+        ),
+    },
+    "trade_flow_monitor": {
+        "priority": 10,
+        "refresh_policy": build_refresh_policy(
+            mode="poll_fast",
+            partial_update_enabled=True,
+            chart_sensitive=True,
+            rerender_scope="widget",
+            notes="trade count and delta update frequently",
+        ),
+        "overlay_contract": build_overlay_contract(
+            enabled=True,
+            base_series=["trade_flow"],
+            overlay_series=[],
+            threshold_lines=["zero_line"],
+            event_markers=[],
+        ),
+        "layout_hints": build_layout_hints(
+            zone_id="primary_live",
+            preferred_w=6,
+            preferred_h=4,
+            min_w=4,
+            min_h=3,
+        ),
+    },
+}
 
 
 def build_widget_contract(
@@ -198,31 +292,99 @@ def warroom_slot(
     )
 
 
+_WARROOM_WIDGET_SLOT_SPECS: dict[str, CommonWidgetSlotSpec] = {
+    "warroom_header": {
+        "zone_id": "overview",
+        "priority": 10,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "warroom_alert_engine": {
+        "zone_id": "overview",
+        "priority": 20,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "ai_operator_panel": {
+        "zone_id": "overview",
+        "priority": 30,
+        "refresh_mode": "poll_slow",
+        "tone": "primary",
+    },
+    "decision_log_panel": {
+        "zone_id": "secondary",
+        "priority": 40,
+        "refresh_mode": "poll_slow",
+        "tone": "primary",
+    },
+    "watch_list_panel": {
+        "zone_id": "secondary",
+        "priority": 50,
+        "refresh_mode": "poll_slow",
+        "tone": "primary",
+    },
+    "warroom_timeline": {
+        "zone_id": "secondary",
+        "priority": 60,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "ai_reasoning_panel": {
+        "zone_id": "ai_diagnostics",
+        "priority": 70,
+        "refresh_mode": "poll_slow",
+        "tone": "primary",
+    },
+    "ai_market_summary_panel": {
+        "zone_id": "ai_diagnostics",
+        "priority": 80,
+        "refresh_mode": "poll_slow",
+        "tone": "primary",
+    },
+    "ai_conversation_panel": {
+        "zone_id": "ai_diagnostics",
+        "priority": 90,
+        "refresh_mode": "poll_slow",
+        "tone": "primary",
+    },
+    "market_regime": {
+        "zone_id": "primary_live",
+        "priority": 35,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "ai_signal": {
+        "zone_id": "primary_live",
+        "priority": 40,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "strategy_state": {
+        "zone_id": "primary_live",
+        "priority": 45,
+        "refresh_mode": "poll_slow",
+        "tone": "primary",
+    },
+    "risk_monitor": {
+        "zone_id": "primary_live",
+        "priority": 50,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "agent_panels": {
+        "zone_id": "primary_live",
+        "priority": 60,
+        "refresh_mode": "poll_slow",
+        "tone": "primary",
+    },
+}
+
+
 def warroom_graph_overlay_contract(widget_id: str) -> WidgetOverlayContract:
-    overlay_map: dict[str, WidgetOverlayContract] = {
-        "market_monitor": build_overlay_contract(
-            enabled=True,
-            base_series=["mid_price"],
-            overlay_series=["best_bid", "best_ask"],
-            threshold_lines=[],
-            event_markers=[],
-        ),
-        "trade_flow_monitor": build_overlay_contract(
-            enabled=True,
-            base_series=["trade_flow"],
-            overlay_series=[],
-            threshold_lines=["zero_line"],
-            event_markers=[],
-        ),
-        "liquidity_pressure": build_overlay_contract(
-            enabled=True,
-            base_series=["liquidity_pressure"],
-            overlay_series=[],
-            threshold_lines=["neutral_band"],
-            event_markers=[],
-        ),
-    }
-    return overlay_map.get(widget_id, build_overlay_contract(enabled=False))
+    spec = warroom_graph_widget_specs().get(widget_id)
+    if spec is not None:
+        return spec["overlay_contract"]
+    return build_overlay_contract(enabled=False)
 
 
 def warroom_overlay_enabled(widget_id: str) -> bool:
@@ -230,11 +392,19 @@ def warroom_overlay_enabled(widget_id: str) -> bool:
 
 
 def warroom_overlay_widget_ids() -> list[str]:
+    return list(warroom_graph_widget_ids())
+
+
+def warroom_graph_widget_ids() -> list[str]:
     return [
         "market_monitor",
-        "trade_flow_monitor",
         "liquidity_pressure",
+        "trade_flow_monitor",
     ]
+
+
+def warroom_graph_widget_specs() -> dict[str, WarroomGraphWidgetSpec]:
+    return dict(_WARROOM_GRAPH_WIDGET_SPECS)
 
 
 def warroom_overlay_contract_count() -> int:
@@ -242,11 +412,7 @@ def warroom_overlay_contract_count() -> int:
 
 
 def warroom_partial_update_widget_ids() -> list[str]:
-    return [
-        "market_monitor",
-        "trade_flow_monitor",
-        "liquidity_pressure",
-    ]
+    return list(warroom_graph_widget_ids())
 
 
 def warroom_partial_update_enabled(widget_id: str) -> bool:
@@ -254,30 +420,9 @@ def warroom_partial_update_enabled(widget_id: str) -> bool:
 
 
 def warroom_refresh_policy(widget_id: str) -> WidgetRefreshPolicy:
-    if widget_id == "market_monitor":
-        return build_refresh_policy(
-            mode="poll_fast",
-            partial_update_enabled=True,
-            chart_sensitive=True,
-            rerender_scope="widget",
-            notes="first candidate for fragment/partial redraw validation",
-        )
-    if widget_id == "trade_flow_monitor":
-        return build_refresh_policy(
-            mode="poll_fast",
-            partial_update_enabled=True,
-            chart_sensitive=True,
-            rerender_scope="widget",
-            notes="trade count and delta update frequently",
-        )
-    if widget_id == "liquidity_pressure":
-        return build_refresh_policy(
-            mode="poll_fast",
-            partial_update_enabled=True,
-            chart_sensitive=True,
-            rerender_scope="widget",
-            notes="orderbook-derived pressure changes frequently",
-        )
+    spec = warroom_graph_widget_specs().get(widget_id)
+    if spec is not None:
+        return spec["refresh_policy"]
     return build_refresh_policy()
 
 
@@ -288,7 +433,7 @@ def warroom_chart_sensitive(widget_id: str) -> bool:
 def warroom_chart_sensitive_widget_ids() -> list[str]:
     return [
         widget_id
-        for widget_id in warroom_overlay_widget_ids()
+        for widget_id in warroom_graph_widget_ids()
         if warroom_chart_sensitive(widget_id)
     ]
 
@@ -305,18 +450,40 @@ def warroom_refresh_mode_counts() -> dict[str, int]:
     return counts
 
 
+def warroom_rerender_scope_counts() -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for widget_id in warroom_overlay_widget_ids():
+        scope = str(warroom_refresh_policy(widget_id).get("rerender_scope", "page"))
+        counts[scope] = counts.get(scope, 0) + 1
+    return counts
+
+
+def warroom_first_partial_redraw_candidate() -> str | None:
+    preferred_order = [
+        "market_monitor",
+        "liquidity_pressure",
+        "trade_flow_monitor",
+    ]
+    for widget_id in preferred_order:
+        policy = warroom_refresh_policy(widget_id)
+        if (
+            bool(policy.get("partial_update_enabled"))
+            and bool(policy.get("chart_sensitive"))
+            and str(policy.get("rerender_scope", "page")) == "widget"
+        ):
+            return widget_id
+    return None
+
+
 def warroom_widget_refresh_mode(widget_id: str) -> SlotRefreshMode:
     mode = warroom_refresh_policy(widget_id).get("mode", "static")
     return str(mode)  # type: ignore[return-value]
 
 
 def warroom_widget_priority(widget_id: str) -> int:
-    if widget_id == "market_monitor":
-        return 30
-    if widget_id == "liquidity_pressure":
-        return 20
-    if widget_id == "trade_flow_monitor":
-        return 10
+    spec = warroom_graph_widget_specs().get(widget_id)
+    if spec is not None:
+        return spec["priority"]
     return 0
 
 
@@ -331,6 +498,29 @@ def warroom_graph_widget_slot(widget_id: str) -> SlotMeta:
         overlay_enabled=warroom_overlay_enabled(widget_id),
         partial_update_enabled=warroom_partial_update_enabled(widget_id),
     )
+
+
+def warroom_widget_slot(widget_id: str) -> SlotMeta:
+    spec = _WARROOM_WIDGET_SLOT_SPECS.get(widget_id)
+    if spec is None:
+        return warroom_slot("secondary", widget_id)
+
+    return warroom_slot(
+        spec["zone_id"],
+        widget_id,
+        label=None,
+        tone=spec["tone"],
+        refresh_mode=spec["refresh_mode"],
+        priority=spec["priority"],
+    )
+
+
+def warroom_widget_ids() -> list[str]:
+    return list(_WARROOM_WIDGET_SLOT_SPECS.keys())
+
+
+def warroom_all_widget_ids() -> list[str]:
+    return list(dict.fromkeys(warroom_widget_ids() + warroom_graph_widget_ids()))
 
 
 class WarroomGraphWidgetBundle(TypedDict):
@@ -348,30 +538,9 @@ def warroom_graph_widget_bundle(widget_id: str) -> WarroomGraphWidgetBundle:
 
 
 def warroom_layout_hints(widget_id: str) -> WidgetLayoutHints:
-    if widget_id == "market_monitor":
-        return build_layout_hints(
-            zone_id="primary_live",
-            preferred_w=6,
-            preferred_h=4,
-            min_w=4,
-            min_h=3,
-        )
-    if widget_id == "trade_flow_monitor":
-        return build_layout_hints(
-            zone_id="primary_live",
-            preferred_w=6,
-            preferred_h=4,
-            min_w=4,
-            min_h=3,
-        )
-    if widget_id == "liquidity_pressure":
-        return build_layout_hints(
-            zone_id="primary_live",
-            preferred_w=6,
-            preferred_h=4,
-            min_w=4,
-            min_h=3,
-        )
+    spec = warroom_graph_widget_specs().get(widget_id)
+    if spec is not None:
+        return spec["layout_hints"]
     return build_layout_hints(zone_id="secondary")
 
 
@@ -440,6 +609,99 @@ def health_slot(
     )
 
 
+_HEALTH_WIDGET_SLOT_SPECS: dict[str, CommonWidgetSlotSpec] = {
+    "collector_summary": {
+        "zone_id": "overview",
+        "priority": 10,
+        "refresh_mode": "poll_normal",
+        "tone": "strong",
+    },
+    "api_summary": {
+        "zone_id": "overview",
+        "priority": 20,
+        "refresh_mode": "poll_fast",
+        "tone": "primary",
+    },
+    "ws_summary": {
+        "zone_id": "overview",
+        "priority": 30,
+        "refresh_mode": "poll_fast",
+        "tone": "primary",
+    },
+    "layer3_summary": {
+        "zone_id": "overview",
+        "priority": 40,
+        "refresh_mode": "poll_normal",
+        "tone": "neutral",
+    },
+    "api_chart_panel": {
+        "zone_id": "primary_live",
+        "priority": 50,
+        "refresh_mode": "poll_fast",
+        "tone": "primary",
+    },
+    "ws_chart_panel": {
+        "zone_id": "primary_live",
+        "priority": 60,
+        "refresh_mode": "poll_fast",
+        "tone": "primary",
+    },
+    "layer3_chart_panel": {
+        "zone_id": "primary_live",
+        "priority": 70,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "api_continuity_panel": {
+        "zone_id": "primary_live",
+        "priority": 80,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "ws_continuity_panel": {
+        "zone_id": "primary_live",
+        "priority": 90,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "current_state_section": {
+        "zone_id": "detail",
+        "priority": 100,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "recent_events_section": {
+        "zone_id": "detail",
+        "priority": 110,
+        "refresh_mode": "poll_normal",
+        "tone": "neutral",
+    },
+}
+
+
+def health_widget_slot(widget_id: str) -> SlotMeta:
+    spec = _HEALTH_WIDGET_SLOT_SPECS.get(widget_id)
+    if spec is None:
+        return health_slot("detail", widget_id)
+
+    return health_slot(
+        spec["zone_id"],
+        widget_id,
+        label=None,
+        tone=spec["tone"],
+        refresh_mode=spec["refresh_mode"],
+        priority=spec["priority"],
+    )
+
+
+def health_widget_ids() -> list[str]:
+    return list(_HEALTH_WIDGET_SLOT_SPECS.keys())
+
+
+def health_widget_zone_ids() -> list[str]:
+    return sorted({spec["zone_id"] for spec in _HEALTH_WIDGET_SLOT_SPECS.values()})
+
+
 def collector_slot(
     zone_id: str,
     widget_id: str,
@@ -460,3 +722,48 @@ def collector_slot(
         refresh_mode=refresh_mode,
         priority=priority,
     )
+
+
+def collector_widget_slot(widget_id: str) -> SlotMeta:
+    spec = _COLLECTOR_WIDGET_SLOT_SPECS.get(widget_id)
+    if spec is None:
+        return collector_slot("primary_live", widget_id)
+
+    return collector_slot(
+        spec["zone_id"],
+        widget_id,
+        label=None,
+        tone=spec["tone"],
+        refresh_mode=spec["refresh_mode"],
+        priority=spec["priority"],
+    )
+
+
+def collector_widget_ids() -> list[str]:
+    return list(_COLLECTOR_WIDGET_SLOT_SPECS.keys())
+
+
+def collector_widget_zone_ids() -> list[str]:
+    return sorted({spec["zone_id"] for spec in _COLLECTOR_WIDGET_SLOT_SPECS.values()})
+
+
+_COLLECTOR_WIDGET_SLOT_SPECS: dict[str, CommonWidgetSlotSpec] = {
+    "origin_continuity_audit": {
+        "zone_id": "primary_live",
+        "priority": 70,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "system_stats": {
+        "zone_id": "primary_live",
+        "priority": 80,
+        "refresh_mode": "poll_normal",
+        "tone": "primary",
+    },
+    "execution_feed": {
+        "zone_id": "primary_live",
+        "priority": 90,
+        "refresh_mode": "poll_fast",
+        "tone": "primary",
+    },
+}

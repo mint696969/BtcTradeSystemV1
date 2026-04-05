@@ -13,7 +13,7 @@ from collections import Counter
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from btcts.collector_vnext.orderbook.book_rebuilder import OrderBookRebuilder
+from btcts.ingestion.l2_canonical.orderbook.book_rebuilder import OrderBookRebuilder
 from btcts.collector_vnext.providers.bitflyer_ws_board import connect_and_stream_board
 
 

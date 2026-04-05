@@ -208,14 +208,14 @@ def render():
             wall_state = "neutral"
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("spread", spread_state)
-    c2.metric("imbalance", imbalance_state)
-    c3.metric("delta", delta_state)
+    c1.metric(get_text(lang, "ai_reasoning_metric_spread"), spread_state)
+    c2.metric(get_text(lang, "ai_reasoning_metric_imbalance"), imbalance_state)
+    c3.metric(get_text(lang, "ai_reasoning_metric_delta"), delta_state)
 
     c4, c5, c6 = st.columns(3)
-    c4.metric("wall", wall_state)
-    c5.metric("regime", regime or "-")
-    c6.metric("strategy", best_strategy or "-")
+    c4.metric(get_text(lang, "ai_reasoning_metric_wall"), wall_state)
+    c5.metric(get_text(lang, "ai_reasoning_metric_regime"), regime or "-")
+    c6.metric(get_text(lang, "ai_reasoning_metric_strategy"), best_strategy or "-")
 
     st.markdown(f"**{get_text(lang, 'ai_reasoning_reasons')}**")
     for line in _reason_lines(lang, spread, imbalance, delta, wall_ratio, regime, best_strategy):
@@ -223,6 +223,10 @@ def render():
 
     st.markdown(f"**{get_text(lang, 'ai_reasoning_conclusion')}**")
     st.success(_conclusion(lang, regime, imbalance, delta, wall_ratio))
-    st.caption(f"source={state.get('source', 'unknown')}")
-    
+    st.caption(
+        get_text(lang, "warroom_generic_source_caption").format(
+            source=state.get("source", "unknown"),
+        )
+    )
+
     st.divider()

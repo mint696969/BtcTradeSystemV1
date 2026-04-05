@@ -9,7 +9,12 @@ import streamlit as st
 
 from btcts.apps.operator_ui.components import execution_feed_panel
 from btcts.apps.operator_ui.components import live_shell
-from btcts.apps.operator_ui.components.live_shell import get_registered_slots, make_slot_meta
+from btcts.apps.operator_ui.components.live_shell import get_registered_slots
+from btcts.apps.operator_ui.components.slot_definitions import (
+    collector_widget_ids,
+    collector_widget_slot,
+    collector_widget_zone_ids,
+)
 from btcts.apps.operator_ui.components import system_stats
 from btcts.apps.operator_ui.components.collector_top_panels import (
     render_origin_continuity_summary_section,
@@ -512,15 +517,7 @@ def render():
     )
 
     with live_shell.slot_widget_from_meta(
-        make_slot_meta(
-            "collector",
-            "primary_live",
-            "origin_continuity_audit",
-            label=get_text(lang, "ui_label_origin_continuity_audit"),
-            tone="primary",
-            refresh_mode="poll_normal",
-            priority=70,
-        )
+        collector_widget_slot("origin_continuity_audit")
     ):
         a1, a2, a3, a4 = st.columns(4)
         a1.metric(get_text(lang, "collector_metric_gap_detected"), origin_audit_summary.get("gap_detected") or 0)
@@ -529,31 +526,19 @@ def render():
         a4.metric(get_text(lang, "collector_metric_resync_complete_ratio"), origin_audit_summary.get("resync_complete_ratio") or "-")
 
     with live_shell.slot_widget_from_meta(
-        make_slot_meta(
-            "collector",
-            "primary_live",
-            "system_stats",
-            label=None,
-            tone="primary",
-            refresh_mode="poll_normal",
-            priority=80,
-        )
+        collector_widget_slot("system_stats")
     ):
         system_stats.render()
 
     with live_shell.slot_widget_from_meta(
-        make_slot_meta(
-            "collector",
-            "primary_live",
-            "execution_feed",
-            label=None,
-            tone="primary",
-            refresh_mode="poll_fast",
-            priority=90,
-        )
+        collector_widget_slot("execution_feed")
     ):
         execution_feed_panel.render()
 
+    _render_collector_recent_events(lang, recent_audit_events)
+    _render_collector_diagnostics(lang)
+
+def _render_collector_recent_events(lang: str, recent_audit_events: list[dict]) -> None:
     with live_shell.render_folded_section(get_text(lang, "collector_recent_events"), expanded=False):
         events = recent_audit_events[:30]
         if events:
@@ -562,10 +547,34 @@ def render():
         else:
             st.warning(get_text(lang, "collector_audit_empty"))
 
+def _render_collector_diagnostics(lang: str) -> None:
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         st.caption(get_text(lang, "ui_slot_diagnostics_collector_caption"))
         slot_rows = get_registered_slots("collector")
         if slot_rows:
             st.dataframe(slot_rows, width="stretch")
+
+            expected_widget_ids = set(collector_widget_ids())
+            actual_widget_ids = {str(row.get("widget_id")) for row in slot_rows}
+            missing_widget_ids = sorted(
+                expected_widget_ids.difference(actual_widget_ids)
+            )
+            if missing_widget_ids:
+                st.warning(
+                    "missing collector slot registrations: " + ", ".join(missing_widget_ids)
+                )
+
+            actual_zone_ids = {
+                str(row.get("zone_id"))
+                for row in slot_rows
+                if row.get("zone_id") is not None
+            }
+            unexpected_zone_ids = sorted(
+                actual_zone_ids.difference(set(collector_widget_zone_ids()))
+            )
+            if unexpected_zone_ids:
+                st.warning(
+                    "unexpected collector zone ids: " + ", ".join(unexpected_zone_ids)
+                )
         else:
             st.info(get_text(lang, "ui_slot_registry_empty_collector"))

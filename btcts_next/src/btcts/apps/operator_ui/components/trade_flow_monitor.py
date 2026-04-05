@@ -37,7 +37,7 @@ def render(
             for col, (label, value) in zip(metric_cols, metric_rows):
                 col.metric(label, value)
 
-        with st.expander("Graph Overlay Contract", expanded=False):
+        with st.expander(get_text(lang, "graph_overlay_contract_title"), expanded=False):
             st.json(overlay_contract)
 
     st.markdown(f"### {get_text(lang, 'trade_flow_title')}")
@@ -74,14 +74,26 @@ def render(
     c2.metric(get_text(lang, "trade_flow_sell_volume"), "-" if sell_vol is None else round(float(sell_vol), 4))
     c3.metric(get_text(lang, "trade_flow_delta"), "-" if delta is None else round(float(delta), 4))
 
-    st.caption(f"{get_text(lang, 'trade_flow_recent_count')}: {trade_count}")
+    st.caption(
+        get_text(lang, "trade_flow_recent_count_caption").format(
+            label=get_text(lang, "trade_flow_recent_count"),
+            count=trade_count,
+        )
+    )
 
     st.caption(
-        f"source={source_label} / ts={format_ui_ts(flow.get('event_ts'), lang)}"
+        get_text(lang, "trade_flow_source_ts_caption").format(
+            source=source_label,
+            ts=format_ui_ts(flow.get("event_ts"), lang),
+        )
     )
 
     micro_names = flow.get("micro_event_names") or []
     if micro_names:
-        st.caption("microstructure: " + ", ".join(micro_names[:5]))
+        st.caption(
+            get_text(lang, "trade_flow_microstructure_caption").format(
+                names=", ".join(micro_names[:5]),
+            )
+        )
 
     st.divider()

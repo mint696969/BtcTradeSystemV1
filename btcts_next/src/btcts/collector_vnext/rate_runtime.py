@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/collector_vnext/rate_runtime.py
-# desc: Thin rate-control adapter for Collector vNext built on top of btcts.collector.rate.RateController.
+# desc: Thin rate-control adapter for Collector vNext built on top of collector_vnext.rate_control.
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List
 
-from btcts.collector.rate import RateController, RatePolicy
+from .rate_control import RateController, RatePolicy
 from btcts.settings import svc as settings_svc
 
 from .config import CollectorConfig

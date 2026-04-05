@@ -12,7 +12,7 @@ _SRC_ROOT = Path(__file__).resolve().parents[3]
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
-from btcts.market_engine.execution.assembler_engine import AssemblerEngine
+from btcts.market_engine.execution.execution_facade import ExecutionFacade
 from btcts.market_engine.profiles import BitflyerProfile
 from btcts.market_engine.config import MarketEngineConfig
 from btcts.market_engine.market_state.projector import MarketStateProjector
@@ -93,7 +93,7 @@ def main() -> int:
     tmp_root.mkdir(parents=True, exist_ok=True)
 
     profile = BitflyerProfile()
-    engine = AssemblerEngine(profile)
+    engine = ExecutionFacade(profile)
     projector = MarketStateProjector()
     writer = MarketStateWriter()
     cfg = _cfg(tmp_root)

@@ -46,8 +46,8 @@ def _risk(
 def main() -> int:
     ws_provider = _read_text("btcts_next/src/btcts/collector_vnext/providers/bitflyer_ws_board.py")
     ws_canonical = _read_text("btcts_next/src/btcts/collector_vnext/transforms/ws_board_to_canonical.py")
-    book_rebuilder = _read_text("btcts_next/src/btcts/collector_vnext/orderbook/book_rebuilder.py")
-    book_apply = _read_text("btcts_next/src/btcts/collector_vnext/orderbook/book_apply.py")
+    book_rebuilder = _read_text("btcts_next/src/btcts/ingestion/l2_canonical/orderbook/book_rebuilder.py")
+    book_apply = _read_text("btcts_next/src/btcts/ingestion/l2_canonical/orderbook/book_apply.py")
     rebuild_long = _read_text("tools/test_collector_vnext_board_ws_rebuild_long.py")
     rebuild_zone = _read_text("tools/test_collector_vnext_board_ws_rebuild_zone_diagnose.py")
 
@@ -135,7 +135,7 @@ def main() -> int:
                 severity="medium",
                 title="snapshot 前 diff は無言で捨てる",
                 evidence=[
-                    "btcts_next/src/btcts/collector_vnext/orderbook/book_rebuilder.py: delta before snapshot is silently ignored",
+                    "btcts_next/src/btcts/ingestion/l2_canonical/orderbook/book_rebuilder.py: delta before snapshot is silently ignored",
                 ],
                 why_it_matters="接続直後の状態遷移を記録せずに捨てるので continuity 監査情報が残らない。",
                 likely_effect="初期ズレの説明が弱くなる。",
@@ -150,8 +150,8 @@ def main() -> int:
                 severity="medium",
                 title="rebuilder に妥当性チェックが無い",
                 evidence=[
-                    "btcts_next/src/btcts/collector_vnext/orderbook/book_rebuilder.py: no crossed/sanity validation",
-                    "btcts_next/src/btcts/collector_vnext/orderbook/book_apply.py: raw updates applied directly",
+                    "btcts_next/src/btcts/ingestion/l2_canonical/orderbook/book_rebuilder.py: no crossed/sanity validation",
+                    "btcts_next/src/btcts/ingestion/l2_canonical/orderbook/book_apply.py: raw updates applied directly",
                 ],
                 why_it_matters="片側崩れや crossed をその場で異常として検出できない。",
                 likely_effect="壊れた state がそのまま比較や downstream signal に流れる。",

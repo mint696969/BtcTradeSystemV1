@@ -10,7 +10,7 @@ import json
 import time
 from typing import Any, Dict, List, Tuple, Optional
 
-from btcts.collector_vnext.orderbook.book_rebuilder import OrderBookRebuilder
+from btcts.ingestion.l2_canonical.orderbook.book_rebuilder import OrderBookRebuilder
 from btcts.collector_vnext.providers.bitflyer_ws_board import connect_and_stream_board
 
 

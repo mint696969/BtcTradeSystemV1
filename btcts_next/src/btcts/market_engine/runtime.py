@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from btcts.market_engine.execution.assembler_engine import AssemblerEngine
+from btcts.market_engine.execution.execution_facade import ExecutionFacade
 from btcts.processing.l3_market_semantics.continuity import InterpretationEngine
 from btcts.market_engine.profiles import BitflyerProfile
 from btcts.market_engine.config import MarketEngineConfig, load_market_engine_config
@@ -25,7 +25,7 @@ class MarketEngineRuntime:
     def __init__(self, cfg: MarketEngineConfig | None = None) -> None:
         self._cfg = cfg or load_market_engine_config()
         self._profile = BitflyerProfile()
-        self._engine = AssemblerEngine(self._profile)
+        self._engine = ExecutionFacade(self._profile)
         self._interpretation = InterpretationEngine()
         self._projector = MarketStateProjector()
         self._writer = MarketStateWriter()

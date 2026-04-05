@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/collector_vnext/paths.py
-# desc: Path builders for Collector vNext raw, compact, canonical, log, and state outputs.
+# desc: Path builders for Collector vNext raw, canonical, log, and state outputs.
 
 from __future__ import annotations
 

@@ -204,9 +204,17 @@ def render():
     c6.metric(get_text(lang, "warroom_header_risk"), risk_label)
 
     st.caption(
-        f"best_strategy={best_strategy} / "
-        f"spread={spread} / imbalance={imbalance} / wall_ratio={wall_ratio}"
+        get_text(lang, "warroom_header_summary_caption").format(
+            best_strategy=best_strategy,
+            spread=spread,
+            imbalance=imbalance,
+            wall_ratio=wall_ratio,
+        )
     )
-    st.caption(f"source={state.get('source', 'unknown')}")
+    st.caption(
+        get_text(lang, "warroom_generic_source_caption").format(
+            source=state.get("source", "unknown"),
+        )
+    )
 
     st.divider()

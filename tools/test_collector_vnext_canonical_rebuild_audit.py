@@ -11,7 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from btcts.collector_vnext.orderbook.book_rebuilder import OrderBookRebuilder
+from btcts.ingestion.l2_canonical.orderbook.book_rebuilder import OrderBookRebuilder
 
 
 # =========================

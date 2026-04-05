@@ -1,5 +1,23 @@
+# path: ./docs/architecture/SYSTEM_ARCHITECTURE.md
+# desc: High-level architecture overview and gateway to current canonical specs.
 BTC Trade System (BTC-TS)
 System Architecture
+
+## Current Canonical Specs
+
+> [!IMPORTANT]
+> この文書は BTC-TS 全体像の高位アーキテクチャ説明です。
+> 現行 repository のレイヤ責務・分離検証・L4 / UI hub 設計の正本は、以下の architecture 文書群を参照してください。
+
+- docs/architecture/LAYER_RESPONSIBILITY_RUNTIME_SPEC_2026-04-04.md
+- docs/architecture/L2_L3_SEPARATION_LIGHTWEIGHT_VERIFICATION_SPEC_2026-04-04.md
+- docs/architecture/L2_L3_SEPARATION_LIGHTWEIGHT_VERIFICATION_CHECKLIST_2026-04-04.md
+- docs/architecture/L4_SHARED_FIRST_DESIGN_SPEC_2026-04-04.md
+- docs/architecture/L4_SHARED_FIRST_MIGRATION_CHECKLIST_2026-04-04.md
+- docs/architecture/UI_HUB_WIDGET_ARCHITECTURE_SPEC_2026-04-04.md
+- docs/architecture/L4_MARKET_SUMMARY_FIELD_SPEC_2026-04-04.md
+- docs/architecture/L4_MARKET_SUMMARY_BUILDER_SKELETON_SPEC_2026-04-04.md
+- docs/architecture/L4_OPERATOR_UI_ADAPTER_SPEC_2026-04-05.md
 
 BTC-TSは Layered Modular Architecture を採用する。
 

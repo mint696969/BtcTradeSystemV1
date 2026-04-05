@@ -148,10 +148,14 @@ def render():
         for item in bullets:
             st.markdown(f"- {item}")
     else:
-        st.markdown("-")
+        st.markdown(f"- {get_text(lang, 'warroom_value_unknown')}")
 
     st.markdown(f"**{get_text(lang, 'ai_summary_outlook')}**")
     st.success(outlook)
-    st.caption(f"source={state.get('source', 'unknown')}")
-    
+    st.caption(
+        get_text(lang, "warroom_generic_source_caption").format(
+            source=state.get("source", "unknown"),
+        )
+    )
+
     st.divider()

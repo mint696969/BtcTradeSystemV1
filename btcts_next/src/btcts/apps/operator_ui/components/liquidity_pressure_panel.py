@@ -43,7 +43,7 @@ def render(
             for col, (label, value) in zip(metric_cols, metric_rows):
                 col.metric(label, value)
 
-        with st.expander("Graph Overlay Contract", expanded=False):
+        with st.expander(get_text(lang, "graph_overlay_contract_title"), expanded=False):
             st.json(overlay_contract)
 
     st.markdown(f"### {get_text(lang, 'liquidity_pressure_title')}")
@@ -130,6 +130,10 @@ def render(
         unsafe_allow_html=True,
     )
 
-    st.caption(f"source={source_label}")
+    st.caption(
+        get_text(lang, "warroom_generic_source_caption").format(
+            source=source_label,
+        )
+    )
 
     st.divider()

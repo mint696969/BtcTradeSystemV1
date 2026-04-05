@@ -1,5 +1,5 @@
-# path: ./btcts_next/src/btcts/market_engine/execution/assembler_engine.py
-# desc: Facade entrypoint for Market Engine execution across realtime and replay execution modes.
+# path: ./btcts_next/src/btcts/market_engine/execution/execution_facade.py
+# desc: Thin facade entrypoint for Market Engine execution across realtime and replay modes.
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from btcts.market_engine.execution.realtime_engine import RealtimeEngine, Realti
 from btcts.market_engine.execution.replay_engine import ReplayEngine
 
 
-class AssemblerEngine:
+class ExecutionFacade:
     def __init__(self, profile: Any) -> None:
         self._profile = profile
         self._realtime_engine = RealtimeEngine(profile)
