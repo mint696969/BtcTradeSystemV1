@@ -15,9 +15,10 @@ from btcts.processing.l3_market_semantics.orderbook import (
 
 
 class ReplayPipeline:
-    def __init__(self):
+    def __init__(self, *, semantic_policy: Optional[Dict] = None):
         self.rebuilder = OrderBookRebuilder()
         self.signal_state = SignalState()
+        self.semantic_policy = dict(semantic_policy or {})
 
     def process_record(self, record: Dict) -> Optional[Dict]:
         record_type = str(record.get("record_type") or "")
@@ -39,6 +40,7 @@ class ReplayPipeline:
             payload,
             levels=10,
             wall_levels=20,
+            semantic_policy=self.semantic_policy,
         )
 
         if signal_payload is None:

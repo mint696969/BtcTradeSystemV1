@@ -15,6 +15,9 @@ def detect_absorption(
 
     wall_detected = wall.get("wall_detected")
     wall_side = wall.get("strongest_side")
+    wall_is_near = bool(wall.get("strongest_is_near"))
+    wall_rank = wall.get("strongest_rank")
+    wall_distance_from_best = wall.get("strongest_distance_from_best")
 
     buy_volume = trade_metrics.get("buy_volume", 0)
     sell_volume = trade_metrics.get("sell_volume", 0)
@@ -24,23 +27,37 @@ def detect_absorption(
         return None
 
     if wall_side == "ask" and delta > 5 and buy_volume > sell_volume:
+        reason = "buy_pressure_absorbed_by_ask_wall"
+        if wall_is_near:
+            reason = "buy_pressure_absorbed_by_near_ask_wall"
+
         return {
             "event_name": "absorption_detected",
             "side": "ask",
             "delta": delta,
             "buy_volume": buy_volume,
             "sell_volume": sell_volume,
-            "reason": "buy_pressure_absorbed_by_ask_wall",
+            "wall_rank": wall_rank,
+            "wall_is_near": wall_is_near,
+            "wall_distance_from_best": wall_distance_from_best,
+            "reason": reason,
         }
 
     if wall_side == "bid" and delta < -5 and sell_volume > buy_volume:
+        reason = "sell_pressure_absorbed_by_bid_wall"
+        if wall_is_near:
+            reason = "sell_pressure_absorbed_by_near_bid_wall"
+
         return {
             "event_name": "absorption_detected",
             "side": "bid",
             "delta": delta,
             "buy_volume": buy_volume,
             "sell_volume": sell_volume,
-            "reason": "sell_pressure_absorbed_by_bid_wall",
+            "wall_rank": wall_rank,
+            "wall_is_near": wall_is_near,
+            "wall_distance_from_best": wall_distance_from_best,
+            "reason": reason,
         }
 
     return None

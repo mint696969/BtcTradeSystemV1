@@ -137,6 +137,12 @@ def main() -> int:
     assert record.best_ask == 101.0
     assert record.spread == 0.5
     assert record.trust_state.value in {"trusted", "provisional"}
+    assert record.interpretation_bucket in {
+        "allow_structural_use",
+        "observe_only",
+        "reanchor_required",
+        None,
+    }
     assert record.zone_density_metadata["mode"] == "hybrid"
 
     out = writer.write(

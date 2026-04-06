@@ -31,10 +31,20 @@ class InterpretationEngine:
             BoundaryReason.INVALID_DIFF_ATTACH,
         }
 
-        if trust_state != TrustState.TRUSTED:
+        caution_boundaries = {
+            BoundaryReason.STREAM_STARTED,
+            BoundaryReason.NEW_STREAM_SESSION,
+            BoundaryReason.RESYNC_COMPLETED,
+            BoundaryReason.UNKNOWN,
+        }
+
+        safe_continuity_states = {None, "", "continuous"}
+        caution_continuity_states = {"resynced", "unknown"}
+
+        if trust_state in {TrustState.BROKEN, TrustState.QUARANTINED}:
             return InterpretationDecision(
                 bucket="reanchor_required",
-                reason="trust_state is not trusted",
+                reason=f"trust_state={trust_state.value}",
                 policy=review_policy,
             )
 
@@ -45,15 +55,71 @@ class InterpretationEngine:
                 policy=review_policy,
             )
 
-        if continuity_state not in {None, "", "continuous"}:
+        if continuity_state == "gap_detected":
             return InterpretationDecision(
                 bucket="reanchor_required",
                 reason=f"continuity_state={continuity_state}",
                 policy=review_policy,
             )
 
+        if trust_state == TrustState.TRUSTED:
+            if boundary_reason in caution_boundaries:
+                return InterpretationDecision(
+                    bucket="observe_only",
+                    reason=f"boundary_reason={boundary_reason.value}",
+                    policy=review_policy,
+                )
+
+            if continuity_state in caution_continuity_states:
+                return InterpretationDecision(
+                    bucket="observe_only",
+                    reason=f"continuity_state={continuity_state}",
+                    policy=review_policy,
+                )
+
+            if continuity_state in safe_continuity_states:
+                return InterpretationDecision(
+                    bucket="allow_structural_use",
+                    reason="trusted state with continuous series",
+                    policy=review_policy,
+                )
+
+            return InterpretationDecision(
+                bucket="observe_only",
+                reason=f"continuity_state={continuity_state}",
+                policy=review_policy,
+            )
+
+        if trust_state == TrustState.PROVISIONAL:
+            if boundary_reason in caution_boundaries:
+                return InterpretationDecision(
+                    bucket="observe_only",
+                    reason=f"provisional trust with boundary_reason={boundary_reason.value}",
+                    policy=review_policy,
+                )
+
+            if continuity_state in caution_continuity_states:
+                return InterpretationDecision(
+                    bucket="observe_only",
+                    reason=f"provisional trust with continuity_state={continuity_state}",
+                    policy=review_policy,
+                )
+
+            if continuity_state in safe_continuity_states:
+                return InterpretationDecision(
+                    bucket="observe_only",
+                    reason="provisional trust requires observation before structural use",
+                    policy=review_policy,
+                )
+
+            return InterpretationDecision(
+                bucket="observe_only",
+                reason=f"provisional trust with continuity_state={continuity_state}",
+                policy=review_policy,
+            )
+
         return InterpretationDecision(
-            bucket="allow_structural_use",
-            reason="trusted state with continuous series",
+            bucket="reanchor_required",
+            reason=f"unhandled trust_state={trust_state.value}",
             policy=review_policy,
         )
