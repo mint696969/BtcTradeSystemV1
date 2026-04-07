@@ -6,14 +6,17 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from btcts.ingestion.event_types import EventType
+from btcts.market_engine.profiles import create_exchange_profile
 from .replay_microstructure import detect_microstructure
 from .replay_pipeline import ReplayPipeline
 from .replay_tradeflow import ReplayTradeFlow
 
 
 class ReplayFusion:
-    def __init__(self):
-        self.board_pipeline = ReplayPipeline()
+    def __init__(self, *, profile_name: str = "bitflyer"):
+        self.board_pipeline = ReplayPipeline(
+            exchange_profile=create_exchange_profile(profile_name),
+        )
         self.tradeflow = ReplayTradeFlow()
         self.last_board_result: Optional[Dict] = None
 

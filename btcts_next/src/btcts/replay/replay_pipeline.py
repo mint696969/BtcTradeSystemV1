@@ -7,18 +7,33 @@ from typing import Dict, List, Optional
 
 from btcts.ingestion.event_types import EventType
 from btcts.ingestion.l2_canonical.orderbook.book_rebuilder import OrderBookRebuilder
+from btcts.market_engine.profiles.base import ExchangeProfile
 from btcts.processing.l3_market_semantics.orderbook import (
     SignalState,
     build_liquidity_payload,
     build_signal_events,
+    resolve_orderbook_semantic_policy,
 )
 
 
 class ReplayPipeline:
-    def __init__(self, *, semantic_policy: Optional[Dict] = None):
+    def __init__(
+        self,
+        *,
+        semantic_policy: Optional[Dict] = None,
+        exchange_profile: ExchangeProfile | None = None,
+    ):
         self.rebuilder = OrderBookRebuilder()
         self.signal_state = SignalState()
-        self.semantic_policy = dict(semantic_policy or {})
+        self.exchange_profile = exchange_profile
+        baseline_policy = None
+        if self.exchange_profile is not None:
+            baseline_policy = self.exchange_profile.orderbook_semantic_policy()
+
+        self.semantic_policy = resolve_orderbook_semantic_policy(
+            baseline_policy=baseline_policy,
+            override_policy=semantic_policy,
+        )
 
     def process_record(self, record: Dict) -> Optional[Dict]:
         record_type = str(record.get("record_type") or "")

@@ -9,6 +9,12 @@ from btcts.core import paths as core_paths
 import pandas as pd
 import streamlit as st
 
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.replay import (
     list_experiment_sessions,
     list_replay_sessions,
@@ -17,8 +23,8 @@ from btcts.replay import (
 )
 
 AUDIT_LOG = core_paths.logs_dir(ensure=False) / "audit.jsonl"
-REPLAY_ROOT = Path(r"E:\btc_ts\replay")
-RESEARCH_ROOT = Path(r"E:\btc_ts\research")
+REPLAY_ROOT = core_paths.replay_dir(ensure=False)
+RESEARCH_ROOT = core_paths.research_dir(ensure=False)
 
 
 def _read_recent_audit(lines: int = 120) -> list[dict]:
@@ -76,6 +82,7 @@ def _latest_experiment_payload():
 
 def render():
     st.header("System Logs")
+    summary_widget = load_market_summary_widget_model()
 
     audit_rows = _read_recent_audit(lines=120)
     replay_payload = _latest_replay_payload()
@@ -138,3 +145,6 @@ def render():
                 st.dataframe(pd.DataFrame(strategy_reports), width="stretch")
             else:
                 st.warning("strategy_reports が空です。")
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))

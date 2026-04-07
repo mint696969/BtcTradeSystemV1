@@ -15,8 +15,12 @@ if str(_SRC_ROOT) not in sys.path:
 
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_overview,
+    load_market_summary_bundle,
+    load_market_summary_status_payload,
+    load_market_summary_widget_model,
     market_monitor_metrics,
     market_state_status_caption,
+    market_summary_status_caption,
 )
 from btcts.market_engine.config import MarketEngineConfig
 from btcts.market_engine.market_state.schema import MarketStateRecord
@@ -54,6 +58,12 @@ def main() -> int:
         trust_state=TrustState.TRUSTED,
         boundary_reason=BoundaryReason.NONE,
         continuity_state="continuous",
+        interpretation_bucket="allow_structural_use",
+        interpretation_reason="healthy_continuity",
+        interpretation_policy={
+            "mode": "continuous_trusted",
+            "review_required": False,
+        },
         best_bid=100.5,
         best_ask=101.0,
         spread=0.5,
@@ -96,6 +106,37 @@ def main() -> int:
     assert "trust=trusted" in caption
     assert "boundary=none" in caption
     assert "series=bf-sess-1:series:100" in caption
+
+    summary = load_market_summary_bundle(exchange="bitflyer", symbol_raw="BTC_JPY")
+    assert summary.summary_type == "market_summary"
+    assert summary.market_uid == "bitflyer.spot.BTC_JPY"
+    assert summary.trust_state == "trusted"
+    assert summary.continuity_state == "continuous"
+    assert summary.interpretation_bucket == "allow_structural_use"
+
+    summary_caption = market_summary_status_caption(summary)
+    assert "freshness=" in summary_caption
+    assert "trust=trusted" in summary_caption
+    assert "series=bf-sess-1:series:100" in summary_caption
+
+    summary_payload = load_market_summary_status_payload(exchange="bitflyer", symbol_raw="BTC_JPY")
+    assert summary_payload["summary_type"] == "market_summary"
+    assert summary_payload["market_uid"] == "bitflyer.spot.BTC_JPY"
+    assert summary_payload["trust_state"] == "trusted"
+    assert summary_payload["continuity_state"] == "continuous"
+    assert summary_payload["interpretation_bucket"] == "allow_structural_use"
+    assert isinstance(summary_payload["notable_events"], list)
+    assert isinstance(summary_payload["alert_candidates"], list)
+
+    widget_model = load_market_summary_widget_model(exchange="bitflyer", symbol_raw="BTC_JPY")
+    assert widget_model.widget_kind == "market_summary"
+    assert widget_model.freshness_key in {"LIVE", "QUIET", "STALE", "UNKNOWN"}
+    assert widget_model.trust_key == "trusted"
+    assert widget_model.continuity_key == "continuous"
+    assert widget_model.interpretation_key == "allow_structural_use"
+    assert widget_model.source_kind == "market_state_preferred"
+    assert isinstance(widget_model.notable_tags, list)
+    assert isinstance(widget_model.alert_tags, list)
 
     saved = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
     assert saved["market_uid"] == "bitflyer.spot.BTC_JPY"

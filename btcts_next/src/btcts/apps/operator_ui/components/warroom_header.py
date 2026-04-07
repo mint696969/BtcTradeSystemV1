@@ -9,6 +9,12 @@ from btcts.apps.operator_ui.components.live_bridge import (
     latest_live_board_metrics,
     recent_live_tradeflow_metrics,
 )
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.components.research_bridge import (
     board_signal_metrics,
     latest_best_strategy_name,
@@ -176,6 +182,8 @@ def render():
         st.warning(get_text(lang, "warroom_header_missing_data"))
         return
 
+    summary_widget = load_market_summary_widget_model()
+
     regime = state.get("regime") or "unknown"
     best_strategy = state.get("best_strategy") or "-"
 
@@ -216,5 +224,8 @@ def render():
             source=state.get("source", "unknown"),
         )
     )
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     st.divider()

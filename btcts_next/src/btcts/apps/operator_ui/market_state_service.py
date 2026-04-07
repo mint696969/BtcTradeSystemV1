@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from btcts.core import paths as core_paths
+from btcts.processing.l4_consumer_models.shared import (
+    MarketSummary,
+    MarketSummaryBuildInput,
+    build_market_summary,
+)
 
 
 def market_state_root() -> Path:
@@ -197,3 +202,30 @@ def load_latest_market_state(
 
     rows = _read_jsonl_rows(latest_part)
     return _preferred_market_state_row(rows)
+
+
+def load_latest_market_summary(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+    state_type: str = "market.overview",
+) -> MarketSummary:
+    row = load_latest_market_state(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+        state_type=state_type,
+    )
+    diagnostics = market_state_diagnostics(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+        state_type=state_type,
+    )
+    source_kind = "market_state_preferred" if row else None
+
+    return build_market_summary(
+        MarketSummaryBuildInput(
+            market_state_row=row,
+            diagnostics=diagnostics,
+            source_kind=source_kind,
+        )
+    )

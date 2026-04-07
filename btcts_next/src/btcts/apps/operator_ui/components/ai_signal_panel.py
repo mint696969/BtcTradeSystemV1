@@ -5,6 +5,12 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.components.research_bridge import (
     board_signal_metrics,
     latest_best_strategy_name,
@@ -98,6 +104,7 @@ def render():
     delta = flow.get("trade_delta")
     regime = latest_regime_name(experiment_payload)
     best_strategy = latest_best_strategy_name(experiment_payload)
+    summary_widget = load_market_summary_widget_model()
 
     regime_label = get_text(lang, "ai_signal_value_range")
     if regime in {"trend_up", "trend_down"}:
@@ -152,5 +159,8 @@ def render():
         f"best_strategy={best_strategy} / replay_ts={replay_ts} / "
         f"source={source_label}"
     )
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     st.divider()

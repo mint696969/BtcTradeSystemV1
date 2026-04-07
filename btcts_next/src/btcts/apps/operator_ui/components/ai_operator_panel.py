@@ -4,6 +4,12 @@
 from __future__ import annotations
 
 import streamlit as st
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.decision_log_store import append_decision
 from btcts.apps.operator_ui.ai_memory_store import (
     append_memory,
@@ -52,6 +58,8 @@ def render():
         st.warning(get_text(lang, "ai_operator_missing_data"))
         st.divider()
         return
+
+    summary_widget = load_market_summary_widget_model()
 
     latest_memory_entry = {
         "spread": state["spread"],
@@ -168,5 +176,8 @@ def render():
             f"action={watch_note.get('action')} / "
             f"risk={watch_note.get('risk')}"
         )
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     st.divider()

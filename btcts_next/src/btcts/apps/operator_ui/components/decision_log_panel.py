@@ -5,6 +5,12 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.decision_log_store import (
     decision_log_jsonl_path,
     load_recent_decisions,
@@ -29,6 +35,7 @@ def render():
 
     rows = st.session_state.ai_operator_decision_log[:5]
     persisted_flag = st.session_state.get("ai_operator_decision_persisted")
+    summary_widget = load_market_summary_widget_model()
 
     if persisted_flag is False:
         st.warning(get_text(lang, "decision_log_persist_failed"))
@@ -130,5 +137,8 @@ def render():
             ok = overwrite_decisions([])
             st.session_state.ai_operator_decision_persisted = ok
             st.rerun()
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     st.divider()

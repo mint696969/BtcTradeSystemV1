@@ -291,6 +291,16 @@ class BitflyerProfile(ExchangeProfile):
             "review_observe_best_gap_abs": self.review_observe_best_gap_abs,
         }
 
+    def orderbook_semantic_policy(self) -> dict[str, Any]:
+        return {
+            "pressure_threshold": 0.20,
+            "wall_ratio_threshold": 0.30,
+            "wall_near_rank_threshold": 5,
+            "pull_threshold": 0.20,
+            "pull_near_levels": 3,
+            "strong_pull_threshold": 0.40,
+        }
+
     def build_snapshot_drift_review_summary(
         self,
         normalized_events: list[dict[str, Any]],

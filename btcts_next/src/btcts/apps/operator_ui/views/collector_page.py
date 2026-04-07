@@ -26,6 +26,12 @@ from btcts.apps.operator_ui.components.live_bridge import (
     collector_runtime_snapshot,
     read_recent_audit_events,
 )
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.collector_state_service import load_state
 from btcts.apps.operator_ui.market_state_service import market_state_diagnostics
@@ -307,6 +313,7 @@ def render():
     origin_continuity = status_state.get("origin_continuity", {}) if isinstance(status_state, dict) else {}
     state_dir_info = collector_state.get("state_dir", {})
     market_state_info = market_state_diagnostics()
+    summary_widget = load_market_summary_widget_model()
     recent_audit_events = read_recent_audit_events(lines=200)
     origin_audit_summary = _origin_audit_summary(recent_audit_events)
 
@@ -506,6 +513,9 @@ def render():
             st.info(get_text(lang, "collector_msg_hot_remaining_unavailable"))
 
     st.caption(get_text(lang, "collector_page_caption"))
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     render_origin_continuity_summary_section(
         lang=lang,

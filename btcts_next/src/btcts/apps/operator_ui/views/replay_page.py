@@ -8,7 +8,14 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.ui_text import get_text
+from btcts.core import paths as core_paths
 from btcts.replay import (
     build_regime_report,
     build_strategy_report,
@@ -20,7 +27,7 @@ from btcts.replay import (
 from btcts.replay.strategy_compare import compare_strategies
 from btcts.replay.strategy_registry import STRATEGY_REGISTRY
 
-REPLAY_ROOT = Path(r"E:\btc_ts\replay")
+REPLAY_ROOT = core_paths.replay_dir(ensure=False)
 
 
 def _sessions_df() -> pd.DataFrame:
@@ -107,6 +114,7 @@ def render():
 
     st.title(get_text(lang, "replay_title"))
     st.caption("Replay export / report / results / sandbox を閲覧する bridge")
+    summary_widget = load_market_summary_widget_model()
 
     tab1, tab2, tab3 = st.tabs(
         [
@@ -414,3 +422,6 @@ def render():
                 st.warning("Replay results がありません。")
         else:
             st.warning("Replay session が選択されていません。")
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))

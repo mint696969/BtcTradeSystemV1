@@ -10,6 +10,7 @@ from btcts.ingestion.l2_canonical.orderbook.book_state import OrderBookState
 from btcts.processing.features.orderbook.book_features import depth_summary
 
 from .liquidity_signals import liquidity_pressure_signal, liquidity_pull_signal, wall_signal
+from .semantic_profile import OrderbookSemanticProfile
 
 
 def _normalize_board_event(event: Dict) -> Dict:
@@ -30,13 +31,10 @@ def build_liquidity_payload(
     semantic_policy: Optional[Dict] = None,
 ) -> Optional[Dict]:
     normalized = _normalize_board_event(canonical_event)
-    policy = semantic_policy or {}
-    pressure_threshold = float(policy.get("pressure_threshold", 0.20))
-    wall_ratio_threshold = float(policy.get("wall_ratio_threshold", 0.30))
-    wall_near_rank_threshold = int(policy.get("wall_near_rank_threshold", 5))
-    pull_threshold = float(policy.get("pull_threshold", 0.20))
-    pull_near_levels = int(policy.get("pull_near_levels", min(3, levels)))
-    strong_pull_threshold = float(policy.get("strong_pull_threshold", 0.40))
+    profile = OrderbookSemanticProfile.from_policy(
+        semantic_policy,
+        levels=levels,
+    )
 
     prev_book: Optional[OrderBookState] = None
     if rebuilder.snapshot_loaded:
@@ -53,13 +51,13 @@ def build_liquidity_payload(
     pressure = liquidity_pressure_signal(
         curr_book,
         levels=levels,
-        pressure_threshold=pressure_threshold,
+        pressure_threshold=profile.pressure_threshold,
     )
     wall = wall_signal(
         curr_book,
         levels=wall_levels,
-        wall_ratio_threshold=wall_ratio_threshold,
-        near_rank_threshold=wall_near_rank_threshold,
+        wall_ratio_threshold=profile.wall_ratio_threshold,
+        near_rank_threshold=profile.wall_near_rank_threshold,
     )
 
     bid_pull = None
@@ -70,31 +68,24 @@ def build_liquidity_payload(
             curr_book,
             side="bid",
             levels=levels,
-            pull_threshold=pull_threshold,
-            near_levels=pull_near_levels,
-            strong_pull_threshold=strong_pull_threshold,
+            pull_threshold=profile.pull_threshold,
+            near_levels=profile.pull_near_levels,
+            strong_pull_threshold=profile.strong_pull_threshold,
         )
         ask_pull = liquidity_pull_signal(
             prev_book,
             curr_book,
             side="ask",
             levels=levels,
-            pull_threshold=pull_threshold,
-            near_levels=pull_near_levels,
-            strong_pull_threshold=strong_pull_threshold,
+            pull_threshold=profile.pull_threshold,
+            near_levels=profile.pull_near_levels,
+            strong_pull_threshold=profile.strong_pull_threshold,
         )
 
     return {
         "event_type": canonical_event.get("event_type"),
         "rebuild_ready": rebuilder.snapshot_loaded,
-        "semantic_policy": {
-            "pressure_threshold": pressure_threshold,
-            "wall_ratio_threshold": wall_ratio_threshold,
-            "wall_near_rank_threshold": wall_near_rank_threshold,
-            "pull_threshold": pull_threshold,
-            "pull_near_levels": pull_near_levels,
-            "strong_pull_threshold": strong_pull_threshold,
-        },
+        "semantic_policy": profile.to_policy(),
         "best_bid": curr_book.best_bid(),
         "best_ask": curr_book.best_ask(),
         "spread": curr_book.spread(),

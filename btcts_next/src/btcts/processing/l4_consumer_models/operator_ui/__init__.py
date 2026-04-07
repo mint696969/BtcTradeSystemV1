@@ -10,3 +10,15 @@ Rules:
 - do not own layout or CSS
 - do not produce widget-library-final render shapes
 """
+
+from .market_summary_adapter import (
+    MarketSummaryWidgetModel,
+    market_summary_status_payload,
+    market_summary_widget_model,
+)
+
+__all__ = [
+    "MarketSummaryWidgetModel",
+    "market_summary_status_payload",
+    "market_summary_widget_model",
+]

@@ -6,7 +6,16 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from btcts.apps.operator_ui.market_state_service import load_latest_market_state
+from btcts.apps.operator_ui.market_state_service import (
+    load_latest_market_state,
+    load_latest_market_summary,
+)
+from btcts.processing.l4_consumer_models.operator_ui import (
+    MarketSummaryWidgetModel,
+    market_summary_status_payload,
+    market_summary_widget_model,
+)
+from btcts.processing.l4_consumer_models.shared import MarketSummary
 
 
 def load_market_overview(
@@ -19,6 +28,42 @@ def load_market_overview(
         symbol_raw=symbol_raw,
         state_type="market.overview",
     )
+
+
+def load_market_summary_bundle(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+) -> MarketSummary:
+    return load_latest_market_summary(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+        state_type="market.overview",
+    )
+
+
+def load_market_summary_status_payload(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+) -> dict[str, Any]:
+    summary = load_market_summary_bundle(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+    )
+    return market_summary_status_payload(summary)
+
+
+def load_market_summary_widget_model(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+) -> MarketSummaryWidgetModel:
+    summary = load_market_summary_bundle(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+    )
+    return market_summary_widget_model(summary)
 
 
 def market_state_age_seconds(state: dict[str, Any] | None) -> float | None:
@@ -100,4 +145,22 @@ def market_state_status_caption(state: dict[str, Any] | None) -> str:
         f"freshness={freshness} / age={age_text} / trust={trust} / "
         f"boundary={boundary} / continuity={continuity} / "
         f"interpretation={interpretation} / series={series_id}"
+    )
+
+
+def market_summary_status_caption(summary: MarketSummary | None) -> str:
+    if summary is None:
+        return "market_summary unavailable"
+
+    trust = summary.trust_state or "-"
+    continuity = summary.continuity_state or "-"
+    interpretation = summary.interpretation_bucket or "-"
+    series_id = summary.source_series_id or "-"
+    freshness = summary.freshness or "UNKNOWN"
+
+    age_text = "-" if summary.age_sec is None else f"{summary.age_sec:.1f}s"
+    return (
+        f"freshness={freshness} / age={age_text} / trust={trust} / "
+        f"continuity={continuity} / interpretation={interpretation} / "
+        f"series={series_id}"
     )

@@ -27,6 +27,12 @@ from btcts.apps.operator_ui.components.health_top_panels import (
     render_overview_summary_panel,
     render_read_guide_section,
 )
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.health_data_service import load_health_snapshot
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.ui_time import format_ui_ts
@@ -358,6 +364,7 @@ def render():
     selected_range_key = _render_health_range_selector(lang)
 
     snapshot = load_health_snapshot(range_key=selected_range_key)
+    summary_widget = load_market_summary_widget_model()
 
     collector_state = snapshot.get("collector_state") or {}
     status_payload = collector_state.get("status") or {}
@@ -540,6 +547,9 @@ def render():
         get_text=get_text,
         section_title_with_range=_section_title_with_range,
     )
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     _render_health_diagnostics(lang)
 

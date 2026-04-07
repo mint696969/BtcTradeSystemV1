@@ -11,6 +11,12 @@ from btcts.apps.operator_ui.components.live_bridge import (
     latest_event,
     read_recent_audit_events,
 )
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 
 from btcts.apps.operator_ui.ui_text import get_text
 
@@ -29,6 +35,7 @@ def render():
     total_events = len(events)
     avg_latency = average_latency(events)
     feed_state = feed_state_from_events(events)
+    summary_widget = load_market_summary_widget_model()
     load_state = "BUSY" if avg_latency is not None and avg_latency >= 450 else "NORMAL"
     max_latency = max(
         [float(row["latency_ms"]) for row in events if row.get("latency_ms") is not None],
@@ -81,5 +88,8 @@ def render():
         f"{latest.get('source')}"
     )
     st.caption(f"{get_text(lang, 'execution_feed_latest')}: {latest_text}")
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     st.divider()

@@ -18,6 +18,9 @@ from btcts.apps.operator_ui.components.market_monitor_presenter import (
     interpretation_caption,
     source_caption,
 )
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.components.slot_definitions import (
     overlay_contract_caption,
     overlay_contract_metric_rows,
@@ -55,6 +58,8 @@ def render(
 
     board = state_bundle["board"]
     state = state_bundle["state"]
+    summary = state_bundle["summary"]
+    summary_widget = state_bundle["summary_widget"]
     state_diag = state_bundle["state_diag"]
     source_label = state_bundle["source_label"]
 
@@ -62,7 +67,7 @@ def render(
     bid_depth = board.get("bid_depth")
     ask_depth = board.get("ask_depth")
     imbalance = board.get("imbalance")
-    status_values = monitor_status_values(board, state)
+    status_values = monitor_status_values(board, state, summary)
     trust_state = status_values["trust_state"]
     continuity_state = status_values["continuity_state"]
     interpretation_bucket = status_values["interpretation_bucket"]
@@ -93,6 +98,9 @@ def render(
             preferred_freshness=preferred_freshness,
         )
     )
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     interpretation_reason = status_values["interpretation_reason"]
     if interpretation_bucket or interpretation_reason or continuity_state:

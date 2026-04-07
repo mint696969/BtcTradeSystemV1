@@ -10,15 +10,21 @@ import pandas as pd
 import streamlit as st
 
 from btcts.apps.operator_ui.ai_memory_store import memory_jsonl_path
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.replay import list_experiment_sessions, load_experiment_session
 from btcts.core import paths as core_paths
 
 AUDIT_LOG = core_paths.logs_dir(ensure=False) / "audit.jsonl"
-COLLECTOR_RAW_ROOT = Path(r"E:\btc_ts\data\collector_raw")
-COLLECTOR_COMPACT_ROOT = Path(r"E:\btc_ts\data\collector_compact")
-MARKET_DATA_ROOT = Path(r"E:\btc_ts\data\market_data")
-RESEARCH_ROOT = Path(r"E:\btc_ts\research")
+COLLECTOR_RAW_ROOT = core_paths.data_dir(ensure=False) / "collector_raw"
+COLLECTOR_COMPACT_ROOT = core_paths.data_dir(ensure=False) / "collector_compact"
+MARKET_DATA_ROOT = core_paths.data_dir(ensure=False) / "market_data"
+RESEARCH_ROOT = core_paths.research_dir(ensure=False)
 
 
 def _read_tail_jsonl(path: Path, lines: int = 120) -> list[dict]:
@@ -172,6 +178,7 @@ def render():
     st.caption(get_text(lang, "research_subtitle"))
 
     replay_ctx = st.session_state.get("research_replay_context")
+    summary_widget = load_market_summary_widget_model()
 
     if replay_ctx:
         st.info("Replay Context から遷移中です。現在の分析条件を表示します。")
@@ -432,3 +439,6 @@ def render():
             else:
                 st.markdown("#### Strategy Reports")
                 st.dataframe(reports_df, width="stretch")
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))

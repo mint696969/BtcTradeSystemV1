@@ -67,6 +67,10 @@ class ExchangeProfile(ABC):
         """Return profile hints for onboarding/audit bridges."""
         return self.review_policy()
 
+    def orderbook_semantic_policy(self) -> dict[str, Any]:
+        """Return baseline Layer3 orderbook semantic threshold policy for this venue."""
+        return {}
+
     def build_snapshot_drift_review_summary(
         self,
         normalized_events: list[dict[str, Any]],

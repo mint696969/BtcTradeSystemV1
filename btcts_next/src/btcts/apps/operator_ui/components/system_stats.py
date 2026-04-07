@@ -6,6 +6,12 @@ from __future__ import annotations
 import streamlit as st
 
 from btcts.apps.operator_ui.components.live_bridge import collector_runtime_snapshot
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 
 
@@ -15,6 +21,7 @@ def render():
     st.markdown(f"### {get_text(lang, 'system_stats_title')}")
 
     runtime = collector_runtime_snapshot()
+    summary_widget = load_market_summary_widget_model()
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Live Mode", runtime["mode"])
@@ -38,5 +45,8 @@ def render():
         f"health_status={runtime.get('live_summary', {}).get('health_status')} / "
         f"daemon_status={runtime.get('live_summary', {}).get('daemon_status')}"
     )
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     st.divider()

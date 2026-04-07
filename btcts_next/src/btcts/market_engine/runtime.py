@@ -8,7 +8,7 @@ from typing import Any
 
 from btcts.market_engine.execution.execution_facade import ExecutionFacade
 from btcts.processing.l3_market_semantics.continuity import InterpretationEngine
-from btcts.market_engine.profiles import BitflyerProfile
+from btcts.market_engine.profiles import create_exchange_profile
 from btcts.market_engine.config import MarketEngineConfig, load_market_engine_config
 from btcts.market_engine.market_state.projector import MarketStateProjector
 from btcts.market_engine.market_state.schema import MarketStateRecord
@@ -24,7 +24,7 @@ class RuntimeStepResult:
 class MarketEngineRuntime:
     def __init__(self, cfg: MarketEngineConfig | None = None) -> None:
         self._cfg = cfg or load_market_engine_config()
-        self._profile = BitflyerProfile()
+        self._profile = create_exchange_profile(str(self._cfg.profile_name))
         self._engine = ExecutionFacade(self._profile)
         self._interpretation = InterpretationEngine()
         self._projector = MarketStateProjector()

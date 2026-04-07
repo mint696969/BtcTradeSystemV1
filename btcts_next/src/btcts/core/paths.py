@@ -110,3 +110,30 @@ def health_paths() -> dict:
         "schema_dir": str(schema_dir(ensure=False)),
         "defaults_dir": str(defaults_dir(ensure=False)),
     }
+
+
+def runtime_root(*, ensure: bool = True) -> Path:
+    """
+    外部運用ルートの基準ディレクトリ。
+    典型:
+    - data_dir = E:\\btc_ts\\data
+    - logs_dir = E:\\btc_ts\\logs
+    のとき E:\\btc_ts を返す。
+
+    既定 repo fallback では btcts_next を返す。
+    """
+    data_parent = data_dir(ensure=False).parent
+    logs_parent = logs_dir(ensure=False).parent
+
+    p = data_parent if data_parent == logs_parent else data_parent
+    return _ensure_dir(p) if ensure else p
+
+
+def replay_dir(*, ensure: bool = True) -> Path:
+    p = runtime_root(ensure=False) / "replay"
+    return _ensure_dir(p) if ensure else p
+
+
+def research_dir(*, ensure: bool = True) -> Path:
+    p = runtime_root(ensure=False) / "research"
+    return _ensure_dir(p) if ensure else p

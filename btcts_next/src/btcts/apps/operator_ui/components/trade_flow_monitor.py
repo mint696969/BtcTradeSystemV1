@@ -10,6 +10,12 @@ from btcts.apps.operator_ui.components.research_bridge import (
     load_latest_replay_payload,
     tradeflow_metrics,
 )
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.ui_time import format_ui_ts
 from btcts.apps.operator_ui.components.slot_definitions import (
@@ -67,6 +73,7 @@ def render(
     sell_vol = flow.get("sell_volume")
     delta = flow.get("trade_delta")
     trade_count = flow.get("trade_count")
+    summary_widget = load_market_summary_widget_model()
 
     c1, c2, c3 = st.columns(3)
 
@@ -95,5 +102,8 @@ def render(
                 names=", ".join(micro_names[:5]),
             )
         )
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     st.divider()

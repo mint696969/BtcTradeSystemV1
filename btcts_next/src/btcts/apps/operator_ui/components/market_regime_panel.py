@@ -13,6 +13,12 @@ from btcts.apps.operator_ui.components.research_bridge import (
     load_latest_replay_payload,
 )
 
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    summary_widget_caption,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components.live_bridge import latest_live_board_metrics
 
@@ -101,6 +107,7 @@ def render():
         return
 
     regime = latest_regime_name(experiment_payload)
+    summary_widget = load_market_summary_widget_model()
     spread_state = _spread_state(board.get("spread"), lang)
     pressure = _pressure_label(board.get("pressure_bias"), lang)
 
@@ -124,5 +131,8 @@ def render():
     )
 
     st.caption(f"source={source_label}")
+
+    if summary_widget:
+        st.caption(summary_widget_caption(summary_widget))
 
     st.divider()

@@ -6,6 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
+from btcts.market_engine.profiles import create_exchange_profile
+
 from .replay_clock import ReplayClock
 from .replay_engine import ReplayEngine
 from .replay_pipeline import ReplayPipeline
@@ -13,13 +15,21 @@ from .replay_session import ReplaySession
 from .replay_source import JsonlReplaySource
 
 
-def run_replay(name: str, paths: Iterable[Path], *, speed: float = 1000.0) -> ReplaySession:
+def run_replay(
+    name: str,
+    paths: Iterable[Path],
+    *,
+    speed: float = 1000.0,
+    profile_name: str = "bitflyer",
+) -> ReplaySession:
     source = JsonlReplaySource(paths)
     records = source.load()
 
     clock = ReplayClock(speed=speed)
     engine = ReplayEngine(records, clock=clock)
-    pipeline = ReplayPipeline()
+    pipeline = ReplayPipeline(
+        exchange_profile=create_exchange_profile(profile_name),
+    )
 
     session = ReplaySession(
         name=name,
