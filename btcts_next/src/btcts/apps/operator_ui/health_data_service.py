@@ -29,6 +29,10 @@ from btcts.apps.operator_ui.market_state_service import (
 )
 from btcts.core import io
 from btcts.core import paths as core_paths
+from btcts.processing.l3_market_semantics import (
+    build_event_usage_summary,
+    resolve_usage_grade,
+)
 
 
 def _audit_log_path() -> Path:
@@ -352,6 +356,158 @@ def build_recent_layer3_series(
     return out
 
 
+
+def build_layer3_semantic_usage_rows(
+    *,
+    interpretation_bucket: str | None,
+) -> list[dict[str, Any]]:
+    bucket = str(interpretation_bucket or "").strip() or None
+    event_families = [
+        "pressure",
+        "wall",
+        "support_resistance",
+        "pull",
+        "depth",
+        "spread",
+        "sweep",
+        "absorption",
+    ]
+
+    out: list[dict[str, Any]] = []
+    for event_family in event_families:
+        out.append(
+            {
+                "source_kind": "layer3_semantic_usage_observer",
+                "interpretation_bucket": bucket,
+                "event_family": event_family,
+                "usage_grade": resolve_usage_grade(bucket, event_family),
+            }
+        )
+
+    return out
+
+
+
+def build_layer3_semantic_usage_summary(
+    *,
+    interpretation_bucket: str | None,
+    market_latest: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    latest = dict(market_latest or {})
+    latest_summary = latest.get("semantic_usage_summary")
+    latest_observer_status = latest.get("semantic_observer_status")
+
+    if isinstance(latest_summary, dict) and latest_summary:
+        return {
+            "source_kind": "market_state_semantic_usage_summary",
+            **latest_summary,
+            "observer_status": (
+                latest_observer_status
+                or latest_summary.get("observer_status")
+                or "unknown"
+            ),
+        }
+
+    summary = build_event_usage_summary(
+        interpretation_bucket,
+    )
+    return {
+        "source_kind": "layer3_semantic_usage_summary",
+        **summary,
+    }
+
+
+def build_layer3_runtime_contract_summary(
+    *,
+    market_latest: dict[str, Any] | None = None,
+    market_diag: dict[str, Any] | None = None,
+    semantic_usage_summary: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    latest = dict(market_latest or {})
+    diag = dict(market_diag or {})
+    semantic_summary = dict(semantic_usage_summary or {})
+
+    observer_present = latest.get("semantic_observer_status") is not None
+    usage_summary_present = isinstance(latest.get("semantic_usage_summary"), dict) and bool(
+        latest.get("semantic_usage_summary")
+    )
+    source_series_present = bool(latest.get("source_series_id"))
+    freshness = str(diag.get("preferred_row_freshness") or "UNKNOWN")
+
+    wiring_status = "missing"
+    if observer_present and usage_summary_present:
+        wiring_status = "wired"
+    elif semantic_summary.get("source_kind") == "layer3_semantic_usage_summary":
+        wiring_status = "fallback"
+
+    return {
+        "source_kind": "layer3_runtime_contract_summary",
+        "wiring_status": wiring_status,
+        "observer_present": observer_present,
+        "usage_summary_present": usage_summary_present,
+        "source_series_present": source_series_present,
+        "freshness": freshness,
+        "semantic_summary_source": str(semantic_summary.get("source_kind") or "unknown"),
+    }
+
+
+def build_layer3_orderbook_runtime_summary(
+    *,
+    market_latest: dict[str, Any] | None = None,
+    market_diag: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    latest = dict(market_latest or {})
+    diag = dict(market_diag or {})
+
+    semantics_summary = latest.get("orderbook_semantics_summary")
+    if not isinstance(semantics_summary, dict):
+        semantics_summary = {}
+
+    near_wall_present = bool(semantics_summary.get("near_wall"))
+    support_present = bool(semantics_summary.get("support"))
+    resistance_present = bool(semantics_summary.get("resistance"))
+    persistence_present = bool(semantics_summary.get("persistence"))
+
+    present_count = sum(
+        [
+            near_wall_present,
+            support_present,
+            resistance_present,
+            persistence_present,
+        ]
+    )
+
+    explicit_contract_status = str(latest.get("orderbook_semantics_contract_status") or "").strip()
+    contract_status_source = "market_state_orderbook_contract_status"
+
+    wiring_status = explicit_contract_status
+    if not wiring_status:
+        contract_status_source = "orderbook_summary_inference"
+        wiring_status = "missing"
+        if present_count >= 4:
+            wiring_status = "wired"
+        elif present_count > 0:
+            wiring_status = "partial"
+
+    return {
+        "source_kind": "layer3_orderbook_runtime_summary",
+        "contract_status_source": contract_status_source,
+        "wiring_status": wiring_status,
+        "freshness": str(diag.get("preferred_row_freshness") or "UNKNOWN"),
+        "near_wall_present": near_wall_present,
+        "near_wall_side": (semantics_summary.get("near_wall") or {}).get("side"),
+        "support_present": support_present,
+        "support_side": (semantics_summary.get("support") or {}).get("side"),
+        "resistance_present": resistance_present,
+        "resistance_side": (semantics_summary.get("resistance") or {}).get("side"),
+        "persistence_present": persistence_present,
+        "persistence_event_name": (semantics_summary.get("persistence") or {}).get("event_name"),
+        "persistence_side": (semantics_summary.get("persistence") or {}).get("side"),
+        "persistence_observable": bool(latest.get("orderbook_persistence_observable")),
+        "present_count": present_count,
+    }
+
+
 def _build_continuity_rail(
     *,
     range_key: str,
@@ -581,6 +737,15 @@ def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
     market_latest = load_latest_market_state()
     market_diag = market_state_diagnostics()
 
+    layer3_interpretation_bucket = (
+        market_latest.get("interpretation_bucket")
+        or market_diag.get("preferred_row_interpretation_bucket")
+    )
+    layer3_semantic_usage_summary = build_layer3_semantic_usage_summary(
+        interpretation_bucket=layer3_interpretation_bucket,
+        market_latest=market_latest,
+    )
+
     rate_domains = state.get("rate_domains") or {}
     domain_names = list(state.get("domain_names") or [])
     shared_ip = state.get("shared_ip") or {}
@@ -612,6 +777,19 @@ def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
         "api_ws_series": build_recent_api_ws_series(range_key=range_key, include_in_progress=False),
         "rate_overlay": build_rate_limit_overlay(range_key=range_key, include_in_progress=False),
         "layer3_series": build_recent_layer3_series(range_key=range_key, include_in_progress=False),
+        "layer3_semantic_usage_rows": build_layer3_semantic_usage_rows(
+            interpretation_bucket=layer3_interpretation_bucket,
+        ),
+        "layer3_semantic_usage_summary": layer3_semantic_usage_summary,
+        "layer3_runtime_contract_summary": build_layer3_runtime_contract_summary(
+            market_latest=market_latest,
+            market_diag=market_diag,
+            semantic_usage_summary=layer3_semantic_usage_summary,
+        ),
+        "layer3_orderbook_runtime_summary": build_layer3_orderbook_runtime_summary(
+            market_latest=market_latest,
+            market_diag=market_diag,
+        ),
         "api_continuity_rail": build_api_continuity_rail(range_key=range_key),
         "ws_continuity_rail": build_ws_continuity_rail(range_key=range_key),
         "recent_anomalies": build_recent_anomaly_rows(max_items=12),

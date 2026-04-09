@@ -8,24 +8,7 @@ ensure_btcts_on_syspath()
 
 import json
 
-
-def _usage_grade(interpretation_bucket: str, event_kind: str) -> str:
-    if interpretation_bucket == "allow_structural_use":
-        return "strong"
-
-    if interpretation_bucket == "observe_only":
-        if event_kind == "pressure":
-            return "watch_weak"
-        if event_kind in {"wall", "pull"}:
-            return "watch"
-        if event_kind in {"sweep", "absorption"}:
-            return "tentative"
-        return "watch"
-
-    if interpretation_bucket == "reanchor_required":
-        return "invalid"
-
-    return "unknown"
+from btcts.processing.l3_market_semantics.event_usage_policy import resolve_usage_grade
 
 
 def main() -> int:
@@ -34,27 +17,30 @@ def main() -> int:
         "observe_only",
         "reanchor_required",
     ]
-    event_kinds = [
+    event_families = [
         "pressure",
         "wall",
+        "support_resistance",
         "pull",
+        "depth",
+        "spread",
         "sweep",
         "absorption",
     ]
 
     rows: list[dict[str, str]] = []
     for bucket in interpretation_buckets:
-        for event_kind in event_kinds:
+        for event_family in event_families:
             rows.append(
                 {
                     "interpretation_bucket": bucket,
-                    "event_kind": event_kind,
-                    "usage_grade": _usage_grade(bucket, event_kind),
+                    "event_family": event_family,
+                    "usage_grade": resolve_usage_grade(bucket, event_family),
                 }
             )
 
     report = {
-        "policy_version": "draft_2026-04-05",
+        "policy_version": "phase1_seed_2026-04-08",
         "rows": rows,
     }
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
+from ..event_usage_policy import enrich_event_contracts
 from .event_enrichment import (
     candidate_events,
     liquidity_depth_change_events,
@@ -182,4 +183,4 @@ def build_signal_events(prev_signal: Optional[Dict], curr_signal: Dict) -> List[
     events.extend(spread_change_events(prev_signal, curr_signal))
     events.extend(candidate_events(curr_signal))
 
-    return events
+    return enrich_event_contracts(events)

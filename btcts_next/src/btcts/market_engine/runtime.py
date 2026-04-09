@@ -61,6 +61,9 @@ class MarketEngineRuntime:
             book_state=result.book_state,
             series_state=result.series_state,
             zone_metadata=result.zone_metadata,
+            orderbook_semantics_contract_status=result.orderbook_semantics_contract_status,
+            orderbook_semantics_summary=result.orderbook_semantics_summary,
+            orderbook_persistence_observable=result.orderbook_persistence_observable,
         )
 
         output_path: str | None = None

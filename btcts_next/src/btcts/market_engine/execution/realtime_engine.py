@@ -3,9 +3,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
+from btcts.market_engine.market_state.live_orderbook_semantics import (
+    build_live_orderbook_semantics_summary,
+)
+from btcts.market_engine.market_state.orderbook_semantics_contract import (
+    empty_orderbook_semantics_summary,
+)
 from btcts.processing.l3_market_semantics.continuity import OrderbookEngine, SeriesEngine, TrustEngine
 from btcts.processing.l3_market_semantics.zone import ZoneEngine
 from btcts.processing.l3_market_semantics.continuity.models import BookState
@@ -18,6 +24,11 @@ class RealtimeStepResult:
     book_state: BookState
     zone_metadata: dict[str, Any]
     started_new_series: bool
+    orderbook_semantics_contract_status: str = "missing"
+    orderbook_semantics_summary: dict[str, Any] = field(
+        default_factory=empty_orderbook_semantics_summary,
+    )
+    orderbook_persistence_observable: bool = False
 
 
 class RealtimeEngine:
@@ -50,11 +61,23 @@ class RealtimeEngine:
                 book_state=trusted_book,
                 zone_policy=self._profile.build_zone_policy(trusted_book),
             )
+            (
+                orderbook_semantics_contract_status,
+                orderbook_semantics_summary,
+            ) = build_live_orderbook_semantics_summary(
+                prev_book_state=None,
+                book_state=zoned_book,
+                semantic_policy=self._profile.orderbook_semantic_policy(),
+            )
+
             return RealtimeStepResult(
                 series_state=series_step.series_state,
                 book_state=zoned_book,
                 zone_metadata=zone_metadata,
                 started_new_series=series_step.started_new_series,
+                orderbook_semantics_contract_status=orderbook_semantics_contract_status,
+                orderbook_semantics_summary=orderbook_semantics_summary,
+                orderbook_persistence_observable=False,
             )
 
         updated_book = self._orderbook_engine.apply_event(
@@ -73,9 +96,21 @@ class RealtimeEngine:
             book_state=trusted_book,
             zone_policy=self._profile.build_zone_policy(trusted_book),
         )
+        (
+            orderbook_semantics_contract_status,
+            orderbook_semantics_summary,
+        ) = build_live_orderbook_semantics_summary(
+            prev_book_state=current_book,
+            book_state=zoned_book,
+            semantic_policy=self._profile.orderbook_semantic_policy(),
+        )
+
         return RealtimeStepResult(
             series_state=series_step.series_state,
             book_state=zoned_book,
             zone_metadata=zone_metadata,
             started_new_series=series_step.started_new_series,
+            orderbook_semantics_contract_status=orderbook_semantics_contract_status,
+            orderbook_semantics_summary=orderbook_semantics_summary,
+            orderbook_persistence_observable=current_book is not None,
         )

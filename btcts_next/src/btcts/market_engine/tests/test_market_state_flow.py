@@ -123,6 +123,9 @@ def main() -> int:
         book_state=step2.book_state,
         series_state=step2.series_state,
         zone_metadata=step2.zone_metadata,
+        orderbook_semantics_contract_status=step2.orderbook_semantics_contract_status,
+        orderbook_semantics_summary=step2.orderbook_semantics_summary,
+        orderbook_persistence_observable=step2.orderbook_persistence_observable,
     )
 
     assert record.continuity_state in {"continuous", "resynced", None}
@@ -143,6 +146,24 @@ def main() -> int:
         "reanchor_required",
         None,
     }
+    assert record.semantic_observer_status in {
+        "healthy",
+        "caution",
+        "broken",
+        "unknown",
+    }
+    assert isinstance(record.semantic_usage_summary, dict)
+    assert "observer_status" in record.semantic_usage_summary
+    assert "total_rows" in record.semantic_usage_summary
+    assert record.orderbook_semantics_contract_status in {"missing", "partial"}
+    assert isinstance(record.orderbook_semantics_summary, dict)
+    assert set(record.orderbook_semantics_summary.keys()) == {
+        "near_wall",
+        "support",
+        "resistance",
+        "persistence",
+    }
+    assert record.orderbook_persistence_observable is True
     assert record.zone_density_metadata["mode"] == "hybrid"
 
     out = writer.write(
@@ -163,6 +184,23 @@ def main() -> int:
     assert saved["best_bid"] == 100.5
     assert saved["best_ask"] == 101.0
     assert saved["spread"] == 0.5
+    assert saved["semantic_observer_status"] in {
+        "healthy",
+        "caution",
+        "broken",
+        "unknown",
+    }
+    assert isinstance(saved["semantic_usage_summary"], dict)
+    assert "observer_status" in saved["semantic_usage_summary"]
+    assert saved["orderbook_semantics_contract_status"] in {"missing", "partial"}
+    assert isinstance(saved["orderbook_semantics_summary"], dict)
+    assert set(saved["orderbook_semantics_summary"].keys()) == {
+        "near_wall",
+        "support",
+        "resistance",
+        "persistence",
+    }
+    assert saved["orderbook_persistence_observable"] is True
     assert saved["zone_density_metadata"]["mode"] == "hybrid"
 
     print("ok")

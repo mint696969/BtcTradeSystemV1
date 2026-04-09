@@ -1,2 +1,20 @@
 # path: ./btcts_next/src/btcts/processing/l3_market_semantics/__init__.py
-# desc: Package marker for shared L3 market semantics layer.
+# desc: Public exports for shared L3 market semantics layer.
+
+from .event_usage_policy import (
+    build_event_usage_summary,
+    enrich_event_contract,
+    enrich_event_contracts,
+    resolve_event_family,
+    resolve_semantic_observer_status,
+    resolve_usage_grade,
+)
+
+__all__ = [
+    "build_event_usage_summary",
+    "enrich_event_contract",
+    "enrich_event_contracts",
+    "resolve_event_family",
+    "resolve_semantic_observer_status",
+    "resolve_usage_grade",
+]

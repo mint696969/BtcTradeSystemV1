@@ -22,10 +22,15 @@ class MarketStateRecord:
     interpretation_bucket: str | None
     interpretation_reason: str | None
     interpretation_policy: dict[str, Any]
-    best_bid: float | None
-    best_ask: float | None
-    spread: float | None
-    mid_price: float | None
+    semantic_observer_status: str | None = None
+    semantic_usage_summary: dict[str, Any] = field(default_factory=dict)
+    orderbook_semantics_contract_status: str | None = None
+    orderbook_semantics_summary: dict[str, Any] = field(default_factory=dict)
+    orderbook_persistence_observable: bool = False
+    best_bid: float | None = None
+    best_ask: float | None = None
+    spread: float | None = None
+    mid_price: float | None = None
     near_zone_bids: list[dict[str, Any]] = field(default_factory=list)
     near_zone_asks: list[dict[str, Any]] = field(default_factory=list)
     top_book_summary: dict[str, Any] = field(default_factory=dict)
@@ -48,6 +53,11 @@ class MarketStateRecord:
             "interpretation_bucket": self.interpretation_bucket,
             "interpretation_reason": self.interpretation_reason,
             "interpretation_policy": self.interpretation_policy,
+            "semantic_observer_status": self.semantic_observer_status,
+            "semantic_usage_summary": self.semantic_usage_summary,
+            "orderbook_semantics_contract_status": self.orderbook_semantics_contract_status,
+            "orderbook_semantics_summary": self.orderbook_semantics_summary,
+            "orderbook_persistence_observable": self.orderbook_persistence_observable,
             "best_bid": self.best_bid,
             "best_ask": self.best_ask,
             "spread": self.spread,

@@ -1,9 +1,9 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/app.py
 # desc: BTC-TS Operator UI のエントリ。Streamlit サイドバーで各 Operator ページを切り替える。
 
-import time
 import streamlit as st
 
+from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.views import (
     collector_page,
     health_page,
@@ -209,26 +209,36 @@ save_ui_state(
     }
 )
 
-auto_refresh_pages = {
-    "collector",
-    "warroom",
-    "health",
-    "logs",
-}
+selected_page_key = str(st.session_state.ui_selected_page_key)
+page_module = pages[selected_page_key]
 
-is_auto_refresh_target = st.session_state.ui_selected_page_key in auto_refresh_pages
+live_shell.reset_registered_slots(selected_page_key)
+page_module.render()
+
+is_slot_refresh_target = live_shell.page_supports_auto_refresh(selected_page_key)
+is_auto_refresh_target = selected_page_key == "logs" or is_slot_refresh_target
+
+effective_refresh_interval_sec = int(st.session_state.ui_refresh_interval)
+if is_slot_refresh_target:
+    slot_recommended_interval_sec = live_shell.page_auto_refresh_interval_sec(
+        selected_page_key,
+        default_sec=effective_refresh_interval_sec,
+    )
+    effective_refresh_interval_sec = min(
+        effective_refresh_interval_sec,
+        int(slot_recommended_interval_sec),
+    )
 
 if st.session_state.ui_auto_refresh and is_auto_refresh_target:
     st.sidebar.caption(
-        f"{get_text(lang, 'refresh_status_on')} / {st.session_state.ui_refresh_interval}s"
+        f"{get_text(lang, 'refresh_status_on')} / {effective_refresh_interval_sec}s"
     )
 else:
     st.sidebar.caption(get_text(lang, "refresh_status_off"))
 
-page_module = pages[st.session_state.ui_selected_page_key]
-page_module.render()
-
 # Auto refresh は live / monitor 系ページに限定する
-if st.session_state.ui_auto_refresh and is_auto_refresh_target:
-    time.sleep(st.session_state.ui_refresh_interval)
-    st.rerun()
+live_shell.render_page_auto_refresh(
+    enabled=bool(st.session_state.ui_auto_refresh and is_auto_refresh_target),
+    interval_sec=effective_refresh_interval_sec,
+    page_key=selected_page_key,
+)

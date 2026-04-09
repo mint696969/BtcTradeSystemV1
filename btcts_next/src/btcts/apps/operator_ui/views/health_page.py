@@ -7,7 +7,6 @@ import pandas as pd
 import streamlit as st
 
 from btcts.apps.operator_ui.components import live_shell
-from btcts.apps.operator_ui.components.live_shell import get_registered_slots
 from btcts.apps.operator_ui.components.slot_definitions import (
     health_widget_ids,
     health_widget_slot,
@@ -109,17 +108,17 @@ def _layer3_summary_label(market_latest: dict, market_diag: dict, lang: str) -> 
 
 def _format_optional_ts(value: str | None, lang: str) -> str:
     if not value:
-        return "-"
+        return get_text(lang, "health_table_empty_value")
     return format_ui_ts(value, lang=lang)
 
 
-def _format_age_seconds(value: str | None) -> str:
+def _format_age_seconds(value: str | None, lang: str) -> str:
     if not value:
-        return "-"
+        return get_text(lang, "health_table_empty_value")
 
     dt = _parse_ui_ts(value)
     if dt is None:
-        return "-"
+        return get_text(lang, "health_table_empty_value")
 
     now = pd.Timestamp.utcnow()
     if getattr(now, "tzinfo", None) is None:
@@ -144,24 +143,10 @@ def _ws_age_seconds(value: str | None) -> float | None:
     return max(0.0, (now.to_pydatetime() - dt).total_seconds())
 
 
-def _ws_freshness_label(origin_payload: dict, lang: str) -> str:
-    age_sec = _ws_age_seconds(origin_payload.get("ts"))
-    if age_sec is None:
-        return "-"
-
-    if age_sec <= 5:
-        return get_text(lang, "health_value_live_freshness")
-    if age_sec <= 30:
-        return get_text(lang, "health_value_quiet_freshness")
-    if age_sec <= 300:
-        return get_text(lang, "health_value_stale_freshness")
-    return get_text(lang, "health_value_broken_freshness")
-
-
 def _ws_freshness_label_from_ts(value: str | None, lang: str) -> str:
     age_sec = _ws_age_seconds(value)
     if age_sec is None:
-        return "-"
+        return get_text(lang, "health_table_empty_value")
 
     if age_sec <= 5:
         return get_text(lang, "health_value_live_freshness")
@@ -189,9 +174,10 @@ def _format_metric_number(
     *,
     decimals: int = 0,
     percent: bool = False,
+    lang: str = "en",
 ) -> str:
     if value is None or value == "":
-        return "-"
+        return get_text(lang, "health_table_empty_value")
 
     try:
         num = float(value)
@@ -210,7 +196,7 @@ def _format_metric_number(
 def _health_value_label(value: str | None, lang: str) -> str:
     raw = str(value or "").strip()
     if not raw:
-        return "-"
+        return get_text(lang, "health_table_empty_value")
 
     key_map = {
         "RUNNING": "health_value_running",
@@ -295,17 +281,20 @@ def _health_event_label(value: str | None, lang: str) -> str:
     return raw
 
 
-def _range_label(range_key: str) -> str:
-    mapping = {
-        "1h": "1時間",
-        "24h": "24時間",
-        "1w": "1週間",
+def _range_label(range_key: str, lang: str) -> str:
+    key_map = {
+        "1h": "health_range_1h",
+        "24h": "health_range_24h",
+        "1w": "health_range_1w",
     }
-    return mapping.get(range_key, range_key)
+    text_key = key_map.get(range_key)
+    if not text_key:
+        return range_key
+    return get_text(lang, text_key)
 
 
-def _section_title_with_range(title: str, range_key: str) -> str:
-    return f"{title}（{_range_label(range_key)}）"
+def _section_title_with_range(title: str, range_key: str, lang: str) -> str:
+    return f"{title}（{_range_label(range_key, lang)}）"
 
 
 def _api_chart_columns_and_labels(api_df: pd.DataFrame, lang: str) -> tuple[list[str], dict[str, str]]:
@@ -360,6 +349,12 @@ def _render_health_range_selector(lang: str) -> str:
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
+    def format_metric_number_local(value, **kwargs) -> str:
+        return _format_metric_number(value, lang=lang, **kwargs)
+
+    def section_title_with_range_local(title: str, range_key: str) -> str:
+        return _section_title_with_range(title, range_key, lang)
+
     live_shell.render_compact_page_header(get_text(lang, "health_title"))
     selected_range_key = _render_health_range_selector(lang)
 
@@ -394,7 +389,6 @@ def render():
     bitflyer_rate_trades = bitflyer_rate_classes.get("rest_trades") or {}
 
     runtime_mode = str(bitflyer_rate.get("mode") or bitflyer_rate.get("summary_state") or "")
-    runtime_active_target_ratio = bitflyer_rate.get("active_target_ratio")
     runtime_utilization = bitflyer_rate.get("utilization")
 
     ws_board_lane = status_payload.get("ws_board_lane") or {}
@@ -430,6 +424,10 @@ def render():
     api_ws_series = snapshot.get("api_ws_series") or []
     rate_overlay = snapshot.get("rate_overlay") or []
     layer3_series = snapshot.get("layer3_series") or []
+    layer3_semantic_usage_rows = snapshot.get("layer3_semantic_usage_rows") or []
+    layer3_semantic_usage_summary = snapshot.get("layer3_semantic_usage_summary") or {}
+    layer3_runtime_contract_summary = snapshot.get("layer3_runtime_contract_summary") or {}
+    layer3_orderbook_runtime_summary = snapshot.get("layer3_orderbook_runtime_summary") or {}
     api_continuity_rail = snapshot.get("api_continuity_rail") or []
     ws_continuity_rail = snapshot.get("ws_continuity_rail") or []
     recent_anomalies = snapshot.get("recent_anomalies") or []
@@ -461,8 +459,8 @@ def render():
             bitflyer_rate_snapshot=bitflyer_rate_snapshot,
             bitflyer_rate_trades=bitflyer_rate_trades,
             get_text=get_text,
-            section_title_with_range=_section_title_with_range,
-            format_metric_number=_format_metric_number,
+            section_title_with_range=section_title_with_range_local,
+            format_metric_number=format_metric_number_local,
             api_chart_columns_and_labels=_api_chart_columns_and_labels,
         )
 
@@ -474,8 +472,8 @@ def render():
             range_key=selected_range_key,
             api_ws_series=api_ws_series,
             get_text=get_text,
-            section_title_with_range=_section_title_with_range,
-            format_metric_number=_format_metric_number,
+            section_title_with_range=section_title_with_range_local,
+            format_metric_number=format_metric_number_local,
         )
 
     with live_shell.slot_widget_from_meta(
@@ -485,10 +483,14 @@ def render():
             lang=lang,
             range_key=selected_range_key,
             layer3_series=layer3_series,
+            layer3_semantic_usage_rows=layer3_semantic_usage_rows,
+            layer3_semantic_usage_summary=layer3_semantic_usage_summary,
+            layer3_runtime_contract_summary=layer3_runtime_contract_summary,
+            layer3_orderbook_runtime_summary=layer3_orderbook_runtime_summary,
             market_latest=market_latest,
             market_diag=market_diag,
             get_text=get_text,
-            section_title_with_range=_section_title_with_range,
+            section_title_with_range=section_title_with_range_local,
             health_value_label=_health_value_label,
         )
 
@@ -519,8 +521,8 @@ def render():
             get_text=get_text,
             health_value_label=_health_value_label,
             format_optional_ts=_format_optional_ts,
-            format_age_seconds=_format_age_seconds,
-            format_metric_number=_format_metric_number,
+            format_age_seconds=lambda value: _format_age_seconds(value, lang),
+            format_metric_number=format_metric_number_local,
             ws_freshness_label_from_ts=_ws_freshness_label_from_ts,
         )
 
@@ -545,7 +547,7 @@ def render():
         api_continuity_rail=api_continuity_rail,
         ws_continuity_rail=ws_continuity_rail,
         get_text=get_text,
-        section_title_with_range=_section_title_with_range,
+        section_title_with_range=section_title_with_range_local,
     )
 
     if summary_widget:
@@ -556,7 +558,7 @@ def render():
 def _render_health_diagnostics(lang: str) -> None:
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         st.caption(get_text(lang, "ui_slot_diagnostics_health_caption"))
-        slot_rows = get_registered_slots("health")
+        slot_rows = live_shell.get_registered_slots("health")
         if slot_rows:
             st.dataframe(slot_rows, width="stretch")
 
@@ -567,7 +569,8 @@ def _render_health_diagnostics(lang: str) -> None:
             )
             if missing_widget_ids:
                 st.warning(
-                    "missing health slot registrations: " + ", ".join(missing_widget_ids)
+                    get_text(lang, "health_warning_missing_slot_registrations_prefix")
+                    + ", ".join(missing_widget_ids)
                 )
 
             actual_zone_ids = {
@@ -580,7 +583,8 @@ def _render_health_diagnostics(lang: str) -> None:
             )
             if unexpected_zone_ids:
                 st.warning(
-                    "unexpected health zone ids: " + ", ".join(unexpected_zone_ids)
+                    get_text(lang, "health_warning_unexpected_zone_ids_prefix")
+                    + ", ".join(unexpected_zone_ids)
                 )
         else:
             st.info(get_text(lang, "ui_slot_registry_empty_health"))

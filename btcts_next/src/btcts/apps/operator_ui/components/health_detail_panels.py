@@ -46,6 +46,9 @@ def render_current_state_section(
     ):
         import streamlit as st
 
+        def bool_flag_label(flag: bool) -> str:
+            return get_text(lang, "health_value_on") if flag else get_text(lang, "health_value_off")
+
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric(
             get_text(lang, "health_metric_status"),
@@ -54,11 +57,15 @@ def render_current_state_section(
         )
         m2.metric(
             get_text(lang, "health_metric_wait_ms"),
-            "-" if not bitflyer_rate else health_value_label(runtime_mode, lang),
+            get_text(lang, "health_table_empty_value")
+            if not bitflyer_rate
+            else health_value_label(runtime_mode, lang),
         )
         m3.metric(
             get_text(lang, "health_metric_util_ratio"),
-            "-" if not bitflyer_rate else format_metric_number(
+            get_text(lang, "health_table_empty_value")
+            if not bitflyer_rate
+            else format_metric_number(
                 runtime_utilization if runtime_utilization is not None else bitflyer_rate.get("util_ratio"),
                 decimals=1,
                 percent=True,
@@ -179,8 +186,8 @@ def render_current_state_section(
         )
         n2.metric(
             get_text(lang, "health_metric_resync"),
-            str(origin_payload.get("resync_active") or False),
-            str(origin_payload.get("gap_detected") or False),
+            bool_flag_label(bool(origin_payload.get("resync_active"))),
+            bool_flag_label(bool(origin_payload.get("gap_detected"))),
         )
         n3.metric(
             get_text(lang, "health_metric_last_sequence_id"),

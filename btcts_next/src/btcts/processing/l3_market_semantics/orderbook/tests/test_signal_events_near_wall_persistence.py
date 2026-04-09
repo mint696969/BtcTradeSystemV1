@@ -59,9 +59,11 @@ def main() -> int:
 
     near_wall = next(event for event in events if event.get("event_name") == "near_wall_continued")
     assert near_wall["side"] == "bid"
+    assert near_wall["event_family"] == "wall"
 
     support = next(event for event in events if event.get("event_name") == "support_continued")
     assert support["side"] == "bid"
+    assert support["event_family"] == "support_resistance"
 
     print("ok")
     return 0

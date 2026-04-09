@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 from typing import Literal, TypedDict
+import json
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 
 PanelTone = Literal["neutral", "primary", "strong"]
@@ -477,6 +479,116 @@ def get_registered_slots(page_id: str | None = None) -> list[dict[str, str | int
         return rows
 
     return [row for row in rows if row.get("page_id") == page_id]
+
+
+def reset_registered_slots(page_id: str | None = None) -> None:
+    slot_registry = st.session_state.get("_live_shell_slot_registry")
+    if not isinstance(slot_registry, dict):
+        st.session_state["_live_shell_slot_registry"] = {}
+        return
+
+    if page_id is None:
+        st.session_state["_live_shell_slot_registry"] = {}
+        return
+
+    remove_keys = [
+        slot_key
+        for slot_key, row in slot_registry.items()
+        if isinstance(row, dict) and row.get("page_id") == page_id
+    ]
+    for slot_key in remove_keys:
+        slot_registry.pop(slot_key, None)
+
+
+def page_supports_auto_refresh(page_id: str) -> bool:
+    rows = get_registered_slots(page_id)
+    return any(str(row.get("refresh_mode") or "static") != "static" for row in rows)
+
+
+def refresh_mode_interval_sec(
+    refresh_mode: str,
+    *,
+    default_sec: int = 15,
+) -> int:
+    mode = str(refresh_mode or "static")
+    mapping = {
+        "stream": 1,
+        "poll_fast": 3,
+        "poll_normal": 5,
+        "poll_slow": 15,
+        "static": default_sec,
+    }
+    return int(mapping.get(mode, default_sec))
+
+
+def page_auto_refresh_interval_sec(
+    page_id: str,
+    *,
+    default_sec: int = 15,
+) -> int:
+    rows = get_registered_slots(page_id)
+    active_modes = [
+        str(row.get("refresh_mode") or "static")
+        for row in rows
+        if str(row.get("refresh_mode") or "static") != "static"
+    ]
+    if not active_modes:
+        return int(default_sec)
+
+    return min(
+        refresh_mode_interval_sec(mode, default_sec=default_sec)
+        for mode in active_modes
+    )
+
+
+def render_page_auto_refresh(
+    *,
+    enabled: bool,
+    interval_sec: int,
+    page_key: str,
+) -> None:
+    interval_ms = max(1000, int(interval_sec) * 1000)
+
+    payload = {
+        "enabled": bool(enabled),
+        "interval_ms": interval_ms,
+        "page_key": str(page_key),
+    }
+
+    components.html(
+        f"""
+        <script>
+        const config = {json.dumps(payload)};
+        const parentWindow = window.parent;
+
+        if (!parentWindow) {{
+            return;
+        }}
+
+        const timerKey = "__btcts_auto_refresh_timer__";
+        const pageKeyKey = "__btcts_auto_refresh_page_key__";
+
+        if (parentWindow[timerKey]) {{
+            parentWindow.clearTimeout(parentWindow[timerKey]);
+            parentWindow[timerKey] = null;
+        }}
+
+        if (!config.enabled) {{
+            parentWindow[pageKeyKey] = null;
+            return;
+        }}
+
+        parentWindow[pageKeyKey] = config.page_key;
+        parentWindow[timerKey] = parentWindow.setTimeout(() => {{
+            if (parentWindow[pageKeyKey] === config.page_key) {{
+                parentWindow.location.reload();
+            }}
+        }}, config.interval_ms);
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
 
 
 def render_folded_section(

@@ -5,9 +5,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from btcts.processing.l3_market_semantics import build_event_usage_summary
 from btcts.processing.l3_market_semantics.continuity.models import BookState
 from btcts.processing.l3_market_semantics.continuity.models import SeriesState
 from btcts.market_engine.config import MarketEngineConfig
+from btcts.market_engine.market_state.orderbook_semantics_contract import (
+    empty_orderbook_semantics_summary,
+)
 from btcts.market_engine.market_state.schema import MarketStateRecord
 
 
@@ -77,7 +81,20 @@ class MarketStateProjector:
         book_state: BookState,
         series_state: SeriesState,
         zone_metadata: dict[str, Any],
+        orderbook_semantics_contract_status: str | None = None,
+        orderbook_semantics_summary: dict[str, Any] | None = None,
+        orderbook_persistence_observable: bool = False,
     ) -> MarketStateRecord:
+        semantic_usage_summary = build_event_usage_summary(
+            book_state.interpretation_bucket,
+        )
+        next_orderbook_semantics_summary = dict(
+            orderbook_semantics_summary or empty_orderbook_semantics_summary()
+        )
+        next_orderbook_semantics_contract_status = (
+            str(orderbook_semantics_contract_status or "").strip() or "missing"
+        )
+
         return MarketStateRecord(
             market_uid=cfg.market_uid,
             exchange=cfg.exchange,
@@ -90,6 +107,11 @@ class MarketStateProjector:
             interpretation_bucket=book_state.interpretation_bucket,
             interpretation_reason=book_state.interpretation_reason,
             interpretation_policy=dict(book_state.interpretation_policy),
+            semantic_observer_status=semantic_usage_summary.get("observer_status"),
+            semantic_usage_summary=semantic_usage_summary,
+            orderbook_semantics_contract_status=next_orderbook_semantics_contract_status,
+            orderbook_semantics_summary=next_orderbook_semantics_summary,
+            orderbook_persistence_observable=bool(orderbook_persistence_observable),
             best_bid=book_state.best_bid,
             best_ask=book_state.best_ask,
             spread=book_state.spread,
