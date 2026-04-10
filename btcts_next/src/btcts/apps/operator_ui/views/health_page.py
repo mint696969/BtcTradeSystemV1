@@ -22,9 +22,12 @@ from btcts.apps.operator_ui.components.health_detail_panels import (
     render_recent_events_section,
 )
 from btcts.apps.operator_ui.components.health_top_panels import (
+    render_api_summary_metric,
+    render_collector_summary_metric,
     render_continuity_panels,
-    render_overview_summary_panel,
+    render_layer3_summary_metric,
     render_read_guide_section,
+    render_ws_summary_metric,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
@@ -217,6 +220,10 @@ def _health_value_label(value: str | None, lang: str) -> str:
         "allow_structural_use": "health_value_allow_structural_use",
         "observe_only": "health_value_observe_only",
         "none": "health_value_none_boundary",
+        "missing": "health_value_missing_wiring",
+        "partial": "health_value_partial_wiring",
+        "wired": "health_value_wired",
+        "fallback": "health_value_fallback_wiring",
     }
 
     text_key = key_map.get(raw)
@@ -346,6 +353,32 @@ def _render_health_range_selector(lang: str) -> str:
     return str(st.session_state.health_selected_range_key)
 
 
+@st.cache_data(show_spinner=False, ttl=1)
+def _load_cached_health_snapshot(range_key: str) -> dict:
+    return load_health_snapshot(range_key=range_key)
+
+
+@st.cache_data(show_spinner=False, ttl=1)
+def _load_cached_market_summary_widget_model():
+    return load_market_summary_widget_model()
+
+
+def _render_health_fragment(*, refresh_mode: str, render_body) -> None:
+    live_shell.render_fragment_block(
+        render_body,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+        refresh_mode=refresh_mode,
+    )
+
+
+def _render_live_tick_caption(lang: str) -> None:
+    now = pd.Timestamp.utcnow()
+    if getattr(now, "tzinfo", None) is None:
+        now = now.tz_localize("UTC")
+    tick_text = now.strftime("%H:%M:%S UTC")
+    st.caption(get_text(lang, "health_caption_live_tick_prefix") + tick_text)
+
+
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
@@ -358,103 +391,80 @@ def render():
     live_shell.render_compact_page_header(get_text(lang, "health_title"))
     selected_range_key = _render_health_range_selector(lang)
 
-    snapshot = load_health_snapshot(range_key=selected_range_key)
-    summary_widget = load_market_summary_widget_model()
-
-    collector_state = snapshot.get("collector_state") or {}
-    status_payload = collector_state.get("status") or {}
-    health_payload = collector_state.get("health") or {}
-    rate_payload = collector_state.get("rate") or {}
-    origin_payload = collector_state.get("origin") or {}
-    checkpoint_payload = collector_state.get("checkpoint") or {}
-    executions_payload = collector_state.get("executions") or {}
-    daemon_status_payload = (
-        collector_state.get("daemon_status")
-        or collector_state.get("exploration_daemon_status")
-        or {}
-    )
-    daemon_health_payload = collector_state.get("health") or {}
-
-    runtime_kind = str(
-        status_payload.get("runtime_kind")
-        or daemon_status_payload.get("runtime_kind")
-        or health_payload.get("runtime_kind")
-        or ""
-    ).lower()
-
-    rate_items = rate_payload.get("items") or {}
-    bitflyer_rate = rate_items.get("bitflyer") or {}
-    bitflyer_rate_classes = bitflyer_rate.get("request_classes") or {}
-    bitflyer_rate_snapshot = bitflyer_rate_classes.get("board_snapshot") or {}
-    bitflyer_rate_trades = bitflyer_rate_classes.get("rest_trades") or {}
-
-    runtime_mode = str(bitflyer_rate.get("mode") or bitflyer_rate.get("summary_state") or "")
-    runtime_utilization = bitflyer_rate.get("utilization")
-
-    ws_board_lane = status_payload.get("ws_board_lane") or {}
-    ws_executions_lane = status_payload.get("ws_executions_lane") or {}
-
-    ws_board_state = str(
-        ws_board_lane.get("state")
-        or origin_payload.get("lane_state")
-        or origin_payload.get("ws_state")
-        or ""
-    )
-    ws_board_last_error = str(
-        ws_board_lane.get("last_error")
-        or origin_payload.get("last_error")
-        or ""
+    live_shell.render_fragment_slot(
+        health_widget_slot("live_tick_caption"),
+        lambda: _render_live_tick_caption(lang),
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
     )
 
-    ws_executions_state = str(
-        ws_executions_lane.get("state")
-        or executions_payload.get("lane_state")
-        or executions_payload.get("ws_state")
-        or ""
-    )
-    ws_executions_last_error = str(
-        ws_executions_lane.get("last_error")
-        or executions_payload.get("last_error")
-        or ""
-    )
+    def _render_collector_summary_section() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+        collector_state = snapshot.get("collector_state") or {}
+        status_payload = collector_state.get("status") or {}
+        health_payload = collector_state.get("health") or {}
 
-    market_latest = snapshot.get("market_latest") or {}
-    market_diag = snapshot.get("market_diag") or {}
+        render_collector_summary_metric(
+            lang=lang,
+            status_payload=status_payload,
+            health_payload=health_payload,
+            get_text=get_text,
+            collector_summary_label=_collector_summary_label,
+        )
 
-    api_ws_series = snapshot.get("api_ws_series") or []
-    rate_overlay = snapshot.get("rate_overlay") or []
-    layer3_series = snapshot.get("layer3_series") or []
-    layer3_semantic_usage_rows = snapshot.get("layer3_semantic_usage_rows") or []
-    layer3_semantic_usage_summary = snapshot.get("layer3_semantic_usage_summary") or {}
-    layer3_runtime_contract_summary = snapshot.get("layer3_runtime_contract_summary") or {}
-    layer3_orderbook_runtime_summary = snapshot.get("layer3_orderbook_runtime_summary") or {}
-    api_continuity_rail = snapshot.get("api_continuity_rail") or []
-    ws_continuity_rail = snapshot.get("ws_continuity_rail") or []
-    recent_anomalies = snapshot.get("recent_anomalies") or []
+    def _render_api_summary_section() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+        collector_state = snapshot.get("collector_state") or {}
+        rate_payload = collector_state.get("rate") or {}
+        rate_items = rate_payload.get("items") or {}
+        bitflyer_rate = rate_items.get("bitflyer") or {}
 
-    render_overview_summary_panel(
-        lang=lang,
-        status_payload=status_payload,
-        health_payload=health_payload,
-        bitflyer_rate=bitflyer_rate,
-        origin_payload=origin_payload,
-        market_latest=market_latest,
-        market_diag=market_diag,
-        get_text=get_text,
-        collector_summary_label=_collector_summary_label,
-        api_summary_label=_api_summary_label,
-        ws_summary_label=_ws_summary_label,
-        layer3_summary_label=_layer3_summary_label,
-    )
+        render_api_summary_metric(
+            lang=lang,
+            bitflyer_rate=bitflyer_rate,
+            get_text=get_text,
+            api_summary_label=_api_summary_label,
+        )
 
-    with live_shell.slot_widget_from_meta(
-        health_widget_slot("api_chart_panel")
-    ):
+    def _render_ws_summary_section() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+        collector_state = snapshot.get("collector_state") or {}
+        origin_payload = collector_state.get("origin") or {}
+
+        render_ws_summary_metric(
+            lang=lang,
+            origin_payload=origin_payload,
+            get_text=get_text,
+            ws_summary_label=_ws_summary_label,
+        )
+
+    def _render_layer3_summary_section() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+        market_latest = snapshot.get("market_latest") or {}
+        market_diag = snapshot.get("market_diag") or {}
+
+        render_layer3_summary_metric(
+            lang=lang,
+            market_latest=market_latest,
+            market_diag=market_diag,
+            get_text=get_text,
+            layer3_summary_label=_layer3_summary_label,
+        )
+
+    def _render_api_chart_section() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+        collector_state = snapshot.get("collector_state") or {}
+        rate_payload = collector_state.get("rate") or {}
+        rate_items = rate_payload.get("items") or {}
+        bitflyer_rate = rate_items.get("bitflyer") or {}
+        bitflyer_rate_classes = bitflyer_rate.get("request_classes") or {}
+        bitflyer_rate_snapshot = bitflyer_rate_classes.get("board_snapshot") or {}
+        bitflyer_rate_trades = bitflyer_rate_classes.get("rest_trades") or {}
+
         render_api_chart_panel(
             lang=lang,
             range_key=selected_range_key,
-            api_ws_series=api_ws_series,
-            rate_overlay=rate_overlay,
+            api_ws_series=snapshot.get("api_ws_series") or [],
+            rate_overlay=snapshot.get("rate_overlay") or [],
             bitflyer_rate=bitflyer_rate,
             bitflyer_rate_snapshot=bitflyer_rate_snapshot,
             bitflyer_rate_trades=bitflyer_rate_trades,
@@ -464,39 +474,95 @@ def render():
             api_chart_columns_and_labels=_api_chart_columns_and_labels,
         )
 
-    with live_shell.slot_widget_from_meta(
-        health_widget_slot("ws_chart_panel")
-    ):
+    def _render_ws_chart_section() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+
         render_ws_chart_panel(
             lang=lang,
             range_key=selected_range_key,
-            api_ws_series=api_ws_series,
+            api_ws_series=snapshot.get("api_ws_series") or [],
             get_text=get_text,
             section_title_with_range=section_title_with_range_local,
             format_metric_number=format_metric_number_local,
         )
 
-    with live_shell.slot_widget_from_meta(
-        health_widget_slot("layer3_chart_panel")
-    ):
+    def _render_layer3_chart_section() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+
         render_layer3_chart_panel(
             lang=lang,
             range_key=selected_range_key,
-            layer3_series=layer3_series,
-            layer3_semantic_usage_rows=layer3_semantic_usage_rows,
-            layer3_semantic_usage_summary=layer3_semantic_usage_summary,
-            layer3_runtime_contract_summary=layer3_runtime_contract_summary,
-            layer3_orderbook_runtime_summary=layer3_orderbook_runtime_summary,
-            market_latest=market_latest,
-            market_diag=market_diag,
+            layer3_series=snapshot.get("layer3_series") or [],
+            layer3_semantic_usage_rows=snapshot.get("layer3_semantic_usage_rows") or [],
+            layer3_semantic_usage_summary=snapshot.get("layer3_semantic_usage_summary") or {},
+            layer3_runtime_contract_summary=snapshot.get("layer3_runtime_contract_summary") or {},
+            layer3_orderbook_runtime_summary=snapshot.get("layer3_orderbook_runtime_summary") or {},
+            market_latest=snapshot.get("market_latest") or {},
+            market_diag=snapshot.get("market_diag") or {},
             get_text=get_text,
             section_title_with_range=section_title_with_range_local,
             health_value_label=_health_value_label,
         )
 
-    with live_shell.slot_widget_from_meta(
-        health_widget_slot("current_state_section")
-    ):
+    def _render_current_state_section_fragment() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+
+        collector_state = snapshot.get("collector_state") or {}
+        status_payload = collector_state.get("status") or {}
+        health_payload = collector_state.get("health") or {}
+        rate_payload = collector_state.get("rate") or {}
+        origin_payload = collector_state.get("origin") or {}
+        checkpoint_payload = collector_state.get("checkpoint") or {}
+        executions_payload = collector_state.get("executions") or {}
+        daemon_status_payload = (
+            collector_state.get("daemon_status")
+            or collector_state.get("exploration_daemon_status")
+            or {}
+        )
+        daemon_health_payload = collector_state.get("health") or {}
+
+        runtime_kind = str(
+            status_payload.get("runtime_kind")
+            or daemon_status_payload.get("runtime_kind")
+            or health_payload.get("runtime_kind")
+            or ""
+        ).lower()
+
+        rate_items = rate_payload.get("items") or {}
+        bitflyer_rate = rate_items.get("bitflyer") or {}
+        runtime_mode = str(bitflyer_rate.get("mode") or bitflyer_rate.get("summary_state") or "")
+        runtime_utilization = bitflyer_rate.get("utilization")
+
+        ws_board_lane = status_payload.get("ws_board_lane") or {}
+        ws_executions_lane = status_payload.get("ws_executions_lane") or {}
+
+        ws_board_state = str(
+            ws_board_lane.get("state")
+            or origin_payload.get("lane_state")
+            or origin_payload.get("ws_state")
+            or ""
+        )
+        ws_board_last_error = str(
+            ws_board_lane.get("last_error")
+            or origin_payload.get("last_error")
+            or ""
+        )
+
+        ws_executions_state = str(
+            ws_executions_lane.get("state")
+            or executions_payload.get("lane_state")
+            or executions_payload.get("ws_state")
+            or ""
+        )
+        ws_executions_last_error = str(
+            ws_executions_lane.get("last_error")
+            or executions_payload.get("last_error")
+            or ""
+        )
+
+        market_latest = snapshot.get("market_latest") or {}
+        market_diag = snapshot.get("market_diag") or {}
+
         render_current_state_section(
             lang=lang,
             status_payload=status_payload,
@@ -526,35 +592,104 @@ def render():
             ws_freshness_label_from_ts=_ws_freshness_label_from_ts,
         )
 
-    with live_shell.slot_widget_from_meta(
-        health_widget_slot("recent_events_section")
-    ):
+    def _render_recent_events_section_fragment() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+
         render_recent_events_section(
             lang=lang,
-            recent_anomalies=recent_anomalies,
+            recent_anomalies=snapshot.get("recent_anomalies") or [],
             get_text=get_text,
             health_event_label=_health_event_label,
         )
+
+    def _render_continuity_section() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+        render_continuity_panels(
+            lang=lang,
+            range_key=selected_range_key,
+            api_continuity_rail=snapshot.get("api_continuity_rail") or [],
+            ws_continuity_rail=snapshot.get("ws_continuity_rail") or [],
+            get_text=get_text,
+            section_title_with_range=section_title_with_range_local,
+        )
+
+    c1, c2, c3, c4 = live_shell.responsive_columns(4, compact=True)
+
+    with c1:
+        live_shell.render_fragment_slot(
+            health_widget_slot("collector_summary"),
+            _render_collector_summary_section,
+            enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+        )
+
+    with c2:
+        live_shell.render_fragment_slot(
+            health_widget_slot("api_summary"),
+            _render_api_summary_section,
+            enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+        )
+
+    with c3:
+        live_shell.render_fragment_slot(
+            health_widget_slot("ws_summary"),
+            _render_ws_summary_section,
+            enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+        )
+
+    with c4:
+        live_shell.render_fragment_slot(
+            health_widget_slot("layer3_summary"),
+            _render_layer3_summary_section,
+            enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+        )
+    live_shell.render_fragment_slot(
+        health_widget_slot("api_chart_panel"),
+        _render_api_chart_section,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
+    live_shell.render_fragment_slot(
+        health_widget_slot("ws_chart_panel"),
+        _render_ws_chart_section,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
+    live_shell.render_fragment_slot(
+        health_widget_slot("layer3_chart_panel"),
+        _render_layer3_chart_section,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
+    live_shell.render_fragment_slot(
+        health_widget_slot("current_state_section"),
+        _render_current_state_section_fragment,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
+    live_shell.render_fragment_slot(
+        health_widget_slot("recent_events_section"),
+        _render_recent_events_section_fragment,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
 
     render_read_guide_section(
         lang=lang,
         get_text=get_text,
     )
 
-    render_continuity_panels(
-        lang=lang,
-        range_key=selected_range_key,
-        api_continuity_rail=api_continuity_rail,
-        ws_continuity_rail=ws_continuity_rail,
-        get_text=get_text,
-        section_title_with_range=section_title_with_range_local,
+    _render_health_fragment(
+        refresh_mode="poll_normal",
+        render_body=_render_continuity_section,
     )
 
-    if summary_widget:
-        st.caption(summary_widget_caption(summary_widget))
+    def _render_market_summary_caption() -> None:
+        latest_summary_widget = _load_cached_market_summary_widget_model()
+        if latest_summary_widget:
+            st.caption(summary_widget_caption(latest_summary_widget))
+
+    live_shell.render_fragment_slot(
+        health_widget_slot("market_summary_caption"),
+        _render_market_summary_caption,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
 
     _render_health_diagnostics(lang)
-
 def _render_health_diagnostics(lang: str) -> None:
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         st.caption(get_text(lang, "ui_slot_diagnostics_health_caption"))

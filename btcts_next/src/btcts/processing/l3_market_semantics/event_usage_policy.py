@@ -81,6 +81,28 @@ def enrich_event_contracts(events: list[dict[str, Any]]) -> list[dict[str, Any]]
     return [enrich_event_contract(event) for event in events]
 
 
+def enrich_event_contract_for_bucket(
+    event: dict[str, Any],
+    interpretation_bucket: str | None,
+) -> dict[str, Any]:
+    out = enrich_event_contract(event)
+    out["usage_grade"] = resolve_usage_grade(
+        interpretation_bucket,
+        str(out.get("event_family") or ""),
+    )
+    return out
+
+
+def enrich_event_contracts_for_bucket(
+    events: list[dict[str, Any]],
+    interpretation_bucket: str | None,
+) -> list[dict[str, Any]]:
+    return [
+        enrich_event_contract_for_bucket(event, interpretation_bucket)
+        for event in events
+    ]
+
+
 _DEFAULT_EVENT_FAMILIES: list[str] = [
     "pressure",
     "wall",
@@ -91,6 +113,25 @@ _DEFAULT_EVENT_FAMILIES: list[str] = [
     "sweep",
     "absorption",
 ]
+
+
+def build_event_usage_contract_rows(
+    interpretation_bucket: str | None,
+    *,
+    event_families: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    families = list(event_families or _DEFAULT_EVENT_FAMILIES)
+    rows: list[dict[str, Any]] = []
+
+    for event_family in families:
+        rows.append(
+            {
+                "event_family": str(event_family),
+                "usage_grade": resolve_usage_grade(interpretation_bucket, event_family),
+            }
+        )
+
+    return rows
 
 
 def resolve_semantic_observer_status(interpretation_bucket: str | None) -> str:

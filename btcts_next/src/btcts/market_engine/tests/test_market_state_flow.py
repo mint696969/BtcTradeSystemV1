@@ -155,13 +155,16 @@ def main() -> int:
     assert isinstance(record.semantic_usage_summary, dict)
     assert "observer_status" in record.semantic_usage_summary
     assert "total_rows" in record.semantic_usage_summary
-    assert record.orderbook_semantics_contract_status in {"missing", "partial"}
+    assert record.orderbook_semantics_contract_status in {"partial", "wired"}
     assert isinstance(record.orderbook_semantics_summary, dict)
     assert set(record.orderbook_semantics_summary.keys()) == {
         "near_wall",
         "support",
         "resistance",
         "persistence",
+        "active_event_count",
+        "active_event_names",
+        "active_event_contracts",
     }
     assert record.orderbook_persistence_observable is True
     assert record.zone_density_metadata["mode"] == "hybrid"
@@ -192,13 +195,16 @@ def main() -> int:
     }
     assert isinstance(saved["semantic_usage_summary"], dict)
     assert "observer_status" in saved["semantic_usage_summary"]
-    assert saved["orderbook_semantics_contract_status"] in {"missing", "partial"}
+    assert saved["orderbook_semantics_contract_status"] in {"partial", "wired"}
     assert isinstance(saved["orderbook_semantics_summary"], dict)
     assert set(saved["orderbook_semantics_summary"].keys()) == {
         "near_wall",
         "support",
         "resistance",
         "persistence",
+        "active_event_count",
+        "active_event_names",
+        "active_event_contracts",
     }
     assert saved["orderbook_persistence_observable"] is True
     assert saved["zone_density_metadata"]["mode"] == "hybrid"

@@ -285,7 +285,10 @@ def render_layer3_chart_panel(
             r1, r2, r3, r4 = st.columns(4)
             r1.metric(
                 get_text(lang, "health_label_runtime_wiring"),
-                str(layer3_runtime_contract_summary.get("wiring_status") or "-"),
+                health_value_label(
+                    str(layer3_runtime_contract_summary.get("wiring_status") or "-"),
+                    lang,
+                ),
             )
             r2.metric(
                 get_text(lang, "health_label_observer_field"),
@@ -317,7 +320,10 @@ def render_layer3_chart_panel(
             o1, o2, o3, o4, o5, o6 = st.columns(6)
             o1.metric(
                 get_text(lang, "health_label_orderbook_wiring"),
-                str(layer3_orderbook_runtime_summary.get("wiring_status") or "-"),
+                health_value_label(
+                    str(layer3_orderbook_runtime_summary.get("wiring_status") or "-"),
+                    lang,
+                ),
             )
             o2.metric(
                 get_text(lang, "health_label_present_count"),
@@ -364,6 +370,49 @@ def render_layer3_chart_panel(
                 + get_text(lang, "health_label_persistence_observable")
                 + "="
                 + bool_label(bool(layer3_orderbook_runtime_summary.get("persistence_observable")))
+            )
+
+            if str(layer3_orderbook_runtime_summary.get("wiring_status") or "") == "partial":
+                st.caption(get_text(lang, "health_caption_orderbook_partial_meaning"))
+
+            active_event_names = layer3_orderbook_runtime_summary.get("active_event_names") or []
+            if not isinstance(active_event_names, list):
+                active_event_names = []
+
+            st.caption(
+                get_text(lang, "health_caption_orderbook_active_events_prefix")
+                + (
+                    ", ".join(str(name) for name in active_event_names if str(name).strip())
+                    if active_event_names
+                    else get_text(lang, "health_value_none_boundary")
+                )
+            )
+
+            active_event_contracts = layer3_orderbook_runtime_summary.get("active_event_contracts") or []
+            if not isinstance(active_event_contracts, list):
+                active_event_contracts = []
+
+            contract_parts: list[str] = []
+            for event in active_event_contracts:
+                if not isinstance(event, dict):
+                    continue
+                event_name = str(event.get("event_name") or "").strip()
+                if not event_name:
+                    continue
+                event_family = str(event.get("event_family") or "unknown")
+                usage_grade = str(event.get("usage_grade") or "unknown")
+                side = str(event.get("side") or "-")
+                contract_parts.append(
+                    f"{event_name}[family={event_family}, grade={usage_grade}, side={side}]"
+                )
+
+            st.caption(
+                get_text(lang, "health_caption_orderbook_active_contracts_prefix")
+                + (
+                    ", ".join(contract_parts[:6])
+                    if contract_parts
+                    else get_text(lang, "health_value_none_boundary")
+                )
             )
 
         if layer3_semantic_usage_summary:

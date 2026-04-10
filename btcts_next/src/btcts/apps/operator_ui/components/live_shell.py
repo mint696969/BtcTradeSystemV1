@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Callable, Literal, TypedDict
 import json
 
 import streamlit as st
@@ -538,6 +538,61 @@ def page_auto_refresh_interval_sec(
     return min(
         refresh_mode_interval_sec(mode, default_sec=default_sec)
         for mode in active_modes
+    )
+
+
+def supports_streamlit_fragment() -> bool:
+    return callable(getattr(st, "fragment", None))
+
+
+def render_fragment_block(
+    render_body: Callable[[], None],
+    *,
+    enabled: bool = True,
+    refresh_mode: str = "static",
+    default_sec: int = 15,
+) -> None:
+    use_fragment = (
+        enabled
+        and str(refresh_mode or "static") != "static"
+        and supports_streamlit_fragment()
+    )
+
+    if not use_fragment:
+        render_body()
+        return
+
+    interval_sec = refresh_mode_interval_sec(
+        str(refresh_mode or "static"),
+        default_sec=default_sec,
+    )
+    fragment = getattr(st, "fragment")
+
+    @fragment(run_every=f"{int(interval_sec)}s")
+    def _fragment_runner() -> None:
+        render_body()
+
+    _fragment_runner()
+
+
+def render_fragment_slot(
+    meta: SlotMeta,
+    render_body: Callable[[], None],
+    *,
+    enabled: bool = True,
+    default_sec: int = 15,
+) -> None:
+    refresh_mode = _meta_str(meta, "refresh_mode", "static")
+
+    def _render_slot() -> None:
+        with slot_widget_from_meta(meta):
+            render_body()
+
+    render_fragment_block(
+        _render_slot,
+        enabled=enabled,
+        refresh_mode=refresh_mode,
+        default_sec=default_sec,
     )
 
 

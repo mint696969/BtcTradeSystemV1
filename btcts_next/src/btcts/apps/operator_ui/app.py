@@ -216,7 +216,14 @@ live_shell.reset_registered_slots(selected_page_key)
 page_module.render()
 
 is_slot_refresh_target = live_shell.page_supports_auto_refresh(selected_page_key)
-is_auto_refresh_target = selected_page_key == "logs" or is_slot_refresh_target
+is_fragment_refresh_target = (
+    selected_page_key == "health"
+    and live_shell.supports_streamlit_fragment()
+    and is_slot_refresh_target
+)
+is_auto_refresh_target = selected_page_key == "logs" or (
+    is_slot_refresh_target and not is_fragment_refresh_target
+)
 
 effective_refresh_interval_sec = int(st.session_state.ui_refresh_interval)
 if is_slot_refresh_target:
@@ -229,7 +236,9 @@ if is_slot_refresh_target:
         int(slot_recommended_interval_sec),
     )
 
-if st.session_state.ui_auto_refresh and is_auto_refresh_target:
+if st.session_state.ui_auto_refresh and (
+    is_auto_refresh_target or is_fragment_refresh_target
+):
     st.sidebar.caption(
         f"{get_text(lang, 'refresh_status_on')} / {effective_refresh_interval_sec}s"
     )

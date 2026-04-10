@@ -7,6 +7,9 @@ from typing import Any
 
 from btcts.ingestion.l2_canonical.orderbook.book_state import OrderBookState
 from btcts.processing.l3_market_semantics.continuity.models import BookState
+from btcts.processing.l3_market_semantics.event_usage_policy import (
+    enrich_event_contracts_for_bucket,
+)
 from btcts.processing.l3_market_semantics.orderbook.event_enrichment import candidate_events
 from btcts.processing.l3_market_semantics.orderbook.liquidity_signals import (
     liquidity_pressure_signal,
@@ -160,19 +163,74 @@ def build_live_orderbook_semantics_summary(
         ),
         None,
     )
+    persistence = transition.get("persistence")
+
+    active_events: list[dict[str, Any]] = [dict(event) for event in events]
+
+    persistence_event_name = str((persistence or {}).get("event_name") or "").strip()
+    persistence_side = (persistence or {}).get("side")
+    if persistence_event_name:
+        active_events.append(
+            {
+                "event_name": persistence_event_name,
+                "side": persistence_side,
+            }
+        )
+
+    enriched_active_event_contracts = enrich_event_contracts_for_bucket(
+        active_events,
+        book_state.interpretation_bucket,
+    )
+
+    active_event_contracts: list[dict[str, Any]] = []
+    seen_event_keys: set[tuple[str, str]] = set()
+
+    for event in enriched_active_event_contracts:
+        event_name = str(event.get("event_name") or "").strip()
+        side = str(event.get("side") or "").strip()
+        if not event_name:
+            continue
+
+        dedupe_key = (event_name, side)
+        if dedupe_key in seen_event_keys:
+            continue
+        seen_event_keys.add(dedupe_key)
+
+        active_event_contracts.append(
+            {
+                "event_name": event_name,
+                "event_family": str(event.get("event_family") or "unknown"),
+                "usage_grade": str(event.get("usage_grade") or "unknown"),
+                "side": event.get("side"),
+            }
+        )
+
+    active_event_names = [
+        str(event.get("event_name") or "")
+        for event in active_event_contracts
+        if str(event.get("event_name") or "").strip()
+    ]
 
     summary = {
         "near_wall": near_wall,
         "support": support,
         "resistance": resistance,
-        "persistence": transition.get("persistence"),
+        "persistence": persistence,
+        "active_event_count": len(active_event_contracts),
+        "active_event_names": active_event_names,
+        "active_event_contracts": active_event_contracts,
     }
 
-    present_count = sum(value is not None for value in summary.values())
+    present_count = sum(
+        value is not None
+        for key, value in summary.items()
+        if key not in {"active_event_count", "active_event_names", "active_event_contracts"}
+    )
 
-    contract_status = "missing"
-    if present_count > 0:
-        contract_status = "partial"
+    # live adapter がここまで到達している時点で wiring 自体は存在する。
+    # したがって current row に active semantics が 0 件でも "missing" ではなく
+    # "partial" として扱い、現在の有効要素数は summary 側で読む。
+    contract_status = "partial"
     if present_count >= 4:
         contract_status = "wired"
 

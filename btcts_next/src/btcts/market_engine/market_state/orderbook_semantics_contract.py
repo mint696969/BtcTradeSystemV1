@@ -12,4 +12,7 @@ def empty_orderbook_semantics_summary() -> dict[str, Any]:
         "support": None,
         "resistance": None,
         "persistence": None,
+        "active_event_count": 0,
+        "active_event_names": [],
+        "active_event_contracts": [],
     }

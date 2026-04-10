@@ -26,6 +26,60 @@ def render_read_guide_section(
         st.caption(f"3. {get_text(lang, 'health_read_guide_line3')}")
 
 
+def render_collector_summary_metric(
+    *,
+    lang: str,
+    status_payload: dict,
+    health_payload: dict,
+    get_text: Callable[[str, str], str],
+    collector_summary_label: Callable[[dict, dict, str], str],
+) -> None:
+    st.metric(
+        get_text(lang, "health_summary_collector"),
+        collector_summary_label(status_payload, health_payload, lang),
+    )
+
+
+def render_api_summary_metric(
+    *,
+    lang: str,
+    bitflyer_rate: dict,
+    get_text: Callable[[str, str], str],
+    api_summary_label: Callable[[dict, str], str],
+) -> None:
+    st.metric(
+        get_text(lang, "health_summary_api"),
+        api_summary_label(bitflyer_rate, lang),
+    )
+
+
+def render_ws_summary_metric(
+    *,
+    lang: str,
+    origin_payload: dict,
+    get_text: Callable[[str, str], str],
+    ws_summary_label: Callable[[dict, str], str],
+) -> None:
+    st.metric(
+        get_text(lang, "health_summary_ws"),
+        ws_summary_label(origin_payload, lang),
+    )
+
+
+def render_layer3_summary_metric(
+    *,
+    lang: str,
+    market_latest: dict,
+    market_diag: dict,
+    get_text: Callable[[str, str], str],
+    layer3_summary_label: Callable[[dict, dict, str], str],
+) -> None:
+    st.metric(
+        get_text(lang, "health_summary_layer3"),
+        layer3_summary_label(market_latest, market_diag, lang),
+    )
+
+
 def render_overview_summary_panel(
     *,
     lang: str,
@@ -47,36 +101,46 @@ def render_overview_summary_panel(
         with live_shell.slot_widget_from_meta(
             health_widget_slot("collector_summary")
         ):
-            st.metric(
-                get_text(lang, "health_summary_collector"),
-                collector_summary_label(status_payload, health_payload, lang),
+            render_collector_summary_metric(
+                lang=lang,
+                status_payload=status_payload,
+                health_payload=health_payload,
+                get_text=get_text,
+                collector_summary_label=collector_summary_label,
             )
 
     with c2:
         with live_shell.slot_widget_from_meta(
             health_widget_slot("api_summary")
         ):
-            st.metric(
-                get_text(lang, "health_summary_api"),
-                api_summary_label(bitflyer_rate, lang),
+            render_api_summary_metric(
+                lang=lang,
+                bitflyer_rate=bitflyer_rate,
+                get_text=get_text,
+                api_summary_label=api_summary_label,
             )
 
     with c3:
         with live_shell.slot_widget_from_meta(
             health_widget_slot("ws_summary")
         ):
-            st.metric(
-                get_text(lang, "health_summary_ws"),
-                ws_summary_label(origin_payload, lang),
+            render_ws_summary_metric(
+                lang=lang,
+                origin_payload=origin_payload,
+                get_text=get_text,
+                ws_summary_label=ws_summary_label,
             )
 
     with c4:
         with live_shell.slot_widget_from_meta(
             health_widget_slot("layer3_summary")
         ):
-            st.metric(
-                get_text(lang, "health_summary_layer3"),
-                layer3_summary_label(market_latest, market_diag, lang),
+            render_layer3_summary_metric(
+                lang=lang,
+                market_latest=market_latest,
+                market_diag=market_diag,
+                get_text=get_text,
+                layer3_summary_label=layer3_summary_label,
             )
 
 

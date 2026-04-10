@@ -634,6 +634,18 @@ _HEALTH_WIDGET_SLOT_SPECS: dict[str, CommonWidgetSlotSpec] = {
         "refresh_mode": "poll_normal",
         "tone": "neutral",
     },
+    "live_tick_caption": {
+        "zone_id": "overview",
+        "priority": 45,
+        "refresh_mode": "poll_fast",
+        "tone": "neutral",
+    },
+    "market_summary_caption": {
+        "zone_id": "detail",
+        "priority": 115,
+        "refresh_mode": "poll_normal",
+        "tone": "neutral",
+    },
     "api_chart_panel": {
         "zone_id": "primary_live",
         "priority": 50,

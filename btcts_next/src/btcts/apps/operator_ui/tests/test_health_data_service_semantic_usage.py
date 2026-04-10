@@ -16,6 +16,9 @@ from btcts.apps.operator_ui.health_data_service import (
     build_layer3_semantic_usage_rows,
     build_layer3_semantic_usage_summary,
 )
+from btcts.processing.l3_market_semantics.event_usage_policy import (
+    build_event_usage_contract_rows,
+)
 
 
 def main() -> int:
@@ -35,6 +38,18 @@ def main() -> int:
         interpretation_bucket="reanchor_required",
     )
     assert all(row["usage_grade"] == "invalid" for row in invalid_rows)
+
+    contract_rows = build_event_usage_contract_rows(
+        interpretation_bucket="observe_only",
+    )
+    assert any(
+        row["event_family"] == "wall" and row["usage_grade"] == "watch"
+        for row in contract_rows
+    )
+    assert any(
+        row["event_family"] == "sweep" and row["usage_grade"] == "tentative"
+        for row in contract_rows
+    )
 
     summary = build_layer3_semantic_usage_summary(
         interpretation_bucket="observe_only",
@@ -127,6 +142,22 @@ def main() -> int:
             "orderbook_semantics_summary": {
                 "near_wall": {"side": "bid"},
                 "support": {"side": "bid"},
+                "active_event_count": 2,
+                "active_event_names": ["support_candidate", "near_wall_continued"],
+                "active_event_contracts": [
+                    {
+                        "event_name": "support_candidate",
+                        "event_family": "support_resistance",
+                        "usage_grade": "watch",
+                        "side": "bid",
+                    },
+                    {
+                        "event_name": "near_wall_continued",
+                        "event_family": "wall",
+                        "usage_grade": "watch",
+                        "side": "bid",
+                    },
+                ],
             },
             "orderbook_persistence_observable": True,
         },
@@ -146,6 +177,13 @@ def main() -> int:
     assert partial_orderbook["persistence_present"] is False
     assert partial_orderbook["persistence_event_name"] is None
     assert partial_orderbook["persistence_side"] is None
+    assert partial_orderbook["active_event_count"] == 2
+    assert partial_orderbook["active_event_names"] == [
+        "support_candidate",
+        "near_wall_continued",
+    ]
+    assert partial_orderbook["active_event_contracts"][0]["event_family"] == "support_resistance"
+    assert partial_orderbook["active_event_contracts"][0]["usage_grade"] == "watch"
 
     wired_orderbook = build_layer3_orderbook_runtime_summary(
         market_latest={

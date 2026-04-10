@@ -480,6 +480,37 @@ def build_layer3_orderbook_runtime_summary(
     explicit_contract_status = str(latest.get("orderbook_semantics_contract_status") or "").strip()
     contract_status_source = "market_state_orderbook_contract_status"
 
+    active_event_names = semantics_summary.get("active_event_names")
+    if not isinstance(active_event_names, list):
+        active_event_names = []
+    active_event_names = [str(name) for name in active_event_names if str(name).strip()]
+
+    active_event_contracts = semantics_summary.get("active_event_contracts")
+    if not isinstance(active_event_contracts, list):
+        active_event_contracts = []
+
+    normalized_active_event_contracts: list[dict[str, Any]] = []
+    for event in active_event_contracts:
+        if not isinstance(event, dict):
+            continue
+        event_name = str(event.get("event_name") or "").strip()
+        if not event_name:
+            continue
+        normalized_active_event_contracts.append(
+            {
+                "event_name": event_name,
+                "event_family": str(event.get("event_family") or "unknown"),
+                "usage_grade": str(event.get("usage_grade") or "unknown"),
+                "side": event.get("side"),
+            }
+        )
+
+    active_event_count = int(
+        semantics_summary.get("active_event_count")
+        or len(normalized_active_event_contracts)
+        or len(active_event_names)
+    )
+
     wiring_status = explicit_contract_status
     if not wiring_status:
         contract_status_source = "orderbook_summary_inference"
@@ -505,6 +536,9 @@ def build_layer3_orderbook_runtime_summary(
         "persistence_side": (semantics_summary.get("persistence") or {}).get("side"),
         "persistence_observable": bool(latest.get("orderbook_persistence_observable")),
         "present_count": present_count,
+        "active_event_count": active_event_count,
+        "active_event_names": active_event_names,
+        "active_event_contracts": normalized_active_event_contracts,
     }
 
 

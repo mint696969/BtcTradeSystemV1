@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from typing import Any
 
 from btcts.market_engine.execution.execution_facade import ExecutionFacade
+from btcts.market_engine.market_state.live_orderbook_semantics import (
+    build_live_orderbook_semantics_summary,
+)
 from btcts.processing.l3_market_semantics.continuity import InterpretationEngine
 from btcts.market_engine.profiles import create_exchange_profile
 from btcts.market_engine.config import MarketEngineConfig, load_market_engine_config
@@ -37,6 +40,8 @@ class MarketEngineRuntime:
         return self._cfg
 
     def step(self, normalized_event: dict[str, Any]) -> RuntimeStepResult:
+        prev_book_for_orderbook_semantics = self._current_book
+
         result = self._engine.run_realtime_step(
             current_series=self._current_series,
             current_book=self._current_book,
@@ -52,6 +57,19 @@ class MarketEngineRuntime:
         result.book_state.interpretation_bucket = interpretation.bucket
         result.book_state.interpretation_reason = interpretation.reason
         result.book_state.interpretation_policy = dict(interpretation.policy)
+
+        prev_orderbook_book = prev_book_for_orderbook_semantics
+        if result.started_new_series:
+            prev_orderbook_book = None
+
+        (
+            result.orderbook_semantics_contract_status,
+            result.orderbook_semantics_summary,
+        ) = build_live_orderbook_semantics_summary(
+            prev_book_state=prev_orderbook_book,
+            book_state=result.book_state,
+            semantic_policy=self._profile.orderbook_semantic_policy(),
+        )
 
         self._current_series = result.series_state
         self._current_book = result.book_state
