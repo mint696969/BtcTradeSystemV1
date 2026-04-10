@@ -81,6 +81,9 @@ def render_supervisor_control_section(
     get_text: Callable[[str, str], str],
     supervisor_status: dict,
     supervisor_request: dict,
+    stack_control_snapshot: dict,
+    request_unified_start: Callable[[], tuple[bool, str, bool]],
+    request_unified_safe_stop: Callable[[], tuple[bool, str]],
     request_unified_restart: Callable[[], tuple[bool, str]],
     is_supervisor_running: Callable[[dict], bool],
     is_restart_request_pending: Callable[[dict], bool],
@@ -98,20 +101,101 @@ def render_supervisor_control_section(
         )
     ):
         supervisor_running = is_supervisor_running(supervisor_status)
-        restart_pending = is_restart_request_pending(supervisor_request)
 
-        if not supervisor_running:
+        pending_action = str(
+            stack_control_snapshot.get("pending_action") or ""
+        ).strip().lower()
+        restart_pending = pending_action == "restart"
+
+        safe_stop_pending = pending_action == "stop_stack"
+        stack_active = bool(stack_control_snapshot.get("stack_active"))
+        supervisor_active = bool(stack_control_snapshot.get("supervisor_active"))
+        archive_active = bool(stack_control_snapshot.get("archive_active"))
+
+        supervisor_mode = str(
+            stack_control_snapshot.get("supervisor_mode")
+            or supervisor_status.get("mode")
+            or "-"
+        )
+        archive_copy_mode = str(
+            stack_control_snapshot.get("archive_copy_mode") or "-"
+        )
+        archive_gc_mode = str(
+            stack_control_snapshot.get("archive_gc_mode") or "-"
+        )
+        archive_copy_phase = str(
+            (stack_control_snapshot.get("archive_copy_state") or {}).get("current_phase")
+            or "-"
+        )
+        archive_gc_phase = str(
+            (stack_control_snapshot.get("archive_gc_state") or {}).get("current_phase")
+            or "-"
+        )
+
+        if not stack_active:
+            st.info(get_text(lang, "collector_msg_stack_not_running"))
+        elif stack_active and not supervisor_running:
             st.warning(get_text(lang, "collector_msg_watchdog_not_running"))
 
         if restart_pending:
             st.info(get_text(lang, "collector_msg_restart_pending"))
 
-        sup_col1, sup_col2, sup_col3, sup_col4 = st.columns([1.2, 1, 1, 1])
+        if safe_stop_pending:
+            st.info(get_text(lang, "collector_msg_safe_stop_pending"))
+
+        sup_col1, sup_col2, sup_col3, sup_col4, sup_col5, sup_col6 = st.columns(6)
+
         with sup_col1:
+            if st.button(
+                get_text(lang, "collector_button_start_unified"),
+                use_container_width=True,
+                disabled=stack_active or restart_pending or safe_stop_pending,
+            ):
+                ok, msg, already_running = request_unified_start()
+                if ok and already_running:
+                    st.info(
+                        get_text(lang, "collector_msg_start_already_running").format(
+                            message=msg,
+                        )
+                    )
+                elif ok:
+                    st.success(
+                        get_text(lang, "collector_msg_start_request_accepted").format(
+                            message=msg,
+                        )
+                    )
+                else:
+                    st.error(
+                        get_text(lang, "collector_msg_start_request_failed").format(
+                            message=msg,
+                        )
+                    )
+
+        with sup_col2:
+            if st.button(
+                get_text(lang, "collector_button_safe_stop_unified"),
+                use_container_width=True,
+                disabled=(not stack_active) or safe_stop_pending,
+            ):
+                ok, msg = request_unified_safe_stop()
+                if ok:
+                    st.success(
+                        get_text(lang, "collector_msg_safe_stop_request_accepted").format(
+                            message=msg,
+                        )
+                    )
+                else:
+                    st.error(
+                        get_text(lang, "collector_msg_safe_stop_request_failed").format(
+                            message=msg,
+                        )
+                    )
+
+        with sup_col3:
             if st.button(
                 get_text(lang, "collector_button_restart_unified"),
                 use_container_width=True,
-                disabled=restart_pending,
+                disabled=(not stack_active) or restart_pending or safe_stop_pending,
             ):
                 ok, msg = request_unified_restart()
                 if ok:
@@ -127,14 +211,48 @@ def render_supervisor_control_section(
                         )
                     )
 
-        with sup_col2:
-            st.metric(get_text(lang, "collector_metric_supervisor_mode"), supervisor_status.get("mode") or "-")
-
-        with sup_col3:
-            st.metric(get_text(lang, "collector_metric_pending_request"), supervisor_request.get("action") or "-")
-
         with sup_col4:
-            st.metric(get_text(lang, "collector_metric_supervisor_uptime_sec"), supervisor_status.get("uptime_sec") or "-")
+            st.metric(
+                get_text(lang, "collector_metric_supervisor_mode"),
+                supervisor_mode,
+            )
+
+        with sup_col5:
+            st.metric(
+                get_text(lang, "collector_metric_pending_request"),
+                pending_action or "-",
+            )
+
+        with sup_col6:
+            st.metric(
+                get_text(lang, "collector_metric_stack_active"),
+                get_text(
+                    lang,
+                    "collector_value_yes" if stack_active else "collector_value_no",
+                ),
+            )
+
+        st.caption(
+            get_text(lang, "collector_caption_stack_control_line").format(
+                stack_active=get_text(
+                    lang,
+                    "collector_value_yes" if stack_active else "collector_value_no",
+                ),
+                supervisor_active=get_text(
+                    lang,
+                    "collector_value_yes" if supervisor_active else "collector_value_no",
+                ),
+                archive_active=get_text(
+                    lang,
+                    "collector_value_yes" if archive_active else "collector_value_no",
+                ),
+                safe_stop_phase=supervisor_mode,
+                archive_copy_mode=archive_copy_mode,
+                archive_copy_phase=archive_copy_phase,
+                archive_gc_mode=archive_gc_mode,
+                archive_gc_phase=archive_gc_phase,
+            )
+        )
 
         if supervisor_status:
             st.caption(

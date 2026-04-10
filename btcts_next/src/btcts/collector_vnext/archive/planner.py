@@ -65,7 +65,7 @@ def build_copy_plan(cfg: ArchiveConfig) -> list[CopyItem]:
     today_name = _today_date_dir_name()
     copy_cutoff = _copy_cutoff_name(cfg.copy_min_age_days)
 
-    for rel_prefix, root in _iter_target_roots(cfg.hot_root, cfg.relative_prefixes):
+    for rel_prefix, root in _iter_target_roots(cfg.hot_root, cfg.resolved_copy_prefixes()):
         if rel_prefix.startswith("data/"):
             for date_dir in _iter_date_dirs(root):
                 if date_dir.name >= today_name:

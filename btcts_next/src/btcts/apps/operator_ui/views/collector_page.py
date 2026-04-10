@@ -36,6 +36,10 @@ from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.collector_state_service import load_state
 from btcts.apps.operator_ui.market_state_service import market_state_diagnostics
 from btcts.collector_vnext.config import load_config
+from btcts.collector_vnext.stack_control import (
+    stack_runtime_snapshot,
+    start_stack_detached,
+)
 from btcts.collector_vnext.unified_state import write_unified_supervisor_request
 from btcts.core import paths as core_paths
 
@@ -207,6 +211,44 @@ def _origin_audit_summary(events: list[dict]) -> dict:
     return summary
 
 
+def _request_unified_start() -> tuple[bool, str, bool]:
+    try:
+        result = start_stack_detached()
+        started_components = result.get("started_components") or []
+        if result.get("already_running"):
+            return True, "stack already running", True
+
+        if started_components:
+            joined = ", ".join(
+                f"{item.get('component')} pid={item.get('pid')}"
+                for item in started_components
+            )
+            return True, f"stack started components={joined}", False
+
+        return True, "stack start completed (no additional component launch was required)", False
+    except Exception as exc:
+        return False, str(exc), False
+
+
+def _request_unified_safe_stop() -> tuple[bool, str]:
+    try:
+        cfg = load_config()
+        request_id = uuid4().hex
+        write_unified_supervisor_request(
+            cfg,
+            {
+                "request_id": request_id,
+                "action": "stop_stack",
+                "requested_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+                "requested_by": "operator_ui",
+                "reason": "maintenance_safe_stop",
+            },
+        )
+        return True, f"safe stop request file written request_id={request_id}"
+    except Exception as exc:
+        return False, str(exc)
+
+
 def _request_unified_restart() -> tuple[bool, str]:
     try:
         cfg = load_config()
@@ -304,6 +346,7 @@ def render():
     daemon_state = collector_state.get("health", {})
     supervisor_status = collector_state.get("supervisor_status", {})
     supervisor_request = collector_state.get("supervisor_request", {})
+    stack_control = stack_runtime_snapshot()
     status_state = collector_state.get("status", {})
     daemon_stop_request = collector_state.get("daemon_stop_request", {})
     archive_copy_state = collector_state.get("archive_copy_state", {})
@@ -344,7 +387,7 @@ def render():
                 last_error=supervisor_status.get("last_error", "-"),
             )
         )
-    if supervisor_request:
+    if supervisor_request and stack_control.get("pending_request_fresh"):
         st.caption(
             get_text(lang, "collector_caption_pending_request_line").format(
                 action=supervisor_request.get("action", "-"),
@@ -392,6 +435,9 @@ def render():
         get_text=get_text,
         supervisor_status=supervisor_status,
         supervisor_request=supervisor_request,
+        stack_control_snapshot=stack_control,
+        request_unified_start=_request_unified_start,
+        request_unified_safe_stop=_request_unified_safe_stop,
         request_unified_restart=_request_unified_restart,
         is_supervisor_running=_is_supervisor_running,
         is_restart_request_pending=_is_restart_request_pending,

@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+import sys
 import time
 
 from btcts.collector_vnext.events import now_iso_utc
@@ -15,8 +16,10 @@ from .config import load_archive_config
 from .gc_job import build_gc_plan, execute_gc_plan
 from .planner import build_copy_plan, execute_copy_plan
 from .state import (
+    acquire_archive_worker_lock,
     clear_archive_stop_request,
     read_archive_stop_request,
+    release_archive_worker_lock,
     write_archive_copy_state,
     write_archive_gc_state,
 )
@@ -34,6 +37,23 @@ def _active_stop_request(cfg) -> dict:
 
 def run_forever() -> int:
     cfg = load_archive_config()
+
+    locked, lock_info = acquire_archive_worker_lock(cfg)
+    if not locked:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "archive_worker": True,
+                    "already_running": True,
+                    "lock_info": lock_info,
+                },
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+        )
+        return 2
+
     worker_started_at = now_iso_utc()
 
     append_archive_audit(
@@ -44,7 +64,8 @@ def run_forever() -> int:
             "host_name": socket.gethostname(),
             "hot_root": str(cfg.hot_root),
             "cold_root": str(cfg.cold_root),
-            "relative_prefixes": cfg.relative_prefixes,
+            "copy_prefixes": cfg.resolved_copy_prefixes(),
+            "gc_prefixes": cfg.resolved_gc_prefixes(),
         },
     )
 
@@ -52,6 +73,7 @@ def run_forever() -> int:
         cfg,
         {
             "mode": "RUNNING",
+            "current_phase": "startup",
             "started_at": worker_started_at,
             "last_error": None,
             "last_plan_count": 0,
@@ -63,9 +85,14 @@ def run_forever() -> int:
         cfg,
         {
             "mode": "IDLE",
+            "current_phase": "startup",
             "started_at": worker_started_at,
             "last_error": None,
+            "last_plan_count": 0,
             "last_deleted_files": 0,
+            "last_deleted_bytes": 0,
+            "enabled": cfg.gc_enabled,
+            "dry_run": cfg.gc_dry_run,
         },
     )
 
@@ -78,6 +105,7 @@ def run_forever() -> int:
                     cfg,
                     {
                         "mode": "STOPPING",
+                        "current_phase": "stopping",
                         "started_at": worker_started_at,
                         "last_error": None,
                         "stop_reason": stop_reason,
@@ -87,6 +115,7 @@ def run_forever() -> int:
                     cfg,
                     {
                         "mode": "STOPPING",
+                        "current_phase": "stopping",
                         "started_at": worker_started_at,
                         "dry_run": cfg.gc_dry_run,
                         "enabled": cfg.gc_enabled,
@@ -97,6 +126,15 @@ def run_forever() -> int:
                 )
                 break
 
+            write_archive_copy_state(
+                cfg,
+                {
+                    "mode": "RUNNING",
+                    "current_phase": "copy_planning",
+                    "started_at": worker_started_at,
+                    "last_error": None,
+                },
+            )
             plan = build_copy_plan(cfg)
             plan_sample = [
                 {
@@ -118,6 +156,17 @@ def run_forever() -> int:
                     },
                 )
 
+            write_archive_copy_state(
+                cfg,
+                {
+                    "mode": "RUNNING",
+                    "current_phase": "copy_executing",
+                    "started_at": worker_started_at,
+                    "last_error": None,
+                    "last_plan_count": len(plan),
+                    "plan_sample": plan_sample,
+                },
+            )
             result = execute_copy_plan(plan)
 
             if result["error_count"]:
@@ -144,6 +193,7 @@ def run_forever() -> int:
                 cfg,
                 {
                     "mode": "RUNNING",
+                    "current_phase": "copy_executing",
                     "started_at": worker_started_at,
                     "last_error": None if result["error_count"] == 0 else "copy_error",
                     "last_scan_ts": now_iso_utc(),
@@ -156,6 +206,17 @@ def run_forever() -> int:
                 },
             )
 
+            write_archive_gc_state(
+                cfg,
+                {
+                    "mode": "RUNNING" if cfg.gc_enabled else "IDLE",
+                    "current_phase": "gc_planning" if cfg.gc_enabled else "sleeping",
+                    "started_at": worker_started_at,
+                    "dry_run": cfg.gc_dry_run,
+                    "enabled": cfg.gc_enabled,
+                    "last_error": None,
+                },
+            )
             gc_plan = build_gc_plan(cfg) if cfg.gc_enabled else []
             gc_plan_sample = [
                 {
@@ -173,6 +234,21 @@ def run_forever() -> int:
                     extra={
                         "dry_run": cfg.gc_dry_run,
                         "plan_count": len(gc_plan),
+                        "plan_sample": gc_plan_sample,
+                    },
+                )
+
+            if cfg.gc_enabled:
+                write_archive_gc_state(
+                    cfg,
+                    {
+                        "mode": "RUNNING",
+                        "current_phase": "gc_executing",
+                        "started_at": worker_started_at,
+                        "dry_run": cfg.gc_dry_run,
+                        "enabled": cfg.gc_enabled,
+                        "last_error": None,
+                        "last_plan_count": len(gc_plan),
                         "plan_sample": gc_plan_sample,
                     },
                 )
@@ -210,6 +286,41 @@ def run_forever() -> int:
                 cfg,
                 {
                     "mode": "RUNNING" if cfg.gc_enabled else "IDLE",
+                    "current_phase": "gc_executing" if cfg.gc_enabled else "sleeping",
+                    "started_at": worker_started_at,
+                    "dry_run": cfg.gc_dry_run,
+                    "enabled": cfg.gc_enabled,
+                    "last_error": None if gc_result["error_count"] == 0 else "gc_error",
+                    "last_scan_ts": now_iso_utc(),
+                    "last_plan_count": len(gc_plan),
+                    "last_deleted_files": gc_result["deleted_files"],
+                    "last_deleted_bytes": gc_result["deleted_bytes"],
+                    "error_count": gc_result["error_count"],
+                    "plan_sample": gc_plan_sample,
+                },
+            )
+
+            write_archive_copy_state(
+                cfg,
+                {
+                    "mode": "RUNNING",
+                    "current_phase": "sleeping",
+                    "started_at": worker_started_at,
+                    "last_error": None if result["error_count"] == 0 else "copy_error",
+                    "last_scan_ts": now_iso_utc(),
+                    "last_plan_count": len(plan),
+                    "last_copied_files": result["copied_files"],
+                    "last_copied_dirs": result["copied_dirs"],
+                    "last_copied_bytes": result["copied_bytes"],
+                    "error_count": result["error_count"],
+                    "plan_sample": plan_sample,
+                },
+            )
+            write_archive_gc_state(
+                cfg,
+                {
+                    "mode": "RUNNING" if cfg.gc_enabled else "IDLE",
+                    "current_phase": "sleeping",
                     "started_at": worker_started_at,
                     "dry_run": cfg.gc_dry_run,
                     "enabled": cfg.gc_enabled,
@@ -230,6 +341,7 @@ def run_forever() -> int:
             cfg,
             {
                 "mode": "STOPPED",
+                "current_phase": "stopped",
                 "started_at": worker_started_at,
                 "last_error": None,
                 "last_scan_ts": now_iso_utc(),
@@ -239,6 +351,7 @@ def run_forever() -> int:
             cfg,
             {
                 "mode": "STOPPED",
+                "current_phase": "stopped",
                 "started_at": worker_started_at,
                 "dry_run": cfg.gc_dry_run,
                 "enabled": cfg.gc_enabled,
@@ -254,6 +367,7 @@ def run_forever() -> int:
             cfg,
             {
                 "mode": "STOPPED",
+                "current_phase": "stopped",
                 "started_at": worker_started_at,
                 "last_error": None,
                 "last_scan_ts": now_iso_utc(),
@@ -263,6 +377,7 @@ def run_forever() -> int:
             cfg,
             {
                 "mode": "STOPPED",
+                "current_phase": "stopped",
                 "started_at": worker_started_at,
                 "dry_run": cfg.gc_dry_run,
                 "enabled": cfg.gc_enabled,
@@ -283,6 +398,7 @@ def run_forever() -> int:
             cfg,
             {
                 "mode": "FAILED",
+                "current_phase": "failed",
                 "started_at": worker_started_at,
                 "last_error": str(exc),
                 "last_scan_ts": now_iso_utc(),
@@ -292,6 +408,7 @@ def run_forever() -> int:
             cfg,
             {
                 "mode": "FAILED",
+                "current_phase": "failed",
                 "started_at": worker_started_at,
                 "dry_run": cfg.gc_dry_run,
                 "enabled": cfg.gc_enabled,
@@ -303,6 +420,7 @@ def run_forever() -> int:
 
     finally:
         clear_archive_stop_request(cfg)
+        release_archive_worker_lock(cfg)
 
 
 def main() -> int:

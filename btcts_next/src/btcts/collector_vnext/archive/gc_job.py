@@ -49,7 +49,7 @@ def build_gc_plan(cfg: ArchiveConfig) -> list[DeleteItem]:
     items: list[DeleteItem] = []
     cutoff = _gc_cutoff_name(cfg.gc_min_age_days)
 
-    for rel_prefix in cfg.relative_prefixes:
+    for rel_prefix in cfg.resolved_gc_prefixes():
         if not rel_prefix.startswith("data/"):
             continue
 
@@ -87,12 +87,16 @@ def build_gc_plan(cfg: ArchiveConfig) -> list[DeleteItem]:
 def execute_gc_plan(items: list[DeleteItem], *, dry_run: bool) -> dict[str, int | list[dict[str, str]]]:
     deleted_files = 0
     deleted_bytes = 0
+    planned_deleted_files = len(items)
+    planned_deleted_bytes = sum(int(item.size_bytes) for item in items)
     errors: list[dict[str, str]] = []
 
     for item in items:
         try:
-            if not dry_run:
-                item.hot_path.unlink(missing_ok=False)
+            if dry_run:
+                continue
+
+            item.hot_path.unlink(missing_ok=False)
             deleted_files += 1
             deleted_bytes += int(item.size_bytes)
         except Exception as exc:
@@ -107,6 +111,8 @@ def execute_gc_plan(items: list[DeleteItem], *, dry_run: bool) -> dict[str, int 
     return {
         "deleted_files": deleted_files,
         "deleted_bytes": deleted_bytes,
+        "planned_deleted_files": planned_deleted_files,
+        "planned_deleted_bytes": planned_deleted_bytes,
         "error_count": len(errors),
         "errors_sample": errors[:20],
     }

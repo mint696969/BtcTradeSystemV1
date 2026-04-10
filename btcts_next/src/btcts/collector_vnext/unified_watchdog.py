@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/collector_vnext/unified_watchdog.py
-# desc: Unified Collector 用の minimal watchdog。manual restart request を受けて graceful restart を実行する。
+# desc: Unified Collector 用の watchdog。manual restart / safe stop request を受けて orchestration する。
 
 from __future__ import annotations
 
@@ -13,11 +13,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .archive.config import load_archive_config
+from .archive.state import (
+    read_archive_copy_state,
+    read_archive_gc_state,
+    read_archive_worker_lock,
+    write_archive_stop_request,
+)
 from .config import load_config
 from .events import now_iso_utc
 from .lock import is_pid_alive
 from .unified_state import (
     read_unified_supervisor_request,
+    read_unified_supervisor_status,
     write_unified_daemon_stop_request,
     write_unified_supervisor_status,
 )
@@ -212,21 +220,126 @@ def _clear_daemon_stop_request(cfg) -> None:
         pass
 
 
-def _start_unified_daemon() -> subprocess.Popen:
-    return subprocess.Popen(
-        [sys.executable, "-m", "btcts.collector_vnext.unified_daemon"],
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[4]
+
+
+def _repo_runtime_python() -> str:
+    override = str(os.getenv("BTCTS_RUNTIME_PYTHON", "") or "").strip()
+    if override:
+        candidate = Path(override)
+        if candidate.exists():
+            return str(candidate)
+
+    repo_root = _repo_root()
+
+    if os.name == "nt":
+        candidates = [
+            repo_root / ".venv" / "Scripts" / "pythonw.exe",
+            repo_root / ".venv" / "Scripts" / "python.exe",
+        ]
+    else:
+        candidates = [
+            repo_root / ".venv" / "bin" / "python",
+        ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+
+    exe = Path(sys.executable)
+    if os.name == "nt" and exe.name.lower() == "python.exe":
+        pythonw = exe.with_name("pythonw.exe")
+        if pythonw.exists():
+            return str(pythonw)
+    return str(exe)
+
+
+def _windows_startupinfo():
+    if os.name != "nt":
+        return None
+
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+    startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
+    return startupinfo
+
+
+def _windows_creationflags() -> int:
+    if os.name != "nt":
+        return 0
+
+    return (
+        getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     )
 
 
-def _request_restart(cfg, request: dict[str, Any]) -> None:
+def _heartbeat_running_status(
+    cfg,
+    *,
+    started_at: str,
+    daemon_pid: int | None,
+    default_last_action: str = "start",
+) -> None:
+    current = read_unified_supervisor_status(cfg) or {}
+
+    _write_status(
+        cfg,
+        mode="RUNNING",
+        last_action=str(current.get("last_action") or default_last_action),
+        last_requested_at=current.get("last_requested_at"),
+        last_completed_at=current.get("last_completed_at"),
+        last_error=current.get("last_error"),
+        daemon_pid=daemon_pid,
+        request_ack_ts=current.get("request_ack_ts"),
+        acked_request_id=current.get("acked_request_id"),
+        started_at=started_at,
+        last_seen_ts=now_iso_utc(),
+        uptime_sec=_uptime_sec(started_at),
+    )
+
+
+def _start_unified_daemon() -> subprocess.Popen:
+    return subprocess.Popen(
+        [_repo_runtime_python(), "-m", "btcts.collector_vnext.unified_daemon"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=_windows_creationflags(),
+        startupinfo=_windows_startupinfo(),
+        close_fds=True,
+    )
+
+
+def _request_daemon_stop(
+    cfg,
+    request: dict[str, Any],
+    *,
+    reason_default: str,
+    restart_requested: bool,
+) -> None:
     write_unified_daemon_stop_request(
         cfg,
         {
             "action": "stop",
             "requested_at": now_iso_utc(),
             "requested_by": "unified_watchdog",
-            "reason": request.get("reason") or "manual_restart",
-            "restart_requested": True,
+            "reason": request.get("reason") or reason_default,
+            "restart_requested": restart_requested,
+            "supervisor_request": request,
+        },
+    )
+
+
+def _request_archive_stop(archive_cfg, request: dict[str, Any]) -> None:
+    write_archive_stop_request(
+        archive_cfg,
+        {
+            "action": "stop",
+            "requested_at": now_iso_utc(),
+            "requested_by": "unified_watchdog",
+            "reason": request.get("reason") or "maintenance_safe_stop",
             "supervisor_request": request,
         },
     )
@@ -241,17 +354,70 @@ def _graceful_stop(proc: subprocess.Popen, timeout_sec: int) -> bool:
     return proc.poll() is not None
 
 
-def _active_restart_request(cfg) -> dict[str, Any]:
+def _active_supervisor_request(cfg) -> dict[str, Any]:
     payload = read_unified_supervisor_request(cfg)
     if not isinstance(payload, dict):
         return {}
-    if str(payload.get("action") or "").strip().lower() != "restart":
+
+    action = str(payload.get("action") or "").strip().lower()
+    if action not in {"restart", "stop_stack"}:
         return {}
     return payload
 
 
+def _archive_worker_alive(archive_cfg) -> bool:
+    lock_info = read_archive_worker_lock(archive_cfg)
+    if not isinstance(lock_info, dict) or not lock_info:
+        return False
+    return is_pid_alive(lock_info.get("pid"))
+
+
+def _archive_state_recent(payload: dict[str, Any], max_age_sec: int = 30) -> bool:
+    if not isinstance(payload, dict) or not payload:
+        return False
+
+    ts = _parse_ts(str(payload.get("ts") or ""))
+    if ts is None:
+        ts = _parse_ts(str(payload.get("last_scan_ts") or ""))
+    if ts is None:
+        ts = _parse_ts(str(payload.get("started_at") or ""))
+    if ts is None:
+        return False
+
+    now = datetime.now(timezone.utc)
+    try:
+        age = max(0.0, (now - ts.astimezone(timezone.utc)).total_seconds())
+    except Exception:
+        return False
+    return age <= max_age_sec
+
+
+def _archive_stopped(archive_cfg) -> tuple[bool, dict[str, Any], dict[str, Any]]:
+    copy_state = read_archive_copy_state(archive_cfg)
+    gc_state = read_archive_gc_state(archive_cfg)
+
+    copy_mode = str(copy_state.get("mode") or "").strip().upper()
+    gc_mode = str(gc_state.get("mode") or "").strip().upper()
+
+    if copy_mode == "STOPPED" and gc_mode == "STOPPED":
+        return True, copy_state, gc_state
+
+    if not _archive_worker_alive(archive_cfg):
+        copy_recent = _archive_state_recent(copy_state, max_age_sec=30)
+        gc_recent = _archive_state_recent(gc_state, max_age_sec=30)
+
+        graceful_copy = copy_mode in {"STOPPING", "STOPPED"}
+        graceful_gc = gc_mode in {"STOPPING", "STOPPED", "IDLE"}
+
+        if copy_recent and gc_recent and graceful_copy and graceful_gc:
+            return True, copy_state, gc_state
+
+    return False, copy_state, gc_state
+
+
 def run_forever() -> int:
     cfg = load_config()
+    archive_cfg = load_archive_config()
 
     locked, lock_info = _acquire_supervisor_lock(cfg)
     if not locked:
@@ -274,6 +440,7 @@ def run_forever() -> int:
     restart_backoff_sec = _env_int("BTCTS_UNIFIED_SUPERVISOR_BACKOFF_SEC", 3)
     max_failures = _env_int("BTCTS_UNIFIED_SUPERVISOR_MAX_FAILURES", 10)
     request_max_age_sec = _env_int("BTCTS_UNIFIED_REQUEST_MAX_AGE_SEC", 600)
+    safe_stop_timeout_sec = _env_int("BTCTS_UNIFIED_SAFE_STOP_TIMEOUT_SEC", 180)
 
     proc: subprocess.Popen | None = None
     consecutive_failures = 0
@@ -354,8 +521,16 @@ def run_forever() -> int:
                 )
                 continue
 
-            request = _active_restart_request(cfg)
+            _heartbeat_running_status(
+                cfg,
+                started_at=supervisor_started_at,
+                daemon_pid=proc.pid,
+                default_last_action="start",
+            )
+
+            request = _active_supervisor_request(cfg)
             if request:
+                action = str(request.get("action") or "").strip().lower()
                 requested_at = str(request.get("requested_at") or now_iso_utc())
                 request_id = str(request.get("request_id") or "").strip() or None
                 request_age_sec = _request_age_sec(request)
@@ -363,7 +538,7 @@ def run_forever() -> int:
                 if request_age_sec is not None and request_age_sec > request_max_age_sec:
                     _append_audit(
                         cfg,
-                        "watchdog.restart.request.stale_ignored",
+                        f"watchdog.{action}.request.stale_ignored",
                         level="WARN",
                         extra={
                             "request_id": request_id,
@@ -376,7 +551,7 @@ def run_forever() -> int:
                     _write_status(
                         cfg,
                         mode="RUNNING",
-                        last_action="restart",
+                        last_action=action,
                         last_requested_at=requested_at,
                         last_error=f"stale_request_ignored age_sec={round(request_age_sec, 1)}",
                         daemon_pid=proc.pid,
@@ -391,89 +566,297 @@ def run_forever() -> int:
 
                 _clear_request_file(cfg)
 
-                _append_audit(
-                    cfg,
-                    "watchdog.restart.requested",
-                    extra={
-                        "request_id": request_id,
-                        "requested_at": requested_at,
-                        "requested_by": request.get("requested_by"),
-                        "reason": request.get("reason"),
-                        "daemon_pid": proc.pid,
-                    },
-                )
-                _write_status(
-                    cfg,
-                    mode="RESTART_REQUESTED",
-                    last_action="restart",
-                    last_requested_at=requested_at,
-                    daemon_pid=proc.pid,
-                    request_ack_ts=now_iso_utc(),
-                    acked_request_id=request_id,
-                    started_at=supervisor_started_at,
-                    last_seen_ts=now_iso_utc(),
-                    uptime_sec=_uptime_sec(supervisor_started_at),
-                )
+                if action == "restart":
+                    _append_audit(
+                        cfg,
+                        "watchdog.restart.requested",
+                        extra={
+                            "request_id": request_id,
+                            "requested_at": requested_at,
+                            "requested_by": request.get("requested_by"),
+                            "reason": request.get("reason"),
+                            "daemon_pid": proc.pid,
+                        },
+                    )
+                    _write_status(
+                        cfg,
+                        mode="RESTART_REQUESTED",
+                        last_action="restart",
+                        last_requested_at=requested_at,
+                        daemon_pid=proc.pid,
+                        request_ack_ts=now_iso_utc(),
+                        acked_request_id=request_id,
+                        started_at=supervisor_started_at,
+                        last_seen_ts=now_iso_utc(),
+                        uptime_sec=_uptime_sec(supervisor_started_at),
+                    )
 
-                _request_restart(cfg, request)
-                _append_audit(cfg, "watchdog.restart.graceful_begin", extra={"daemon_pid": proc.pid, "request_id": request_id})
-                _write_status(
-                    cfg,
-                    mode="GRACEFUL_STOPPING",
-                    last_action="restart",
-                    last_requested_at=requested_at,
-                    daemon_pid=proc.pid,
-                    request_ack_ts=now_iso_utc(),
-                    acked_request_id=request_id,
-                    started_at=supervisor_started_at,
-                    last_seen_ts=now_iso_utc(),
-                    uptime_sec=_uptime_sec(supervisor_started_at),
-                )
+                    _request_daemon_stop(
+                        cfg,
+                        request,
+                        reason_default="manual_restart",
+                        restart_requested=True,
+                    )
+                    _append_audit(
+                        cfg,
+                        "watchdog.restart.graceful_begin",
+                        extra={"daemon_pid": proc.pid, "request_id": request_id},
+                    )
+                    _write_status(
+                        cfg,
+                        mode="GRACEFUL_STOPPING",
+                        last_action="restart",
+                        last_requested_at=requested_at,
+                        daemon_pid=proc.pid,
+                        request_ack_ts=now_iso_utc(),
+                        acked_request_id=request_id,
+                        started_at=supervisor_started_at,
+                        last_seen_ts=now_iso_utc(),
+                        uptime_sec=_uptime_sec(supervisor_started_at),
+                    )
 
-                stopped = _graceful_stop(proc, graceful_timeout_sec)
-                if not stopped:
-                    _append_audit(cfg, "watchdog.restart.graceful_timeout", level="WARN", extra={"daemon_pid": proc.pid, "request_id": request_id})
-                    proc.kill()
-                    try:
-                        proc.wait(timeout=5)
-                    except Exception:
-                        pass
-                    _append_audit(cfg, "watchdog.restart.force_kill", level="WARN", extra={"daemon_pid": proc.pid, "request_id": request_id})
+                    stopped = _graceful_stop(proc, graceful_timeout_sec)
+                    if not stopped:
+                        _append_audit(
+                            cfg,
+                            "watchdog.restart.graceful_timeout",
+                            level="WARN",
+                            extra={"daemon_pid": proc.pid, "request_id": request_id},
+                        )
+                        proc.kill()
+                        try:
+                            proc.wait(timeout=5)
+                        except Exception:
+                            pass
+                        _append_audit(
+                            cfg,
+                            "watchdog.restart.force_kill",
+                            level="WARN",
+                            extra={"daemon_pid": proc.pid, "request_id": request_id},
+                        )
 
-                _clear_daemon_stop_request(cfg)
+                    _clear_daemon_stop_request(cfg)
 
-                _write_status(
-                    cfg,
-                    mode="BACKOFF",
-                    last_action="restart",
-                    last_requested_at=requested_at,
-                    daemon_pid=None,
-                    request_ack_ts=now_iso_utc(),
-                    acked_request_id=request_id,
-                    started_at=supervisor_started_at,
-                    last_seen_ts=now_iso_utc(),
-                    uptime_sec=_uptime_sec(supervisor_started_at),
-                )
-                time.sleep(restart_backoff_sec)
+                    _write_status(
+                        cfg,
+                        mode="BACKOFF",
+                        last_action="restart",
+                        last_requested_at=requested_at,
+                        daemon_pid=None,
+                        request_ack_ts=now_iso_utc(),
+                        acked_request_id=request_id,
+                        started_at=supervisor_started_at,
+                        last_seen_ts=now_iso_utc(),
+                        uptime_sec=_uptime_sec(supervisor_started_at),
+                    )
+                    time.sleep(restart_backoff_sec)
 
-                proc = _start_unified_daemon()
-                consecutive_failures = 0
-                completed_at = now_iso_utc()
+                    proc = _start_unified_daemon()
+                    consecutive_failures = 0
+                    completed_at = now_iso_utc()
 
-                _append_audit(cfg, "watchdog.restart.completed", extra={"daemon_pid": proc.pid, "request_id": request_id})
-                _write_status(
-                    cfg,
-                    mode="RUNNING",
-                    last_action="restart",
-                    last_requested_at=requested_at,
-                    last_completed_at=completed_at,
-                    daemon_pid=proc.pid,
-                    request_ack_ts=now_iso_utc(),
-                    acked_request_id=request_id,
-                    started_at=supervisor_started_at,
-                    last_seen_ts=now_iso_utc(),
-                    uptime_sec=_uptime_sec(supervisor_started_at),
-                )
+                    _append_audit(
+                        cfg,
+                        "watchdog.restart.completed",
+                        extra={"daemon_pid": proc.pid, "request_id": request_id},
+                    )
+                    _write_status(
+                        cfg,
+                        mode="RUNNING",
+                        last_action="restart",
+                        last_requested_at=requested_at,
+                        last_completed_at=completed_at,
+                        daemon_pid=proc.pid,
+                        request_ack_ts=now_iso_utc(),
+                        acked_request_id=request_id,
+                        started_at=supervisor_started_at,
+                        last_seen_ts=now_iso_utc(),
+                        uptime_sec=_uptime_sec(supervisor_started_at),
+                    )
+                    continue
+
+                if action == "stop_stack":
+                    _append_audit(
+                        cfg,
+                        "watchdog.stop_stack.requested",
+                        extra={
+                            "request_id": request_id,
+                            "requested_at": requested_at,
+                            "requested_by": request.get("requested_by"),
+                            "reason": request.get("reason"),
+                            "daemon_pid": proc.pid,
+                        },
+                    )
+                    _write_status(
+                        cfg,
+                        mode="STOP_REQUESTED",
+                        last_action="stop_stack",
+                        last_requested_at=requested_at,
+                        daemon_pid=proc.pid,
+                        request_ack_ts=now_iso_utc(),
+                        acked_request_id=request_id,
+                        started_at=supervisor_started_at,
+                        last_seen_ts=now_iso_utc(),
+                        uptime_sec=_uptime_sec(supervisor_started_at),
+                    )
+
+                    _request_daemon_stop(
+                        cfg,
+                        request,
+                        reason_default="maintenance_safe_stop",
+                        restart_requested=False,
+                    )
+                    _append_audit(
+                        cfg,
+                        "watchdog.stop_stack.daemon_graceful_begin",
+                        extra={"daemon_pid": proc.pid, "request_id": request_id},
+                    )
+                    _write_status(
+                        cfg,
+                        mode="GRACEFUL_STOPPING",
+                        last_action="stop_stack",
+                        last_requested_at=requested_at,
+                        daemon_pid=proc.pid,
+                        request_ack_ts=now_iso_utc(),
+                        acked_request_id=request_id,
+                        started_at=supervisor_started_at,
+                        last_seen_ts=now_iso_utc(),
+                        uptime_sec=_uptime_sec(supervisor_started_at),
+                    )
+
+                    stopped = _graceful_stop(proc, graceful_timeout_sec)
+                    if not stopped:
+                        _append_audit(
+                            cfg,
+                            "watchdog.stop_stack.daemon_graceful_timeout",
+                            level="WARN",
+                            extra={"daemon_pid": proc.pid, "request_id": request_id},
+                        )
+                        proc.kill()
+                        try:
+                            proc.wait(timeout=5)
+                        except Exception:
+                            pass
+                        _append_audit(
+                            cfg,
+                            "watchdog.stop_stack.daemon_force_kill",
+                            level="WARN",
+                            extra={"daemon_pid": proc.pid, "request_id": request_id},
+                        )
+
+                    _clear_daemon_stop_request(cfg)
+
+                    _write_status(
+                        cfg,
+                        mode="DAEMON_STOPPED",
+                        last_action="stop_stack",
+                        last_requested_at=requested_at,
+                        daemon_pid=None,
+                        request_ack_ts=now_iso_utc(),
+                        acked_request_id=request_id,
+                        started_at=supervisor_started_at,
+                        last_seen_ts=now_iso_utc(),
+                        uptime_sec=_uptime_sec(supervisor_started_at),
+                    )
+
+                    _request_archive_stop(archive_cfg, request)
+                    _append_audit(
+                        cfg,
+                        "watchdog.stop_stack.archive_drain_requested",
+                        extra={"request_id": request_id},
+                    )
+                    _write_status(
+                        cfg,
+                        mode="ARCHIVE_DRAIN_REQUESTED",
+                        last_action="stop_stack",
+                        last_requested_at=requested_at,
+                        daemon_pid=None,
+                        request_ack_ts=now_iso_utc(),
+                        acked_request_id=request_id,
+                        started_at=supervisor_started_at,
+                        last_seen_ts=now_iso_utc(),
+                        uptime_sec=_uptime_sec(supervisor_started_at),
+                    )
+
+                    deadline = time.time() + max(safe_stop_timeout_sec, 1)
+                    archive_completed = False
+                    copy_state: dict[str, Any] = {}
+                    gc_state: dict[str, Any] = {}
+
+                    while time.time() < deadline:
+                        archive_completed, copy_state, gc_state = _archive_stopped(archive_cfg)
+                        if archive_completed:
+                            break
+
+                        _write_status(
+                            cfg,
+                            mode="ARCHIVE_DRAINING",
+                            last_action="stop_stack",
+                            last_requested_at=requested_at,
+                            daemon_pid=None,
+                            request_ack_ts=now_iso_utc(),
+                            acked_request_id=request_id,
+                            started_at=supervisor_started_at,
+                            last_seen_ts=now_iso_utc(),
+                            uptime_sec=_uptime_sec(supervisor_started_at),
+                        )
+                        time.sleep(1.0)
+
+                    if not archive_completed:
+                        _append_audit(
+                            cfg,
+                            "watchdog.stop_stack.archive_timeout",
+                            level="ERROR",
+                            extra={
+                                "request_id": request_id,
+                                "timeout_sec": safe_stop_timeout_sec,
+                                "archive_copy_mode": str(copy_state.get("mode") or ""),
+                                "archive_gc_mode": str(gc_state.get("mode") or ""),
+                            },
+                        )
+                        _write_status(
+                            cfg,
+                            mode="FAILED",
+                            last_action="stop_stack",
+                            last_requested_at=requested_at,
+                            last_error=(
+                                "archive_stop_timeout "
+                                f"copy_mode={str(copy_state.get('mode') or '-')}"
+                                f" gc_mode={str(gc_state.get('mode') or '-')}"
+                            ),
+                            daemon_pid=None,
+                            request_ack_ts=now_iso_utc(),
+                            acked_request_id=request_id,
+                            started_at=supervisor_started_at,
+                            last_seen_ts=now_iso_utc(),
+                            uptime_sec=_uptime_sec(supervisor_started_at),
+                        )
+                        return 1
+
+                    completed_at = now_iso_utc()
+                    _append_audit(
+                        cfg,
+                        "watchdog.stop_stack.completed",
+                        extra={
+                            "request_id": request_id,
+                            "archive_copy_mode": str(copy_state.get("mode") or ""),
+                            "archive_gc_mode": str(gc_state.get("mode") or ""),
+                        },
+                    )
+                    _write_status(
+                        cfg,
+                        mode="SAFE_STOP_COMPLETED",
+                        last_action="stop_stack",
+                        last_requested_at=requested_at,
+                        last_completed_at=completed_at,
+                        daemon_pid=None,
+                        request_ack_ts=now_iso_utc(),
+                        acked_request_id=request_id,
+                        started_at=supervisor_started_at,
+                        last_seen_ts=now_iso_utc(),
+                        uptime_sec=_uptime_sec(supervisor_started_at),
+                    )
+                    return 0
 
             time.sleep(1.0)
 

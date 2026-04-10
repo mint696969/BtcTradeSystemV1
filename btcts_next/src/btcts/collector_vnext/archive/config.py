@@ -10,6 +10,19 @@ from pathlib import Path
 from btcts.collector_vnext.config import load_config
 
 
+DEFAULT_COPY_PREFIXES = [
+    "data/market_data",
+    "data/collector_raw",
+    "state/collector_vnext",
+    "logs/collector_vnext",
+]
+
+DEFAULT_GC_PREFIXES = [
+    "data/market_data",
+    "data/collector_raw",
+]
+
+
 def _env_int(name: str, default: int) -> int:
     raw = str(os.getenv(name, "") or "").strip()
     if not raw:
@@ -38,14 +51,9 @@ def _env_bool(name: str, default: bool) -> bool:
 class ArchiveConfig:
     hot_root: Path
     cold_root: Path
-    relative_prefixes: list[str] = field(
-        default_factory=lambda: [
-            "data/market_data",
-            "data/collector_raw",
-            "state/collector_vnext",
-            "logs/collector_vnext",
-        ]
-    )
+    relative_prefixes: list[str] = field(default_factory=list)
+    copy_prefixes: list[str] = field(default_factory=list)
+    gc_prefixes: list[str] = field(default_factory=list)
     scan_interval_sec: int = 30
     stable_age_sec: int = 600
     copy_min_age_days: int = 1
@@ -56,6 +64,22 @@ class ArchiveConfig:
     gc_dry_run: bool = True
     max_delete_files_per_cycle: int = 32
 
+    def resolved_copy_prefixes(self) -> list[str]:
+        if self.copy_prefixes:
+            return list(self.copy_prefixes)
+        if self.relative_prefixes:
+            return list(self.relative_prefixes)
+        return list(DEFAULT_COPY_PREFIXES)
+
+    def resolved_gc_prefixes(self) -> list[str]:
+        if self.gc_prefixes:
+            return list(self.gc_prefixes)
+        if self.relative_prefixes:
+            legacy = [x for x in self.relative_prefixes if str(x).startswith("data/")]
+            if legacy:
+                return legacy
+        return list(DEFAULT_GC_PREFIXES)
+
 
 def load_archive_config() -> ArchiveConfig:
     collector_cfg = load_config()
@@ -65,15 +89,9 @@ def load_archive_config() -> ArchiveConfig:
     return ArchiveConfig(
         hot_root=hot_base,
         cold_root=cold_root,
-        relative_prefixes=_env_list(
-            "BTCTS_ARCHIVE_RELATIVE_PREFIXES",
-            [
-                "data/market_data",
-                "data/collector_raw",
-                "state/collector_vnext",
-                "logs/collector_vnext",
-            ],
-        ),
+        relative_prefixes=_env_list("BTCTS_ARCHIVE_RELATIVE_PREFIXES", []),
+        copy_prefixes=_env_list("BTCTS_ARCHIVE_COPY_PREFIXES", []),
+        gc_prefixes=_env_list("BTCTS_ARCHIVE_GC_PREFIXES", []),
         scan_interval_sec=max(10, _env_int("BTCTS_ARCHIVE_SCAN_INTERVAL_SEC", 30)),
         stable_age_sec=max(60, _env_int("BTCTS_ARCHIVE_STABLE_AGE_SEC", 600)),
         copy_min_age_days=max(1, _env_int("BTCTS_ARCHIVE_COPY_MIN_AGE_DAYS", 1)),
