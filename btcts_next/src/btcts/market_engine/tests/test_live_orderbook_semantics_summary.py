@@ -104,6 +104,12 @@ def main() -> int:
         "near_wall_continued",
         "support_continued",
     }
+    assert summary["summary_slots_present"] == [
+        "near_wall",
+        "support",
+        "persistence",
+    ]
+    assert summary["summary_slots_count"] == 3
     assert summary["active_event_count"] == len(summary["active_event_names"])
     assert "support_candidate" in summary["active_event_names"]
     assert isinstance(summary["active_event_contracts"], list)
@@ -113,6 +119,31 @@ def main() -> int:
         and str(event.get("usage_grade")) == "strong"
         for event in summary["active_event_contracts"]
     )
+
+    support_row = next(
+        event
+        for event in summary["active_event_contracts"]
+        if str(event.get("event_name")) == "support_candidate"
+    )
+    assert support_row["meaning_version"] == "l3_event_usage_policy.v1alpha1"
+    assert support_row["contract_source"] == "l3_event_usage_policy"
+    assert support_row["trust_bucket"] == "degraded"
+    assert support_row["interpretation_bucket"] == "allow_structural_use"
+    assert support_row["consumer_allowed"] == [
+        "ui",
+        "alert",
+        "ai",
+        "strategy",
+        "execution",
+    ]
+    assert support_row["actionability"] == "actionable"
+    assert support_row["forecast_horizon_hint"] == "short"
+    assert support_row["half_life_sec"] == 30
+    assert support_row["invalidates_on"] == [
+        "series_boundary",
+        "reanchor_required",
+    ]
+    assert support_row["evidence_refs"] == []
 
     flat_status, flat_summary = build_live_orderbook_semantics_summary(
         prev_book_state=None,
@@ -129,6 +160,8 @@ def main() -> int:
     assert flat_summary["support"] is None
     assert flat_summary["resistance"] is None
     assert flat_summary["persistence"] is None
+    assert flat_summary["summary_slots_present"] == []
+    assert flat_summary["summary_slots_count"] == 0
     assert flat_summary["active_event_count"] == 0
     assert flat_summary["active_event_names"] == []
     assert flat_summary["active_event_contracts"] == []

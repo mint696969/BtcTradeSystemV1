@@ -55,3 +55,28 @@ def interpretation_caption(
         interpretation_bucket=interpretation_bucket or "-",
         interpretation_reason=interpretation_reason or "-",
     )
+
+
+def summary_contract_caption(
+    *,
+    lang: str,
+    summary: dict | None,
+) -> str:
+    payload = dict(summary or {})
+
+    semantic_rows_kind = str(
+        payload.get("semantic_usage_contract_rows_kind") or "event_family_contract_rows"
+    )
+    semantic_rows_count = int(payload.get("semantic_usage_contract_rows_count") or 0)
+
+    active_event_rows_kind = str(
+        payload.get("orderbook_active_event_contracts_kind") or "active_event_contract_rows"
+    )
+    active_event_rows_count = int(payload.get("orderbook_active_event_contracts_count") or 0)
+
+    return get_text(lang, "market_monitor_contract_line").format(
+        semantic_rows_kind=semantic_rows_kind,
+        semantic_rows_count=semantic_rows_count,
+        active_event_rows_kind=active_event_rows_kind,
+        active_event_rows_count=active_event_rows_count,
+    )

@@ -30,8 +30,12 @@ from btcts.apps.operator_ui.market_state_service import (
 from btcts.core import io
 from btcts.core import paths as core_paths
 from btcts.processing.l3_market_semantics import (
+    build_event_usage_contract_rows,
     build_event_usage_summary,
-    resolve_usage_grade,
+)
+from btcts.processing.l4_consumer_models.shared import (
+    HealthDigestBuildInput,
+    build_health_digest,
 )
 
 
@@ -360,31 +364,55 @@ def build_recent_layer3_series(
 def build_layer3_semantic_usage_rows(
     *,
     interpretation_bucket: str | None,
+    market_latest: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     bucket = str(interpretation_bucket or "").strip() or None
-    event_families = [
-        "pressure",
-        "wall",
-        "support_resistance",
-        "pull",
-        "depth",
-        "spread",
-        "sweep",
-        "absorption",
+    latest = dict(market_latest or {})
+    default_meaning_version = str(
+        build_event_usage_summary(bucket).get("meaning_version") or "unknown"
+    )
+
+    live_rows = latest.get("semantic_usage_contract_rows")
+    if isinstance(live_rows, list) and live_rows:
+        out: list[dict[str, Any]] = []
+        for row in live_rows:
+            if not isinstance(row, dict):
+                continue
+            event_family = str(row.get("event_family") or "").strip()
+            if not event_family:
+                continue
+            out.append(
+                {
+                    "source_kind": "market_state_semantic_usage_contract_rows",
+                    "contract_source": str(row.get("contract_source") or "l3_event_usage_policy"),
+                    "interpretation_bucket": str(
+                        row.get("interpretation_bucket")
+                        or bucket
+                        or ""
+                    ).strip() or None,
+                    "meaning_version": str(
+                        row.get("meaning_version") or default_meaning_version
+                    ),
+                    "event_family": event_family,
+                    "usage_grade": str(row.get("usage_grade") or "unknown"),
+                }
+            )
+        if out:
+            return out
+
+    return [
+        {
+            "source_kind": "layer3_semantic_usage_observer",
+            "contract_source": "l3_event_usage_policy",
+            "interpretation_bucket": bucket,
+            "meaning_version": str(
+                row.get("meaning_version") or default_meaning_version
+            ),
+            "event_family": str(row.get("event_family") or ""),
+            "usage_grade": str(row.get("usage_grade") or "unknown"),
+        }
+        for row in build_event_usage_contract_rows(bucket)
     ]
-
-    out: list[dict[str, Any]] = []
-    for event_family in event_families:
-        out.append(
-            {
-                "source_kind": "layer3_semantic_usage_observer",
-                "interpretation_bucket": bucket,
-                "event_family": event_family,
-                "usage_grade": resolve_usage_grade(bucket, event_family),
-            }
-        )
-
-    return out
 
 
 
@@ -396,11 +424,18 @@ def build_layer3_semantic_usage_summary(
     latest = dict(market_latest or {})
     latest_summary = latest.get("semantic_usage_summary")
     latest_observer_status = latest.get("semantic_observer_status")
+    default_meaning_version = str(
+        build_event_usage_summary(interpretation_bucket).get("meaning_version")
+        or "unknown"
+    )
 
     if isinstance(latest_summary, dict) and latest_summary:
         return {
             "source_kind": "market_state_semantic_usage_summary",
             **latest_summary,
+            "meaning_version": str(
+                latest_summary.get("meaning_version") or default_meaning_version
+            ),
             "observer_status": (
                 latest_observer_status
                 or latest_summary.get("observer_status")
@@ -431,6 +466,11 @@ def build_layer3_runtime_contract_summary(
     usage_summary_present = isinstance(latest.get("semantic_usage_summary"), dict) and bool(
         latest.get("semantic_usage_summary")
     )
+
+    contract_rows = latest.get("semantic_usage_contract_rows")
+    contract_rows_present = isinstance(contract_rows, list) and bool(contract_rows)
+    contract_rows_count = len(contract_rows) if isinstance(contract_rows, list) else 0
+
     source_series_present = bool(latest.get("source_series_id"))
     freshness = str(diag.get("preferred_row_freshness") or "UNKNOWN")
 
@@ -445,6 +485,8 @@ def build_layer3_runtime_contract_summary(
         "wiring_status": wiring_status,
         "observer_present": observer_present,
         "usage_summary_present": usage_summary_present,
+        "contract_rows_present": contract_rows_present,
+        "contract_rows_count": contract_rows_count,
         "source_series_present": source_series_present,
         "freshness": freshness,
         "semantic_summary_source": str(semantic_summary.get("source_kind") or "unknown"),
@@ -468,14 +510,40 @@ def build_layer3_orderbook_runtime_summary(
     resistance_present = bool(semantics_summary.get("resistance"))
     persistence_present = bool(semantics_summary.get("persistence"))
 
-    present_count = sum(
-        [
-            near_wall_present,
-            support_present,
-            resistance_present,
-            persistence_present,
-        ]
+    canonical_summary_slots = (
+        "near_wall",
+        "support",
+        "resistance",
+        "persistence",
     )
+    inferred_summary_slots_present = [
+        slot_name
+        for slot_name, slot_present in (
+            ("near_wall", near_wall_present),
+            ("support", support_present),
+            ("resistance", resistance_present),
+            ("persistence", persistence_present),
+        )
+        if slot_present
+    ]
+
+    raw_summary_slots_present = semantics_summary.get("summary_slots_present")
+    if isinstance(raw_summary_slots_present, list):
+        raw_slot_names = {
+            str(name).strip()
+            for name in raw_summary_slots_present
+            if str(name).strip() in canonical_summary_slots
+        }
+        summary_slots_present = [
+            slot_name for slot_name in canonical_summary_slots if slot_name in raw_slot_names
+        ]
+    else:
+        summary_slots_present = list(inferred_summary_slots_present)
+
+    if not summary_slots_present:
+        summary_slots_present = list(inferred_summary_slots_present)
+
+    present_count = len(summary_slots_present)
 
     explicit_contract_status = str(latest.get("orderbook_semantics_contract_status") or "").strip()
     contract_status_source = "market_state_orderbook_contract_status"
@@ -496,11 +564,31 @@ def build_layer3_orderbook_runtime_summary(
         event_name = str(event.get("event_name") or "").strip()
         if not event_name:
             continue
+        raw_consumer_allowed = event.get("consumer_allowed")
+        consumer_allowed = list(raw_consumer_allowed) if isinstance(raw_consumer_allowed, list) else []
+
+        raw_invalidates_on = event.get("invalidates_on")
+        invalidates_on = list(raw_invalidates_on) if isinstance(raw_invalidates_on, list) else []
+
+        raw_evidence_refs = event.get("evidence_refs")
+        evidence_refs = list(raw_evidence_refs) if isinstance(raw_evidence_refs, list) else []
+
         normalized_active_event_contracts.append(
             {
+                "contract_source": str(event.get("contract_source") or "l3_event_usage_policy"),
                 "event_name": event_name,
                 "event_family": str(event.get("event_family") or "unknown"),
                 "usage_grade": str(event.get("usage_grade") or "unknown"),
+                "interpretation_bucket": str(event.get("interpretation_bucket") or "").strip() or None,
+                "meaning_version": str(event.get("meaning_version") or "unknown"),
+                "confidence": event.get("confidence"),
+                "trust_bucket": str(event.get("trust_bucket") or "unknown"),
+                "consumer_allowed": consumer_allowed,
+                "actionability": str(event.get("actionability") or "unknown"),
+                "forecast_horizon_hint": str(event.get("forecast_horizon_hint") or "unknown"),
+                "half_life_sec": event.get("half_life_sec"),
+                "invalidates_on": invalidates_on,
+                "evidence_refs": evidence_refs,
                 "side": event.get("side"),
             }
         )
@@ -511,14 +599,19 @@ def build_layer3_orderbook_runtime_summary(
         or len(active_event_names)
     )
 
+    inferred_wiring_status = "missing"
+    if present_count >= 4:
+        inferred_wiring_status = "wired"
+    elif present_count > 0 or active_event_count > 0:
+        inferred_wiring_status = "partial"
+
     wiring_status = explicit_contract_status
     if not wiring_status:
         contract_status_source = "orderbook_summary_inference"
-        wiring_status = "missing"
-        if present_count >= 4:
-            wiring_status = "wired"
-        elif present_count > 0:
-            wiring_status = "partial"
+        wiring_status = inferred_wiring_status
+    elif explicit_contract_status == "missing" and inferred_wiring_status in {"partial", "wired"}:
+        contract_status_source = "orderbook_summary_inference_overrode_missing"
+        wiring_status = inferred_wiring_status
 
     return {
         "source_kind": "layer3_orderbook_runtime_summary",
@@ -536,6 +629,7 @@ def build_layer3_orderbook_runtime_summary(
         "persistence_side": (semantics_summary.get("persistence") or {}).get("side"),
         "persistence_observable": bool(latest.get("orderbook_persistence_observable")),
         "present_count": present_count,
+        "summary_slots_present": summary_slots_present,
         "active_event_count": active_event_count,
         "active_event_names": active_event_names,
         "active_event_contracts": normalized_active_event_contracts,
@@ -779,6 +873,31 @@ def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
         interpretation_bucket=layer3_interpretation_bucket,
         market_latest=market_latest,
     )
+    layer3_semantic_usage_rows = build_layer3_semantic_usage_rows(
+        interpretation_bucket=layer3_interpretation_bucket,
+        market_latest=market_latest,
+    )
+    layer3_runtime_contract_summary = build_layer3_runtime_contract_summary(
+        market_latest=market_latest,
+        market_diag=market_diag,
+        semantic_usage_summary=layer3_semantic_usage_summary,
+    )
+    layer3_orderbook_runtime_summary = build_layer3_orderbook_runtime_summary(
+        market_latest=market_latest,
+        market_diag=market_diag,
+    )
+    health_digest = build_health_digest(
+        HealthDigestBuildInput(
+            collector_state=state,
+            market_state_row=market_latest,
+            market_diagnostics=market_diag,
+            semantic_usage_summary=layer3_semantic_usage_summary,
+            semantic_usage_rows=layer3_semantic_usage_rows,
+            runtime_contract_summary=layer3_runtime_contract_summary,
+            orderbook_runtime_summary=layer3_orderbook_runtime_summary,
+            source_kind="health_data_service",
+        )
+    )
 
     rate_domains = state.get("rate_domains") or {}
     domain_names = list(state.get("domain_names") or [])
@@ -811,19 +930,11 @@ def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
         "api_ws_series": build_recent_api_ws_series(range_key=range_key, include_in_progress=False),
         "rate_overlay": build_rate_limit_overlay(range_key=range_key, include_in_progress=False),
         "layer3_series": build_recent_layer3_series(range_key=range_key, include_in_progress=False),
-        "layer3_semantic_usage_rows": build_layer3_semantic_usage_rows(
-            interpretation_bucket=layer3_interpretation_bucket,
-        ),
+        "layer3_semantic_usage_rows": layer3_semantic_usage_rows,
         "layer3_semantic_usage_summary": layer3_semantic_usage_summary,
-        "layer3_runtime_contract_summary": build_layer3_runtime_contract_summary(
-            market_latest=market_latest,
-            market_diag=market_diag,
-            semantic_usage_summary=layer3_semantic_usage_summary,
-        ),
-        "layer3_orderbook_runtime_summary": build_layer3_orderbook_runtime_summary(
-            market_latest=market_latest,
-            market_diag=market_diag,
-        ),
+        "layer3_runtime_contract_summary": layer3_runtime_contract_summary,
+        "layer3_orderbook_runtime_summary": layer3_orderbook_runtime_summary,
+        "health_digest": health_digest,
         "api_continuity_rail": build_api_continuity_rail(range_key=range_key),
         "ws_continuity_rail": build_ws_continuity_rail(range_key=range_key),
         "recent_anomalies": build_recent_anomaly_rows(max_items=12),

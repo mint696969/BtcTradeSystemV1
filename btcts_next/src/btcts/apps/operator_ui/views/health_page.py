@@ -18,10 +18,15 @@ from btcts.apps.operator_ui.components.health_chart_panels import (
     render_ws_chart_panel,
 )
 from btcts.apps.operator_ui.components.health_detail_panels import (
+    build_health_digest_current_state_caption,
     render_current_state_section,
     render_recent_events_section,
 )
 from btcts.apps.operator_ui.components.health_top_panels import (
+    build_health_digest_api_summary_caption,
+    build_health_digest_collector_summary_caption,
+    build_health_digest_layer3_summary_caption,
+    build_health_digest_ws_summary_caption,
     render_api_summary_metric,
     render_collector_summary_metric,
     render_continuity_panels,
@@ -35,6 +40,11 @@ from btcts.apps.operator_ui.components.market_state_bridge import (
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
+
+from btcts.apps.operator_ui.components.health_digest_bridge import (
+    build_health_digest_ui_bundle,
+)
+
 from btcts.apps.operator_ui.health_data_service import load_health_snapshot
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.ui_time import format_ui_ts
@@ -402,6 +412,13 @@ def render():
         collector_state = snapshot.get("collector_state") or {}
         status_payload = collector_state.get("status") or {}
         health_payload = collector_state.get("health") or {}
+        health_digest_bundle = build_health_digest_ui_bundle(
+            snapshot.get("health_digest")
+        )
+        digest_caption = build_health_digest_collector_summary_caption(
+            widget=health_digest_bundle["widget"],
+            payload=health_digest_bundle["payload"],
+        )
 
         render_collector_summary_metric(
             lang=lang,
@@ -409,6 +426,7 @@ def render():
             health_payload=health_payload,
             get_text=get_text,
             collector_summary_label=_collector_summary_label,
+            digest_caption=digest_caption,
         )
 
     def _render_api_summary_section() -> None:
@@ -417,30 +435,53 @@ def render():
         rate_payload = collector_state.get("rate") or {}
         rate_items = rate_payload.get("items") or {}
         bitflyer_rate = rate_items.get("bitflyer") or {}
+        health_digest_bundle = build_health_digest_ui_bundle(
+            snapshot.get("health_digest")
+        )
+        digest_caption = build_health_digest_api_summary_caption(
+            widget=health_digest_bundle["widget"],
+            payload=health_digest_bundle["payload"],
+        )
 
         render_api_summary_metric(
             lang=lang,
             bitflyer_rate=bitflyer_rate,
             get_text=get_text,
             api_summary_label=_api_summary_label,
+            digest_caption=digest_caption,
         )
 
     def _render_ws_summary_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
         collector_state = snapshot.get("collector_state") or {}
         origin_payload = collector_state.get("origin") or {}
+        health_digest_bundle = build_health_digest_ui_bundle(
+            snapshot.get("health_digest")
+        )
+        digest_caption = build_health_digest_ws_summary_caption(
+            widget=health_digest_bundle["widget"],
+            payload=health_digest_bundle["payload"],
+        )
 
         render_ws_summary_metric(
             lang=lang,
             origin_payload=origin_payload,
             get_text=get_text,
             ws_summary_label=_ws_summary_label,
+            digest_caption=digest_caption,
         )
 
     def _render_layer3_summary_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
         market_latest = snapshot.get("market_latest") or {}
         market_diag = snapshot.get("market_diag") or {}
+        health_digest_bundle = build_health_digest_ui_bundle(
+            snapshot.get("health_digest")
+        )
+        digest_caption = build_health_digest_layer3_summary_caption(
+            widget=health_digest_bundle["widget"],
+            payload=health_digest_bundle["payload"],
+        )
 
         render_layer3_summary_metric(
             lang=lang,
@@ -448,6 +489,7 @@ def render():
             market_diag=market_diag,
             get_text=get_text,
             layer3_summary_label=_layer3_summary_label,
+            digest_caption=digest_caption,
         )
 
     def _render_api_chart_section() -> None:
@@ -562,6 +604,9 @@ def render():
 
         market_latest = snapshot.get("market_latest") or {}
         market_diag = snapshot.get("market_diag") or {}
+        health_digest_bundle = build_health_digest_ui_bundle(
+            snapshot.get("health_digest")
+        )
 
         render_current_state_section(
             lang=lang,
@@ -582,6 +627,8 @@ def render():
             ws_executions_last_error=ws_executions_last_error,
             market_latest=market_latest,
             market_diag=market_diag,
+            health_digest_widget=health_digest_bundle["widget"],
+            health_digest_payload=health_digest_bundle["payload"],
             daemon_status_payload=daemon_status_payload,
             daemon_health_payload=daemon_health_payload,
             get_text=get_text,

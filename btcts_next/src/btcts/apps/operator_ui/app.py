@@ -215,30 +215,17 @@ page_module = pages[selected_page_key]
 live_shell.reset_registered_slots(selected_page_key)
 page_module.render()
 
-is_slot_refresh_target = live_shell.page_supports_auto_refresh(selected_page_key)
-is_fragment_refresh_target = (
-    selected_page_key == "health"
-    and live_shell.supports_streamlit_fragment()
-    and is_slot_refresh_target
-)
-is_auto_refresh_target = selected_page_key == "logs" or (
-    is_slot_refresh_target and not is_fragment_refresh_target
+refresh_plan = live_shell.resolve_page_refresh_plan(
+    page_key=selected_page_key,
+    ui_auto_refresh=bool(st.session_state.ui_auto_refresh),
+    ui_refresh_interval_sec=int(st.session_state.ui_refresh_interval),
 )
 
-effective_refresh_interval_sec = int(st.session_state.ui_refresh_interval)
-if is_slot_refresh_target:
-    slot_recommended_interval_sec = live_shell.page_auto_refresh_interval_sec(
-        selected_page_key,
-        default_sec=effective_refresh_interval_sec,
-    )
-    effective_refresh_interval_sec = min(
-        effective_refresh_interval_sec,
-        int(slot_recommended_interval_sec),
-    )
+effective_refresh_interval_sec = int(
+    refresh_plan["effective_refresh_interval_sec"]
+)
 
-if st.session_state.ui_auto_refresh and (
-    is_auto_refresh_target or is_fragment_refresh_target
-):
+if refresh_plan["refresh_status_visible"]:
     st.sidebar.caption(
         f"{get_text(lang, 'refresh_status_on')} / {effective_refresh_interval_sec}s"
     )
@@ -247,7 +234,7 @@ else:
 
 # Auto refresh は live / monitor 系ページに限定する
 live_shell.render_page_auto_refresh(
-    enabled=bool(st.session_state.ui_auto_refresh and is_auto_refresh_target),
+    enabled=bool(refresh_plan["page_reload_enabled"]),
     interval_sec=effective_refresh_interval_sec,
     page_key=selected_page_key,
 )

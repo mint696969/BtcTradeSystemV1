@@ -17,6 +17,7 @@ from btcts.apps.operator_ui.components.market_monitor_presenter import (
     best_bid_ask_ts_caption,
     interpretation_caption,
     source_caption,
+    summary_contract_caption,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -101,6 +102,14 @@ def render(
 
     if summary_widget:
         st.caption(summary_widget_caption(summary_widget))
+
+    if summary:
+        st.caption(
+            summary_contract_caption(
+                lang=lang,
+                summary=summary,
+            )
+        )
 
     interpretation_reason = status_values["interpretation_reason"]
     if interpretation_bucket or interpretation_reason or continuity_state:

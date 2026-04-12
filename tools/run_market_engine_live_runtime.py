@@ -14,6 +14,11 @@ from pathlib import Path
 from typing import Any
 
 from btcts.market_engine.config import load_market_engine_config
+from btcts.market_engine.lock import (
+    acquire_live_runtime_lock,
+    live_runtime_lock_path,
+    release_live_runtime_lock,
+)
 from btcts.market_engine.runtime import MarketEngineRuntime
 
 
@@ -129,102 +134,120 @@ def _event_time_key(row: dict[str, Any]) -> tuple[str, int]:
 
 def main() -> int:
     cfg = load_market_engine_config()
-    runtime = MarketEngineRuntime(cfg)
+    lock_path = live_runtime_lock_path(cfg, runtime_name="live_runtime")
+    acquired, lock_info = acquire_live_runtime_lock(cfg, runtime_name="live_runtime")
+    if not acquired:
+        summary = {
+            "ok": False,
+            "error": "live_runtime_already_running",
+            "lock_path": str(lock_path),
+            "existing_lock": lock_info,
+            "data_root": str(_data_root()),
+        }
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 2
 
-    poll_sec = _env_float("BTCTS_MARKET_ENGINE_LIVE_POLL_SEC", 1.0)
-    max_seconds = _env_float("BTCTS_MARKET_ENGINE_LIVE_SECONDS", 60.0)
+    try:
+        runtime = MarketEngineRuntime(cfg)
 
-    snapshot_dir = _canonical_dir(
-        exchange=cfg.exchange,
-        symbol=cfg.symbol_raw,
-        record_type="market.orderbook.snapshot",
-    )
-    diff_dir = _canonical_dir(
-        exchange=cfg.exchange,
-        symbol=cfg.symbol_raw,
-        record_type="market.orderbook.diff",
-    )
+        poll_sec = _env_float("BTCTS_MARKET_ENGINE_LIVE_POLL_SEC", 1.0)
+        max_seconds = _env_float("BTCTS_MARKET_ENGINE_LIVE_SECONDS", 60.0)
 
-    snapshot_file = _latest_part_file(snapshot_dir)
-    diff_file = _latest_part_file(diff_dir)
+        snapshot_dir = _canonical_dir(
+            exchange=cfg.exchange,
+            symbol=cfg.symbol_raw,
+            record_type="market.orderbook.snapshot",
+        )
+        diff_dir = _canonical_dir(
+            exchange=cfg.exchange,
+            symbol=cfg.symbol_raw,
+            record_type="market.orderbook.diff",
+        )
 
-    if snapshot_file is None:
-        raise RuntimeError(f"snapshot canonical file not found: {snapshot_dir}")
-    if diff_file is None:
-        raise RuntimeError(f"diff canonical file not found: {diff_dir}")
+        snapshot_file = _latest_part_file(snapshot_dir)
+        diff_file = _latest_part_file(diff_dir)
 
-    seeded = False
-    snapshot_seed = _read_last_json(snapshot_file)
-    last_output_path: str | None = None
-    processed = 0
+        if snapshot_file is None:
+            raise RuntimeError(f"snapshot canonical file not found: {snapshot_dir}")
+        if diff_file is None:
+            raise RuntimeError(f"diff canonical file not found: {diff_dir}")
 
-    if isinstance(snapshot_seed, dict) and _record_type_of(snapshot_seed) == "market.orderbook.snapshot":
-        result = runtime.step(snapshot_seed)
-        last_output_path = result.output_path
-        processed += 1
-        seeded = True
+        seeded = False
+        snapshot_seed = _read_last_json(snapshot_file)
+        last_output_path: str | None = None
+        processed = 0
 
-    # 起動時点以降に追記される snapshot / diff の両方を追う
-    snapshot_pos = snapshot_file.stat().st_size if snapshot_file.exists() else 0
-    diff_pos = diff_file.stat().st_size if diff_file.exists() else 0
-
-    started = time.monotonic()
-    while True:
-        if max_seconds > 0:
-            if (time.monotonic() - started) >= max_seconds:
-                break
-        # 日付ローテや part 切替にも追従
-        latest_snapshot_file = _latest_part_file(snapshot_dir)
-        latest_diff_file = _latest_part_file(diff_dir)
-
-        if latest_snapshot_file is not None and latest_snapshot_file != snapshot_file:
-            snapshot_file = latest_snapshot_file
-            snapshot_pos = 0
-
-        if latest_diff_file is not None and latest_diff_file != diff_file:
-            diff_file = latest_diff_file
-            diff_pos = 0
-
-        if not seeded and snapshot_file is not None:
-            snapshot_seed = _read_last_json(snapshot_file)
-            if isinstance(snapshot_seed, dict) and _record_type_of(snapshot_seed) == "market.orderbook.snapshot":
-                result = runtime.step(snapshot_seed)
-                last_output_path = result.output_path
-                processed += 1
-                seeded = True
-                snapshot_pos = snapshot_file.stat().st_size if snapshot_file.exists() else 0
-
-        snapshot_rows, snapshot_pos = _iter_new_jsonl(snapshot_file, snapshot_pos)
-        diff_rows, diff_pos = _iter_new_jsonl(diff_file, diff_pos)
-
-        pending_rows: list[dict[str, Any]] = []
-        for row in snapshot_rows:
-            if _record_type_of(row) == "market.orderbook.snapshot":
-                pending_rows.append(row)
-        for row in diff_rows:
-            if _record_type_of(row) == "market.orderbook.diff":
-                pending_rows.append(row)
-
-        pending_rows.sort(key=_event_time_key)
-
-        for row in pending_rows:
-            result = runtime.step(row)
+        if isinstance(snapshot_seed, dict) and _record_type_of(snapshot_seed) == "market.orderbook.snapshot":
+            result = runtime.step(snapshot_seed)
             last_output_path = result.output_path
             processed += 1
+            seeded = True
 
-        time.sleep(poll_sec)
+        # 起動時点以降に追記される snapshot / diff の両方を追う
+        snapshot_pos = snapshot_file.stat().st_size if snapshot_file.exists() else 0
+        diff_pos = diff_file.stat().st_size if diff_file.exists() else 0
 
-    summary = {
-        "ok": True,
-        "seeded_from_snapshot": seeded,
-        "processed_events": processed,
-        "snapshot_file": str(snapshot_file),
-        "diff_file": str(diff_file),
-        "last_output_path": last_output_path,
-        "data_root": str(_data_root()),
-    }
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
-    return 0
+        started = time.monotonic()
+        while True:
+            if max_seconds > 0:
+                if (time.monotonic() - started) >= max_seconds:
+                    break
+            # 日付ローテや part 切替にも追従
+            latest_snapshot_file = _latest_part_file(snapshot_dir)
+            latest_diff_file = _latest_part_file(diff_dir)
+
+            if latest_snapshot_file is not None and latest_snapshot_file != snapshot_file:
+                snapshot_file = latest_snapshot_file
+                snapshot_pos = 0
+
+            if latest_diff_file is not None and latest_diff_file != diff_file:
+                diff_file = latest_diff_file
+                diff_pos = 0
+
+            if not seeded and snapshot_file is not None:
+                snapshot_seed = _read_last_json(snapshot_file)
+                if isinstance(snapshot_seed, dict) and _record_type_of(snapshot_seed) == "market.orderbook.snapshot":
+                    result = runtime.step(snapshot_seed)
+                    last_output_path = result.output_path
+                    processed += 1
+                    seeded = True
+                    snapshot_pos = snapshot_file.stat().st_size if snapshot_file.exists() else 0
+
+            snapshot_rows, snapshot_pos = _iter_new_jsonl(snapshot_file, snapshot_pos)
+            diff_rows, diff_pos = _iter_new_jsonl(diff_file, diff_pos)
+
+            pending_rows: list[dict[str, Any]] = []
+            for row in snapshot_rows:
+                if _record_type_of(row) == "market.orderbook.snapshot":
+                    pending_rows.append(row)
+            for row in diff_rows:
+                if _record_type_of(row) == "market.orderbook.diff":
+                    pending_rows.append(row)
+
+            pending_rows.sort(key=_event_time_key)
+
+            for row in pending_rows:
+                result = runtime.step(row)
+                last_output_path = result.output_path
+                processed += 1
+
+            time.sleep(poll_sec)
+
+        summary = {
+            "ok": True,
+            "seeded_from_snapshot": seeded,
+            "processed_events": processed,
+            "snapshot_file": str(snapshot_file),
+            "diff_file": str(diff_file),
+            "last_output_path": last_output_path,
+            "data_root": str(_data_root()),
+            "lock_path": str(lock_path),
+            "lock_pid": lock_info.get("pid"),
+        }
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return 0
+    finally:
+        release_live_runtime_lock(cfg, runtime_name="live_runtime")
 
 
 if __name__ == "__main__":

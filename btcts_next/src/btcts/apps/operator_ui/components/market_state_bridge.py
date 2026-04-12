@@ -157,10 +157,13 @@ def market_summary_status_caption(summary: MarketSummary | None) -> str:
     interpretation = summary.interpretation_bucket or "-"
     series_id = summary.source_series_id or "-"
     freshness = summary.freshness or "UNKNOWN"
+    semantic_rows_count = len(summary.semantic_usage_contract_rows)
+    active_event_rows_count = len(summary.orderbook_active_event_contracts)
 
     age_text = "-" if summary.age_sec is None else f"{summary.age_sec:.1f}s"
     return (
         f"freshness={freshness} / age={age_text} / trust={trust} / "
         f"continuity={continuity} / interpretation={interpretation} / "
+        f"family_rows={semantic_rows_count} / active_event_rows={active_event_rows_count} / "
         f"series={series_id}"
     )

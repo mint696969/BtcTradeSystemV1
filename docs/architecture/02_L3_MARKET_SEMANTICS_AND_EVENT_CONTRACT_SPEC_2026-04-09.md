@@ -1,19 +1,20 @@
 # path: ./tmp/02_L3_MARKET_SEMANTICS_AND_EVENT_CONTRACT_SPEC_2026-04-09.md
-# desc: L3 Market Semantics and Event Contract Spec (updated after Phase 2.5 checkpoint)
+# desc: L3 Market Semantics and Event Contract Spec (updated after orderbook semantics richer formal spec sync)
 
-更新日: 2026-04-09
+更新日: 2026-04-11
 位置づけ: 現行 mainline に合わせた L3 正本仕様
 対象: `btcts_next/src/btcts/processing/l3_market_semantics/`, `btcts_next/src/btcts/market_engine/`, `btcts_next/src/btcts/replay/`
 
 ---
 
 ## 1. この仕様書の目的
-本仕様書は、L3 を **市場意味の唯一の owner** として固定したまま、2026-04-09 時点の current truth を次の 4 論点で整理するための文書である。
+本仕様書は、L3 を **市場意味の唯一の owner** として固定したまま、2026-04-11 時点の current truth を次の 5 論点で整理するための文書である。
 
 1. continuity / trust / interpretation の owner 境界
 2. orderbook semantics の owner 境界
-3. event usage の current implementation と未完部分
-4. live runtime outward に出ている partial contract の位置づけ
+3. event usage の current implementation と contract rows 到達点
+4. live runtime outward に出ている partial / additive contract の位置づけ
+5. summary / family rows / active event rows の境界
 
 ---
 
@@ -37,10 +38,12 @@ L3 は、**市場意味の唯一の正本層**である。
 - execution orchestration
 - AI wording / proposal phrasing
 
-### 2026-04-09 時点の重要な更新
-- event usage は **event-level full contract は未完** だが、**summary-level runtime outward は接続済み**
-- live orderbook semantics は **full parity は未完** だが、**partial stable outward contract は固定済み**
-- Health は **observer-only** のまま、これらの runtime 状態を表示できる
+### 2026-04-11 時点の重要な更新
+- event usage は **summary-level runtime outward** を超えて、**event-family contract rows outward** まで到達済み
+- live orderbook semantics は **partial live outward** に加え、**active event contracts** が live `market_state` に到達済み
+- `orderbook_semantics_summary` は、current row における summary slot の present 情報を `summary_slots_present` / `summary_slots_count` として保持できる段まで進んだ
+- shared consumer は raw `market_state` 依存だけでなく、**contract-first bundle** まで前進済み
+- immediate open は wiring missing ではなく、**richer formal spec の固定** と **bundle / digest 拡張判断** に移っている
 
 ---
 
@@ -99,12 +102,25 @@ UI や adapter が後から bucket や trust を再判定してはならない�
 
 - `resolve_event_family()`
 - `resolve_usage_grade()`
+- `build_event_usage_contract_rows()`
 - `resolve_semantic_observer_status()`
 - `build_event_usage_summary()`
 
-これは、Health 側の独自 convenience summary ではなく、**L3 owner 側に usage summary helper がある** ことを意味する。
+これは、Health 側の独自 convenience summary ではなく、**L3 owner 側に usage summary と family-row helper がある** ことを意味する。
 
-## 5.2 summary-level runtime outward
+## 5.2 current reading は 3 層で読む
+2026-04-11 時点では、下流が event usage / orderbook semantics の contract を読むとき、少なくとも次の 3 層を明確に分けるべきである。
+
+1. `semantic_usage_summary`
+   - aggregate observer summary
+2. `semantic_usage_contract_rows`
+   - event-family contract rows
+3. `orderbook_active_event_contracts`
+   - currently active event-level rows
+
+重要なのは、この 3 つを同じ粒度のものとして混ぜないことである。
+
+## 5.3 summary-level runtime outward
 live `market_state` outward には、次が additive で追加済みである。
 
 - `semantic_observer_status`
@@ -115,19 +131,30 @@ live `market_state` outward には、次が additive で追加済みである。
 - `btcts_next/src/btcts/market_engine/market_state/projector.py`
 
 ### 位置づけ
-これらは **event-level full contract** ではない。
-しかし、少なくとも
+これは **aggregate observer summary** であり、family rows や active event rows と同一ではない。
 
-- interpretation bucket に対する observer status
-- family-based usage summary
+## 5.4 family-row outward
+live `market_state` outward には、さらに次が追加済みである。
 
-を runtime outward で見せる入口としては固定済みである。
+- `semantic_usage_contract_rows`
 
-## 5.3 正しい表現
-したがって、2026-04-09 時点では次の表現が正しい。
+projector は L3 owner helper 由来の rows を current mainline で正規に載せる。
+各 row の current baseline shape は次である。
 
-- `event usage contract is not fully unwired` ではない
-- 正しくは **summary wired / event-level full contract unfinished** である
+- `contract_source`
+- `interpretation_bucket`
+- `event_family`
+- `usage_grade`
+
+### 位置づけ
+これは **event-family 単位の contract rows** であり、summary の詳細化ではあるが、event-level row そのものではない。
+
+## 5.5 正しい表現
+したがって、2026-04-11 時点では次の表現が正しい。
+
+- `event usage contract is unwired` ではない
+- `summary wired only` でももう不十分である
+- 正しくは **summary wired -> family-row outward reached -> event-level full formalization still open** である
 
 ---
 
@@ -148,7 +175,7 @@ live `market_state` outward には、次が additive で追加済みである。
 - structural use 不可
 
 ### 重要な注意
-これは **L3 owner 側にある現行 baseline** であって、まだ full event contract fields すべてが runtime row に載った状態ではない。
+これは **L3 owner 側にある現行 baseline** であって、まだ future full event contract fields すべてが runtime row に載った完成形ではない。
 
 ---
 
@@ -192,17 +219,64 @@ orderbook semantics は replay / audit 側では広く使われている。
 - `support`
 - `resistance`
 - `persistence`
+- `summary_slots_present`
+- `summary_slots_count`
+- `active_event_names`
+- `active_event_contracts`
 
-## 7.3 正しい表現
-2026-04-09 時点では、次の表現が正しい。
+## 7.3 summary slot presence の current formalization
+2026-04-11 時点では、`orderbook_semantics_summary` 自体が **current row でどの summary slot が present か** を説明できる。
+
+### current baseline shape
+- `summary_slots_present`
+  - `near_wall`
+  - `support`
+  - `resistance`
+  - `persistence`
+  のうち、current row で present な slot 名 list
+- `summary_slots_count`
+  - 上記 present slot 数
+
+### 位置づけ
+これは active event rows の代替ではない。
+**summary slot presence** と **active event rows** は別粒度の contract である。
+
+## 7.4 active event contracts reached
+2026-04-11 時点では、`orderbook_semantics_summary.active_event_contracts` が live `market_state` に到達済みである。
+current baseline shape は次である。
+
+- `event_name`
+- `event_family`
+- `usage_grade`
+- `side`
+
+### 位置づけ
+これは **currently active event-level rows** であり、`semantic_usage_contract_rows` の代替ではない。
+family-level rows と active event-level rows は用途も粒度も異なる。
+
+## 7.5 contract status の current reading
+current live adapter は、summary slot が 0 件でも **live adapter が動いている限り `missing` ではなく `partial`** として扱う。
+
+### current meaning
+- `missing`
+  - contract field 自体が live outward で見えていない、または上流から contract status が欠落している読み
+- `partial`
+  - adapter は live outward まで到達している
+  - ただし current row の present summary slot は 0〜3 件でもよい
+- `wired`
+  - current row で `near_wall / support / resistance / persistence` の 4 slot が present
+
+## 7.6 正しい表現
+2026-04-11 時点では、次の表現が正しい。
 
 - live orderbook semantics は **全面未固定** ではない
-- 正しくは **partial stable outward fixed / full parity unfinished** である
+- `orderbook_semantics_contract_status=missing` は current live mainline の標準状態ではない
+- 正しくは **partial live outward fixed / summary slot presence formalized / active event contracts reached / full parity and richer formal spec still open** である
 
 ---
 
 ## 8. `orderbook_persistence_observable` の意味
-この field は今回の docs 更新で明文化しておくべき重要点である。
+この field は current docs でも明文化しておくべき重要点である。
 
 ### 意味
 - `False` は「persistence が起きていない」と同義ではない
@@ -218,17 +292,27 @@ orderbook semantics は replay / audit 側では広く使われている。
 ---
 
 ## 9. market_state outward の current truth
-`btcts_next/src/btcts/market_engine/market_state/schema.py` にある現行 field のうち、Phase 2.5 以降の重要追加は次である。
+`btcts_next/src/btcts/market_engine/market_state/schema.py` にある現行 field のうち、Phase 2.5 以降から current richer formal spec sync までの重要追加は次である。
 
 ### semantic summary fields
 - `semantic_observer_status`
 - `semantic_usage_summary`
+
+### semantic family-row fields
+- `semantic_usage_contract_rows`
 
 ### orderbook runtime fields
 - `orderbook_semantics_contract_status`
 - `orderbook_semantics_summary`
 - `orderbook_persistence_observable`
 
+### orderbook summary subfields
+- `summary_slots_present`
+- `summary_slots_count`
+- `active_event_names`
+- `active_event_contracts`
+
+### current reading
 これらは **additive field** として扱う。
 既存 field を壊す breaking 変更ではなく、runtime contract を育てるための追加とみなす。
 
@@ -240,9 +324,11 @@ Health は L3 owner ではない。
 
 ### できていること
 - `market_state` 側の formal field を優先して読む
-- field がなければ fallback inference を使う
+- `semantic_usage_contract_rows` を優先し、欠ける場合のみ fallback rows を生成する
+- `orderbook_semantics_summary.summary_slots_present` を優先し、欠ける場合のみ summary 内容から推論する
 - explicit contract / inference を区別表示する
 - source / freshness / observable を表示する
+- active event contracts を observer-only に表示できる
 
 ### やってはいけないこと
 - Health 側で event strength を再定義する
@@ -256,16 +342,18 @@ current open は次のように粒度分解して読むのが適切である。
 
 ### event usage
 - summary-level outward は接続済み
-- event-level full contract は未完
-- shared bundle 化は未着手
+- family-row outward は到達済み
+- event-level full formal contract は未完
 
 ### live orderbook semantics
 - partial stable outward contract は固定済み
-- full parity / full wiring は未完
-- replay/live の最終 contract 固定はまだこれから
+- summary slot presence は formalized 済み
+- active event contracts は到達済み
+- replay/live の完全 parity と richer formal spec の最終固定は未完
 
 ### consumer expansion
-- contract-first を崩して先に event-heavy consumer を増やしてはならない
+- shared L4 contract-first bundle には rows / active event contracts が届いている
+- broader consumer expansion では、summary / family rows / summary slots / active event rows の境界を崩してはならない
 
 ---
 
@@ -280,12 +368,13 @@ current open は次のように粒度分解して読むのが適切である。
 
 ## 13. 一言
 L3 は市場意味の owner である。
-2026-04-09 時点の mainline は、
+2026-04-11 時点の mainline は、
 
 - event usage summary は owner 側に寄った
-- runtime outward は summary-level で前進した
-- live orderbook semantics は partial outward contract まで到達した
+- family-row outward は `semantic_usage_contract_rows` まで到達した
+- live orderbook semantics は partial outward contract に加え active event contracts まで到達した
+- summary slot presence は `summary_slots_present` / `summary_slots_count` として formalized された
 
 という段階にある。
 
-「何もつながっていない」ではなく、**partial 到達を認めたうえで full contract をこれから詰める段階**として読むのが正しい。
+「何もつながっていない」でも「全部完成した」でもなく、**summary / family rows / summary slots / active event rows を分けて扱いながら contract boundary を固定する段階**として読むのが正しい。

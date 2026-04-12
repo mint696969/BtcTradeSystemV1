@@ -69,6 +69,10 @@ def market_summary_status_payload(summary: MarketSummary | None) -> dict[str, An
     if summary is None:
         return {}
 
+    semantic_usage_contract_rows = list(summary.semantic_usage_contract_rows)
+    orderbook_active_event_contracts = list(summary.orderbook_active_event_contracts)
+    orderbook_summary_slots_present = list(summary.orderbook_summary_slots_present)
+
     return {
         "summary_type": summary.summary_type,
         "exchange": summary.exchange,
@@ -87,6 +91,17 @@ def market_summary_status_payload(summary: MarketSummary | None) -> dict[str, An
         "market_state_label": summary.market_state_label,
         "participation_state": summary.participation_state,
         "liquidity_bias": summary.liquidity_bias,
+        "semantic_usage_contract_rows_kind": "event_family_contract_rows",
+        "semantic_usage_contract_rows_count": len(semantic_usage_contract_rows),
+        "semantic_usage_contract_rows": semantic_usage_contract_rows,
+        "orderbook_summary_slots_kind": "summary_slot_names",
+        "orderbook_summary_slots_count": summary.orderbook_summary_slots_count,
+        "orderbook_wiring_status": str(summary.orderbook_wiring_status),
+        "orderbook_contract_status_source": str(summary.orderbook_contract_status_source),
+        "orderbook_summary_slots_present": orderbook_summary_slots_present,
+        "orderbook_active_event_contracts_kind": "active_event_contract_rows",
+        "orderbook_active_event_contracts_count": len(orderbook_active_event_contracts),
+        "orderbook_active_event_contracts": orderbook_active_event_contracts,
         "notable_events": list(summary.notable_events),
         "alert_candidates": list(summary.alert_candidates),
         "diagnostics": dict(summary.diagnostics),

@@ -180,6 +180,7 @@ def build_live_orderbook_semantics_summary(
     enriched_active_event_contracts = enrich_event_contracts_for_bucket(
         active_events,
         book_state.interpretation_bucket,
+        trust_state=str(getattr(book_state.trust_state, "value", book_state.trust_state) or ""),
     )
 
     active_event_contracts: list[dict[str, Any]] = []
@@ -196,11 +197,31 @@ def build_live_orderbook_semantics_summary(
             continue
         seen_event_keys.add(dedupe_key)
 
+        raw_consumer_allowed = event.get("consumer_allowed")
+        consumer_allowed = list(raw_consumer_allowed) if isinstance(raw_consumer_allowed, list) else []
+
+        raw_invalidates_on = event.get("invalidates_on")
+        invalidates_on = list(raw_invalidates_on) if isinstance(raw_invalidates_on, list) else []
+
+        raw_evidence_refs = event.get("evidence_refs")
+        evidence_refs = list(raw_evidence_refs) if isinstance(raw_evidence_refs, list) else []
+
         active_event_contracts.append(
             {
+                "contract_source": str(event.get("contract_source") or "l3_event_usage_policy"),
                 "event_name": event_name,
                 "event_family": str(event.get("event_family") or "unknown"),
                 "usage_grade": str(event.get("usage_grade") or "unknown"),
+                "interpretation_bucket": event.get("interpretation_bucket"),
+                "meaning_version": str(event.get("meaning_version") or "unknown"),
+                "confidence": event.get("confidence"),
+                "trust_bucket": str(event.get("trust_bucket") or "unknown"),
+                "consumer_allowed": consumer_allowed,
+                "actionability": str(event.get("actionability") or "unknown"),
+                "forecast_horizon_hint": str(event.get("forecast_horizon_hint") or "unknown"),
+                "half_life_sec": event.get("half_life_sec"),
+                "invalidates_on": invalidates_on,
+                "evidence_refs": evidence_refs,
                 "side": event.get("side"),
             }
         )
@@ -211,21 +232,30 @@ def build_live_orderbook_semantics_summary(
         if str(event.get("event_name") or "").strip()
     ]
 
+    summary_slots_present = [
+        slot_name
+        for slot_name, slot_value in (
+            ("near_wall", near_wall),
+            ("support", support),
+            ("resistance", resistance),
+            ("persistence", persistence),
+        )
+        if slot_value is not None
+    ]
+
     summary = {
         "near_wall": near_wall,
         "support": support,
         "resistance": resistance,
         "persistence": persistence,
+        "summary_slots_present": summary_slots_present,
+        "summary_slots_count": len(summary_slots_present),
         "active_event_count": len(active_event_contracts),
         "active_event_names": active_event_names,
         "active_event_contracts": active_event_contracts,
     }
 
-    present_count = sum(
-        value is not None
-        for key, value in summary.items()
-        if key not in {"active_event_count", "active_event_names", "active_event_contracts"}
-    )
+    present_count = len(summary_slots_present)
 
     # live adapter がここまで到達している時点で wiring 自体は存在する。
     # したがって current row に active semantics が 0 件でも "missing" ではなく

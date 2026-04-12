@@ -200,6 +200,167 @@ def render_ws_chart_panel(
         st.caption(get_text(lang, "health_chart_unfinished_bucket_caption"))
 
 
+def _distribution_dict_text(counts: dict[str, int] | None) -> str:
+    if not isinstance(counts, dict) or not counts:
+        return "none"
+
+    normalized: dict[str, int] = {}
+    for key, value in counts.items():
+        text = str(key).strip()
+        if not text:
+            continue
+        try:
+            normalized[text] = int(value)
+        except Exception:
+            continue
+
+    if not normalized:
+        return "none"
+
+    return ",".join(
+        f"{key}:{normalized[key]}"
+        for key in sorted(normalized)
+    )
+
+
+def _distribution_text(values: list[str]) -> str:
+    counts: dict[str, int] = {}
+    for value in values:
+        key = str(value).strip()
+        if not key:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+
+    if not counts:
+        return "none"
+
+    return ",".join(
+        f"{key}:{counts[key]}"
+        for key in sorted(counts)
+    )
+
+
+def build_semantic_contract_observer_caption(
+    *,
+    layer3_semantic_usage_summary: dict,
+    layer3_semantic_usage_rows: list[dict],
+    layer3_orderbook_runtime_summary: dict,
+) -> str:
+    summary = dict(layer3_semantic_usage_summary or {})
+    family_rows = list(layer3_semantic_usage_rows or [])
+    runtime_summary = dict(layer3_orderbook_runtime_summary or {})
+
+    observer_status = str(summary.get("observer_status") or "unknown")
+    summary_source = str(summary.get("source_kind") or "unknown")
+    summary_contract_source = str(summary.get("contract_source") or "unknown")
+    summary_version = str(summary.get("meaning_version") or "unknown")
+    active_event_contracts = runtime_summary.get("active_event_contracts") or []
+    if not isinstance(active_event_contracts, list):
+        active_event_contracts = []
+
+    meaning_versions = sorted(
+        {
+            str(event.get("meaning_version") or "").strip()
+            for event in active_event_contracts
+            if isinstance(event, dict) and str(event.get("meaning_version") or "").strip()
+        }
+    )
+    trust_buckets = [
+        str(event.get("trust_bucket") or "").strip()
+        for event in active_event_contracts
+        if isinstance(event, dict) and str(event.get("trust_bucket") or "").strip()
+    ]
+    interpretation_buckets = [
+        str(event.get("interpretation_bucket") or "").strip()
+        for event in active_event_contracts
+        if isinstance(event, dict) and str(event.get("interpretation_bucket") or "").strip()
+    ]
+    consumer_keys = sorted(
+        {
+            str(consumer).strip()
+            for event in active_event_contracts
+            if isinstance(event, dict)
+            for consumer in (event.get("consumer_allowed") or [])
+            if str(consumer).strip()
+        }
+    )
+    summary_unknown_event_count = summary.get("unknown_event_count")
+    if summary_unknown_event_count is None:
+        unknown_event_count = sum(
+            1
+            for event in active_event_contracts
+            if isinstance(event, dict)
+            and (
+                str(event.get("event_family") or "").strip() == "unknown"
+                or str(event.get("meaning_version") or "").strip() in {"", "unknown"}
+            )
+        )
+    else:
+        unknown_event_count = int(summary_unknown_event_count or 0)
+
+    summary_mapped_event_count = summary.get("mapped_event_count")
+    if summary_mapped_event_count is None:
+        mapped_event_count = max(
+            0,
+            int(summary.get("active_event_count") or len(active_event_contracts))
+            - int(unknown_event_count),
+        )
+    else:
+        mapped_event_count = int(summary_mapped_event_count or 0)
+
+    versions_text = ",".join(meaning_versions) if meaning_versions else "none"
+
+    summary_family_distribution = summary.get("event_family_distribution")
+    if isinstance(summary_family_distribution, dict):
+        family_text = _distribution_dict_text(summary_family_distribution)
+    else:
+        family_values = [
+            str(event.get("event_family") or "").strip()
+            for event in active_event_contracts
+            if isinstance(event, dict) and str(event.get("event_family") or "").strip()
+        ]
+        family_text = _distribution_text(family_values)
+
+    summary_trust_distribution = summary.get("trust_bucket_distribution")
+    trust_text = (
+        _distribution_dict_text(summary_trust_distribution)
+        if isinstance(summary_trust_distribution, dict)
+        else _distribution_text(trust_buckets)
+    )
+
+    summary_interpretation_distribution = summary.get(
+        "interpretation_bucket_distribution"
+    )
+    interpretation_text = (
+        _distribution_dict_text(summary_interpretation_distribution)
+        if isinstance(summary_interpretation_distribution, dict)
+        else _distribution_text(interpretation_buckets)
+    )
+
+    summary_consumer_distribution = summary.get("consumer_distribution")
+    consumers_text = (
+        _distribution_dict_text(summary_consumer_distribution)
+        if isinstance(summary_consumer_distribution, dict)
+        else ",".join(consumer_keys) if consumer_keys else "none"
+    )
+
+    return (
+        f"semantic_observer={observer_status} / "
+        f"summary_source={summary_source} / "
+        f"summary_contract={summary_contract_source} / "
+        f"summary_version={summary_version} / "
+        f"family_rows={len(family_rows)} / "
+        f"active_events={int(summary.get('active_event_count') or len(active_event_contracts))} / "
+        f"mapped_events={mapped_event_count} / "
+        f"family_dist={family_text} / "
+        f"active_versions={versions_text} / "
+        f"trust_dist={trust_text} / "
+        f"interpretation_dist={interpretation_text} / "
+        f"consumers={consumers_text} / "
+        f"unknown_events={unknown_event_count}"
+    )
+
+
 def render_layer3_chart_panel(
     *,
     lang: str,
@@ -282,7 +443,7 @@ def render_layer3_chart_panel(
             st.caption(get_text(lang, "health_chart_layer3_current_only_caption"))
 
         if layer3_runtime_contract_summary:
-            r1, r2, r3, r4 = st.columns(4)
+            r1, r2, r3, r4, r5 = st.columns(5)
             r1.metric(
                 get_text(lang, "health_label_runtime_wiring"),
                 health_value_label(
@@ -299,12 +460,20 @@ def render_layer3_chart_panel(
                 bool_label(bool(layer3_runtime_contract_summary.get("usage_summary_present"))),
             )
             r4.metric(
+                get_text(lang, "health_label_contract_rows_field"),
+                bool_label(bool(layer3_runtime_contract_summary.get("contract_rows_present"))),
+            )
+            r5.metric(
                 get_text(lang, "health_label_source_series"),
                 bool_label(bool(layer3_runtime_contract_summary.get("source_series_present"))),
             )
             st.caption(
                 get_text(lang, "health_caption_runtime_freshness_prefix")
                 + str(layer3_runtime_contract_summary.get("freshness") or "UNKNOWN")
+            )
+            st.caption(
+                get_text(lang, "health_caption_semantic_layers_prefix")
+                + get_text(lang, "health_caption_semantic_layers_value")
             )
 
         if layer3_orderbook_runtime_summary:
@@ -445,8 +614,19 @@ def render_layer3_chart_panel(
                 get_text(lang, "health_label_invalid"),
                 int(layer3_semantic_usage_summary.get("invalid_count") or 0),
             )
+            st.caption(
+                build_semantic_contract_observer_caption(
+                    layer3_semantic_usage_summary=layer3_semantic_usage_summary,
+                    layer3_semantic_usage_rows=layer3_semantic_usage_rows,
+                    layer3_orderbook_runtime_summary=layer3_orderbook_runtime_summary,
+                )
+            )
 
         if layer3_semantic_usage_rows:
+            st.caption(
+                get_text(lang, "health_caption_semantic_family_rows_prefix")
+                + str(len(layer3_semantic_usage_rows))
+            )
             usage_df = pd.DataFrame(layer3_semantic_usage_rows)
             usage_df = usage_df[
                 [

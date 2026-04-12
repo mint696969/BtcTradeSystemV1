@@ -541,6 +541,58 @@ def page_auto_refresh_interval_sec(
     )
 
 
+def resolve_page_refresh_plan(
+    *,
+    page_key: str,
+    ui_auto_refresh: bool,
+    ui_refresh_interval_sec: int,
+    fragment_supported: bool | None = None,
+) -> dict[str, bool | int]:
+    is_slot_refresh_target = page_supports_auto_refresh(page_key)
+
+    supports_fragment = (
+        supports_streamlit_fragment()
+        if fragment_supported is None
+        else bool(fragment_supported)
+    )
+
+    is_fragment_refresh_target = (
+        page_key == "health"
+        and supports_fragment
+        and is_slot_refresh_target
+    )
+    is_page_auto_refresh_target = page_key == "logs" or (
+        is_slot_refresh_target and not is_fragment_refresh_target
+    )
+
+    effective_refresh_interval_sec = int(ui_refresh_interval_sec)
+    if is_slot_refresh_target:
+        slot_recommended_interval_sec = page_auto_refresh_interval_sec(
+            page_key,
+            default_sec=effective_refresh_interval_sec,
+        )
+        effective_refresh_interval_sec = min(
+            effective_refresh_interval_sec,
+            int(slot_recommended_interval_sec),
+        )
+
+    refresh_status_visible = bool(
+        ui_auto_refresh and (
+            is_page_auto_refresh_target or is_fragment_refresh_target
+        )
+    )
+
+    return {
+        "slot_refresh_target": is_slot_refresh_target,
+        "fragment_refresh_target": is_fragment_refresh_target,
+        "page_auto_refresh_target": is_page_auto_refresh_target,
+        "page_reload_enabled": bool(ui_auto_refresh and is_page_auto_refresh_target),
+        "fragment_refresh_enabled": bool(ui_auto_refresh and is_fragment_refresh_target),
+        "refresh_status_visible": refresh_status_visible,
+        "effective_refresh_interval_sec": effective_refresh_interval_sec,
+    }
+
+
 def supports_streamlit_fragment() -> bool:
     return callable(getattr(st, "fragment", None))
 

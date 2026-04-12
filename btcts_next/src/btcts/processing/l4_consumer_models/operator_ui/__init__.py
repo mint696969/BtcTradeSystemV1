@@ -11,6 +11,11 @@ Rules:
 - do not produce widget-library-final render shapes
 """
 
+from .health_digest_adapter import (
+    HealthDigestWidgetModel,
+    health_digest_status_payload,
+    health_digest_widget_model,
+)
 from .market_summary_adapter import (
     MarketSummaryWidgetModel,
     market_summary_status_payload,
@@ -18,6 +23,9 @@ from .market_summary_adapter import (
 )
 
 __all__ = [
+    "HealthDigestWidgetModel",
+    "health_digest_status_payload",
+    "health_digest_widget_model",
     "MarketSummaryWidgetModel",
     "market_summary_status_payload",
     "market_summary_widget_model",

@@ -24,6 +24,7 @@ class MarketStateRecord:
     interpretation_policy: dict[str, Any]
     semantic_observer_status: str | None = None
     semantic_usage_summary: dict[str, Any] = field(default_factory=dict)
+    semantic_usage_contract_rows: list[dict[str, Any]] = field(default_factory=list)
     orderbook_semantics_contract_status: str | None = None
     orderbook_semantics_summary: dict[str, Any] = field(default_factory=dict)
     orderbook_persistence_observable: bool = False
@@ -55,6 +56,7 @@ class MarketStateRecord:
             "interpretation_policy": self.interpretation_policy,
             "semantic_observer_status": self.semantic_observer_status,
             "semantic_usage_summary": self.semantic_usage_summary,
+            "semantic_usage_contract_rows": self.semantic_usage_contract_rows,
             "orderbook_semantics_contract_status": self.orderbook_semantics_contract_status,
             "orderbook_semantics_summary": self.orderbook_semantics_summary,
             "orderbook_persistence_observable": self.orderbook_persistence_observable,

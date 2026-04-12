@@ -12,6 +12,8 @@ def empty_orderbook_semantics_summary() -> dict[str, Any]:
         "support": None,
         "resistance": None,
         "persistence": None,
+        "summary_slots_present": [],
+        "summary_slots_count": 0,
         "active_event_count": 0,
         "active_event_names": [],
         "active_event_contracts": [],

@@ -33,11 +33,14 @@ def render_collector_summary_metric(
     health_payload: dict,
     get_text: Callable[[str, str], str],
     collector_summary_label: Callable[[dict, dict, str], str],
+    digest_caption: str | None = None,
 ) -> None:
     st.metric(
         get_text(lang, "health_summary_collector"),
         collector_summary_label(status_payload, health_payload, lang),
     )
+    if digest_caption:
+        st.caption(digest_caption)
 
 
 def render_api_summary_metric(
@@ -46,11 +49,14 @@ def render_api_summary_metric(
     bitflyer_rate: dict,
     get_text: Callable[[str, str], str],
     api_summary_label: Callable[[dict, str], str],
+    digest_caption: str | None = None,
 ) -> None:
     st.metric(
         get_text(lang, "health_summary_api"),
         api_summary_label(bitflyer_rate, lang),
     )
+    if digest_caption:
+        st.caption(digest_caption)
 
 
 def render_ws_summary_metric(
@@ -59,10 +65,93 @@ def render_ws_summary_metric(
     origin_payload: dict,
     get_text: Callable[[str, str], str],
     ws_summary_label: Callable[[dict, str], str],
+    digest_caption: str | None = None,
 ) -> None:
     st.metric(
         get_text(lang, "health_summary_ws"),
         ws_summary_label(origin_payload, lang),
+    )
+    if digest_caption:
+        st.caption(digest_caption)
+
+
+def build_health_digest_layer3_summary_caption(
+    *,
+    widget,
+    payload: dict | None,
+) -> str:
+    if widget is None or not payload:
+        return "health_digest unavailable"
+
+    semantic_rows = int(payload.get("semantic_usage_contract_rows_count") or 0)
+    summary_slots = int(payload.get("orderbook_summary_slots_count") or 0)
+    active_event_rows = int(payload.get("orderbook_active_event_contracts_count") or 0)
+
+    return (
+        f"semantic_rows={semantic_rows} / "
+        f"summary_slots={summary_slots} / "
+        f"active_event_rows={active_event_rows}"
+    )
+
+
+def build_health_digest_collector_summary_caption(
+    *,
+    widget,
+    payload: dict | None,
+) -> str:
+    if widget is None or not payload:
+        return "health_digest unavailable"
+
+    collector_runtime = dict(payload.get("collector_runtime") or {})
+    collector_mode = str(getattr(widget, "collector_mode_key", None) or "unknown")
+    collector_ok = getattr(widget, "collector_ok", None)
+    runtime_kind = str(collector_runtime.get("runtime_kind") or "unknown")
+
+    return (
+        f"mode={collector_mode} / "
+        f"ok={collector_ok} / "
+        f"runtime_kind={runtime_kind}"
+    )
+
+
+def build_health_digest_api_summary_caption(
+    *,
+    widget,
+    payload: dict | None,
+) -> str:
+    if widget is None or not payload:
+        return "health_digest unavailable"
+
+    api_runtime = dict(payload.get("api_runtime") or {})
+    api_mode = str(getattr(widget, "api_mode_key", None) or "unknown")
+    utilization = api_runtime.get("utilization")
+    requests_60s = int(api_runtime.get("requests_60s") or 0)
+
+    util_text = "-" if utilization is None else f"{float(utilization) * 100:.1f}%"
+    return (
+        f"mode={api_mode} / "
+        f"utilization={util_text} / "
+        f"requests_60s={requests_60s}"
+    )
+
+
+def build_health_digest_ws_summary_caption(
+    *,
+    widget,
+    payload: dict | None,
+) -> str:
+    if widget is None or not payload:
+        return "health_digest unavailable"
+
+    ws_runtime = dict(payload.get("ws_runtime") or {})
+    board_state = str(getattr(widget, "ws_board_state_key", None) or "unknown")
+    executions_state = str(getattr(widget, "ws_executions_state_key", None) or "unknown")
+    board_freshness = str(ws_runtime.get("board_freshness") or "UNKNOWN")
+    executions_freshness = str(ws_runtime.get("executions_freshness") or "UNKNOWN")
+
+    return (
+        f"board={board_state} ({board_freshness}) / "
+        f"exec={executions_state} ({executions_freshness})"
     )
 
 
@@ -73,11 +162,14 @@ def render_layer3_summary_metric(
     market_diag: dict,
     get_text: Callable[[str, str], str],
     layer3_summary_label: Callable[[dict, dict, str], str],
+    digest_caption: str | None = None,
 ) -> None:
     st.metric(
         get_text(lang, "health_summary_layer3"),
         layer3_summary_label(market_latest, market_diag, lang),
     )
+    if digest_caption:
+        st.caption(digest_caption)
 
 
 def render_overview_summary_panel(

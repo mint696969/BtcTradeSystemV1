@@ -155,6 +155,24 @@ def main() -> int:
     assert isinstance(record.semantic_usage_summary, dict)
     assert "observer_status" in record.semantic_usage_summary
     assert "total_rows" in record.semantic_usage_summary
+    assert "contract_source" in record.semantic_usage_summary
+    assert "active_event_count" in record.semantic_usage_summary
+    assert "mapped_event_count" in record.semantic_usage_summary
+    assert "unknown_event_count" in record.semantic_usage_summary
+    assert "event_family_distribution" in record.semantic_usage_summary
+    assert "trust_bucket_distribution" in record.semantic_usage_summary
+    assert "interpretation_bucket_distribution" in record.semantic_usage_summary
+    assert "consumer_distribution" in record.semantic_usage_summary
+    assert isinstance(record.semantic_usage_contract_rows, list)
+    assert len(record.semantic_usage_contract_rows) == record.semantic_usage_summary["total_rows"]
+    assert all(
+        row["contract_source"] == "l3_event_usage_policy"
+        for row in record.semantic_usage_contract_rows
+    )
+    assert all(
+        row["meaning_version"] == "l3_event_usage_policy.v1alpha1"
+        for row in record.semantic_usage_contract_rows
+    )
     assert record.orderbook_semantics_contract_status in {"partial", "wired"}
     assert isinstance(record.orderbook_semantics_summary, dict)
     assert set(record.orderbook_semantics_summary.keys()) == {
@@ -162,6 +180,8 @@ def main() -> int:
         "support",
         "resistance",
         "persistence",
+        "summary_slots_present",
+        "summary_slots_count",
         "active_event_count",
         "active_event_names",
         "active_event_contracts",
@@ -195,6 +215,24 @@ def main() -> int:
     }
     assert isinstance(saved["semantic_usage_summary"], dict)
     assert "observer_status" in saved["semantic_usage_summary"]
+    assert "contract_source" in saved["semantic_usage_summary"]
+    assert "active_event_count" in saved["semantic_usage_summary"]
+    assert "mapped_event_count" in saved["semantic_usage_summary"]
+    assert "unknown_event_count" in saved["semantic_usage_summary"]
+    assert "event_family_distribution" in saved["semantic_usage_summary"]
+    assert "trust_bucket_distribution" in saved["semantic_usage_summary"]
+    assert "interpretation_bucket_distribution" in saved["semantic_usage_summary"]
+    assert "consumer_distribution" in saved["semantic_usage_summary"]
+    assert isinstance(saved["semantic_usage_contract_rows"], list)
+    assert len(saved["semantic_usage_contract_rows"]) == saved["semantic_usage_summary"]["total_rows"]
+    assert all(
+        row["contract_source"] == "l3_event_usage_policy"
+        for row in saved["semantic_usage_contract_rows"]
+    )
+    assert all(
+        row["meaning_version"] == "l3_event_usage_policy.v1alpha1"
+        for row in saved["semantic_usage_contract_rows"]
+    )
     assert saved["orderbook_semantics_contract_status"] in {"partial", "wired"}
     assert isinstance(saved["orderbook_semantics_summary"], dict)
     assert set(saved["orderbook_semantics_summary"].keys()) == {
@@ -202,6 +240,8 @@ def main() -> int:
         "support",
         "resistance",
         "persistence",
+        "summary_slots_present",
+        "summary_slots_count",
         "active_event_count",
         "active_event_names",
         "active_event_contracts",

@@ -11,6 +11,27 @@ from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.ui_time import format_ui_ts
 
 
+def build_health_digest_current_state_caption(
+    *,
+    widget,
+    payload: dict | None,
+) -> str:
+    if widget is None or not payload:
+        return "health_digest unavailable"
+
+    freshness = str(getattr(widget, "freshness_key", None) or "UNKNOWN")
+    semantic_rows = int(payload.get("semantic_usage_contract_rows_count") or 0)
+    summary_slots = int(payload.get("orderbook_summary_slots_count") or 0)
+    active_event_rows = int(payload.get("orderbook_active_event_contracts_count") or 0)
+
+    return (
+        f"health_digest: freshness={freshness} / "
+        f"semantic_rows={semantic_rows} / "
+        f"summary_slots={summary_slots} / "
+        f"active_event_rows={active_event_rows}"
+    )
+
+
 def render_current_state_section(
     *,
     lang: str,
@@ -31,6 +52,8 @@ def render_current_state_section(
     ws_executions_last_error: str,
     market_latest: dict,
     market_diag: dict,
+    health_digest_widget=None,
+    health_digest_payload: dict | None = None,
     daemon_status_payload: dict,
     daemon_health_payload: dict,
     get_text: Callable[[str, str], str],
@@ -48,6 +71,13 @@ def render_current_state_section(
 
         def bool_flag_label(flag: bool) -> str:
             return get_text(lang, "health_value_on") if flag else get_text(lang, "health_value_off")
+
+        st.caption(
+            build_health_digest_current_state_caption(
+                widget=health_digest_widget,
+                payload=health_digest_payload,
+            )
+        )
 
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric(

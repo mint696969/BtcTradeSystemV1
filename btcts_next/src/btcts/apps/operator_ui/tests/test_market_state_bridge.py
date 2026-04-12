@@ -64,6 +64,51 @@ def main() -> int:
             "mode": "continuous_trusted",
             "review_required": False,
         },
+        semantic_usage_contract_rows=[
+            {
+                "contract_source": "l3_event_usage_policy",
+                "interpretation_bucket": "allow_structural_use",
+                "meaning_version": "l3_event_usage_policy.v1alpha1",
+                "event_family": "wall",
+                "usage_grade": "strong",
+            },
+            {
+                "contract_source": "l3_event_usage_policy",
+                "interpretation_bucket": "allow_structural_use",
+                "meaning_version": "l3_event_usage_policy.v1alpha1",
+                "event_family": "absorption",
+                "usage_grade": "strong",
+            },
+        ],
+        orderbook_semantics_summary={
+            "near_wall": {"side": "bid"},
+            "support": None,
+            "resistance": None,
+            "persistence": None,
+            "summary_slots_present": ["near_wall"],
+            "summary_slots_count": 1,
+            "active_event_count": 1,
+            "active_event_names": ["near_wall_continued"],
+            "active_event_contracts": [
+                {
+                    "contract_source": "l3_event_usage_policy",
+                    "event_name": "near_wall_continued",
+                    "event_family": "wall",
+                    "usage_grade": "strong",
+                    "interpretation_bucket": "allow_structural_use",
+                    "meaning_version": "l3_event_usage_policy.v1alpha1",
+                    "confidence": 0.85,
+                    "trust_bucket": "trusted",
+                    "consumer_allowed": ["ui", "alert", "ai", "strategy", "execution"],
+                    "actionability": "actionable",
+                    "forecast_horizon_hint": "short",
+                    "half_life_sec": 30,
+                    "invalidates_on": ["series_boundary", "reanchor_required"],
+                    "evidence_refs": [],
+                    "side": "bid",
+                }
+            ],
+        },
         best_bid=100.5,
         best_ask=101.0,
         spread=0.5,
@@ -117,6 +162,8 @@ def main() -> int:
     summary_caption = market_summary_status_caption(summary)
     assert "freshness=" in summary_caption
     assert "trust=trusted" in summary_caption
+    assert "family_rows=2" in summary_caption
+    assert "active_event_rows=1" in summary_caption
     assert "series=bf-sess-1:series:100" in summary_caption
 
     summary_payload = load_market_summary_status_payload(exchange="bitflyer", symbol_raw="BTC_JPY")
@@ -125,6 +172,17 @@ def main() -> int:
     assert summary_payload["trust_state"] == "trusted"
     assert summary_payload["continuity_state"] == "continuous"
     assert summary_payload["interpretation_bucket"] == "allow_structural_use"
+    assert summary_payload["semantic_usage_contract_rows_kind"] == "event_family_contract_rows"
+    assert summary_payload["semantic_usage_contract_rows_count"] == 2
+    assert summary_payload["semantic_usage_contract_rows"][0]["contract_source"] == "l3_event_usage_policy"
+    assert summary_payload["semantic_usage_contract_rows"][0]["meaning_version"] == "l3_event_usage_policy.v1alpha1"
+    assert summary_payload["orderbook_summary_slots_kind"] == "summary_slot_names"
+    assert summary_payload["orderbook_summary_slots_count"] == 1
+    assert summary_payload["orderbook_summary_slots_present"] == ["near_wall"]
+    assert summary_payload["orderbook_active_event_contracts_kind"] == "active_event_contract_rows"
+    assert summary_payload["orderbook_active_event_contracts_count"] == 1
+    assert summary_payload["orderbook_active_event_contracts"][0]["contract_source"] == "l3_event_usage_policy"
+    assert summary_payload["orderbook_active_event_contracts"][0]["meaning_version"] == "l3_event_usage_policy.v1alpha1"
     assert isinstance(summary_payload["notable_events"], list)
     assert isinstance(summary_payload["alert_candidates"], list)
 

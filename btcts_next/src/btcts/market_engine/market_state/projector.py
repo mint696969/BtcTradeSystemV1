@@ -5,7 +5,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from btcts.processing.l3_market_semantics import build_event_usage_summary
+from btcts.processing.l3_market_semantics import (
+    build_event_usage_contract_rows,
+    build_event_usage_summary,
+)
 from btcts.processing.l3_market_semantics.continuity.models import BookState
 from btcts.processing.l3_market_semantics.continuity.models import SeriesState
 from btcts.market_engine.config import MarketEngineConfig
@@ -87,7 +90,25 @@ class MarketStateProjector:
     ) -> MarketStateRecord:
         semantic_usage_summary = build_event_usage_summary(
             book_state.interpretation_bucket,
+            event_names=list(
+                ((orderbook_semantics_summary or {}).get("active_event_names") or [])
+            ),
+            active_event_contracts=list(
+                ((orderbook_semantics_summary or {}).get("active_event_contracts") or [])
+            ),
         )
+        semantic_usage_contract_rows = [
+            {
+                "contract_source": "l3_event_usage_policy",
+                "interpretation_bucket": book_state.interpretation_bucket,
+                "meaning_version": str(row.get("meaning_version") or "unknown"),
+                "event_family": str(row.get("event_family") or ""),
+                "usage_grade": str(row.get("usage_grade") or "unknown"),
+            }
+            for row in build_event_usage_contract_rows(
+                book_state.interpretation_bucket,
+            )
+        ]
         next_orderbook_semantics_summary = dict(
             orderbook_semantics_summary or empty_orderbook_semantics_summary()
         )
@@ -109,6 +130,7 @@ class MarketStateProjector:
             interpretation_policy=dict(book_state.interpretation_policy),
             semantic_observer_status=semantic_usage_summary.get("observer_status"),
             semantic_usage_summary=semantic_usage_summary,
+            semantic_usage_contract_rows=semantic_usage_contract_rows,
             orderbook_semantics_contract_status=next_orderbook_semantics_contract_status,
             orderbook_semantics_summary=next_orderbook_semantics_summary,
             orderbook_persistence_observable=bool(orderbook_persistence_observable),

@@ -11,6 +11,7 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.apps.operator_ui.components.market_monitor_logic import monitor_status_values
+from btcts.apps.operator_ui.components.market_monitor_presenter import summary_contract_caption
 
 
 def main() -> int:
@@ -50,6 +51,20 @@ def main() -> int:
     assert resolved_override["continuity_state"] == "board_continuous"
     assert resolved_override["interpretation_bucket"] == "board_allow"
     assert resolved_override["interpretation_reason"] == "board_reason"
+
+    contract_caption = summary_contract_caption(
+        lang="en",
+        summary={
+            "semantic_usage_contract_rows_kind": "event_family_contract_rows",
+            "semantic_usage_contract_rows_count": 2,
+            "orderbook_active_event_contracts_kind": "active_event_contract_rows",
+            "orderbook_active_event_contracts_count": 1,
+        },
+    )
+    assert "family_rows=2" in contract_caption
+    assert "event_family_contract_rows" in contract_caption
+    assert "active_event_rows=1" in contract_caption
+    assert "active_event_contract_rows" in contract_caption
 
     print("ok")
     return 0

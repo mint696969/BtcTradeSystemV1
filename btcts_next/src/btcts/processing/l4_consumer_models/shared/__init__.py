@@ -11,9 +11,13 @@ Rules:
 - widget-library-free
 """
 
+from .health_digest import HealthDigest, HealthDigestBuildInput, build_health_digest
 from .market_summary import MarketSummary, MarketSummaryBuildInput, build_market_summary
 
 __all__ = [
+    "HealthDigest",
+    "HealthDigestBuildInput",
+    "build_health_digest",
     "MarketSummary",
     "MarketSummaryBuildInput",
     "build_market_summary",
