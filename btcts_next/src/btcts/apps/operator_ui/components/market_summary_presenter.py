@@ -4,9 +4,33 @@
 from __future__ import annotations
 
 
+def _dist_text(distribution: dict[str, int]) -> str:
+    if not distribution:
+        return "-"
+    return ",".join(f"{key}:{distribution[key]}" for key in sorted(distribution))
+
 def summary_widget_caption(summary_widget) -> str:
     notable_text = "-" if not summary_widget.notable_tags else ",".join(summary_widget.notable_tags)
     alert_text = "-" if not summary_widget.alert_tags else ",".join(summary_widget.alert_tags)
+
+    slots_present_text = (
+        ",".join(summary_widget.orderbook_summary_slots_present)
+        if summary_widget.orderbook_summary_slots_present
+        else "-"
+    )
+    active_event_names_text = (
+        ",".join(summary_widget.orderbook_active_event_names)
+        if summary_widget.orderbook_active_event_names
+        else "-"
+    )
+    family_dist_text = _dist_text(summary_widget.semantic_event_family_distribution)
+    trust_dist_text = _dist_text(summary_widget.semantic_trust_bucket_distribution)
+    interpretation_dist_text = _dist_text(
+        summary_widget.semantic_interpretation_bucket_distribution
+    )
+    consumer_dist_text = _dist_text(summary_widget.semantic_consumer_distribution)
+    age_text = "-" if summary_widget.age_sec is None else f"{float(summary_widget.age_sec):.1f}s"
+    event_ts_text = summary_widget.event_ts or "-"
 
     return (
         "summary_widget "
@@ -14,7 +38,38 @@ def summary_widget_caption(summary_widget) -> str:
         f"trust={summary_widget.trust_key or '-'} / "
         f"continuity={summary_widget.continuity_key or '-'} / "
         f"interpretation={summary_widget.interpretation_key or '-'} / "
+        f"semantic_wiring={summary_widget.semantic_wiring_key} / "
+        f"observer_status={summary_widget.semantic_observer_status_key} / "
+        f"observer_present={summary_widget.semantic_observer_present_key} / "
+        f"usage_summary_present={summary_widget.semantic_usage_summary_present_key} / "
+        f"contract_rows_present={summary_widget.semantic_contract_rows_present_key} / "
+        f"semantic_source={summary_widget.semantic_summary_source_key} / "
+        f"semantic_contract={summary_widget.semantic_contract_source_key} / "
+        f"semantic_version={summary_widget.semantic_meaning_version_key} / "
+        f"orderbook_wiring={summary_widget.orderbook_wiring_key} / "
+        f"orderbook_source={summary_widget.orderbook_contract_status_source_key} / "
+        f"semantic_rows={summary_widget.semantic_rows_count} / "
+        f"semantic_total_rows={summary_widget.semantic_total_rows} / "
+        f"semantic_active_events={summary_widget.semantic_active_event_count} / "
+        f"mapped_events={summary_widget.semantic_mapped_event_count} / "
+        f"unknown_events={summary_widget.semantic_unknown_event_count} / "
+        f"family_dist={family_dist_text} / "
+        f"trust_dist={trust_dist_text} / "
+        f"interpretation_dist={interpretation_dist_text} / "
+        f"consumer_dist={consumer_dist_text} / "
+        f"summary_slots={summary_widget.summary_slots_count} / "
+        f"slots_present={slots_present_text} / "
+        f"near_wall_present={summary_widget.orderbook_near_wall_present_key} / "
+        f"support_present={summary_widget.orderbook_support_present_key} / "
+        f"resistance_present={summary_widget.orderbook_resistance_present_key} / "
+        f"active_events={summary_widget.active_event_count} / "
+        f"active_event_names={active_event_names_text} / "
+        f"persistence_present={summary_widget.persistence_present_key} / "
+        f"persistence_observable={summary_widget.persistence_observable_key} / "
         f"source={summary_widget.source_kind} / "
+        f"series={summary_widget.source_series_id or '-'} / "
+        f"age={age_text} / "
+        f"event_ts={event_ts_text} / "
         f"notable={notable_text} / "
         f"alerts={alert_text}"
     )

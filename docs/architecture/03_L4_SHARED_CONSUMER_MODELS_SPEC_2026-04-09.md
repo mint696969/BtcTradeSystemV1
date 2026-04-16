@@ -1,7 +1,7 @@
 # path: ./tmp/03_L4_SHARED_CONSUMER_MODELS_SPEC_2026-04-09.md
-# desc: L4 Shared Consumer Models Spec (updated after orderbook semantics richer formal spec sync)
+# desc: L4 Shared Consumer Models Spec (merged current-truth sync after Phase 2 / 2.5 closeout)
 
-更新日: 2026-04-11
+更新日: 2026-04-14
 位置づけ: 現行 mainline に合わせた L4 shared / consumer adapter 統合仕様
 対象: `btcts_next/src/btcts/processing/l4_consumer_models/`, `btcts_next/src/btcts/apps/operator_ui/`, `btcts_next/src/btcts/market_engine/`
 
@@ -36,7 +36,7 @@ L4 は **shared-first の shape owner** である。
 - execution orchestration の owner になる
 
 ### 現状の一言
-L4 は未展開ではない。2026-04-11 時点では、`market_summary` を中核に **contract-first bundle が実際に mainline へ入っている** 段階である。
+L4 は未展開ではない。2026-04-14 時点では、`market_summary` を中核に **summary-first mainline contract bundle** が mainline に入っており、さらに `health_digest` の current-state shared path まで到達している段階である。
 
 ---
 
@@ -44,19 +44,24 @@ L4 は未展開ではない。2026-04-11 時点では、`market_summary` を中�
 
 ### shared
 - `btcts_next/src/btcts/processing/l4_consumer_models/shared/market_summary.py`
+- `btcts_next/src/btcts/processing/l4_consumer_models/shared/health_digest.py`
 
 ### operator_ui thin adapter
 - `btcts_next/src/btcts/processing/l4_consumer_models/operator_ui/market_summary_adapter.py`
+- `btcts_next/src/btcts/processing/l4_consumer_models/operator_ui/health_digest_adapter.py`
 
 ### UI 側接続
 - `btcts_next/src/btcts/apps/operator_ui/market_state_service.py`
+- `btcts_next/src/btcts/apps/operator_ui/health_data_service.py`
 - `btcts_next/src/btcts/apps/operator_ui/components/market_state_bridge.py`
+- `btcts_next/src/btcts/apps/operator_ui/components/health_digest_bridge.py`
 
 旧説明にあった
 
 - 「L4 package 未展開」
 - 「market_summary は次フェーズで作る」
 - 「operator_ui adapter は skeleton だけ」
+- 「health_digest は将来の話」
 
 という表現は、現行 mainline には合わない。
 
@@ -81,17 +86,30 @@ UI bridge
 components / page
 ```
 
-この経路は、
+Health current-state line は次である。
+
+```text
+collector_state / market_state row / runtime summaries
+  ↓
+L4 shared builder
+  build_health_digest()
+  ↓
+L4 operator_ui thin adapter
+  health digest widget key / payload shaping
+  ↓
+UI bridge
+  health_digest_bridge.py
+  ↓
+components / page
+```
+
+これらの経路は、
 
 - L3 truth を直接 UI にばらまかず
 - L4 shared で一度 bundle 化し
 - adapter で consumer 都合の薄変換を行う
 
 という shared-first の原則に沿っている。
-
-### 2026-04-11 時点での読み替え
-この flow は単なる raw row pass-through ではない。
-`market_summary` は current mainline で、**semantic usage family rows**、**orderbook summary slot presence**、**orderbook active event contracts** を直接受ける contract-first bundle へ前進している。
 
 ---
 
@@ -126,10 +144,37 @@ components / page
   - `market_state_label`
   - `participation_state`
   - `liquidity_bias`
-- contract-first rows / shape
+- semantic side
+  - `semantic_summary_source`
+  - `semantic_contract_source`
+  - `semantic_meaning_version`
+  - `semantic_observer_status`
+  - `semantic_observer_present`
+  - `semantic_usage_summary_present`
+  - `semantic_contract_rows_present`
+  - `semantic_contract_rows_count`
+  - `semantic_runtime_wiring_status`
+  - `semantic_total_rows`
+  - `semantic_active_event_count`
+  - `semantic_mapped_event_count`
+  - `semantic_unknown_event_count`
+  - `semantic_event_family_distribution`
+  - `semantic_trust_bucket_distribution`
+  - `semantic_interpretation_bucket_distribution`
+  - `semantic_consumer_distribution`
   - `semantic_usage_contract_rows`
+- orderbook side
+  - `orderbook_wiring_status`
+  - `orderbook_contract_status_source`
+  - `orderbook_persistence_observable`
   - `orderbook_summary_slots_present`
   - `orderbook_summary_slots_count`
+  - `orderbook_near_wall_present`
+  - `orderbook_support_present`
+  - `orderbook_resistance_present`
+  - `orderbook_persistence_present`
+  - `orderbook_active_event_names`
+  - `orderbook_active_event_count`
   - `orderbook_active_event_contracts`
 - lightweight consumer tags
   - `notable_events`
@@ -138,18 +183,45 @@ components / page
   - `diagnostics`
 
 ## 5.2 この bundle の意味
-`market_summary` は、**市場状態の最小 shared summary** として既に成立している。
-さらに 2026-04-11 時点では、単なる summary に留まらず、**contract-first に rows と slot presence を保持できる shared bundle** へ前進している。
+`market_summary` は、2026-04-13 時点では **Phase 2 / 2.5 の summary-first mainline contract bundle** として読む方が current repo truth に近い。
+
+単なる「市場状態の最小 shared summary」に留まらず、semantic / orderbook の wiring, provenance, counts, distributions, presence を additive に保持する shared mainline へ前進している。
 
 ### current reading
-- `semantic_usage_contract_rows`
-  - event-family contract rows
-- `orderbook_summary_slots_present`
-  - current row の summary slot presence
-- `orderbook_active_event_contracts`
-  - currently active event-level rows
+#### semantic side
+- `semantic_summary_source`
+- `semantic_contract_source`
+- `semantic_meaning_version`
+- `semantic_observer_status`
+- `semantic_observer_present`
+- `semantic_usage_summary_present`
+- `semantic_contract_rows_present`
+- `semantic_contract_rows_count`
+- `semantic_runtime_wiring_status`
+- `semantic_total_rows`
+- `semantic_active_event_count`
+- `semantic_mapped_event_count`
+- `semantic_unknown_event_count`
+- `semantic_event_family_distribution`
+- `semantic_trust_bucket_distribution`
+- `semantic_interpretation_bucket_distribution`
+- `semantic_consumer_distribution`
 
-この 3 つは、単なる notable tag でも diagnostics でもなく、**shared bundle に載る contract / shape field** として扱うのが正しい。
+#### orderbook side
+- `orderbook_wiring_status`
+- `orderbook_contract_status_source`
+- `orderbook_persistence_observable`
+- `orderbook_summary_slots_present`
+- `orderbook_summary_slots_count`
+- `orderbook_near_wall_present`
+- `orderbook_support_present`
+- `orderbook_resistance_present`
+- `orderbook_persistence_present`
+- `orderbook_active_event_names`
+- `orderbook_active_event_count`
+- `orderbook_active_event_contracts`
+
+これらは、単なる notable tag や diagnostics ではなく、**shared bundle に載る mainline contract / shape field** として扱うのが正しい。
 
 ---
 
@@ -163,8 +235,10 @@ components / page
 - lightweight な notable / alert tag の付与
 - diagnostics の引き継ぎ
 - `semantic_usage_contract_rows` の正規化
+- semantic / orderbook runtime field の additive 正規化
 - `orderbook_semantics_summary.summary_slots_present` / `summary_slots_count` の shared shape への正規化
-- `orderbook_semantics_summary.active_event_contracts` の shared shape への正規化
+- `orderbook_semantics_summary.active_event_contracts` / `active_event_names` の shared shape への正規化
+- `orderbook_persistence_observable` の shared shape への正規化
 
 ### やってはいけないこと
 - UI wording 生成
@@ -180,12 +254,14 @@ shared builder は、meaning owner ではなく **shared read model builder** �
 ## 7. thin adapter の責務
 
 ## 7.1 current 実体
-`btcts_next/src/btcts/processing/l4_consumer_models/operator_ui/market_summary_adapter.py` は current thin adapter である。
+- `btcts_next/src/btcts/processing/l4_consumer_models/operator_ui/market_summary_adapter.py`
+- `btcts_next/src/btcts/processing/l4_consumer_models/operator_ui/health_digest_adapter.py`
 
 ### current output
 - `MarketSummaryWidgetModel`
 - `market_summary_widget_model()`
 - `market_summary_status_payload()`
+- health digest widget key / payload shaping
 
 ## 7.2 adapter がやってよいこと
 - field 名の consumer 向け変換
@@ -193,7 +269,7 @@ shared builder は、meaning owner ではなく **shared read model builder** �
 - placeholder fallback
 - widget ごとの subset 切り出し
 - status payload の flattening
-- shared bundle の contract rows / slot presence を payload として通すこと
+- shared bundle の contract rows / slot presence / observer field を payload として通すこと
 
 ## 7.3 adapter がやってはいけないこと
 - 新しい market meaning の生成
@@ -212,14 +288,22 @@ shared builder は、meaning owner ではなく **shared read model builder** �
 - diagnostics を作る
 - `build_market_summary()` へ入力を組む
 
+### `health_data_service.py`
+- collector / market_state / runtime summary source を読む
+- `build_health_digest()` へ入力を組む
+- timeline / anomaly / page convenience line は現時点では service 側にも残る
+
 ### `market_state_bridge.py`
 - shared bundle を読む
 - thin adapter を通して UI 用 payload / widget model を返す
 - UI 側 components と shared 経路をつなぐ
 
+### `health_digest_bridge.py`
+- shared digest / adapter output を current-state panel 群へつなぐ
+- observer-only current-state line を UI に渡す
+
 ### 位置づけ
-現時点では妥当である。
-特に current mainline では、bridge / service は rows の owner ではなく、**shared bundle を consumer へ渡す接続層**として読むのが正しい。
+現時点では妥当である。bridge / service は rows や meaning の owner ではなく、**shared bundle を consumer へ渡す接続層**として読むのが正しい。
 
 ---
 
@@ -232,38 +316,44 @@ L4 は動いているが、全面完成ではない。
 - UI bridge 経路
 - contract-first rows の shared 受け取り
 - orderbook summary slot presence の shared 受け取り
+- current-state shared `health_digest` path
+- `market_summary` / `health_digest` の shared-first mainline reuse line
 
-### まだ formal ではないもの
+### broader formalization がまだ open のもの
 - `semantic_timeline_bundle`
-- `health_digest`
 - `liquidity_snapshot_bundle`
 - prediction / decision 向け shared bundle
 - execution signal 系 bundle
+- `health_digest` の timeline / anomaly / broader split formalization
 
-したがって、L4 は「未展開」ではなく、**`market_summary` を起点に contract-first で拡張中**と表現するのが正しい。
+したがって、L4 は「未展開」ではなく、**`market_summary` を起点に mainline contract bundle を固定しつつ、`health_digest` current-state path まで到達済み**と表現するのが current truth に近い。
 
 ---
 
 ## 10. Health と L4 の関係
-2026-04-11 時点では、Health の主入力はまだ service 主導であり、L4 shared bundle に全面統一されてはいない。
+2026-04-13 時点では、Health の主入力は全面的に L4 に統一完了したとまでは言わないが、**current-state shared digest path reached** と読むのが current repo truth に近い。
 
 ### できていること
 - Health は `market_state` の formal field を読める
 - runtime observer として useful な可視化ができる
 - shared consumer 側では `semantic_usage_contract_rows` と `orderbook_active_event_contracts` を直接受けられる
 - `market_summary` は orderbook summary slot presence も受けられる
+- `health_digest` は shared / adapter / bridge / current-state panel usage まで repo mainline に到達している
 
-### まだ未完のこと
-- Health 本体の主入力を L4 shared digest に寄せ切っていない
-- `health_digest` という shared bundle はまだ formal ではない
+### carry-forward open
+- Health 本体の broader input formalization
+- `health_digest` timeline / anomaly split formalization
+- broader wording / consumer expansion
+- full formal completion と docs sync
 
 ### 方針
-L4 側に Health digest を作る場合も、observer-only 原則を崩して meaning owner を増やしてはならない。
+`health_digest` は future-only の bundle ではなく、**observer-only current-state shared digest path reached** と読んだうえで、broader split を additive-first に formal 化する。
+observer-only 原則を崩して meaning owner を増やしてはならない。
 
 ---
 
 ## 11. contract boundary の current reading
-current handoff に基づくと、shared consumer / UI / docs では次の 4 層を混同しないことが重要である。
+shared consumer / UI / docs では次の 4 層を混同しないことが重要である。
 
 1. `semantic_usage_summary`
    - aggregate observer summary
@@ -283,7 +373,7 @@ L4 `market_summary` は current mainline で 2 / 3 / 4 を直接受けられる�
 current roadmap と current stop point を踏まえると、次段の L4 bundle 候補は次の順が自然である。
 
 1. summary / family rows / summary slots / active event rows の境界を崩さない wording 固定
-2. observer-only の `health_digest`
+2. broader formalization を前提にした observer-only の `health_digest`
 3. orderbook semantics richer formal spec 固定後の `liquidity_snapshot_bundle`
 4. prediction / decision contract を受ける shared bundle
 5. `semantic_timeline_bundle`
@@ -337,6 +427,6 @@ L4 shared は契約として育てる。
 ## 15. 一言
 L4 は未展開ではない。
 現在の mainline では `market_summary` を中核に shared-first の最小経路が既に成立している。
-さらに 2026-04-11 時点では、`semantic_usage_contract_rows`、`orderbook_summary_slots_present`、`orderbook_active_event_contracts` を直接受ける **contract-first bundle** まで到達している。
+さらに 2026-04-13 時点では、semantic / orderbook の summary-first mainline contract bundle と `health_digest` current-state shared path が repo truth として読める。
 
 今後は、meaning を増やさず shape を育てること、そして summary / family rows / summary slots / active event rows の境界を崩さずに bundle を増やすことが正しい進み方である。

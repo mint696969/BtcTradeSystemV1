@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Callable
+
 import streamlit as st
 
 from btcts.apps.operator_ui.components import agent_panels
@@ -54,15 +56,57 @@ _GRAPH_WIDGET_RENDERERS = {
 }
 
 
-def _render_graph_widget_bundle(bundle: WarroomGraphWidgetBundle) -> None:
+def _render_fragmentable_warroom_widget(
+    widget_id: str,
+    render_body: Callable[[], None],
+    *,
+    fragment_enabled: bool = False,
+) -> None:
+    slot_meta = warroom_widget_slot(widget_id)
+
+    if fragment_enabled:
+        live_shell.render_fragment_slot(
+            slot_meta,
+            render_body,
+            enabled=True,
+        )
+        return
+
+    with live_shell.slot_widget_from_meta(slot_meta):
+        render_body()
+
+
+def _render_graph_widget_bundle(
+    bundle: WarroomGraphWidgetBundle,
+    *,
+    fragment_enabled: bool = False,
+) -> None:
     renderer = _GRAPH_WIDGET_RENDERERS.get(str(bundle["widget_id"]))
     if renderer is None:
         return
 
-    with live_shell.slot_widget_from_meta(bundle["slot_meta"]):
+    widget_id = str(bundle["widget_id"])
+    slot_meta = bundle["slot_meta"]
+
+    def _render_body() -> None:
         renderer(
             overlay_contract=bundle["overlay_contract"],
         )
+
+    if (
+        fragment_enabled
+        and warroom_partial_update_enabled(widget_id)
+        and warroom_chart_sensitive(widget_id)
+    ):
+        live_shell.render_fragment_slot(
+            slot_meta,
+            _render_body,
+            enabled=True,
+        )
+        return
+
+    with live_shell.slot_widget_from_meta(slot_meta):
+        _render_body()
 
 
 def _expected_warroom_widget_ids() -> set[str]:
@@ -83,8 +127,66 @@ def _unexpected_registered_zone_ids(slot_rows: list[dict]) -> list[str]:
     return sorted(actual_zone_ids.difference(set(warroom_widget_zone_ids())))
 
 
+def _warroom_refresh_diagnostics_summary(
+    *,
+    default_sec: int = 15,
+) -> dict[str, int | bool]:
+    graph_fragment_widget_ids = [
+        widget_id
+        for widget_id in warroom_graph_widget_ids()
+        if (
+            warroom_partial_update_enabled(widget_id)
+            and warroom_chart_sensitive(widget_id)
+        )
+    ]
+    non_graph_fragment_widget_ids = [
+        "warroom_header",
+        "market_regime",
+        "ai_signal",
+        "strategy_state",
+        "risk_monitor",
+        "agent_panels",
+    ]
+    fragment_widget_ids = [
+        *non_graph_fragment_widget_ids,
+        *graph_fragment_widget_ids,
+    ]
+
+    fragment_modes = [
+        str(warroom_widget_slot(widget_id).get("refresh_mode", "static"))
+        for widget_id in non_graph_fragment_widget_ids
+    ] + [
+        str(warroom_refresh_policy(widget_id).get("mode", "static"))
+        for widget_id in graph_fragment_widget_ids
+    ]
+
+    fragment_interval_sec = (
+        min(
+            live_shell.refresh_mode_interval_sec(
+                mode,
+                default_sec=default_sec,
+            )
+            for mode in fragment_modes
+        )
+        if fragment_modes
+        else int(default_sec)
+    )
+    page_reload_interval_sec = live_shell.page_non_fragment_refresh_interval_sec(
+        "warroom",
+        default_sec=default_sec,
+    )
+
+    return {
+        "fragment_widget_count": len(fragment_widget_ids),
+        "fragment_interval_sec": int(fragment_interval_sec),
+        "page_reload_interval_sec": int(page_reload_interval_sec),
+        "hybrid_refresh": bool(fragment_widget_ids),
+    }
+
+
 def render():
     lang = st.session_state.get("ui_lang", "en")
+    fragment_enabled = bool(st.session_state.get("ui_auto_refresh", True))
 
     live_shell.render_compact_page_header(get_text(lang, "warroom_title"))
 
@@ -97,10 +199,11 @@ def render():
         label=get_text(lang, "ui_label_overview"),
         zone_kind="overview",
     ):
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("warroom_header")
-        ):
-            warroom_header.render()
+        _render_fragmentable_warroom_widget(
+            "warroom_header",
+            warroom_header.render,
+            fragment_enabled=fragment_enabled,
+        )
 
         with live_shell.slot_widget_from_meta(
             warroom_widget_slot("warroom_alert_engine")
@@ -134,37 +237,45 @@ def render():
         label=get_text(lang, "ui_label_primary_live"),
         zone_kind="primary_live",
     ):
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("market_regime")
-        ):
-            market_regime_panel.render()
+        _render_fragmentable_warroom_widget(
+            "market_regime",
+            market_regime_panel.render,
+            fragment_enabled=fragment_enabled,
+        )
 
         graph_widget_bundles = [
             warroom_graph_widget_bundle(widget_id)
             for widget_id in warroom_graph_widget_ids()
         ]
         for bundle in graph_widget_bundles:
-            _render_graph_widget_bundle(bundle)
+            _render_graph_widget_bundle(
+                bundle,
+                fragment_enabled=fragment_enabled,
+            )
 
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("ai_signal")
-        ):
-            ai_signal_panel.render()
+        _render_fragmentable_warroom_widget(
+            "ai_signal",
+            ai_signal_panel.render,
+            fragment_enabled=fragment_enabled,
+        )
 
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("strategy_state")
-        ):
-            strategy_state_panel.render()
+        _render_fragmentable_warroom_widget(
+            "strategy_state",
+            strategy_state_panel.render,
+            fragment_enabled=fragment_enabled,
+        )
 
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("risk_monitor")
-        ):
-            risk_monitor_panel.render()
+        _render_fragmentable_warroom_widget(
+            "risk_monitor",
+            risk_monitor_panel.render,
+            fragment_enabled=fragment_enabled,
+        )
 
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("agent_panels")
-        ):
-            agent_panels.render()
+        _render_fragmentable_warroom_widget(
+            "agent_panels",
+            agent_panels.render,
+            fragment_enabled=fragment_enabled,
+        )
 
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         slot_rows = get_registered_slots("warroom")
@@ -251,6 +362,31 @@ def render():
                 "warroom_refresh_modes_caption",
             ).format(
                 counts=warroom_refresh_mode_counts(),
+            )
+        )
+        refresh_diag = _warroom_refresh_diagnostics_summary()
+        if refresh_diag["hybrid_refresh"]:
+            st.caption(
+                get_text(
+                    lang,
+                    "warroom_hybrid_refresh_caption",
+                )
+            )
+        st.caption(
+            get_text(
+                lang,
+                "warroom_fragment_refresh_caption",
+            ).format(
+                count=refresh_diag["fragment_widget_count"],
+                interval=refresh_diag["fragment_interval_sec"],
+            )
+        )
+        st.caption(
+            get_text(
+                lang,
+                "warroom_page_reload_refresh_caption",
+            ).format(
+                interval=refresh_diag["page_reload_interval_sec"],
             )
         )
         st.caption(

@@ -64,10 +64,20 @@ def summary_contract_caption(
 ) -> str:
     payload = dict(summary or {})
 
+    semantic_wiring = str(payload.get("semantic_runtime_wiring_status") or "missing")
+    semantic_observer_present = bool(payload.get("semantic_observer_present"))
+    semantic_usage_summary_present = bool(payload.get("semantic_usage_summary_present"))
+    semantic_contract_rows_present = bool(payload.get("semantic_contract_rows_present"))
     semantic_rows_kind = str(
         payload.get("semantic_usage_contract_rows_kind") or "event_family_contract_rows"
     )
     semantic_rows_count = int(payload.get("semantic_usage_contract_rows_count") or 0)
+
+    orderbook_wiring = str(payload.get("orderbook_wiring_status") or "missing")
+    summary_slots_count = int(payload.get("orderbook_summary_slots_count") or 0)
+    persistence_present = bool(payload.get("orderbook_persistence_present"))
+    persistence_observable = bool(payload.get("orderbook_persistence_observable"))
+    active_events_count = int(payload.get("orderbook_active_event_count") or 0)
 
     active_event_rows_kind = str(
         payload.get("orderbook_active_event_contracts_kind") or "active_event_contract_rows"
@@ -75,8 +85,17 @@ def summary_contract_caption(
     active_event_rows_count = int(payload.get("orderbook_active_event_contracts_count") or 0)
 
     return get_text(lang, "market_monitor_contract_line").format(
+        semantic_wiring=semantic_wiring,
+        semantic_observer_present=semantic_observer_present,
+        semantic_usage_summary_present=semantic_usage_summary_present,
+        semantic_contract_rows_present=semantic_contract_rows_present,
         semantic_rows_kind=semantic_rows_kind,
         semantic_rows_count=semantic_rows_count,
+        orderbook_wiring=orderbook_wiring,
+        summary_slots_count=summary_slots_count,
+        persistence_present=persistence_present,
+        persistence_observable=persistence_observable,
+        active_events_count=active_events_count,
         active_event_rows_kind=active_event_rows_kind,
         active_event_rows_count=active_event_rows_count,
     )

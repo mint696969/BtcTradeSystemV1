@@ -99,8 +99,12 @@ class MarketStateProjector:
         )
         semantic_usage_contract_rows = [
             {
-                "contract_source": "l3_event_usage_policy",
-                "interpretation_bucket": book_state.interpretation_bucket,
+                "contract_source": str(
+                    row.get("contract_source") or "l3_event_usage_policy"
+                ),
+                "interpretation_bucket": (
+                    str(row.get("interpretation_bucket") or "").strip() or None
+                ),
                 "meaning_version": str(row.get("meaning_version") or "unknown"),
                 "event_family": str(row.get("event_family") or ""),
                 "usage_grade": str(row.get("usage_grade") or "unknown"),

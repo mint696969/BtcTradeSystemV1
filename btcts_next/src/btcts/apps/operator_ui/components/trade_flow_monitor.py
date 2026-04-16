@@ -5,27 +5,21 @@ from __future__ import annotations
 
 import streamlit as st
 
-from btcts.apps.operator_ui.components.research_bridge import (
-    latest_trade_row,
-    load_latest_replay_payload,
-    tradeflow_metrics,
-)
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
-from btcts.apps.operator_ui.ui_text import get_text
-from btcts.apps.operator_ui.ui_time import format_ui_ts
 from btcts.apps.operator_ui.components.slot_definitions import (
     overlay_contract_caption,
     overlay_contract_metric_rows,
 )
-
-from btcts.apps.operator_ui.components.live_bridge import (
-    recent_live_tradeflow_metrics,
+from btcts.apps.operator_ui.components.trade_flow_state import (
+    build_trade_flow_state,
 )
+from btcts.apps.operator_ui.ui_text import get_text
+from btcts.apps.operator_ui.ui_time import format_ui_ts
 
 
 def render(
@@ -48,26 +42,12 @@ def render(
 
     st.markdown(f"### {get_text(lang, 'trade_flow_title')}")
 
-    live_flow = recent_live_tradeflow_metrics(lines=80)
-    source_label = "live_canonical"
-
-    if live_flow:
-        flow = {
-            "buy_volume": live_flow.get("buy_size"),
-            "sell_volume": live_flow.get("sell_size"),
-            "trade_delta": live_flow.get("delta"),
-            "trade_count": live_flow.get("trade_count"),
-            "event_ts": live_flow.get("event_ts"),
-            "micro_event_names": [],
-        }
-    else:
-        replay_payload = load_latest_replay_payload()
-        flow = tradeflow_metrics(latest_trade_row(replay_payload))
-        source_label = "replay_tradeflow"
-
+    flow = build_trade_flow_state()
     if not flow:
         st.warning(get_text(lang, "trade_flow_not_found"))
         return
+
+    source_label = str(flow.get("source_label") or "unknown")
 
     buy_vol = flow.get("buy_volume")
     sell_vol = flow.get("sell_volume")

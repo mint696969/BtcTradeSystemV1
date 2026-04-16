@@ -13,6 +13,11 @@ Rules:
 
 from .health_digest import HealthDigest, HealthDigestBuildInput, build_health_digest
 from .market_summary import MarketSummary, MarketSummaryBuildInput, build_market_summary
+from .prediction_summary import (
+    PredictionSummary,
+    PredictionSummaryBuildInput,
+    build_prediction_summary,
+)
 
 __all__ = [
     "HealthDigest",
@@ -21,4 +26,7 @@ __all__ = [
     "MarketSummary",
     "MarketSummaryBuildInput",
     "build_market_summary",
+    "PredictionSummary",
+    "PredictionSummaryBuildInput",
+    "build_prediction_summary",
 ]

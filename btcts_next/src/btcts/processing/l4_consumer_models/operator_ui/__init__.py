@@ -21,6 +21,11 @@ from .market_summary_adapter import (
     market_summary_status_payload,
     market_summary_widget_model,
 )
+from .prediction_summary_adapter import (
+    PredictionSummaryWidgetModel,
+    prediction_summary_status_payload,
+    prediction_summary_widget_model,
+)
 
 __all__ = [
     "HealthDigestWidgetModel",
@@ -29,4 +34,7 @@ __all__ = [
     "MarketSummaryWidgetModel",
     "market_summary_status_payload",
     "market_summary_widget_model",
+    "PredictionSummaryWidgetModel",
+    "prediction_summary_status_payload",
+    "prediction_summary_widget_model",
 ]

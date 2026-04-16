@@ -23,6 +23,20 @@ class HealthDigestWidgetModel:
     interpretation_key: str | None
     semantic_wiring_key: str | None
     orderbook_wiring_key: str | None
+    semantic_summary_source_key: str
+    semantic_observer_status_key: str
+    orderbook_contract_status_source_key: str
+    semantic_observer_present_key: str
+    semantic_usage_summary_present_key: str
+    semantic_contract_rows_present_key: str
+    semantic_source_series_present_key: str
+    orderbook_near_wall_present_key: str
+    orderbook_support_present_key: str
+    orderbook_resistance_present_key: str
+    orderbook_persistence_present_key: str
+    orderbook_persistence_observable_key: str
+    orderbook_summary_slots_present: list[str]
+    orderbook_active_event_names: list[str]
     semantic_contract_rows_count: int
     orderbook_summary_slots_count: int
     active_event_count: int
@@ -69,6 +83,20 @@ def health_digest_widget_model(digest: HealthDigest | None) -> HealthDigestWidge
             interpretation_key="unknown",
             semantic_wiring_key="missing",
             orderbook_wiring_key="missing",
+            semantic_summary_source_key="unknown",
+            semantic_observer_status_key="unknown",
+            orderbook_contract_status_source_key="unknown",
+            semantic_observer_present_key="false",
+            semantic_usage_summary_present_key="false",
+            semantic_contract_rows_present_key="false",
+            semantic_source_series_present_key="false",
+            orderbook_near_wall_present_key="false",
+            orderbook_support_present_key="false",
+            orderbook_resistance_present_key="false",
+            orderbook_persistence_present_key="false",
+            orderbook_persistence_observable_key="false",
+            orderbook_summary_slots_present=[],
+            orderbook_active_event_names=[],
             semantic_contract_rows_count=0,
             orderbook_summary_slots_count=0,
             active_event_count=0,
@@ -98,6 +126,42 @@ def health_digest_widget_model(digest: HealthDigest | None) -> HealthDigestWidge
         interpretation_key=_key(market_runtime.get("interpretation_bucket"), fallback="unknown"),
         semantic_wiring_key=_key(semantic_usage.get("runtime_wiring_status"), fallback="missing"),
         orderbook_wiring_key=_key(orderbook_runtime.get("wiring_status"), fallback="missing"),
+        semantic_summary_source_key=_key(semantic_usage.get("summary_source"), fallback="unknown")
+        or "unknown",
+        semantic_observer_status_key=_key(semantic_usage.get("observer_status"), fallback="unknown")
+        or "unknown",
+        orderbook_contract_status_source_key=_key(
+            orderbook_runtime.get("contract_status_source"),
+            fallback="unknown",
+        )
+        or "unknown",
+        semantic_observer_present_key="true" if semantic_usage.get("observer_present") else "false",
+        semantic_usage_summary_present_key="true"
+        if semantic_usage.get("usage_summary_present")
+        else "false",
+        semantic_contract_rows_present_key="true"
+        if semantic_usage.get("contract_rows_present")
+        else "false",
+        semantic_source_series_present_key="true"
+        if semantic_usage.get("source_series_present")
+        else "false",
+        orderbook_near_wall_present_key="true"
+        if orderbook_runtime.get("near_wall_present")
+        else "false",
+        orderbook_support_present_key="true"
+        if orderbook_runtime.get("support_present")
+        else "false",
+        orderbook_resistance_present_key="true"
+        if orderbook_runtime.get("resistance_present")
+        else "false",
+        orderbook_persistence_present_key="true"
+        if orderbook_runtime.get("persistence_present")
+        else "false",
+        orderbook_persistence_observable_key="true"
+        if orderbook_runtime.get("persistence_observable")
+        else "false",
+        orderbook_summary_slots_present=list(orderbook_runtime.get("summary_slots_present") or []),
+        orderbook_active_event_names=list(orderbook_runtime.get("active_event_names") or []),
         semantic_contract_rows_count=_number(semantic_usage.get("contract_rows_count")),
         orderbook_summary_slots_count=_number(orderbook_runtime.get("summary_slots_count")),
         active_event_count=_number(orderbook_runtime.get("active_event_count")),
@@ -121,6 +185,7 @@ def health_digest_status_payload(digest: HealthDigest | None) -> dict[str, Any]:
 
     semantic_contract_rows = list(semantic_usage.get("contract_rows") or [])
     orderbook_summary_slots_present = list(orderbook_runtime.get("summary_slots_present") or [])
+    orderbook_active_event_names = list(orderbook_runtime.get("active_event_names") or [])
     orderbook_active_event_contracts = list(orderbook_runtime.get("active_event_contracts") or [])
 
     return {
@@ -139,16 +204,28 @@ def health_digest_status_payload(digest: HealthDigest | None) -> dict[str, Any]:
         "market_runtime": market_runtime,
         "semantic_usage_summary_source": semantic_usage.get("summary_source"),
         "semantic_usage_observer_status": semantic_usage.get("observer_status"),
+        "semantic_usage_observer_present": bool(semantic_usage.get("observer_present")),
+        "semantic_usage_summary_present": bool(semantic_usage.get("usage_summary_present")),
         "semantic_usage_runtime_wiring_status": semantic_usage.get("runtime_wiring_status"),
+        "semantic_usage_contract_rows_present": bool(semantic_usage.get("contract_rows_present")),
         "semantic_usage_contract_rows_kind": "event_family_contract_rows",
         "semantic_usage_contract_rows_count": _number(semantic_usage.get("contract_rows_count")),
         "semantic_usage_contract_rows": semantic_contract_rows,
+        "semantic_usage_source_series_present": bool(semantic_usage.get("source_series_present")),
+        "orderbook_contract_status_source": orderbook_runtime.get("contract_status_source"),
         "orderbook_runtime_wiring_status": orderbook_runtime.get("wiring_status"),
+        "orderbook_near_wall_present": bool(orderbook_runtime.get("near_wall_present")),
+        "orderbook_support_present": bool(orderbook_runtime.get("support_present")),
+        "orderbook_resistance_present": bool(orderbook_runtime.get("resistance_present")),
+        "orderbook_persistence_present": bool(orderbook_runtime.get("persistence_present")),
+        "orderbook_persistence_observable": bool(orderbook_runtime.get("persistence_observable")),
         "orderbook_summary_slots_kind": "summary_slot_names",
         "orderbook_summary_slots_count": _number(orderbook_runtime.get("summary_slots_count")),
         "orderbook_summary_slots_present": orderbook_summary_slots_present,
+        "orderbook_active_event_names": orderbook_active_event_names,
+        "orderbook_active_event_count": _number(orderbook_runtime.get("active_event_count")),
         "orderbook_active_event_contracts_kind": "active_event_contract_rows",
-        "orderbook_active_event_contracts_count": _number(orderbook_runtime.get("active_event_count")),
+        "orderbook_active_event_contracts_count": len(orderbook_active_event_contracts),
         "orderbook_active_event_contracts": orderbook_active_event_contracts,
         "diagnostics": diagnostics,
     }

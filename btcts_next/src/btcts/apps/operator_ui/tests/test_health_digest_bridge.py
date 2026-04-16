@@ -52,15 +52,28 @@ def main() -> int:
             "interpretation_bucket": "allow_structural_use",
         },
         semantic_usage={
+            "summary_source": "market_state_semantic_usage_summary",
+            "observer_status": "healthy",
             "runtime_wiring_status": "wired",
+            "observer_present": True,
+            "usage_summary_present": True,
+            "contract_rows_present": True,
+            "source_series_present": True,
             "contract_rows_count": 2,
             "contract_rows": [{"event_family": "wall"}],
         },
         orderbook_runtime={
+            "contract_status_source": "market_state_orderbook_contract_status",
             "wiring_status": "partial",
             "summary_slots_count": 3,
             "summary_slots_present": ["near_wall", "support", "persistence"],
+            "near_wall_present": True,
+            "support_present": True,
+            "resistance_present": False,
+            "persistence_present": True,
+            "persistence_observable": True,
             "active_event_count": 1,
+            "active_event_names": ["near_wall_continued"],
             "active_event_contracts": [{"event_name": "near_wall_continued"}],
         },
         diagnostics={"preferred_row_age_sec": 5.0},
@@ -70,12 +83,29 @@ def main() -> int:
     assert bundle["widget"].widget_kind == "health_digest"
     assert bundle["widget"].freshness_key == "LIVE"
     assert bundle["payload"]["source_kind"] == "health_data_service"
+    assert bundle["payload"]["semantic_usage_summary_source"] == "market_state_semantic_usage_summary"
     assert bundle["payload"]["semantic_usage_contract_rows_count"] == 2
     assert bundle["payload"]["orderbook_summary_slots_count"] == 3
+    assert bundle["payload"]["orderbook_active_event_names"] == ["near_wall_continued"]
+    assert bundle["payload"]["orderbook_active_event_count"] == 1
     assert bundle["payload"]["orderbook_active_event_contracts_count"] == 1
 
     widget = build_health_digest_widget(digest)
     assert widget.collector_mode_key == "unified"
+    assert widget.semantic_summary_source_key == "market_state_semantic_usage_summary"
+    assert widget.semantic_observer_status_key == "healthy"
+    assert widget.orderbook_contract_status_source_key == "market_state_orderbook_contract_status"
+    assert widget.semantic_observer_present_key == "true"
+    assert widget.semantic_usage_summary_present_key == "true"
+    assert widget.semantic_contract_rows_present_key == "true"
+    assert widget.semantic_source_series_present_key == "true"
+    assert widget.orderbook_near_wall_present_key == "true"
+    assert widget.orderbook_support_present_key == "true"
+    assert widget.orderbook_resistance_present_key == "false"
+    assert widget.orderbook_persistence_present_key == "true"
+    assert widget.orderbook_persistence_observable_key == "true"
+    assert widget.orderbook_summary_slots_present == ["near_wall", "support", "persistence"]
+    assert widget.orderbook_active_event_names == ["near_wall_continued"]
     assert widget.orderbook_summary_slots_count == 3
 
     payload = build_health_digest_payload(digest)

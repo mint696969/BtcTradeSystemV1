@@ -59,8 +59,9 @@ def render(
 
     board = state_bundle["board"]
     state = state_bundle["state"]
-    summary = state_bundle["summary"]
-    summary_widget = state_bundle["summary_widget"]
+    summary_bundle = state_bundle.get("summary_bundle") or {}
+    summary = summary_bundle.get("status_payload") or state_bundle["summary"]
+    summary_widget = summary_bundle.get("widget_model") or state_bundle["summary_widget"]
     state_diag = state_bundle["state_diag"]
     source_label = state_bundle["source_label"]
 

@@ -17,7 +17,12 @@ from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_overview,
     load_market_summary_bundle,
     load_market_summary_status_payload,
+    load_market_summary_ui_bundle,
     load_market_summary_widget_model,
+    load_prediction_summary_bundle,
+    load_prediction_summary_status_payload,
+    load_prediction_summary_ui_bundle,
+    load_prediction_summary_widget_model,
     market_monitor_metrics,
     market_state_status_caption,
     market_summary_status_caption,
@@ -64,6 +69,21 @@ def main() -> int:
             "mode": "continuous_trusted",
             "review_required": False,
         },
+        semantic_observer_status="healthy",
+        semantic_usage_summary={
+            "source_kind": "market_state_semantic_usage_summary",
+            "contract_source": "l3_event_usage_policy",
+            "meaning_version": "l3_event_usage_policy.v1alpha1",
+            "observer_status": "healthy",
+            "total_rows": 2,
+            "active_event_count": 1,
+            "mapped_event_count": 1,
+            "unknown_event_count": 0,
+            "event_family_distribution": {"wall": 2},
+            "trust_bucket_distribution": {"trusted": 2},
+            "interpretation_bucket_distribution": {"observe_only": 2},
+            "consumer_distribution": {"health": 2},
+        },
         semantic_usage_contract_rows=[
             {
                 "contract_source": "l3_event_usage_policy",
@@ -80,6 +100,7 @@ def main() -> int:
                 "usage_grade": "strong",
             },
         ],
+        orderbook_persistence_observable=True,
         orderbook_semantics_summary={
             "near_wall": {"side": "bid"},
             "support": None,
@@ -162,7 +183,22 @@ def main() -> int:
     summary_caption = market_summary_status_caption(summary)
     assert "freshness=" in summary_caption
     assert "trust=trusted" in summary_caption
+    assert "semantic_wiring=wired" in summary_caption
+    assert "semantic_contract=l3_event_usage_policy" in summary_caption
+    assert "semantic_version=l3_event_usage_policy.v1alpha1" in summary_caption
+    assert "orderbook_wiring=partial" in summary_caption
+    assert "persistence_present=False" in summary_caption
+    assert "persistence_observable=True" in summary_caption
     assert "family_rows=2" in summary_caption
+    assert "semantic_active_events=1" in summary_caption
+    assert "mapped_events=1" in summary_caption
+    assert "unknown_events=0" in summary_caption
+    assert "family_dist_keys=1" in summary_caption
+    assert "trust_dist_keys=1" in summary_caption
+    assert "interpretation_dist_keys=1" in summary_caption
+    assert "consumer_dist_keys=1" in summary_caption
+    assert "summary_slots=1" in summary_caption
+    assert "active_events=1" in summary_caption
     assert "active_event_rows=1" in summary_caption
     assert "series=bf-sess-1:series:100" in summary_caption
 
@@ -172,13 +208,45 @@ def main() -> int:
     assert summary_payload["trust_state"] == "trusted"
     assert summary_payload["continuity_state"] == "continuous"
     assert summary_payload["interpretation_bucket"] == "allow_structural_use"
+
+    summary_ui_bundle = load_market_summary_ui_bundle(exchange="bitflyer", symbol_raw="BTC_JPY")
+    assert summary_ui_bundle["summary"].summary_type == "market_summary"
+    assert summary_ui_bundle["summary"].market_uid == "bitflyer.spot.BTC_JPY"
+    assert summary_ui_bundle["status_payload"]["semantic_runtime_wiring_status"] == "wired"
+    assert summary_ui_bundle["widget_model"].semantic_wiring_key == "wired"
+    assert summary_payload["semantic_summary_source"] == "market_state_semantic_usage_summary"
+    assert summary_payload["semantic_contract_source"] == "l3_event_usage_policy"
+    assert summary_payload["semantic_meaning_version"] == "l3_event_usage_policy.v1alpha1"
+    assert summary_payload["semantic_observer_status"] == "healthy"
+    assert summary_payload["semantic_observer_present"] is True
+    assert summary_payload["semantic_usage_summary_present"] is True
+    assert summary_payload["semantic_contract_rows_present"] is True
+    assert summary_payload["semantic_contract_rows_count"] == 2
+    assert summary_payload["semantic_runtime_wiring_status"] == "wired"
+    assert summary_payload["semantic_total_rows"] == 2
+    assert summary_payload["semantic_active_event_count"] == 1
+    assert summary_payload["semantic_mapped_event_count"] == 1
+    assert summary_payload["semantic_unknown_event_count"] == 0
+    assert summary_payload["semantic_event_family_distribution"] == {"wall": 2}
+    assert summary_payload["semantic_trust_bucket_distribution"] == {"trusted": 2}
+    assert summary_payload["semantic_interpretation_bucket_distribution"] == {"observe_only": 2}
+    assert summary_payload["semantic_consumer_distribution"] == {"health": 2}
     assert summary_payload["semantic_usage_contract_rows_kind"] == "event_family_contract_rows"
     assert summary_payload["semantic_usage_contract_rows_count"] == 2
     assert summary_payload["semantic_usage_contract_rows"][0]["contract_source"] == "l3_event_usage_policy"
     assert summary_payload["semantic_usage_contract_rows"][0]["meaning_version"] == "l3_event_usage_policy.v1alpha1"
     assert summary_payload["orderbook_summary_slots_kind"] == "summary_slot_names"
     assert summary_payload["orderbook_summary_slots_count"] == 1
+    assert summary_payload["orderbook_wiring_status"] == "partial"
+    assert summary_payload["orderbook_contract_status_source"] == "orderbook_summary_inference"
+    assert summary_payload["orderbook_persistence_observable"] is True
+    assert summary_payload["orderbook_near_wall_present"] is True
+    assert summary_payload["orderbook_support_present"] is False
+    assert summary_payload["orderbook_resistance_present"] is False
+    assert summary_payload["orderbook_persistence_present"] is False
     assert summary_payload["orderbook_summary_slots_present"] == ["near_wall"]
+    assert summary_payload["orderbook_active_event_names"] == ["near_wall_continued"]
+    assert summary_payload["orderbook_active_event_count"] == 1
     assert summary_payload["orderbook_active_event_contracts_kind"] == "active_event_contract_rows"
     assert summary_payload["orderbook_active_event_contracts_count"] == 1
     assert summary_payload["orderbook_active_event_contracts"][0]["contract_source"] == "l3_event_usage_policy"
@@ -192,9 +260,70 @@ def main() -> int:
     assert widget_model.trust_key == "trusted"
     assert widget_model.continuity_key == "continuous"
     assert widget_model.interpretation_key == "allow_structural_use"
+    assert widget_model.semantic_wiring_key == "wired"
+    assert widget_model.semantic_observer_status_key == "healthy"
+    assert widget_model.semantic_observer_present_key == "true"
+    assert widget_model.semantic_usage_summary_present_key == "true"
+    assert widget_model.semantic_contract_rows_present_key == "true"
+    assert widget_model.semantic_summary_source_key == "market_state_semantic_usage_summary"
+    assert widget_model.semantic_contract_source_key == "l3_event_usage_policy"
+    assert widget_model.semantic_meaning_version_key == "l3_event_usage_policy.v1alpha1"
+    assert widget_model.orderbook_wiring_key == "partial"
+    assert widget_model.orderbook_contract_status_source_key == "orderbook_summary_inference"
+    assert widget_model.semantic_rows_count == 2
+    assert widget_model.semantic_total_rows == 2
+    assert widget_model.semantic_active_event_count == 1
+    assert widget_model.semantic_mapped_event_count == 1
+    assert widget_model.semantic_unknown_event_count == 0
+    assert widget_model.semantic_event_family_distribution == {"wall": 2}
+    assert widget_model.semantic_trust_bucket_distribution == {"trusted": 2}
+    assert widget_model.semantic_interpretation_bucket_distribution == {"observe_only": 2}
+    assert widget_model.semantic_consumer_distribution == {"health": 2}
+    assert widget_model.summary_slots_count == 1
+    assert widget_model.orderbook_summary_slots_present == ["near_wall"]
+    assert widget_model.orderbook_near_wall_present_key == "true"
+    assert widget_model.orderbook_support_present_key == "false"
+    assert widget_model.orderbook_resistance_present_key == "false"
+    assert widget_model.active_event_count == 1
+    assert widget_model.orderbook_active_event_names == ["near_wall_continued"]
+    assert widget_model.persistence_present_key == "false"
+    assert widget_model.persistence_observable_key == "true"
     assert widget_model.source_kind == "market_state_preferred"
     assert isinstance(widget_model.notable_tags, list)
     assert isinstance(widget_model.alert_tags, list)
+
+    prediction_summary = load_prediction_summary_bundle(
+        exchange="bitflyer",
+        symbol_raw="BTC_JPY",
+    )
+    assert prediction_summary.prediction_type == "shared_prediction_summary"
+    assert prediction_summary.market_uid == "bitflyer.spot.BTC_JPY"
+    assert prediction_summary.horizon == "short"
+
+    prediction_payload = load_prediction_summary_status_payload(
+        exchange="bitflyer",
+        symbol_raw="BTC_JPY",
+    )
+    assert prediction_payload["prediction_type"] == "shared_prediction_summary"
+    assert prediction_payload["market_uid"] == "bitflyer.spot.BTC_JPY"
+    assert prediction_payload["horizon"] == "short"
+    assert "confidence" in prediction_payload
+
+    prediction_ui_bundle = load_prediction_summary_ui_bundle(
+        exchange="bitflyer",
+        symbol_raw="BTC_JPY",
+    )
+    assert prediction_ui_bundle["summary"].prediction_type == "shared_prediction_summary"
+    assert prediction_ui_bundle["status_payload"]["prediction_type"] == "shared_prediction_summary"
+    assert prediction_ui_bundle["widget_model"].widget_kind == "shared_prediction_summary"
+
+    prediction_widget = load_prediction_summary_widget_model(
+        exchange="bitflyer",
+        symbol_raw="BTC_JPY",
+    )
+    assert prediction_widget.widget_kind == "shared_prediction_summary"
+    assert prediction_widget.horizon_key == "short"
+    assert prediction_widget.freshness_key in {"LIVE", "QUIET", "STALE", "UNKNOWN"}
 
     saved = json.loads(out.read_text(encoding="utf-8").splitlines()[0])
     assert saved["market_uid"] == "bitflyer.spot.BTC_JPY"

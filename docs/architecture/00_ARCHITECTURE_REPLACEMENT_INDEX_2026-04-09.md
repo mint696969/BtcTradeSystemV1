@@ -30,7 +30,7 @@
 
 1. `00_ARCHITECTURE_REPLACEMENT_INDEX_2026-04-09.md`
 2. `01_L1_L2_CAPTURE_CANONICAL_RUNTIME_SPEC_2026-04-09.md`
-3. `02_L3_MARKET_SEMANTICS_AND_EVENT_CONTRACT_SPEC_2026-04-09.md`
+3. `02_L3_MARKET_SEMANTICS_AND_EVENT_CONTRACT_SPEC_2026-04-14_MERGED.md`
 4. `03_L4_SHARED_CONSUMER_MODELS_SPEC_2026-04-09.md`
 5. `04_UI_HUB_OPERATOR_UI_SPEC_2026-04-09.md`
 6. `05_SUPPORTING_POLICIES_AND_VERIFICATION_SPEC_2026-04-09.md`
@@ -148,10 +148,10 @@ UI / Health / Warroom / Replay / Research
 - collector_vnext と ingestion/l2_canonical の境界を説明する
 - L3 以降の意味論は持ち込まない
 
-### `02_L3_MARKET_SEMANTICS_AND_EVENT_CONTRACT_SPEC_2026-04-09.md`
+### `02_L3_MARKET_SEMANTICS_AND_EVENT_CONTRACT_SPEC_2026-04-14_MERGED.md`
 - L3 owner 境界を固定する
 - continuity / trust / interpretation / orderbook semantics を整理する
-- event usage summary と runtime outward partial contract の現況を説明する
+- event usage summary / family-row / active-event-row の current truth と runtime outward partial contract の現況を説明する
 
 ### `03_L4_SHARED_CONSUMER_MODELS_SPEC_2026-04-09.md`
 - L4 shared-first の current implementation を説明する

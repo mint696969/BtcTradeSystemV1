@@ -7,26 +7,17 @@ import json
 from pathlib import Path
 import streamlit as st
 
-from btcts.apps.operator_ui.components.research_bridge import (
-    board_signal_metrics,
-    latest_board_row,
-    latest_trade_row,
-    load_latest_replay_payload,
-    tradeflow_metrics,
-)
-
 import os
-from btcts.apps.operator_ui.components.live_bridge import (
-    latest_live_board_metrics,
-    recent_live_tradeflow_metrics,
-)
+
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
-
+from btcts.apps.operator_ui.components.risk_monitor_state import (
+    build_risk_monitor_state,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 
 
@@ -121,62 +112,18 @@ def render():
 
     st.markdown(f"### {get_text(lang, 'risk_monitor_title')}")
 
-    live_board = latest_live_board_metrics()
-    live_flow = recent_live_tradeflow_metrics(lines=80)
-
-    source_label = "replay_board+tradeflow + audit_latency"
-
-    board = None
-    flow = None
-
-    live_spread = live_board.get("spread")
-    live_delta = live_flow.get("delta")
-
-    if live_spread is not None and live_delta is not None:
-        bid_depth = live_board.get("bid_depth")
-        ask_depth = live_board.get("ask_depth")
-
-        imbalance = None
-        if bid_depth is not None and ask_depth is not None:
-            try:
-                bid_depth_f = float(bid_depth)
-                ask_depth_f = float(ask_depth)
-                denom = bid_depth_f + ask_depth_f
-                if denom > 0:
-                    imbalance = (bid_depth_f - ask_depth_f) / denom
-            except Exception:
-                imbalance = None
-
-        board = {
-            "spread": float(live_spread),
-            "imbalance": imbalance,
-            "wall_ratio": None,
-        }
-        flow = {
-            "trade_delta": float(live_delta),
-        }
-        source_label = "live_canonical + audit_latency"
-
-    if not board or not flow:
-        replay_payload = load_latest_replay_payload()
-        board = board_signal_metrics(
-            latest_board_row(replay_payload)
-        )
-        flow = tradeflow_metrics(
-            latest_trade_row(replay_payload)
-        )
-
-    if not board or not flow:
+    state = build_risk_monitor_state()
+    if not state:
         st.warning(get_text(lang, "risk_monitor_missing_data"))
         return
 
-    spread = board.get("spread")
-    imbalance = board.get("imbalance")
-    wall_ratio = board.get("wall_ratio")
+    spread = state.get("spread")
+    imbalance = state.get("imbalance")
+    wall_ratio = state.get("wall_ratio")
+    delta = state.get("delta")
+    source_label = state.get("source_label") or "unknown"
 
     summary_widget = load_market_summary_widget_model()
-
-    delta = flow.get("trade_delta")
 
     latency = _recent_audit_latency()
 

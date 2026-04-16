@@ -172,8 +172,11 @@ def _normalize_semantic_usage(
         "summary": dict(semantic_usage_summary),
         "contract_rows": list(semantic_usage_rows),
         "runtime_wiring_status": _safe_str(runtime_contract_summary.get("wiring_status")) or "missing",
+        "observer_present": bool(runtime_contract_summary.get("observer_present")),
+        "usage_summary_present": bool(runtime_contract_summary.get("usage_summary_present")),
         "contract_rows_present": bool(runtime_contract_summary.get("contract_rows_present")),
         "contract_rows_count": int(runtime_contract_summary.get("contract_rows_count") or 0),
+        "source_series_present": bool(runtime_contract_summary.get("source_series_present")),
     }
 
 
@@ -184,7 +187,15 @@ def _normalize_orderbook_runtime(orderbook_runtime_summary: dict[str, Any]) -> d
         "wiring_status": _safe_str(orderbook_runtime_summary.get("wiring_status")) or "missing",
         "freshness": _safe_str(orderbook_runtime_summary.get("freshness")) or "UNKNOWN",
         "summary_slots_present": list(orderbook_runtime_summary.get("summary_slots_present") or []),
-        "summary_slots_count": int(orderbook_runtime_summary.get("present_count") or 0),
+        "summary_slots_count": int(
+            orderbook_runtime_summary.get("summary_slots_count")
+            or orderbook_runtime_summary.get("present_count")
+            or 0
+        ),
+        "near_wall_present": bool(orderbook_runtime_summary.get("near_wall_present")),
+        "support_present": bool(orderbook_runtime_summary.get("support_present")),
+        "resistance_present": bool(orderbook_runtime_summary.get("resistance_present")),
+        "persistence_present": bool(orderbook_runtime_summary.get("persistence_present")),
         "persistence_observable": bool(orderbook_runtime_summary.get("persistence_observable")),
         "active_event_count": int(orderbook_runtime_summary.get("active_event_count") or 0),
         "active_event_names": list(orderbook_runtime_summary.get("active_event_names") or []),

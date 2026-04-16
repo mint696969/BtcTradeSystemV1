@@ -75,8 +75,11 @@ def main() -> int:
                 }
             ],
             "runtime_wiring_status": "wired",
+            "observer_present": True,
+            "usage_summary_present": True,
             "contract_rows_present": True,
             "contract_rows_count": 1,
+            "source_series_present": True,
         },
         orderbook_runtime={
             "contract_status_source": "market_state_orderbook_contract_status",
@@ -84,6 +87,10 @@ def main() -> int:
             "freshness": "LIVE",
             "summary_slots_present": ["near_wall", "support"],
             "summary_slots_count": 2,
+            "near_wall_present": True,
+            "support_present": True,
+            "resistance_present": False,
+            "persistence_present": False,
             "persistence_observable": True,
             "active_event_count": 1,
             "active_event_names": ["near_wall_continued"],
@@ -127,11 +134,24 @@ def main() -> int:
     assert payload["digest_version"] == "v1alpha1"
     assert payload["source_kind"] == "health_data_service"
     assert payload["freshness"] == "LIVE"
+    assert payload["semantic_usage_observer_present"] is True
+    assert payload["semantic_usage_summary_present"] is True
+    assert payload["semantic_usage_contract_rows_present"] is True
     assert payload["semantic_usage_contract_rows_kind"] == "event_family_contract_rows"
     assert payload["semantic_usage_contract_rows_count"] == 1
+    assert payload["semantic_usage_source_series_present"] is True
+    assert payload["orderbook_contract_status_source"] == "market_state_orderbook_contract_status"
+    assert payload["orderbook_runtime_wiring_status"] == "partial"
+    assert payload["orderbook_near_wall_present"] is True
+    assert payload["orderbook_support_present"] is True
+    assert payload["orderbook_resistance_present"] is False
+    assert payload["orderbook_persistence_present"] is False
+    assert payload["orderbook_persistence_observable"] is True
     assert payload["orderbook_summary_slots_kind"] == "summary_slot_names"
     assert payload["orderbook_summary_slots_count"] == 2
     assert payload["orderbook_summary_slots_present"] == ["near_wall", "support"]
+    assert payload["orderbook_active_event_names"] == ["near_wall_continued"]
+    assert payload["orderbook_active_event_count"] == 1
     assert payload["orderbook_active_event_contracts_kind"] == "active_event_contract_rows"
     assert payload["orderbook_active_event_contracts_count"] == 1
     assert payload["orderbook_active_event_contracts"][0]["event_name"] == "near_wall_continued"

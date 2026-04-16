@@ -373,6 +373,55 @@ def _load_cached_market_summary_widget_model():
     return load_market_summary_widget_model()
 
 
+def _snapshot_current_state_bundle(snapshot: dict) -> dict:
+    bundle = snapshot.get("current_state_bundle")
+    if isinstance(bundle, dict):
+        return bundle
+    return snapshot
+
+
+def _snapshot_timeline_bundle(snapshot: dict) -> dict:
+    bundle = snapshot.get("timeline_bundle")
+    if isinstance(bundle, dict):
+        return bundle
+    return snapshot
+
+
+def _snapshot_anomaly_bundle(snapshot: dict) -> dict:
+    bundle = snapshot.get("anomaly_bundle")
+    if isinstance(bundle, dict):
+        return bundle
+    return snapshot
+
+
+def _snapshot_anomaly_items(snapshot: dict) -> list[dict]:
+    anomaly_bundle = _snapshot_anomaly_bundle(snapshot)
+    items = anomaly_bundle.get("items")
+    if isinstance(items, list):
+        return items
+    recent_anomalies = anomaly_bundle.get("recent_anomalies")
+    if isinstance(recent_anomalies, list):
+        return recent_anomalies
+    return []
+
+
+def _snapshot_continuity_bundle(snapshot: dict) -> dict:
+    bundle = snapshot.get("continuity_bundle")
+    if isinstance(bundle, dict):
+        return bundle
+    timeline_bundle = snapshot.get("timeline_bundle")
+    if isinstance(timeline_bundle, dict):
+        return timeline_bundle
+    return snapshot
+
+
+def _snapshot_health_digest_ui_bundle(snapshot: dict) -> dict:
+    current_state_bundle = _snapshot_current_state_bundle(snapshot)
+    return build_health_digest_ui_bundle(
+        current_state_bundle.get("health_digest")
+    )
+
+
 def _render_health_fragment(*, refresh_mode: str, render_body) -> None:
     live_shell.render_fragment_block(
         render_body,
@@ -409,12 +458,12 @@ def render():
 
     def _render_collector_summary_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
-        collector_state = snapshot.get("collector_state") or {}
+        current_state_bundle = _snapshot_current_state_bundle(snapshot)
+
+        collector_state = current_state_bundle.get("collector_state") or {}
         status_payload = collector_state.get("status") or {}
         health_payload = collector_state.get("health") or {}
-        health_digest_bundle = build_health_digest_ui_bundle(
-            snapshot.get("health_digest")
-        )
+        health_digest_bundle = _snapshot_health_digest_ui_bundle(snapshot)
         digest_caption = build_health_digest_collector_summary_caption(
             widget=health_digest_bundle["widget"],
             payload=health_digest_bundle["payload"],
@@ -431,13 +480,13 @@ def render():
 
     def _render_api_summary_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
-        collector_state = snapshot.get("collector_state") or {}
+        current_state_bundle = _snapshot_current_state_bundle(snapshot)
+
+        collector_state = current_state_bundle.get("collector_state") or {}
         rate_payload = collector_state.get("rate") or {}
         rate_items = rate_payload.get("items") or {}
         bitflyer_rate = rate_items.get("bitflyer") or {}
-        health_digest_bundle = build_health_digest_ui_bundle(
-            snapshot.get("health_digest")
-        )
+        health_digest_bundle = _snapshot_health_digest_ui_bundle(snapshot)
         digest_caption = build_health_digest_api_summary_caption(
             widget=health_digest_bundle["widget"],
             payload=health_digest_bundle["payload"],
@@ -453,11 +502,11 @@ def render():
 
     def _render_ws_summary_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
-        collector_state = snapshot.get("collector_state") or {}
+        current_state_bundle = _snapshot_current_state_bundle(snapshot)
+
+        collector_state = current_state_bundle.get("collector_state") or {}
         origin_payload = collector_state.get("origin") or {}
-        health_digest_bundle = build_health_digest_ui_bundle(
-            snapshot.get("health_digest")
-        )
+        health_digest_bundle = _snapshot_health_digest_ui_bundle(snapshot)
         digest_caption = build_health_digest_ws_summary_caption(
             widget=health_digest_bundle["widget"],
             payload=health_digest_bundle["payload"],
@@ -473,11 +522,11 @@ def render():
 
     def _render_layer3_summary_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
-        market_latest = snapshot.get("market_latest") or {}
-        market_diag = snapshot.get("market_diag") or {}
-        health_digest_bundle = build_health_digest_ui_bundle(
-            snapshot.get("health_digest")
-        )
+        current_state_bundle = _snapshot_current_state_bundle(snapshot)
+
+        market_latest = current_state_bundle.get("market_latest") or {}
+        market_diag = current_state_bundle.get("market_diag") or {}
+        health_digest_bundle = _snapshot_health_digest_ui_bundle(snapshot)
         digest_caption = build_health_digest_layer3_summary_caption(
             widget=health_digest_bundle["widget"],
             payload=health_digest_bundle["payload"],
@@ -494,7 +543,10 @@ def render():
 
     def _render_api_chart_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
-        collector_state = snapshot.get("collector_state") or {}
+        current_state_bundle = _snapshot_current_state_bundle(snapshot)
+        timeline_bundle = _snapshot_timeline_bundle(snapshot)
+
+        collector_state = current_state_bundle.get("collector_state") or {}
         rate_payload = collector_state.get("rate") or {}
         rate_items = rate_payload.get("items") or {}
         bitflyer_rate = rate_items.get("bitflyer") or {}
@@ -505,8 +557,8 @@ def render():
         render_api_chart_panel(
             lang=lang,
             range_key=selected_range_key,
-            api_ws_series=snapshot.get("api_ws_series") or [],
-            rate_overlay=snapshot.get("rate_overlay") or [],
+            api_ws_series=timeline_bundle.get("api_ws_series") or [],
+            rate_overlay=timeline_bundle.get("rate_overlay") or [],
             bitflyer_rate=bitflyer_rate,
             bitflyer_rate_snapshot=bitflyer_rate_snapshot,
             bitflyer_rate_trades=bitflyer_rate_trades,
@@ -518,11 +570,12 @@ def render():
 
     def _render_ws_chart_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
+        timeline_bundle = _snapshot_timeline_bundle(snapshot)
 
         render_ws_chart_panel(
             lang=lang,
             range_key=selected_range_key,
-            api_ws_series=snapshot.get("api_ws_series") or [],
+            api_ws_series=timeline_bundle.get("api_ws_series") or [],
             get_text=get_text,
             section_title_with_range=section_title_with_range_local,
             format_metric_number=format_metric_number_local,
@@ -530,17 +583,19 @@ def render():
 
     def _render_layer3_chart_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
+        current_state_bundle = _snapshot_current_state_bundle(snapshot)
+        timeline_bundle = _snapshot_timeline_bundle(snapshot)
 
         render_layer3_chart_panel(
             lang=lang,
             range_key=selected_range_key,
-            layer3_series=snapshot.get("layer3_series") or [],
-            layer3_semantic_usage_rows=snapshot.get("layer3_semantic_usage_rows") or [],
-            layer3_semantic_usage_summary=snapshot.get("layer3_semantic_usage_summary") or {},
-            layer3_runtime_contract_summary=snapshot.get("layer3_runtime_contract_summary") or {},
-            layer3_orderbook_runtime_summary=snapshot.get("layer3_orderbook_runtime_summary") or {},
-            market_latest=snapshot.get("market_latest") or {},
-            market_diag=snapshot.get("market_diag") or {},
+            layer3_series=timeline_bundle.get("layer3_series") or [],
+            layer3_semantic_usage_rows=current_state_bundle.get("layer3_semantic_usage_rows") or [],
+            layer3_semantic_usage_summary=current_state_bundle.get("layer3_semantic_usage_summary") or {},
+            layer3_runtime_contract_summary=current_state_bundle.get("layer3_runtime_contract_summary") or {},
+            layer3_orderbook_runtime_summary=current_state_bundle.get("layer3_orderbook_runtime_summary") or {},
+            market_latest=current_state_bundle.get("market_latest") or {},
+            market_diag=current_state_bundle.get("market_diag") or {},
             get_text=get_text,
             section_title_with_range=section_title_with_range_local,
             health_value_label=_health_value_label,
@@ -548,8 +603,9 @@ def render():
 
     def _render_current_state_section_fragment() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
+        current_state_bundle = _snapshot_current_state_bundle(snapshot)
 
-        collector_state = snapshot.get("collector_state") or {}
+        collector_state = current_state_bundle.get("collector_state") or {}
         status_payload = collector_state.get("status") or {}
         health_payload = collector_state.get("health") or {}
         rate_payload = collector_state.get("rate") or {}
@@ -602,11 +658,9 @@ def render():
             or ""
         )
 
-        market_latest = snapshot.get("market_latest") or {}
-        market_diag = snapshot.get("market_diag") or {}
-        health_digest_bundle = build_health_digest_ui_bundle(
-            snapshot.get("health_digest")
-        )
+        market_latest = current_state_bundle.get("market_latest") or {}
+        market_diag = current_state_bundle.get("market_diag") or {}
+        health_digest_bundle = _snapshot_health_digest_ui_bundle(snapshot)
 
         render_current_state_section(
             lang=lang,
@@ -644,18 +698,20 @@ def render():
 
         render_recent_events_section(
             lang=lang,
-            recent_anomalies=snapshot.get("recent_anomalies") or [],
+            recent_anomalies=_snapshot_anomaly_items(snapshot),
             get_text=get_text,
             health_event_label=_health_event_label,
         )
 
     def _render_continuity_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
+        continuity_bundle = _snapshot_continuity_bundle(snapshot)
+
         render_continuity_panels(
             lang=lang,
             range_key=selected_range_key,
-            api_continuity_rail=snapshot.get("api_continuity_rail") or [],
-            ws_continuity_rail=snapshot.get("ws_continuity_rail") or [],
+            api_continuity_rail=continuity_bundle.get("api_continuity_rail") or [],
+            ws_continuity_rail=continuity_bundle.get("ws_continuity_rail") or [],
             get_text=get_text,
             section_title_with_range=section_title_with_range_local,
         )

@@ -55,6 +55,21 @@ def main() -> int:
             "mode": "continuous_trusted",
             "review_required": False,
         },
+        semantic_observer_status="healthy",
+        semantic_usage_summary={
+            "source_kind": "market_state_semantic_usage_summary",
+            "contract_source": "l3_event_usage_policy",
+            "meaning_version": "l3_event_usage_policy.v1alpha1",
+            "observer_status": "healthy",
+            "total_rows": 2,
+            "active_event_count": 1,
+            "mapped_event_count": 1,
+            "unknown_event_count": 0,
+            "event_family_distribution": {"wall": 2},
+            "trust_bucket_distribution": {"trusted": 2},
+            "interpretation_bucket_distribution": {"observe_only": 2},
+            "consumer_distribution": {"health": 2},
+        },
         semantic_usage_contract_rows=[
             {
                 "contract_source": "l3_event_usage_policy",
@@ -71,6 +86,7 @@ def main() -> int:
                 "usage_grade": "strong",
             },
         ],
+        orderbook_persistence_observable=True,
         orderbook_semantics_summary={
             "near_wall": {"side": "bid"},
             "support": None,
@@ -135,10 +151,29 @@ def main() -> int:
     assert summary.continuity_state == "continuous"
     assert summary.interpretation_bucket == "allow_structural_use"
     assert summary.interpretation_reason == "healthy_continuity"
+    assert summary.semantic_summary_source == "market_state_semantic_usage_summary"
+    assert summary.semantic_contract_source == "l3_event_usage_policy"
+    assert summary.semantic_meaning_version == "l3_event_usage_policy.v1alpha1"
+    assert summary.semantic_observer_status == "healthy"
+    assert summary.semantic_observer_present is True
+    assert summary.semantic_usage_summary_present is True
+    assert summary.semantic_contract_rows_present is True
+    assert summary.semantic_contract_rows_count == 2
+    assert summary.semantic_runtime_wiring_status == "wired"
+    assert summary.semantic_total_rows == 2
+    assert summary.semantic_active_event_count == 1
+    assert summary.semantic_mapped_event_count == 1
+    assert summary.semantic_unknown_event_count == 0
+    assert summary.semantic_event_family_distribution == {"wall": 2}
+    assert summary.semantic_trust_bucket_distribution == {"trusted": 2}
+    assert summary.semantic_interpretation_bucket_distribution == {"observe_only": 2}
+    assert summary.semantic_consumer_distribution == {"health": 2}
     assert summary.semantic_usage_contract_rows[0]["contract_source"] == "l3_event_usage_policy"
     assert summary.semantic_usage_contract_rows[0]["meaning_version"] == "l3_event_usage_policy.v1alpha1"
     assert summary.semantic_usage_contract_rows[0]["event_family"] == "wall"
     assert summary.semantic_usage_contract_rows[0]["usage_grade"] == "strong"
+    assert summary.orderbook_active_event_names == ["near_wall_continued"]
+    assert summary.orderbook_active_event_count == 1
     assert summary.orderbook_active_event_contracts[0]["meaning_version"] == "l3_event_usage_policy.v1alpha1"
     assert summary.orderbook_active_event_contracts[0]["contract_source"] == "l3_event_usage_policy"
     assert summary.orderbook_active_event_contracts[0]["trust_bucket"] == "trusted"
@@ -146,8 +181,13 @@ def main() -> int:
     assert summary.orderbook_active_event_contracts[0]["half_life_sec"] == 30
     assert summary.orderbook_summary_slots_present == ["near_wall"]
     assert summary.orderbook_summary_slots_count == 1
+    assert summary.orderbook_near_wall_present is True
+    assert summary.orderbook_support_present is False
+    assert summary.orderbook_resistance_present is False
+    assert summary.orderbook_persistence_present is False
     assert summary.orderbook_wiring_status == "partial"
     assert summary.orderbook_contract_status_source == "orderbook_summary_inference"
+    assert summary.orderbook_persistence_observable is True
     assert summary.notable_events is not None
     assert summary.alert_candidates is not None
 

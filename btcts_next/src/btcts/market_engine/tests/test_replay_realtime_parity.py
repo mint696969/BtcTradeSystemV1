@@ -113,6 +113,28 @@ def _series_fingerprint(step) -> tuple:
     )
 
 
+def _orderbook_semantics_fingerprint(step) -> tuple:
+    summary = step.orderbook_semantics_summary or {}
+    active_contracts = tuple(
+        (
+            str(event.get("event_name")),
+            str(event.get("event_family")),
+            str(event.get("usage_grade")),
+            str(event.get("side")),
+        )
+        for event in (summary.get("active_event_contracts") or [])
+    )
+    return (
+        str(step.orderbook_semantics_contract_status),
+        bool(step.orderbook_persistence_observable),
+        tuple(summary.get("summary_slots_present") or []),
+        int(summary.get("summary_slots_count") or 0),
+        int(summary.get("active_event_count") or 0),
+        tuple(summary.get("active_event_names") or []),
+        active_contracts,
+    )
+
+
 def main() -> int:
     profile = BitflyerProfile()
 
@@ -139,6 +161,7 @@ def main() -> int:
     for replay_step, realtime_step in zip(replay_results, realtime_results):
         assert _book_fingerprint(replay_step) == _book_fingerprint(realtime_step)
         assert _series_fingerprint(replay_step) == _series_fingerprint(realtime_step)
+        assert _orderbook_semantics_fingerprint(replay_step) == _orderbook_semantics_fingerprint(realtime_step)
 
     final_replay = replay_results[-1]
     assert final_replay.book_state.best_bid == 100.5
@@ -146,6 +169,13 @@ def main() -> int:
     assert final_replay.book_state.spread == 0.5
     assert final_replay.book_state.trust_state.value == "trusted"
     assert final_replay.zone_metadata["mode"] == "hybrid"
+
+    final_summary = final_replay.orderbook_semantics_summary
+    assert final_replay.orderbook_semantics_contract_status in {"partial", "wired"}
+    assert isinstance(final_summary.get("summary_slots_present"), list)
+    assert "active_event_count" in final_summary
+    assert "active_event_names" in final_summary
+    assert "active_event_contracts" in final_summary
 
     print("ok")
     return 0

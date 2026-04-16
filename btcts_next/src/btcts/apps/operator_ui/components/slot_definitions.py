@@ -302,7 +302,7 @@ _WARROOM_WIDGET_SLOT_SPECS: dict[str, CommonWidgetSlotSpec] = {
     "warroom_alert_engine": {
         "zone_id": "overview",
         "priority": 20,
-        "refresh_mode": "poll_normal",
+        "refresh_mode": "poll_slow",
         "tone": "primary",
     },
     "ai_operator_panel": {
@@ -326,7 +326,7 @@ _WARROOM_WIDGET_SLOT_SPECS: dict[str, CommonWidgetSlotSpec] = {
     "warroom_timeline": {
         "zone_id": "secondary",
         "priority": 60,
-        "refresh_mode": "poll_normal",
+        "refresh_mode": "poll_slow",
         "tone": "primary",
     },
     "ai_reasoning_panel": {

@@ -88,6 +88,8 @@ def main() -> int:
     contract_rows = build_event_usage_contract_rows(
         interpretation_bucket="observe_only",
     )
+    assert all(row["contract_source"] == "l3_event_usage_policy" for row in contract_rows)
+    assert all(row["interpretation_bucket"] == "observe_only" for row in contract_rows)
     assert any(
         row["event_family"] == "wall" and row["usage_grade"] == "watch"
         for row in contract_rows
@@ -328,6 +330,25 @@ def main() -> int:
     )
     assert fallback_contract["wiring_status"] == "fallback"
 
+    partial_contract = build_layer3_runtime_contract_summary(
+        market_latest={
+            "source_series_id": "bf-sess-1:series:100",
+            "semantic_usage_contract_rows": [
+                {
+                    "contract_source": "l3_event_usage_policy",
+                    "event_family": "wall",
+                    "usage_grade": "watch",
+                }
+            ],
+        },
+        market_diag={"preferred_row_freshness": "QUIET"},
+        semantic_usage_summary={},
+    )
+    assert partial_contract["wiring_status"] == "partial"
+    assert partial_contract["contract_rows_present"] is True
+    assert partial_contract["contract_rows_count"] == 1
+    assert partial_contract["source_series_present"] is True
+
     missing_contract = build_layer3_runtime_contract_summary(
         market_latest={},
         market_diag={"preferred_row_freshness": "UNKNOWN"},
@@ -364,7 +385,6 @@ def main() -> int:
                 "summary_slots_present": ["near_wall"],
                 "summary_slots_count": 1,
                 "active_event_count": 1,
-                "active_event_names": ["near_wall_continued"],
                 "active_event_contracts": [
                     {
                         "event_name": "near_wall_continued",
@@ -384,6 +404,8 @@ def main() -> int:
         == "orderbook_summary_inference_overrode_missing"
     )
     assert stale_missing_orderbook["summary_slots_present"] == ["near_wall"]
+    assert stale_missing_orderbook["summary_slots_count"] == 1
+    assert stale_missing_orderbook["active_event_names"] == ["near_wall_continued"]
     assert stale_missing_orderbook["active_event_count"] == 1
 
     partial_orderbook = build_layer3_orderbook_runtime_summary(
@@ -430,6 +452,7 @@ def main() -> int:
     assert partial_orderbook["contract_status_source"] == "orderbook_summary_inference"
     assert partial_orderbook["freshness"] == "QUIET"
     assert partial_orderbook["present_count"] == 2
+    assert partial_orderbook["summary_slots_count"] == 2
     assert partial_orderbook["summary_slots_present"] == [
         "near_wall",
         "support",
@@ -471,6 +494,7 @@ def main() -> int:
     assert wired_orderbook["wiring_status"] == "wired"
     assert wired_orderbook["freshness"] == "LIVE"
     assert wired_orderbook["present_count"] == 4
+    assert wired_orderbook["summary_slots_count"] == 4
     assert wired_orderbook["summary_slots_present"] == [
         "near_wall",
         "support",

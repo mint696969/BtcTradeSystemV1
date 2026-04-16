@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TypedDict
 
 from btcts.apps.operator_ui.market_state_service import (
     load_latest_market_state,
@@ -12,10 +12,16 @@ from btcts.apps.operator_ui.market_state_service import (
 )
 from btcts.processing.l4_consumer_models.operator_ui import (
     MarketSummaryWidgetModel,
+    PredictionSummaryWidgetModel,
     market_summary_status_payload,
     market_summary_widget_model,
+    prediction_summary_status_payload,
+    prediction_summary_widget_model,
 )
-from btcts.processing.l4_consumer_models.shared import MarketSummary
+from btcts.processing.l4_consumer_models.shared import MarketSummary, PredictionSummary
+from btcts.apps.operator_ui.components.prediction_summary_state import (
+    load_prediction_summary_state,
+)
 
 
 def load_market_overview(
@@ -42,6 +48,34 @@ def load_market_summary_bundle(
     )
 
 
+class MarketSummaryUiBundle(TypedDict):
+    summary: MarketSummary
+    status_payload: dict[str, Any]
+    widget_model: MarketSummaryWidgetModel
+
+
+class PredictionSummaryUiBundle(TypedDict):
+    summary: PredictionSummary
+    status_payload: dict[str, Any]
+    widget_model: PredictionSummaryWidgetModel
+
+
+def load_market_summary_ui_bundle(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+) -> MarketSummaryUiBundle:
+    summary = load_market_summary_bundle(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+    )
+    return {
+        "summary": summary,
+        "status_payload": market_summary_status_payload(summary),
+        "widget_model": market_summary_widget_model(summary),
+    }
+
+
 def load_market_summary_status_payload(
     *,
     exchange: str = "bitflyer",
@@ -64,6 +98,66 @@ def load_market_summary_widget_model(
         symbol_raw=symbol_raw,
     )
     return market_summary_widget_model(summary)
+
+
+def load_prediction_summary_bundle(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+    include_health_caution: bool = True,
+) -> PredictionSummary:
+    state = load_prediction_summary_state(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+        include_health_caution=include_health_caution,
+    )
+    return state["prediction"]
+
+
+def load_prediction_summary_ui_bundle(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+    include_health_caution: bool = True,
+) -> PredictionSummaryUiBundle:
+    summary = load_prediction_summary_bundle(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+        include_health_caution=include_health_caution,
+    )
+    return {
+        "summary": summary,
+        "status_payload": prediction_summary_status_payload(summary),
+        "widget_model": prediction_summary_widget_model(summary),
+    }
+
+
+def load_prediction_summary_status_payload(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+    include_health_caution: bool = True,
+) -> dict[str, Any]:
+    summary = load_prediction_summary_bundle(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+        include_health_caution=include_health_caution,
+    )
+    return prediction_summary_status_payload(summary)
+
+
+def load_prediction_summary_widget_model(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+    include_health_caution: bool = True,
+) -> PredictionSummaryWidgetModel:
+    summary = load_prediction_summary_bundle(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+        include_health_caution=include_health_caution,
+    )
+    return prediction_summary_widget_model(summary)
 
 
 def market_state_age_seconds(state: dict[str, Any] | None) -> float | None:
@@ -157,13 +251,37 @@ def market_summary_status_caption(summary: MarketSummary | None) -> str:
     interpretation = summary.interpretation_bucket or "-"
     series_id = summary.source_series_id or "-"
     freshness = summary.freshness or "UNKNOWN"
+    semantic_wiring = summary.semantic_runtime_wiring_status or "missing"
+    semantic_contract = summary.semantic_contract_source or "unknown"
+    semantic_version = summary.semantic_meaning_version or "unknown"
+    orderbook_wiring = summary.orderbook_wiring_status or "missing"
+    persistence_present = str(bool(summary.orderbook_persistence_present))
+    persistence_observable = str(bool(summary.orderbook_persistence_observable))
     semantic_rows_count = len(summary.semantic_usage_contract_rows)
+    semantic_active_event_count = int(summary.semantic_active_event_count)
+    semantic_mapped_event_count = int(summary.semantic_mapped_event_count)
+    semantic_unknown_event_count = int(summary.semantic_unknown_event_count)
+    semantic_family_buckets = len(summary.semantic_event_family_distribution)
+    semantic_trust_buckets = len(summary.semantic_trust_bucket_distribution)
+    semantic_interpretation_buckets = len(summary.semantic_interpretation_bucket_distribution)
+    semantic_consumer_buckets = len(summary.semantic_consumer_distribution)
+    summary_slots_count = int(summary.orderbook_summary_slots_count)
+    active_event_count = int(summary.orderbook_active_event_count)
     active_event_rows_count = len(summary.orderbook_active_event_contracts)
 
     age_text = "-" if summary.age_sec is None else f"{summary.age_sec:.1f}s"
     return (
         f"freshness={freshness} / age={age_text} / trust={trust} / "
         f"continuity={continuity} / interpretation={interpretation} / "
-        f"family_rows={semantic_rows_count} / active_event_rows={active_event_rows_count} / "
-        f"series={series_id}"
+        f"semantic_wiring={semantic_wiring} / "
+        f"semantic_contract={semantic_contract} / semantic_version={semantic_version} / "
+        f"orderbook_wiring={orderbook_wiring} / "
+        f"persistence_present={persistence_present} / "
+        f"persistence_observable={persistence_observable} / "
+        f"family_rows={semantic_rows_count} / semantic_active_events={semantic_active_event_count} / "
+        f"mapped_events={semantic_mapped_event_count} / unknown_events={semantic_unknown_event_count} / "
+        f"family_dist_keys={semantic_family_buckets} / trust_dist_keys={semantic_trust_buckets} / "
+        f"interpretation_dist_keys={semantic_interpretation_buckets} / consumer_dist_keys={semantic_consumer_buckets} / "
+        f"summary_slots={summary_slots_count} / active_events={active_event_count} / "
+        f"active_event_rows={active_event_rows_count} / series={series_id}"
     )

@@ -43,6 +43,10 @@ def render_api_chart_panel(
         api_df["ts"] = pd.to_datetime(api_df["ts"], utc=True)
 
         latest_api = api_df.iloc[-1].to_dict() if not api_df.empty else {}
+        coverage_complete = bool(latest_api.get("coverage_complete"))
+        coverage_warning = str(latest_api.get("coverage_warning") or "").strip()
+        coverage_oldest_available_ts = latest_api.get("coverage_oldest_available_ts")
+        coverage_window_start_ts = latest_api.get("coverage_window_start_ts")
         api_metric_mode = str(latest_api.get("api_metric_mode") or "short")
 
         a1, a2, a3, a4 = st.columns(4)
@@ -85,6 +89,14 @@ def render_api_chart_panel(
         if api_chart_columns:
             api_chart_df = api_df.set_index("ts")[api_chart_columns].rename(columns=api_chart_labels)
             st.line_chart(api_chart_df, height=260, width="stretch")
+
+            if not coverage_complete and coverage_warning:
+                st.warning(
+                    "coverage warning: audit tail did not fully cover this window "
+                    f"(window_start={coverage_window_start_ts}, "
+                    f"oldest_available={coverage_oldest_available_ts})"
+                )
+
         else:
             st.info(get_text(lang, "health_value_no_data"))
 
@@ -112,25 +124,13 @@ def render_api_chart_panel(
                 format_metric_number(latest_overlay.get("hard_cap_utilization"), decimals=1, percent=True),
             )
 
-            if api_metric_mode == "short":
-                overlay_chart_df = overlay_df.set_index("ts")[
-                    [
-                        "utilization",
-                        "active_target_ratio",
-                        "target_utilization",
-                        "hard_cap_utilization",
-                    ]
-                ].rename(
-                    columns={
-                        "utilization": get_text(lang, "health_chart_current_utilization"),
-                        "active_target_ratio": get_text(lang, "health_chart_active_target_ratio"),
-                        "target_utilization": get_text(lang, "health_chart_target_utilization"),
-                        "hard_cap_utilization": get_text(lang, "health_chart_hard_cap_utilization"),
-                    }
-                )
-                st.line_chart(overlay_chart_df, height=220, width="stretch")
-            else:
-                st.caption(get_text(lang, "health_chart_api_overlay_current_only_short_caption"))
+            overlay_source_kind = str(latest_overlay.get("source_kind") or "unknown")
+
+            st.caption(
+                "rate overlay is current-state only "
+                f"(source={overlay_source_kind}, range={range_key})"
+            )
+            st.caption(get_text(lang, "health_chart_api_overlay_current_only_short_caption"))
 
         st.caption(get_text(lang, "health_chart_api_caption"))
         if api_metric_mode != "short":
@@ -165,6 +165,10 @@ def render_ws_chart_panel(
         ws_df["ts"] = pd.to_datetime(ws_df["ts"], utc=True)
 
         latest_ws = ws_df.iloc[-1].to_dict() if not ws_df.empty else {}
+        coverage_complete = bool(latest_ws.get("coverage_complete"))
+        coverage_warning = str(latest_ws.get("coverage_warning") or "").strip()
+        coverage_oldest_available_ts = latest_ws.get("coverage_oldest_available_ts")
+        coverage_window_start_ts = latest_ws.get("coverage_window_start_ts")
 
         w1, w2, w3 = st.columns(3)
         w1.metric(
@@ -196,6 +200,14 @@ def render_ws_chart_panel(
             }
         )
         st.line_chart(ws_chart_df, height=220, width="stretch")
+
+        if not coverage_complete and coverage_warning:
+            st.warning(
+                "coverage warning: audit tail did not fully cover this window "
+                f"(window_start={coverage_window_start_ts}, "
+                f"oldest_available={coverage_oldest_available_ts})"
+            )
+
         st.caption(get_text(lang, "health_chart_ws_caption"))
         st.caption(get_text(lang, "health_chart_unfinished_bucket_caption"))
 
@@ -284,6 +296,33 @@ def build_semantic_contract_observer_caption(
             if str(consumer).strip()
         }
     )
+    orderbook_source = str(runtime_summary.get("contract_status_source") or "unknown")
+    orderbook_wiring = str(runtime_summary.get("wiring_status") or "missing")
+    summary_slots_count = int(
+        runtime_summary.get("summary_slots_count")
+        or runtime_summary.get("present_count")
+        or 0
+    )
+
+    summary_slots_present = runtime_summary.get("summary_slots_present") or []
+    if not isinstance(summary_slots_present, list):
+        summary_slots_present = []
+    slots_present_text = (
+        ",".join(str(name).strip() for name in summary_slots_present if str(name).strip())
+        or "none"
+    )
+
+    persistence_present = bool(runtime_summary.get("persistence_present"))
+    persistence_observable = bool(runtime_summary.get("persistence_observable"))
+
+    active_event_names = runtime_summary.get("active_event_names") or []
+    if not isinstance(active_event_names, list):
+        active_event_names = []
+    active_event_names_text = (
+        ",".join(str(name).strip() for name in active_event_names if str(name).strip())
+        or "none"
+    )
+
     summary_unknown_event_count = summary.get("unknown_event_count")
     if summary_unknown_event_count is None:
         unknown_event_count = sum(
@@ -349,14 +388,21 @@ def build_semantic_contract_observer_caption(
         f"summary_source={summary_source} / "
         f"summary_contract={summary_contract_source} / "
         f"summary_version={summary_version} / "
+        f"orderbook_source={orderbook_source} / "
+        f"orderbook_wiring={orderbook_wiring} / "
         f"family_rows={len(family_rows)} / "
+        f"summary_slots={summary_slots_count} / "
+        f"slots_present={slots_present_text} / "
         f"active_events={int(summary.get('active_event_count') or len(active_event_contracts))} / "
+        f"active_event_names={active_event_names_text} / "
         f"mapped_events={mapped_event_count} / "
         f"family_dist={family_text} / "
         f"active_versions={versions_text} / "
         f"trust_dist={trust_text} / "
         f"interpretation_dist={interpretation_text} / "
         f"consumers={consumers_text} / "
+        f"persistence_present={persistence_present} / "
+        f"persistence_observable={persistence_observable} / "
         f"unknown_events={unknown_event_count}"
     )
 
@@ -420,27 +466,13 @@ def render_layer3_chart_panel(
             health_value_label(market_diag.get("preferred_row_freshness"), lang),
         )
 
-        if range_key == "1h":
-            layer3_df = pd.DataFrame(layer3_series)
-            layer3_df["ts"] = pd.to_datetime(layer3_df["ts"], utc=True)
-            layer3_chart_df = layer3_df.set_index("ts")[
-                [
-                    "trust_score",
-                    "continuity_score",
-                    "interpretation_score",
-                    "freshness_score",
-                ]
-            ].rename(
-                columns={
-                    "trust_score": get_text(lang, "health_chart_trust_score"),
-                    "continuity_score": get_text(lang, "health_chart_continuity_score"),
-                    "interpretation_score": get_text(lang, "health_chart_interpretation_score"),
-                    "freshness_score": get_text(lang, "health_chart_freshness_score"),
-                }
-            )
-            st.line_chart(layer3_chart_df, height=220, width="stretch")
-        else:
-            st.caption(get_text(lang, "health_chart_layer3_current_only_caption"))
+        layer3_latest_series = layer3_series[-1] if layer3_series else {}
+
+        st.caption(
+            "layer3 score overlay is current-state only "
+            f"(source={layer3_latest_series.get('source_kind') or 'unknown'}, range={range_key})"
+        )
+        st.caption(get_text(lang, "health_chart_layer3_current_only_caption"))
 
         if layer3_runtime_contract_summary:
             r1, r2, r3, r4, r5 = st.columns(5)
@@ -496,7 +528,11 @@ def render_layer3_chart_panel(
             )
             o2.metric(
                 get_text(lang, "health_label_present_count"),
-                int(layer3_orderbook_runtime_summary.get("present_count") or 0),
+                int(
+                    layer3_orderbook_runtime_summary.get("summary_slots_count")
+                    or layer3_orderbook_runtime_summary.get("present_count")
+                    or 0
+                ),
             )
             o3.metric(
                 get_text(lang, "health_label_near_wall"),

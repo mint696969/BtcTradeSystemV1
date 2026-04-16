@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TypedDict
 
-from btcts.apps.operator_ui.components.live_bridge import (
-    latest_live_board_metrics,
-    recent_live_tradeflow_metrics,
+from btcts.apps.operator_ui.components.market_signal_state import (
+    MarketSignalContext,
+    load_market_signal_context,
 )
 from btcts.apps.operator_ui.components.research_bridge import (
     board_signal_metrics,
@@ -57,41 +58,31 @@ def recent_audit_latency(lines: int = 40):
     return sum(rows) / len(rows)
 
 
-def build_live_alert_state() -> dict | None:
-    live_board = latest_live_board_metrics()
-    live_flow = recent_live_tradeflow_metrics(lines=80)
-    experiment_payload = load_latest_experiment_payload()
+class WarroomLiveAlertState(TypedDict):
+    spread: float
+    imbalance: float
+    delta: float
+    alert_ts: str | None
+    regime: str
+    best_strategy: str
+    latency: float | None
 
-    spread = live_board.get("spread")
-    if spread is None:
+
+def build_live_alert_state() -> WarroomLiveAlertState | None:
+    signal_state: MarketSignalContext | None = load_market_signal_context()
+    if not signal_state:
         return None
 
-    bid_depth = live_board.get("bid_depth")
-    ask_depth = live_board.get("ask_depth")
-    delta = live_flow.get("delta")
-    alert_ts = live_flow.get("event_ts") or live_board.get("event_ts")
-
-    regime = latest_regime_name(experiment_payload)
-    best_strategy = latest_best_strategy_name(experiment_payload)
-
-    imbalance = None
-    if bid_depth is not None and ask_depth is not None:
-        try:
-            bid_depth_f = float(bid_depth)
-            ask_depth_f = float(ask_depth)
-            denom = bid_depth_f + ask_depth_f
-            if denom > 0:
-                imbalance = (bid_depth_f - ask_depth_f) / denom
-        except Exception:
-            imbalance = None
+    if str(signal_state.get("data_source") or "") != "live_canonical":
+        return None
 
     return {
-        "spread": spread,
-        "imbalance": imbalance,
-        "delta": 0.0 if delta is None else delta,
-        "alert_ts": alert_ts,
-        "regime": regime,
-        "best_strategy": best_strategy,
+        "spread": signal_state.get("spread"),
+        "imbalance": signal_state.get("imbalance"),
+        "delta": 0.0 if signal_state.get("delta") is None else signal_state.get("delta"),
+        "alert_ts": signal_state.get("event_ts"),
+        "regime": signal_state.get("regime"),
+        "best_strategy": signal_state.get("best_strategy"),
         "latency": recent_audit_latency(),
     }
 

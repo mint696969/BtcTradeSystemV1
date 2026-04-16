@@ -48,6 +48,48 @@ def _read_recent_audit_rows(*, max_lines: int = 4000) -> list[dict[str, Any]]:
     return io.read_jsonl_tail(path, max_lines=max_lines)
 
 
+def _audit_max_lines_for_range(range_key: str) -> int:
+    if range_key == "1h":
+        return 50000
+    if range_key == "24h":
+        return 120000
+    if range_key == "1w":
+        return 240000
+    return 50000
+
+
+def _audit_coverage_meta(
+    *,
+    rows: list[dict[str, Any]],
+    oldest_bucket: datetime,
+) -> dict[str, Any]:
+    earliest_ts: datetime | None = None
+
+    for row in rows:
+        dt = parse_ts(row.get("ts"))
+        if dt is None:
+            continue
+        dt_utc = dt.astimezone(timezone.utc)
+        if earliest_ts is None or dt_utc < earliest_ts:
+            earliest_ts = dt_utc
+
+    coverage_complete = earliest_ts is not None and earliest_ts <= oldest_bucket
+    coverage_warning = None
+    if not coverage_complete:
+        coverage_warning = "audit_tail_did_not_cover_full_window"
+
+    return {
+        "coverage_complete": coverage_complete,
+        "coverage_warning": coverage_warning,
+        "coverage_oldest_available_ts": (
+            earliest_ts.isoformat().replace("+00:00", "Z")
+            if earliest_ts is not None
+            else None
+        ),
+        "coverage_window_start_ts": oldest_bucket.isoformat().replace("+00:00", "Z"),
+    }
+
+
 def _api_chart_spec(range_key: str) -> dict[str, Any]:
     if range_key == "1h":
         return {
@@ -141,7 +183,9 @@ def build_recent_api_ws_series(
 
     buckets = time_buckets(window_minutes, bucket_minutes)
     target_buckets = display_buckets(buckets, include_in_progress=include_in_progress)
-    rows = _read_recent_audit_rows(max_lines=4000)
+    rows = _read_recent_audit_rows(
+        max_lines=_audit_max_lines_for_range(range_key)
+    )
 
     per_bucket: dict[datetime, dict[str, float]] = defaultdict(
         lambda: {
@@ -159,6 +203,11 @@ def build_recent_api_ws_series(
 
     bucket_set = set(buckets)
     oldest = buckets[0]
+
+    coverage_meta = _audit_coverage_meta(
+        rows=rows,
+        oldest_bucket=oldest,
+    )
 
     for row in rows:
         dt = parse_ts(row.get("ts"))
@@ -238,6 +287,10 @@ def build_recent_api_ws_series(
                 "resync_events": item["resync_events"],
                 "warn_error_events": item["warn_error_events"],
                 "avg_latency_ms": avg_latency,
+                "coverage_complete": coverage_meta["coverage_complete"],
+                "coverage_warning": coverage_meta["coverage_warning"],
+                "coverage_oldest_available_ts": coverage_meta["coverage_oldest_available_ts"],
+                "coverage_window_start_ts": coverage_meta["coverage_window_start_ts"],
             }
         )
 
@@ -403,8 +456,12 @@ def build_layer3_semantic_usage_rows(
     return [
         {
             "source_kind": "layer3_semantic_usage_observer",
-            "contract_source": "l3_event_usage_policy",
-            "interpretation_bucket": bucket,
+            "contract_source": str(
+                row.get("contract_source") or "l3_event_usage_policy"
+            ),
+            "interpretation_bucket": (
+                str(row.get("interpretation_bucket") or bucket or "").strip() or None
+            ),
             "meaning_version": str(
                 row.get("meaning_version") or default_meaning_version
             ),
@@ -477,6 +534,8 @@ def build_layer3_runtime_contract_summary(
     wiring_status = "missing"
     if observer_present and usage_summary_present:
         wiring_status = "wired"
+    elif contract_rows_present or source_series_present:
+        wiring_status = "partial"
     elif semantic_summary.get("source_kind") == "layer3_semantic_usage_summary":
         wiring_status = "fallback"
 
@@ -543,6 +602,7 @@ def build_layer3_orderbook_runtime_summary(
     if not summary_slots_present:
         summary_slots_present = list(inferred_summary_slots_present)
 
+    summary_slots_count = int(semantics_summary.get("summary_slots_count") or len(summary_slots_present))
     present_count = len(summary_slots_present)
 
     explicit_contract_status = str(latest.get("orderbook_semantics_contract_status") or "").strip()
@@ -593,6 +653,13 @@ def build_layer3_orderbook_runtime_summary(
             }
         )
 
+    if not active_event_names:
+        active_event_names = [
+            str(event.get("event_name"))
+            for event in normalized_active_event_contracts
+            if str(event.get("event_name") or "").strip()
+        ]
+
     active_event_count = int(
         semantics_summary.get("active_event_count")
         or len(normalized_active_event_contracts)
@@ -629,6 +696,7 @@ def build_layer3_orderbook_runtime_summary(
         "persistence_side": (semantics_summary.get("persistence") or {}).get("side"),
         "persistence_observable": bool(latest.get("orderbook_persistence_observable")),
         "present_count": present_count,
+        "summary_slots_count": summary_slots_count,
         "summary_slots_present": summary_slots_present,
         "active_event_count": active_event_count,
         "active_event_names": active_event_names,
@@ -642,7 +710,9 @@ def _build_continuity_rail(
     row_specs: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     state = load_state()
-    rows = _read_recent_audit_rows(max_lines=4000)
+    rows = _read_recent_audit_rows(
+        max_lines=_audit_max_lines_for_range(range_key)
+    )
 
     cfg = range_config(range_key)
     window_minutes = int(cfg["window_minutes"])
@@ -664,6 +734,16 @@ def _build_continuity_rail(
 
     bucket_set = set(buckets)
     oldest = buckets[0]
+
+    coverage_meta = _audit_coverage_meta(
+        rows=rows,
+        oldest_bucket=oldest,
+    )
+
+    coverage_meta = _audit_coverage_meta(
+        rows=rows,
+        oldest_bucket=oldest,
+    )
 
     for row in rows:
         dt = parse_ts(row.get("ts"))
@@ -756,6 +836,10 @@ def _build_continuity_rail(
                     "source_kind": "audit_continuity_rail",
                     "level": level,
                     "reason": reason,
+                    "coverage_complete": coverage_meta["coverage_complete"],
+                    "coverage_warning": coverage_meta["coverage_warning"],
+                    "coverage_oldest_available_ts": coverage_meta["coverage_oldest_available_ts"],
+                    "coverage_window_start_ts": coverage_meta["coverage_window_start_ts"],
                 }
             )
 
@@ -860,11 +944,12 @@ def build_recent_anomaly_rows(*, max_items: int = 12) -> list[dict[str, Any]]:
     return out
 
 
-def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
-    state = load_state()
-    market_latest = load_latest_market_state()
-    market_diag = market_state_diagnostics()
-
+def _build_health_current_state_bundle(
+    *,
+    state: dict[str, Any],
+    market_latest: dict[str, Any],
+    market_diag: dict[str, Any],
+) -> dict[str, Any]:
     layer3_interpretation_bucket = (
         market_latest.get("interpretation_bucket")
         or market_diag.get("preferred_row_interpretation_bucket")
@@ -925,22 +1010,110 @@ def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
         "shared_ip_remaining_60s": shared_ip_remaining_60s,
         "market_latest": market_latest,
         "market_diag": market_diag,
-        "selected_range_key": range_key,
-        "range_presets": HEALTH_RANGE_PRESETS,
-        "api_ws_series": build_recent_api_ws_series(range_key=range_key, include_in_progress=False),
-        "rate_overlay": build_rate_limit_overlay(range_key=range_key, include_in_progress=False),
-        "layer3_series": build_recent_layer3_series(range_key=range_key, include_in_progress=False),
         "layer3_semantic_usage_rows": layer3_semantic_usage_rows,
         "layer3_semantic_usage_summary": layer3_semantic_usage_summary,
         "layer3_runtime_contract_summary": layer3_runtime_contract_summary,
         "layer3_orderbook_runtime_summary": layer3_orderbook_runtime_summary,
         "health_digest": health_digest,
+    }
+
+
+def _build_health_timeline_bundle(*, range_key: str) -> dict[str, Any]:
+    return {
+        "api_ws_series": build_recent_api_ws_series(
+            range_key=range_key,
+            include_in_progress=False,
+        ),
+        "rate_overlay": build_rate_limit_overlay(
+            range_key=range_key,
+            include_in_progress=False,
+        ),
+        "layer3_series": build_recent_layer3_series(
+            range_key=range_key,
+            include_in_progress=False,
+        ),
+    }
+
+
+def _build_health_continuity_bundle(*, range_key: str) -> dict[str, Any]:
+    return {
         "api_continuity_rail": build_api_continuity_rail(range_key=range_key),
         "ws_continuity_rail": build_ws_continuity_rail(range_key=range_key),
-        "recent_anomalies": build_recent_anomaly_rows(max_items=12),
+    }
+
+
+def _build_health_anomaly_bundle(*, max_items: int = 12) -> dict[str, Any]:
+    items = build_recent_anomaly_rows(max_items=max_items)
+    return {
+        "source_kind": "audit_recent_anomaly_feed",
+        "feed_kind": "health_recent_anomalies",
+        "max_items": max_items,
+        "items": items,
+        "recent_anomalies": items,
+    }
+
+
+def _build_health_page_meta_bundle(*, range_key: str) -> dict[str, Any]:
+    return {
+        "selected_range_key": range_key,
+        "range_presets": HEALTH_RANGE_PRESETS,
         "paths": {
             "logs_dir": str(core_paths.logs_dir(ensure=False)),
             "data_dir": str(core_paths.data_dir(ensure=False)),
             "config_dir": str(core_paths.config_dir(ensure=False)),
         },
     }
+
+
+def load_health_current_state_bundle(
+    *,
+    state: dict[str, Any] | None = None,
+    market_latest: dict[str, Any] | None = None,
+    market_diag: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    resolved_state = dict(state or load_state())
+    resolved_market_latest = dict(market_latest or load_latest_market_state())
+    resolved_market_diag = dict(market_diag or market_state_diagnostics())
+    return _build_health_current_state_bundle(
+        state=resolved_state,
+        market_latest=resolved_market_latest,
+        market_diag=resolved_market_diag,
+    )
+
+
+def load_health_timeline_bundle(*, range_key: str = "1h") -> dict[str, Any]:
+    return _build_health_timeline_bundle(range_key=range_key)
+
+
+def load_health_continuity_bundle(*, range_key: str = "1h") -> dict[str, Any]:
+    return _build_health_continuity_bundle(range_key=range_key)
+
+
+def load_health_anomaly_bundle(*, max_items: int = 12) -> dict[str, Any]:
+    return _build_health_anomaly_bundle(max_items=max_items)
+
+
+def load_health_page_meta_bundle(*, range_key: str = "1h") -> dict[str, Any]:
+    return _build_health_page_meta_bundle(range_key=range_key)
+
+
+def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
+    current_state_bundle = load_health_current_state_bundle()
+    timeline_bundle = load_health_timeline_bundle(range_key=range_key)
+    continuity_bundle = load_health_continuity_bundle(range_key=range_key)
+    anomaly_bundle = load_health_anomaly_bundle(max_items=12)
+    page_meta_bundle = load_health_page_meta_bundle(range_key=range_key)
+
+    snapshot: dict[str, Any] = {}
+    snapshot.update(current_state_bundle)
+    snapshot.update(timeline_bundle)
+    snapshot.update(continuity_bundle)
+    snapshot.update(anomaly_bundle)
+    snapshot.update(page_meta_bundle)
+
+    snapshot["current_state_bundle"] = current_state_bundle
+    snapshot["timeline_bundle"] = timeline_bundle
+    snapshot["continuity_bundle"] = continuity_bundle
+    snapshot["anomaly_bundle"] = anomaly_bundle
+    snapshot["page_meta_bundle"] = page_meta_bundle
+    return snapshot

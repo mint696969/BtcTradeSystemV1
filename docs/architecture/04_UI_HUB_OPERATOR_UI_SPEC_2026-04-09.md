@@ -1,7 +1,7 @@
 # path: ./tmp/04_UI_HUB_OPERATOR_UI_SPEC_2026-04-09.md
-# desc: UI Hub and Operator UI Spec (updated after Health-first Phase 2.5 checkpoint)
+# desc: UI Hub and Operator UI Spec (merged current-truth sync after Phase 2 / 2.5 closeout)
 
-更新日: 2026-04-09
+更新日: 2026-04-14
 位置づけ: 現行 mainline に合わせた operator UI / hub / presenter / widget 境界仕様
 対象: `btcts_next/src/btcts/apps/operator_ui/`, `btcts_next/src/btcts/processing/l4_consumer_models/operator_ui/`
 
@@ -106,6 +106,7 @@ bridge は shared bundle / status payload / widget model を UI 側へつなぐ�
 
 ### 例
 - `components/market_state_bridge.py`
+- `components/health_digest_bridge.py`
 
 ## 5.3 presenter
 presenter は widget が食べやすい最終表示 shape に整える。
@@ -122,7 +123,7 @@ widget の並び、slot 割当、page-level grouping を担当する。
 ---
 
 ## 6. current success pattern
-現時点で最も素直に shared-first を実現しているのは `market_summary` 周辺である。
+現時点で最も素直に shared-first を実現しているのは `market_summary` 周辺と `health_digest` current-state line である。
 
 ### 正方向
 - `market_state_service.py`
@@ -131,12 +132,19 @@ widget の並び、slot 割当、page-level grouping を担当する。
 - `components/market_state_bridge.py`
 - presenter / component / page
 
+### Health current-state line
+- `health_data_service.py`
+- `processing/l4_consumer_models/shared/health_digest.py`
+- `processing/l4_consumer_models/operator_ui/health_digest_adapter.py`
+- `components/health_digest_bridge.py`
+- current-state panel / caption / page
+
 この経路は今後の UI 拡張の基準になる。
 
 ---
 
 ## 7. Health observer の current truth
-2026-04-09 時点では、Health は未来形ではなく、observer-only として既にかなり前進している。
+2026-04-13 時点では、Health は未来形ではなく、**summary-first / observer-only** の current line が repo mainline にかなり固定されている。
 
 ### 主な service 側実装
 - `build_layer3_semantic_usage_summary()`
@@ -148,33 +156,74 @@ widget の並び、slot 割当、page-level grouping を担当する。
 
 ### 表示側実装
 - `btcts_next/src/btcts/apps/operator_ui/components/health_chart_panels.py`
+- `btcts_next/src/btcts/apps/operator_ui/components/health_top_panels.py`
+- `btcts_next/src/btcts/apps/operator_ui/components/health_detail_panels.py`
+- `btcts_next/src/btcts/apps/operator_ui/components/health_digest_bridge.py`
 - `btcts_next/src/btcts/apps/operator_ui/views/health_page.py`
 
-### 現在できること
-- semantic source の表示
-- runtime wiring の表示
-- orderbook source の表示
-- orderbook freshness の表示
-- near wall / support / resistance / persistence の有無表示
-- side / persistence event / persistence side の表示
-- `persistence_observable` の表示
-- explicit contract / inference の区別
+### current truth
+Health observer は、少なくとも次を current line として読める。
+
+#### semantic observer line
+- `observer_present`
+- `usage_summary_present`
+- `contract_rows_present`
+- `contract_rows_count`
+- `source_series_present`
+- `summary_source`
+- `summary_contract`
+- `summary_version`
+- `active_events`
+- `mapped_events`
+- `unknown_events`
+- distribution fields
+
+#### orderbook runtime line
+- `wiring_status`
+- `contract_status_source`
+- `freshness`
+- `summary_slots_present`
+- `summary_slots_count`
+- `near_wall_present`
+- `support_present`
+- `resistance_present`
+- `persistence_present`
+- `persistence_observable`
+- `active_event_names`
+- `active_event_contracts`
 
 ### 重要な読み方
-Health が `unhealthy` や `STALE` を出していても、それは UI が formal market_state を正直に見せているだけの可能性がある。
-実装不良と即断しないこと。
+- Health は wiring / summary presence / active event delivery を観測するのであって、meaning owner ではない
+- `persistence_present` と `persistence_observable` は混同しない
+- Health が `unhealthy` や `STALE` を出していても、それは formal market_state を正直に表示しているだけの可能性がある
+- UI convenience で contract gap を埋めない
 
 ---
 
 ## 8. Health 側でまだ未完のもの
-### 未完
-- UI 自動更新は未実装
-- page 全リロードなしの no-reload refresh は未実装
-- L4 shared bundle を Health 本体の主入力へ統一していない
-- panel 文言の一部が text layer へ未移管
+### current reached
+- `health_page.py` は `render_fragment_slot()` を広く使い、Health page を fragment-first refresh path へかなり寄せている
+- `test_live_shell_refresh_plan.py` は health の fragment path を検証している
+- shared `health_digest` / adapter / bridge / current-state panel usage は repo mainline に到達済み
+
+### remaining open
+- fragment-first foundation reached 後の stability / wording / remaining scope judgment
+- L4 shared input の broader formalization
+- timeline / anomaly split の formalization
+- panel 文言の一部 text layer 整理
 
 ### 現時点の立場
-これらは blocker ではないが、次フェーズの重要整備対象である。
+したがって stale な読みは、
+- `UI 自動更新は未実装`
+- `page 全リロードなしの no-reload refresh は未実装`
+
+ではなく、
+
+- **fragment-slot foundation reached**
+- **Health page is on fragment-first refresh path**
+- **remaining open = stability / wording / broader formalization**
+
+と書くのが current repo truth に近い。
 
 ---
 
@@ -262,12 +311,12 @@ shared bundle に UI 都合を持ち込まないこと。
 ---
 
 ## 13. current roadmap と UI の整合
-2026-04-09 時点では、UI 側で次の順序を守るのが安全である。
+2026-04-14 時点では、UI 側で次の順序を守るのが安全である。
 
 1. architecture docs を repo truth に同期する
-2. Health UI 自動更新方針を設計する
+2. Health current truth を stale wording なく保持する
 3. panel 文言を text layer へ寄せる
-4. L4 側で Health digest をどう持つか検討する
+4. L4 側で Health digest の broader formalization を進める
 5. full wiring / full parity の consumer 拡張は contract 固定後に進める
 
 つまり UI は、契約未固定論点を先に吸収する場所ではない。
@@ -276,7 +325,7 @@ shared bundle に UI 都合を持ち込まないこと。
 
 ## 14. 一言
 operator UI は市場意味を作る場所ではない。
-2026-04-09 時点では、Health observer 実装は既に useful な段まで進んでいるが、なお owner 境界は守られている。
+2026-04-14 時点では、Health observer 実装は既に useful な段まで進んでおり、fragment-first refresh path と current-state digest path も mainline に到達しているが、なお owner 境界は守られている。
 
 今後も、
 

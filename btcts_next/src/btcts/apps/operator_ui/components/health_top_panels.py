@@ -83,14 +83,51 @@ def build_health_digest_layer3_summary_caption(
     if widget is None or not payload:
         return "health_digest unavailable"
 
+    semantic_wiring = str(getattr(widget, "semantic_wiring_key", None) or "missing")
+    orderbook_wiring = str(getattr(widget, "orderbook_wiring_key", None) or "missing")
+    semantic_source = str(getattr(widget, "semantic_summary_source_key", None) or "unknown")
+    observer_status = str(getattr(widget, "semantic_observer_status_key", None) or "unknown")
+    orderbook_source = str(
+        getattr(widget, "orderbook_contract_status_source_key", None) or "unknown"
+    )
+    source_kind = str(getattr(widget, "source_kind", None) or "unknown")
+    observer_present = bool(payload.get("semantic_usage_observer_present"))
+    usage_summary_present = bool(payload.get("semantic_usage_summary_present"))
+    contract_rows_present = bool(payload.get("semantic_usage_contract_rows_present"))
+    source_series_present = bool(payload.get("semantic_usage_source_series_present"))
+    persistence_present = bool(payload.get("orderbook_persistence_present"))
+    persistence_observable = bool(payload.get("orderbook_persistence_observable"))
     semantic_rows = int(payload.get("semantic_usage_contract_rows_count") or 0)
     summary_slots = int(payload.get("orderbook_summary_slots_count") or 0)
+    slots_present = ",".join(list(getattr(widget, "orderbook_summary_slots_present", []) or [])) or "-"
+    active_events = int(payload.get("orderbook_active_event_count") or 0)
+    active_event_names = ",".join(list(getattr(widget, "orderbook_active_event_names", []) or [])) or "-"
     active_event_rows = int(payload.get("orderbook_active_event_contracts_count") or 0)
+    age_sec = getattr(widget, "age_sec", None)
+    age_text = "-" if age_sec is None else f"{float(age_sec):.1f}s"
+    event_ts = str(getattr(widget, "event_ts", None) or "-")
 
     return (
+        f"semantic_wiring={semantic_wiring} / "
+        f"semantic_source={semantic_source} / "
+        f"observer_status={observer_status} / "
+        f"orderbook_wiring={orderbook_wiring} / "
+        f"orderbook_source={orderbook_source} / "
+        f"source={source_kind} / "
+        f"observer_present={observer_present} / "
+        f"usage_summary_present={usage_summary_present} / "
+        f"contract_rows_present={contract_rows_present} / "
+        f"source_series_present={source_series_present} / "
+        f"persistence_present={persistence_present} / "
+        f"persistence_observable={persistence_observable} / "
         f"semantic_rows={semantic_rows} / "
         f"summary_slots={summary_slots} / "
-        f"active_event_rows={active_event_rows}"
+        f"slots_present={slots_present} / "
+        f"active_events={active_events} / "
+        f"active_event_names={active_event_names} / "
+        f"active_event_rows={active_event_rows} / "
+        f"age={age_text} / "
+        f"event_ts={event_ts}"
     )
 
 

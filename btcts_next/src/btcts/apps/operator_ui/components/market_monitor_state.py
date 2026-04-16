@@ -8,8 +8,7 @@ from btcts.apps.operator_ui.components.live_bridge import (
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_overview,
-    load_market_summary_status_payload,
-    load_market_summary_widget_model,
+    load_market_summary_ui_bundle,
     market_monitor_metrics,
 )
 from btcts.apps.operator_ui.market_state_service import market_state_diagnostics
@@ -23,8 +22,9 @@ from btcts.apps.operator_ui.components.research_bridge import (
 def analyze_market_monitor_state() -> dict | None:
     live_board = latest_live_board_metrics()
     state = load_market_overview()
-    summary = load_market_summary_status_payload()
-    summary_widget = load_market_summary_widget_model()
+    summary_bundle = load_market_summary_ui_bundle()
+    summary = summary_bundle["status_payload"]
+    summary_widget = summary_bundle["widget_model"]
     state_diag = market_state_diagnostics()
     board = {}
     source_label = "unknown"
@@ -78,6 +78,7 @@ def analyze_market_monitor_state() -> dict | None:
     return {
         "board": board,
         "state": state,
+        "summary_bundle": summary_bundle,
         "summary": summary,
         "summary_widget": summary_widget,
         "state_diag": state_diag,

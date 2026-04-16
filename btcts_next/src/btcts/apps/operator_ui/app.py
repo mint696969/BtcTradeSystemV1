@@ -150,6 +150,7 @@ st.session_state.ui_auto_refresh = st.sidebar.checkbox(
     get_text(lang, "refresh_label"),
     value=st.session_state.ui_auto_refresh,
     key="ui_auto_refresh_checkbox",
+    help=get_text(lang, "refresh_help"),
 )
 
 st.session_state.ui_refresh_interval = st.sidebar.selectbox(

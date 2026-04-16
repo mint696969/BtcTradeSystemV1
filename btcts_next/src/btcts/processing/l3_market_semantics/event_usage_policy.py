@@ -292,13 +292,16 @@ def build_event_usage_contract_rows(
     event_families: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     families = list(event_families or _DEFAULT_EVENT_FAMILIES)
+    bucket = str(interpretation_bucket or "").strip() or None
     rows: list[dict[str, Any]] = []
 
     for event_family in families:
         rows.append(
             {
+                "contract_source": "l3_event_usage_policy",
+                "interpretation_bucket": bucket,
                 "event_family": str(event_family),
-                "usage_grade": resolve_usage_grade(interpretation_bucket, event_family),
+                "usage_grade": resolve_usage_grade(bucket, event_family),
                 "meaning_version": _EVENT_MEANING_VERSION,
             }
         )

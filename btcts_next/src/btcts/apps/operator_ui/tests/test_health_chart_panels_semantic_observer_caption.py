@@ -49,6 +49,16 @@ def main() -> int:
             {"event_family": "pressure", "usage_grade": "watch_weak"},
         ],
         layer3_orderbook_runtime_summary={
+            "contract_status_source": "market_state_orderbook_contract_status",
+            "wiring_status": "partial",
+            "summary_slots_count": 2,
+            "summary_slots_present": ["near_wall", "support"],
+            "persistence_present": False,
+            "persistence_observable": True,
+            "active_event_names": [
+                "near_wall_continued",
+                "support_candidate",
+            ],
             "active_event_contracts": [
                 {
                     "event_name": "near_wall_continued",
@@ -89,6 +99,13 @@ def main() -> int:
     assert "interpretation_dist=allow_structural_use:1,observe_only:1" in caption
     assert "consumers=ai:2,alert:2,execution:1,strategy:1,ui:2" in caption
     assert "unknown_events=1" in caption
+    assert "orderbook_source=market_state_orderbook_contract_status" in caption
+    assert "orderbook_wiring=partial" in caption
+    assert "summary_slots=2" in caption
+    assert "slots_present=near_wall,support" in caption
+    assert "active_event_names=near_wall_continued,support_candidate" in caption
+    assert "persistence_present=False" in caption
+    assert "persistence_observable=True" in caption
 
     summary_first = build_semantic_contract_observer_caption(
         layer3_semantic_usage_summary={
@@ -120,6 +137,16 @@ def main() -> int:
             {"event_family": "wall", "usage_grade": "strong"},
         ],
         layer3_orderbook_runtime_summary={
+            "contract_status_source": "market_state_orderbook_contract_status",
+            "wiring_status": "partial",
+            "summary_slots_count": 2,
+            "summary_slots_present": ["near_wall", "support"],
+            "persistence_present": False,
+            "persistence_observable": True,
+            "active_event_names": [
+                "near_wall_continued",
+                "support_candidate",
+            ],
             "active_event_contracts": [
                 {
                     "event_name": "near_wall_continued",
@@ -153,6 +180,13 @@ def main() -> int:
     assert "trust_dist=degraded:1,trusted:1" in summary_first
     assert "interpretation_dist=observe_only:2" in summary_first
     assert "consumers=ai:2,alert:2,ui:2" in summary_first
+    assert "orderbook_source=market_state_orderbook_contract_status" in summary_first
+    assert "orderbook_wiring=partial" in summary_first
+    assert "summary_slots=2" in summary_first
+    assert "slots_present=near_wall,support" in summary_first
+    assert "active_event_names=near_wall_continued,support_candidate" in summary_first
+    assert "persistence_present=False" in summary_first
+    assert "persistence_observable=True" in summary_first
 
     empty = build_semantic_contract_observer_caption(
         layer3_semantic_usage_summary={},
@@ -171,6 +205,13 @@ def main() -> int:
     assert "interpretation_dist=none" in empty
     assert "consumers=none" in empty
     assert "unknown_events=0" in empty
+    assert "orderbook_source=unknown" in empty
+    assert "orderbook_wiring=missing" in empty
+    assert "summary_slots=0" in empty
+    assert "slots_present=none" in empty
+    assert "active_event_names=none" in empty
+    assert "persistence_present=False" in empty
+    assert "persistence_observable=False" in empty
 
     print("ok")
     return 0

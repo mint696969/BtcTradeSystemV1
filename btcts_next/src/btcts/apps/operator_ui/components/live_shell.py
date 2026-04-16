@@ -541,6 +541,29 @@ def page_auto_refresh_interval_sec(
     )
 
 
+def page_non_fragment_refresh_interval_sec(
+    page_id: str,
+    *,
+    default_sec: int = 15,
+) -> int:
+    rows = get_registered_slots(page_id)
+    active_modes = [
+        str(row.get("refresh_mode") or "static")
+        for row in rows
+        if (
+            str(row.get("refresh_mode") or "static") != "static"
+            and not bool(row.get("partial_update_enabled"))
+        )
+    ]
+    if not active_modes:
+        return int(default_sec)
+
+    return min(
+        refresh_mode_interval_sec(mode, default_sec=default_sec)
+        for mode in active_modes
+    )
+
+
 def resolve_page_refresh_plan(
     *,
     page_key: str,
@@ -556,21 +579,44 @@ def resolve_page_refresh_plan(
         else bool(fragment_supported)
     )
 
+    fragment_refresh_page_keys = {
+        "health",
+        "warroom",
+    }
+    hybrid_refresh_page_keys = {
+        "warroom",
+    }
+
     is_fragment_refresh_target = (
-        page_key == "health"
+        page_key in fragment_refresh_page_keys
         and supports_fragment
         and is_slot_refresh_target
     )
-    is_page_auto_refresh_target = page_key == "logs" or (
-        is_slot_refresh_target and not is_fragment_refresh_target
+    is_page_auto_refresh_target = (
+        page_key == "logs"
+        or page_key in hybrid_refresh_page_keys
+        or (
+            is_slot_refresh_target
+            and not is_fragment_refresh_target
+        )
     )
 
     effective_refresh_interval_sec = int(ui_refresh_interval_sec)
     if is_slot_refresh_target:
-        slot_recommended_interval_sec = page_auto_refresh_interval_sec(
-            page_key,
-            default_sec=effective_refresh_interval_sec,
-        )
+        if (
+            page_key in hybrid_refresh_page_keys
+            and is_fragment_refresh_target
+        ):
+            slot_recommended_interval_sec = page_non_fragment_refresh_interval_sec(
+                page_key,
+                default_sec=effective_refresh_interval_sec,
+            )
+        else:
+            slot_recommended_interval_sec = page_auto_refresh_interval_sec(
+                page_key,
+                default_sec=effective_refresh_interval_sec,
+            )
+
         effective_refresh_interval_sec = min(
             effective_refresh_interval_sec,
             int(slot_recommended_interval_sec),

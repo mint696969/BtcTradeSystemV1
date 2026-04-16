@@ -35,6 +35,20 @@ def main() -> int:
         interpretation_key="allow_structural_use",
         semantic_wiring_key="wired",
         orderbook_wiring_key="partial",
+        semantic_summary_source_key="market_state_semantic_usage_summary",
+        semantic_observer_status_key="healthy",
+        orderbook_contract_status_source_key="market_state_orderbook_contract_status",
+        semantic_observer_present_key="true",
+        semantic_usage_summary_present_key="true",
+        semantic_contract_rows_present_key="true",
+        semantic_source_series_present_key="true",
+        orderbook_near_wall_present_key="true",
+        orderbook_support_present_key="true",
+        orderbook_resistance_present_key="false",
+        orderbook_persistence_present_key="false",
+        orderbook_persistence_observable_key="true",
+        orderbook_summary_slots_present=["near_wall", "support", "persistence"],
+        orderbook_active_event_names=["near_wall_continued"],
         semantic_contract_rows_count=2,
         orderbook_summary_slots_count=3,
         active_event_count=1,
@@ -83,14 +97,38 @@ def main() -> int:
     caption = build_health_digest_layer3_summary_caption(
         widget=widget,
         payload={
+            "semantic_usage_observer_present": True,
+            "semantic_usage_summary_present": True,
+            "semantic_usage_contract_rows_present": True,
+            "semantic_usage_source_series_present": True,
             "semantic_usage_contract_rows_count": 2,
+            "orderbook_persistence_present": False,
+            "orderbook_persistence_observable": True,
             "orderbook_summary_slots_count": 3,
+            "orderbook_active_event_count": 1,
             "orderbook_active_event_contracts_count": 1,
         },
     )
+    assert "semantic_wiring=wired" in caption
+    assert "semantic_source=market_state_semantic_usage_summary" in caption
+    assert "observer_status=healthy" in caption
+    assert "orderbook_wiring=partial" in caption
+    assert "orderbook_source=market_state_orderbook_contract_status" in caption
+    assert "source=health_data_service" in caption
+    assert "observer_present=True" in caption
+    assert "usage_summary_present=True" in caption
+    assert "contract_rows_present=True" in caption
+    assert "source_series_present=True" in caption
+    assert "persistence_present=False" in caption
+    assert "persistence_observable=True" in caption
     assert "semantic_rows=2" in caption
     assert "summary_slots=3" in caption
+    assert "slots_present=near_wall,support,persistence" in caption
+    assert "active_events=1" in caption
+    assert "active_event_names=near_wall_continued" in caption
     assert "active_event_rows=1" in caption
+    assert "age=5.0s" in caption
+    assert "event_ts=2026-04-11T15:00:00Z" in caption
 
     empty_caption = build_health_digest_layer3_summary_caption(
         widget=None,

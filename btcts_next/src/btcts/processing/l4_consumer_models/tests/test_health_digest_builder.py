@@ -85,8 +85,11 @@ def main() -> int:
 
     runtime_contract_summary = {
         "wiring_status": "wired",
+        "observer_present": True,
+        "usage_summary_present": True,
         "contract_rows_present": True,
         "contract_rows_count": 1,
+        "source_series_present": True,
     }
 
     orderbook_runtime_summary = {
@@ -94,6 +97,11 @@ def main() -> int:
         "wiring_status": "partial",
         "freshness": "LIVE",
         "summary_slots_present": ["near_wall", "support"],
+        "summary_slots_count": 2,
+        "near_wall_present": True,
+        "support_present": True,
+        "resistance_present": False,
+        "persistence_present": False,
         "present_count": 2,
         "persistence_observable": True,
         "active_event_count": 1,
@@ -141,13 +149,21 @@ def main() -> int:
 
     assert digest.semantic_usage["summary_source"] == "market_state_semantic_usage_summary"
     assert digest.semantic_usage["observer_status"] == "healthy"
+    assert digest.semantic_usage["observer_present"] is True
+    assert digest.semantic_usage["usage_summary_present"] is True
     assert digest.semantic_usage["runtime_wiring_status"] == "wired"
+    assert digest.semantic_usage["contract_rows_present"] is True
     assert digest.semantic_usage["contract_rows_count"] == 1
+    assert digest.semantic_usage["source_series_present"] is True
 
     assert digest.orderbook_runtime["contract_status_source"] == "market_state_orderbook_contract_status"
     assert digest.orderbook_runtime["wiring_status"] == "partial"
     assert digest.orderbook_runtime["summary_slots_present"] == ["near_wall", "support"]
     assert digest.orderbook_runtime["summary_slots_count"] == 2
+    assert digest.orderbook_runtime["near_wall_present"] is True
+    assert digest.orderbook_runtime["support_present"] is True
+    assert digest.orderbook_runtime["resistance_present"] is False
+    assert digest.orderbook_runtime["persistence_present"] is False
     assert digest.orderbook_runtime["active_event_count"] == 1
     assert digest.orderbook_runtime["active_event_contracts"][0]["event_name"] == "near_wall_continued"
 

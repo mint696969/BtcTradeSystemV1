@@ -26,12 +26,36 @@ class MarketSummary:
     market_state_label: str | None
     participation_state: str | None
     liquidity_bias: str | None
+    semantic_summary_source: str = "unknown"
+    semantic_contract_source: str = "unknown"
+    semantic_meaning_version: str = "unknown"
+    semantic_observer_status: str = "unknown"
+    semantic_observer_present: bool = False
+    semantic_usage_summary_present: bool = False
+    semantic_contract_rows_present: bool = False
+    semantic_contract_rows_count: int = 0
+    semantic_runtime_wiring_status: str = "missing"
+    semantic_total_rows: int = 0
+    semantic_active_event_count: int = 0
+    semantic_mapped_event_count: int = 0
+    semantic_unknown_event_count: int = 0
+    semantic_event_family_distribution: dict[str, int] = field(default_factory=dict)
+    semantic_trust_bucket_distribution: dict[str, int] = field(default_factory=dict)
+    semantic_interpretation_bucket_distribution: dict[str, int] = field(default_factory=dict)
+    semantic_consumer_distribution: dict[str, int] = field(default_factory=dict)
     semantic_usage_contract_rows: list[dict[str, Any]] = field(default_factory=list)
     orderbook_active_event_contracts: list[dict[str, Any]] = field(default_factory=list)
+    orderbook_active_event_names: list[str] = field(default_factory=list)
+    orderbook_active_event_count: int = 0
     orderbook_summary_slots_present: list[str] = field(default_factory=list)
     orderbook_summary_slots_count: int = 0
+    orderbook_near_wall_present: bool = False
+    orderbook_support_present: bool = False
+    orderbook_resistance_present: bool = False
+    orderbook_persistence_present: bool = False
     orderbook_wiring_status: str = "missing"
     orderbook_contract_status_source: str = "unknown"
+    orderbook_persistence_observable: bool = False
     notable_events: list[str] = field(default_factory=list)
     alert_candidates: list[str] = field(default_factory=list)
     diagnostics: dict[str, Any] = field(default_factory=dict)
@@ -156,6 +180,133 @@ def _normalize_orderbook_active_event_contracts(row: dict[str, Any]) -> list[dic
     return out
 
 
+def _normalize_orderbook_active_event_names(row: dict[str, Any]) -> list[str]:
+    summary = row.get("orderbook_semantics_summary")
+    if not isinstance(summary, dict):
+        return []
+
+    out: list[str] = []
+
+    raw_names = summary.get("active_event_names")
+    if isinstance(raw_names, list):
+        for item in raw_names:
+            name = _safe_str(item)
+            if name is not None:
+                out.append(name)
+
+    if out:
+        return out
+
+    raw_rows = summary.get("active_event_contracts")
+    if not isinstance(raw_rows, list):
+        return []
+
+    for item in raw_rows:
+        if not isinstance(item, dict):
+            continue
+        name = _safe_str(item.get("event_name"))
+        if name is not None:
+            out.append(name)
+
+    return out
+
+
+def _normalize_distribution(value: Any) -> dict[str, int]:
+    if not isinstance(value, dict):
+        return {}
+
+    out: dict[str, int] = {}
+    for key, raw_value in value.items():
+        normalized_key = _safe_str(key)
+        if normalized_key is None:
+            continue
+        try:
+            out[normalized_key] = int(raw_value)
+        except Exception:
+            continue
+    return out
+
+
+def _normalize_semantic_runtime_fields(
+    row: dict[str, Any],
+    *,
+    semantic_usage_contract_rows_count: int,
+) -> tuple[
+    str,
+    str,
+    str,
+    str,
+    bool,
+    bool,
+    bool,
+    int,
+    str,
+    int,
+    int,
+    int,
+    int,
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+    dict[str, int],
+]:
+    summary = row.get("semantic_usage_summary")
+    if not isinstance(summary, dict):
+        summary = {}
+
+    summary_source = _safe_str(summary.get("source_kind")) or "unknown"
+    contract_source = _safe_str(summary.get("contract_source")) or "unknown"
+    meaning_version = _safe_str(summary.get("meaning_version")) or "unknown"
+    observer_status = (
+        _safe_str(row.get("semantic_observer_status"))
+        or _safe_str(summary.get("observer_status"))
+        or "unknown"
+    )
+
+    observer_present = _safe_str(row.get("semantic_observer_status")) is not None
+    usage_summary_present = bool(summary)
+    contract_rows_present = semantic_usage_contract_rows_count > 0
+    contract_rows_count = int(semantic_usage_contract_rows_count)
+
+    if observer_present and usage_summary_present:
+        wiring_status = "wired"
+    elif semantic_usage_contract_rows_count > 0:
+        wiring_status = "partial"
+    else:
+        wiring_status = "missing"
+
+    total_rows = int(summary.get("total_rows") or semantic_usage_contract_rows_count or 0)
+    active_event_count = int(summary.get("active_event_count") or 0)
+    mapped_event_count = int(summary.get("mapped_event_count") or 0)
+    unknown_event_count = int(summary.get("unknown_event_count") or 0)
+    event_family_distribution = _normalize_distribution(summary.get("event_family_distribution"))
+    trust_bucket_distribution = _normalize_distribution(summary.get("trust_bucket_distribution"))
+    interpretation_bucket_distribution = _normalize_distribution(
+        summary.get("interpretation_bucket_distribution")
+    )
+    consumer_distribution = _normalize_distribution(summary.get("consumer_distribution"))
+
+    return (
+        summary_source,
+        contract_source,
+        meaning_version,
+        observer_status,
+        observer_present,
+        usage_summary_present,
+        contract_rows_present,
+        contract_rows_count,
+        wiring_status,
+        total_rows,
+        active_event_count,
+        mapped_event_count,
+        unknown_event_count,
+        event_family_distribution,
+        trust_bucket_distribution,
+        interpretation_bucket_distribution,
+        consumer_distribution,
+    )
+
+
 def _normalize_orderbook_summary_slots(row: dict[str, Any]) -> tuple[list[str], int]:
     summary = row.get("orderbook_semantics_summary")
     if not isinstance(summary, dict):
@@ -188,6 +339,27 @@ def _normalize_orderbook_summary_slots(row: dict[str, Any]) -> tuple[list[str], 
         ]
 
     return slots_present, len(slots_present)
+
+
+def _slot_present(slot_name: str, slots_present: list[str]) -> bool:
+    return slot_name in set(slots_present)
+
+
+def _normalize_orderbook_active_event_count(
+    row: dict[str, Any],
+    *,
+    active_event_names_count: int,
+    active_event_contracts_count: int,
+) -> int:
+    summary = row.get("orderbook_semantics_summary")
+    if isinstance(summary, dict):
+        raw_count = summary.get("active_event_count")
+        try:
+            return int(raw_count)
+        except Exception:
+            pass
+
+    return max(active_event_names_count, active_event_contracts_count)
 
 
 def _normalize_orderbook_wiring_status(
@@ -293,11 +465,43 @@ def build_market_summary(inp: MarketSummaryBuildInput) -> MarketSummary:
     )
 
     semantic_usage_contract_rows = _normalize_semantic_usage_contract_rows(row)
+    (
+        semantic_summary_source,
+        semantic_contract_source,
+        semantic_meaning_version,
+        semantic_observer_status,
+        semantic_observer_present,
+        semantic_usage_summary_present,
+        semantic_contract_rows_present,
+        semantic_contract_rows_count,
+        semantic_runtime_wiring_status,
+        semantic_total_rows,
+        semantic_active_event_count,
+        semantic_mapped_event_count,
+        semantic_unknown_event_count,
+        semantic_event_family_distribution,
+        semantic_trust_bucket_distribution,
+        semantic_interpretation_bucket_distribution,
+        semantic_consumer_distribution,
+    ) = _normalize_semantic_runtime_fields(
+        row,
+        semantic_usage_contract_rows_count=len(semantic_usage_contract_rows),
+    )
     orderbook_active_event_contracts = _normalize_orderbook_active_event_contracts(row)
+    orderbook_active_event_names = _normalize_orderbook_active_event_names(row)
+    orderbook_active_event_count = _normalize_orderbook_active_event_count(
+        row,
+        active_event_names_count=len(orderbook_active_event_names),
+        active_event_contracts_count=len(orderbook_active_event_contracts),
+    )
     (
         orderbook_summary_slots_present,
         orderbook_summary_slots_count,
     ) = _normalize_orderbook_summary_slots(row)
+    orderbook_near_wall_present = _slot_present("near_wall", orderbook_summary_slots_present)
+    orderbook_support_present = _slot_present("support", orderbook_summary_slots_present)
+    orderbook_resistance_present = _slot_present("resistance", orderbook_summary_slots_present)
+    orderbook_persistence_present = _slot_present("persistence", orderbook_summary_slots_present)
     (
         orderbook_wiring_status,
         orderbook_contract_status_source,
@@ -306,6 +510,7 @@ def build_market_summary(inp: MarketSummaryBuildInput) -> MarketSummary:
         summary_slots_count=orderbook_summary_slots_count,
         active_event_contracts_count=len(orderbook_active_event_contracts),
     )
+    orderbook_persistence_observable = bool(row.get("orderbook_persistence_observable"))
 
     notable_events = _collect_notable_events(
         freshness=freshness,
@@ -337,12 +542,36 @@ def build_market_summary(inp: MarketSummaryBuildInput) -> MarketSummary:
         market_state_label=_safe_str(row.get("market_state_label")),
         participation_state=_safe_str(row.get("participation_state")),
         liquidity_bias=_safe_str(row.get("liquidity_bias")),
+        semantic_summary_source=semantic_summary_source,
+        semantic_contract_source=semantic_contract_source,
+        semantic_meaning_version=semantic_meaning_version,
+        semantic_observer_status=semantic_observer_status,
+        semantic_observer_present=semantic_observer_present,
+        semantic_usage_summary_present=semantic_usage_summary_present,
+        semantic_contract_rows_present=semantic_contract_rows_present,
+        semantic_contract_rows_count=semantic_contract_rows_count,
+        semantic_runtime_wiring_status=semantic_runtime_wiring_status,
+        semantic_total_rows=semantic_total_rows,
+        semantic_active_event_count=semantic_active_event_count,
+        semantic_mapped_event_count=semantic_mapped_event_count,
+        semantic_unknown_event_count=semantic_unknown_event_count,
+        semantic_event_family_distribution=semantic_event_family_distribution,
+        semantic_trust_bucket_distribution=semantic_trust_bucket_distribution,
+        semantic_interpretation_bucket_distribution=semantic_interpretation_bucket_distribution,
+        semantic_consumer_distribution=semantic_consumer_distribution,
         semantic_usage_contract_rows=semantic_usage_contract_rows,
         orderbook_active_event_contracts=orderbook_active_event_contracts,
+        orderbook_active_event_names=orderbook_active_event_names,
+        orderbook_active_event_count=orderbook_active_event_count,
         orderbook_summary_slots_present=orderbook_summary_slots_present,
         orderbook_summary_slots_count=orderbook_summary_slots_count,
+        orderbook_near_wall_present=orderbook_near_wall_present,
+        orderbook_support_present=orderbook_support_present,
+        orderbook_resistance_present=orderbook_resistance_present,
+        orderbook_persistence_present=orderbook_persistence_present,
         orderbook_wiring_status=orderbook_wiring_status,
         orderbook_contract_status_source=orderbook_contract_status_source,
+        orderbook_persistence_observable=orderbook_persistence_observable,
         notable_events=notable_events,
         alert_candidates=alert_candidates,
         diagnostics=diagnostics,

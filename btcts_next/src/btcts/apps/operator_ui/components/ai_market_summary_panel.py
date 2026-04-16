@@ -5,88 +5,24 @@ from __future__ import annotations
 
 import streamlit as st
 
-from btcts.apps.operator_ui.components.live_bridge import (
-    latest_live_board_metrics,
-    recent_live_tradeflow_metrics,
+from btcts.apps.operator_ui.components.ai_market_summary_state import (
+    build_ai_market_summary_state,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
+    load_prediction_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
-from btcts.apps.operator_ui.components.research_bridge import (
-    board_signal_metrics,
-    latest_best_strategy_name,
-    latest_board_row,
-    latest_regime_name,
-    latest_trade_row,
-    load_latest_experiment_payload,
-    load_latest_replay_payload,
-    tradeflow_metrics,
+from btcts.apps.operator_ui.components.prediction_summary_presenter import (
+    prediction_snapshot_lines,
 )
 from btcts.apps.operator_ui.ui_text import get_text
 
 
 def _analyze_live_or_fallback():
-    live_board = latest_live_board_metrics()
-    live_flow = recent_live_tradeflow_metrics(lines=80)
-    experiment_payload = load_latest_experiment_payload()
-
-    fallback_regime = latest_regime_name(experiment_payload)
-    fallback_best_strategy = latest_best_strategy_name(experiment_payload)
-
-    live_spread = live_board.get("spread")
-    live_delta = live_flow.get("delta")
-
-    if live_spread is not None and live_delta is not None:
-        bid_depth = live_board.get("bid_depth")
-        ask_depth = live_board.get("ask_depth")
-
-        imbalance = None
-        if bid_depth is not None and ask_depth is not None:
-            try:
-                bid_depth_f = float(bid_depth)
-                ask_depth_f = float(ask_depth)
-                denom = bid_depth_f + ask_depth_f
-                if denom > 0:
-                    imbalance = (bid_depth_f - ask_depth_f) / denom
-            except Exception:
-                imbalance = None
-
-        pressure_bias = "neutral_bias"
-        if isinstance(imbalance, (int, float)):
-            if imbalance > 0.2:
-                pressure_bias = "buy_pressure"
-            elif imbalance < -0.2:
-                pressure_bias = "sell_pressure"
-
-        return {
-            "spread": float(live_spread),
-            "imbalance": None if imbalance is None else float(imbalance),
-            "delta": float(live_delta),
-            "pressure_bias": pressure_bias,
-            "regime": fallback_regime if fallback_regime != "unknown" else "live_canonical",
-            "best_strategy": fallback_best_strategy,
-            "source": "live_canonical + research_experiment",
-        }
-
-    replay_payload = load_latest_replay_payload()
-    board = board_signal_metrics(latest_board_row(replay_payload))
-    flow = tradeflow_metrics(latest_trade_row(replay_payload))
-
-    if not board or not flow:
-        return None
-
-    return {
-        "spread": board.get("spread"),
-        "imbalance": board.get("imbalance"),
-        "delta": flow.get("trade_delta"),
-        "pressure_bias": board.get("pressure_bias"),
-        "regime": latest_regime_name(experiment_payload),
-        "best_strategy": latest_best_strategy_name(experiment_payload),
-        "source": "replay_board+tradeflow + research_experiment",
-    }
+    return build_ai_market_summary_state()
 
 
 def render():
@@ -101,6 +37,7 @@ def render():
         return
 
     summary_widget = load_market_summary_widget_model()
+    prediction_widget = load_prediction_summary_widget_model()
 
     spread = state.get("spread")
     imbalance = state.get("imbalance")
@@ -162,11 +99,17 @@ def render():
     st.success(outlook)
     st.caption(
         get_text(lang, "warroom_generic_source_caption").format(
-            source=state.get("source", "unknown"),
+            source=state.get("source_label") or state.get("source", "unknown"),
         )
     )
 
     if summary_widget:
         st.caption(summary_widget_caption(summary_widget))
+
+    prediction_lines = prediction_snapshot_lines(prediction_widget)
+    if prediction_lines:
+        st.markdown("**Prediction snapshot**")
+        for line in prediction_lines:
+            st.markdown(f"- {line}")
 
     st.divider()

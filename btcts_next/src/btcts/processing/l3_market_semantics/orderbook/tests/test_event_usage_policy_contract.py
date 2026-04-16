@@ -67,6 +67,8 @@ def main() -> int:
     assert contract_row["side"] == "bid"
 
     family_rows = build_event_usage_contract_rows("observe_only")
+    assert family_rows[0]["contract_source"] == "l3_event_usage_policy"
+    assert family_rows[0]["interpretation_bucket"] == "observe_only"
     assert family_rows[0]["meaning_version"] == "l3_event_usage_policy.v1alpha1"
 
     summary = build_event_usage_summary(

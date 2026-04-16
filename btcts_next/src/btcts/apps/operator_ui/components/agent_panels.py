@@ -13,6 +13,12 @@ from btcts.apps.operator_ui.components.agent_logic import (
 from btcts.apps.operator_ui.components.agent_state import (
     analyze_agent_state,
 )
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_prediction_summary_widget_model,
+)
+from btcts.apps.operator_ui.components.prediction_summary_presenter import (
+    prediction_snapshot_lines,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 
 
@@ -60,6 +66,7 @@ def render():
         wall_ratio,
         audit_rows,
     )
+    prediction_widget = load_prediction_summary_widget_model()
 
     col1, col2, col3 = st.columns(3)
 
@@ -93,5 +100,11 @@ def render():
         f"delta={delta}, wall_ratio={wall_ratio}, best={best_strategy} / "
         f"source={source_label}"
     )
+
+    prediction_lines = prediction_snapshot_lines(prediction_widget)
+    if prediction_lines:
+        st.markdown("**Prediction snapshot**")
+        for line in prediction_lines:
+            st.markdown(f"- {line}")
 
     st.divider()

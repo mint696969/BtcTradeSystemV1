@@ -1,7 +1,7 @@
 # path: ./tmp/07_CONSUMER_ADAPTER_AND_WIDGET_BOUNDARY_SPEC_2026-04-11.md
-# desc: Consumer Adapter and Widget Boundary Spec (continuation after L4/UI responsibility alignment)
+# desc: Consumer Adapter and Widget Boundary Spec (merged current-truth sync after L4/UI responsibility alignment)
 
-更新日: 2026-04-11
+更新日: 2026-04-14
 位置づけ: `docs/architecture/` 続きファイル候補 / L4 shared・consumer adapter・widget 境界固定
 対象: `btcts_next/src/btcts/processing/l4_consumer_models/`, `btcts_next/src/btcts/apps/operator_ui/`, 将来の AI / strategy / execution / monitoring consumer
 
@@ -55,7 +55,7 @@ consumer-neutral な shared bundle。
 
 ### 例
 - `MarketSummary`
-- 将来の `HealthDigest`
+- `HealthDigest`
 - 将来の `LiquiditySnapshotBundle`
 - 将来の `SemanticTimelineBundle`
 
@@ -223,10 +223,22 @@ bridge / presenter / widget / view
 ### current reading
 - `semantic_usage_contract_rows`
 - `orderbook_summary_slots_present`
+- `orderbook_summary_slots_count`
+- `orderbook_active_event_names`
 - `orderbook_active_event_contracts`
+- `orderbook_persistence_observable`
 
 のような **他 consumer にも価値のある contract / shape** は shared にあるべきである。
+
+また current repo truth では、shared mainline の reuse line は少なくとも次でかなり強まっている。
+
+- `processing/l4_consumer_models/operator_ui/market_summary_adapter.py`
+- `apps/operator_ui/components/market_state_bridge.py`
+- `apps/operator_ui/components/market_summary_presenter.py`
+- `apps/operator_ui/components/market_monitor_presenter.py`
+
 一方で、caption 文や metric card の最終表示 shape は adapter / presenter / widget に残すのが正しい。
+monitor / presenter / widget は shared line の **再整形** であって、meaning owner ではない。
 
 ---
 
@@ -259,7 +271,8 @@ bridge / presenter / widget / view
 ---
 
 ## 8. `health_digest` をどこまで L4 に置くべきか
-`health_digest` を正式化する場合も、次の線を守る。
+`health_digest` は、2026-04-13 時点では **current-state observer-only shared digest path reached** と読める。
+そのうえで、broader split を formal 化する場合も次の線を守る。
 
 ### L4 shared に置いてよいもの
 - freshness
@@ -267,7 +280,10 @@ bridge / presenter / widget / view
 - wiring_status
 - semantic summary
 - semantic usage contract rows
+- semantic observer presence / contract row presence
 - orderbook summary slot presence
+- orderbook summary slot count
+- orderbook active event names
 - orderbook active event contracts
 - persistence observable
 - wording-free な runtime health digest
@@ -278,6 +294,7 @@ bridge / presenter / widget / view
 - badge 文言
 - panel grouping
 - page ごとの見せ方
+- widget key / payload shaping
 
 ### L4 shared に置いてはいけないもの
 - 新しい health meaning 判定
@@ -286,7 +303,7 @@ bridge / presenter / widget / view
 - Streamlit 固有表現
 
 ### 一言
-`health_digest` は作るとしても、**observer-only shared digest** に留めるのが正しい。
+`health_digest` は future-only の想定ではなく、**current-state observer-only shared digest path reached** を前提に、timeline / anomaly / broader split を carry-forward formalization するのが正しい。
 
 ---
 
@@ -367,8 +384,8 @@ contract が足りないからといって page logic で near wall / support / 
 ## 12. 現在の推奨アクション
 この仕様に沿うなら、次の順で進めるのが自然である。
 
-1. `health_digest` を formal 化する場合の最小 field draft を作る
-2. その draft を
+1. `health_digest` current-state line を docs 上で current truth に合わせて固定する
+2. そのうえで broader split を
    - shared に置く field
    - adapter に置く field
    - widget にしか置かない field

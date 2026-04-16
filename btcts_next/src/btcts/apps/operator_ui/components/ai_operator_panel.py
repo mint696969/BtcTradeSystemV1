@@ -6,9 +6,13 @@ from __future__ import annotations
 import streamlit as st
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
+    load_prediction_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
+)
+from btcts.apps.operator_ui.components.prediction_summary_presenter import (
+    prediction_snapshot_lines,
 )
 from btcts.apps.operator_ui.decision_log_store import append_decision
 from btcts.apps.operator_ui.ai_memory_store import (
@@ -60,6 +64,7 @@ def render():
         return
 
     summary_widget = load_market_summary_widget_model()
+    prediction_widget = load_prediction_summary_widget_model()
 
     latest_memory_entry = {
         "spread": state["spread"],
@@ -179,5 +184,11 @@ def render():
 
     if summary_widget:
         st.caption(summary_widget_caption(summary_widget))
+
+    prediction_lines = prediction_snapshot_lines(prediction_widget)
+    if prediction_lines:
+        st.markdown("**Prediction snapshot**")
+        for line in prediction_lines:
+            st.markdown(f"- {line}")
 
     st.divider()
