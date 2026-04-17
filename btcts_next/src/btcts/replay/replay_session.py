@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/replay/replay_session.py
-# desc: Replay session object that stores replay outputs and summary stats.
+# desc: Replay session object that stores replay outputs and additive prediction evaluation artifacts.
 
 from __future__ import annotations
 
@@ -13,10 +13,18 @@ class ReplaySession:
     source_paths: List[str]
     processed_count: int = 0
     output: List[Dict] = field(default_factory=list)
+    prediction_evaluation_entries: List[Dict] = field(default_factory=list)
+    prediction_calibration_reviews: List[Dict] = field(default_factory=list)
 
     def add(self, item: Dict) -> None:
         self.output.append(item)
         self.processed_count += 1
+
+    def add_prediction_evaluation_entry(self, item: Dict) -> None:
+        self.prediction_evaluation_entries.append(item)
+
+    def add_prediction_calibration_review(self, item: Dict) -> None:
+        self.prediction_calibration_reviews.append(item)
 
     def summary(self) -> Dict:
         event_count = 0
@@ -37,4 +45,10 @@ class ReplaySession:
             "processed_count": self.processed_count,
             "signal_count": signal_count,
             "event_count": event_count,
+            "prediction_evaluation_entry_count": len(
+                self.prediction_evaluation_entries
+            ),
+            "prediction_calibration_review_count": len(
+                self.prediction_calibration_reviews
+            ),
         }

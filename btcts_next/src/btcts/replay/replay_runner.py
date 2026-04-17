@@ -10,6 +10,7 @@ from btcts.market_engine.profiles import create_exchange_profile
 
 from .replay_clock import ReplayClock
 from .replay_engine import ReplayEngine
+from .replay_export import export_replay_session
 from .replay_pipeline import ReplayPipeline
 from .replay_session import ReplaySession
 from .replay_source import JsonlReplaySource
@@ -46,3 +47,26 @@ def run_replay(
             session.add(result)
 
     return session
+
+
+
+
+def run_and_export_replay(
+    name: str,
+    paths: Iterable[Path],
+    *,
+    out_root: Path,
+    speed: float = 1000.0,
+    profile_name: str = "bitflyer",
+) -> tuple[ReplaySession, dict[str, str]]:
+    session = run_replay(
+        name=name,
+        paths=paths,
+        speed=speed,
+        profile_name=profile_name,
+    )
+    artifacts = export_replay_session(
+        session=session,
+        out_root=out_root,
+    )
+    return session, artifacts

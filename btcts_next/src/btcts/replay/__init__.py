@@ -6,15 +6,16 @@ from __future__ import annotations
 from .replay_catalog import list_replay_sessions
 from .replay_clock import ReplayClock
 from .replay_engine import ReplayEngine
-from .replay_export import export_replay_results
+from .replay_export import export_replay_results, export_replay_session
 from .replay_fusion import ReplayFusion
 from .replay_load import load_replay_session
-from .replay_runner import run_replay
+from .replay_runner import run_and_export_replay, run_replay
 from .replay_session import ReplaySession
 from .replay_source import JsonlReplaySource
-from .strategy_report import build_strategy_report
-from .strategy_sandbox import run_strategy_sandbox
-from .regime_report import build_regime_report
+from .prediction_evaluation_entry import build_prediction_evaluation_entry
+from .prediction_evaluation_report import build_prediction_evaluation_report
+from .prediction_calibration_review import build_prediction_calibration_review
+from .prediction_realized_outcome import build_prediction_realized_outcome
 from .strategy_report import build_strategy_report
 from .strategy_sandbox import run_strategy_sandbox
 from .regime_report import build_regime_report
@@ -29,8 +30,14 @@ __all__ = [
     "ReplayFusion",
     "ReplaySession",
     "JsonlReplaySource",
-    "run_replay",
+    "build_prediction_evaluation_entry",
+    "build_prediction_evaluation_report",
+    "build_prediction_calibration_review",
+    "build_prediction_realized_outcome",
     "export_replay_results",
+    "export_replay_session",
+    "run_replay",
+    "run_and_export_replay",
     "list_replay_sessions",
     "load_replay_session",
     "run_strategy_sandbox",
