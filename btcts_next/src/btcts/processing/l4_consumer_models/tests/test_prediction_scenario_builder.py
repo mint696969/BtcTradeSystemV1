@@ -12,9 +12,11 @@ if str(_SRC_ROOT) not in sys.path:
 
 from btcts.processing.l4_consumer_models.shared import (  # noqa: E402
     MarketSummaryBuildInput,
+    PredictionReplayFeedbackBuildInput,
     PredictionScenarioBuildInput,
     PredictionSystemBuildInput,
     build_market_summary,
+    build_prediction_replay_feedback,
     build_prediction_scenario_output,
     build_prediction_system_input,
 )
@@ -78,6 +80,21 @@ def main() -> int:
                 "transition_sign": "weakening_continuation",
                 "turning_point_risk": "medium",
             },
+            replay_feedback=build_prediction_replay_feedback(
+                PredictionReplayFeedbackBuildInput(
+                    calibration_review={
+                        "review_priority": "high",
+                        "primary_focus": "confidence_downside_review",
+                        "confidence_review": "lower_confidence_weight",
+                        "caution_review": "raise_caution_weight",
+                    },
+                    evaluation_report={
+                        "entry_count": 3,
+                        "average_confidence_gap": -0.18,
+                        "average_caution_gap": 1.0,
+                    },
+                )
+            ),
         )
     )
 
@@ -98,8 +115,8 @@ def main() -> int:
 
     assert scenario_output.current_regime_state == "reversal_watch"
     assert scenario_output.current_hypothesis_health == "caution_increase"
-    assert round(scenario_output.current_confidence, 2) == 0.46
-    assert scenario_output.current_caution_level == "low"
+    assert round(scenario_output.current_confidence, 2) == 0.28
+    assert scenario_output.current_caution_level == "medium"
 
     assert len(scenario_output.outlooks) == 3
     assert scenario_output.outlooks[0].horizon == "5m"
@@ -107,9 +124,12 @@ def main() -> int:
     assert scenario_output.outlooks[0].continuation_likelihood == "medium"
     assert scenario_output.outlooks[0].reversal_likelihood == "medium"
     assert scenario_output.outlooks[0].turning_point_risk == "medium"
-    assert round(scenario_output.outlooks[0].confidence, 2) == 0.46
-    assert round(scenario_output.outlooks[1].confidence, 2) == 0.38
-    assert round(scenario_output.outlooks[2].confidence, 2) == 0.30
+    assert round(scenario_output.outlooks[0].confidence, 2) == 0.28
+    assert round(scenario_output.outlooks[1].confidence, 2) == 0.20
+    assert round(scenario_output.outlooks[2].confidence, 2) == 0.12
+    assert scenario_output.outlooks[0].caution_level == "medium"
+    assert scenario_output.outlooks[1].caution_level == "medium"
+    assert scenario_output.outlooks[2].caution_level == "medium"
 
     assert scenario_output.invalidation_state == "caution_increase"
     assert scenario_output.invalidation_signals == (
@@ -122,6 +142,14 @@ def main() -> int:
     assert scenario_output.evidence["health_digest_present"] is False
     assert scenario_output.evidence["liquidity_board_history_present"] is True
     assert scenario_output.evidence["regime_turning_point_present"] is True
+    assert scenario_output.evidence["replay_feedback_present"] is True
+    assert scenario_output.evidence["replay_feedback_summary"] == {
+        "review_priority": "high",
+        "primary_focus": "confidence_downside_review",
+        "entry_count": 3,
+        "average_confidence_gap": -0.18,
+        "average_caution_gap": 1.0,
+    }
     assert scenario_output.evidence["summary_interpretation_bucket"] == "allow_structural_use"
     assert scenario_output.evidence["summary_trust_state"] == "trusted"
     assert scenario_output.evidence["transition_sign"] == "weakening_continuation"
@@ -146,6 +174,12 @@ def main() -> int:
     assert scenario_output.diagnostics["active_family_count"] == 3
     assert scenario_output.diagnostics["missing_family_count"] == 0
     assert scenario_output.diagnostics["caution_flag_count"] == 0
+    assert scenario_output.diagnostics["replay_feedback_present"] is True
+    assert scenario_output.diagnostics["replay_feedback_confidence_adjustment"] == -0.11
+    assert scenario_output.diagnostics["replay_feedback_caution_adjustment"] == 1
+    assert scenario_output.diagnostics["replay_feedback_caution_adjustment_policy"] == (
+        "raise_once_high_priority"
+    )
     assert scenario_output.diagnostics["caller"] == "unit_test"
 
     blocked = build_prediction_scenario_output(PredictionScenarioBuildInput())
@@ -162,6 +196,8 @@ def main() -> int:
     assert blocked.invalidation_signals == ("prediction_input_absent",)
     assert blocked.scenario_switch_hint == "maintain_no_trade"
     assert blocked.evidence["market_summary_present"] is False
+    assert blocked.evidence["replay_feedback_present"] is False
+    assert blocked.evidence["replay_feedback_summary"] is None
     assert blocked.evidence["evidence_trace_summary"] == {
         "active_family_count": 0,
         "missing_family_count": 0,

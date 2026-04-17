@@ -46,6 +46,10 @@ from .prediction_calibration_hint_builder import (
     PredictionCalibrationBuildInput,
     build_prediction_calibration_hint,
 )
+from .prediction_replay_feedback import (
+    PredictionReplayFeedbackBuildInput,
+    build_prediction_replay_feedback,
+)
 
 __all__ = [
     "HealthDigest",
@@ -73,4 +77,6 @@ __all__ = [
     "build_prediction_liquidity_board_history",
     "PredictionCalibrationBuildInput",
     "build_prediction_calibration_hint",
+    "PredictionReplayFeedbackBuildInput",
+    "build_prediction_replay_feedback",
 ]

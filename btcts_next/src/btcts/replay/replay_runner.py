@@ -12,6 +12,7 @@ from .replay_clock import ReplayClock
 from .replay_engine import ReplayEngine
 from .replay_export import export_replay_session
 from .replay_pipeline import ReplayPipeline
+from .replay_prediction_artifacts import ReplayPredictionArtifactBuilder
 from .replay_session import ReplaySession
 from .replay_source import JsonlReplaySource
 
@@ -36,6 +37,11 @@ def run_replay(
         name=name,
         source_paths=[str(Path(p)) for p in paths],
     )
+    prediction_artifact_builder = ReplayPredictionArtifactBuilder(
+        exchange=profile_name,
+        symbol_raw="BTC_JPY",
+        realized_horizon="5m",
+    )
 
     while engine.has_next():
         record = engine.next_event()
@@ -46,9 +52,19 @@ def run_replay(
         if result is not None:
             session.add(result)
 
+            prediction_artifacts = prediction_artifact_builder.consume_result_artifacts(
+                result
+            )
+
+            evaluation_entry = prediction_artifacts["evaluation_entry"]
+            if evaluation_entry is not None:
+                session.add_prediction_evaluation_entry(evaluation_entry)
+
+            calibration_review = prediction_artifacts["calibration_review"]
+            if calibration_review is not None:
+                session.add_prediction_calibration_review(calibration_review)
+
     return session
-
-
 
 
 def run_and_export_replay(

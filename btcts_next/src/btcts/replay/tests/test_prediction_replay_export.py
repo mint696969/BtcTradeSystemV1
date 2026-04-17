@@ -40,6 +40,16 @@ def main() -> int:
                     "caution_bias_hint": "balanced",
                 }
             ],
+            prediction_calibration_reviews=[
+                {
+                    "review_type": "prediction_calibration_review",
+                    "review_priority": "high",
+                    "primary_focus": "confidence_downside_review",
+                    "confidence_review": "lower_confidence_weight",
+                    "caution_review": "raise_caution_weight",
+                    "invalidation_review": "raise_invalidation_sensitivity",
+                }
+            ],
         )
 
         assert exported["session_dir"]
@@ -47,12 +57,15 @@ def main() -> int:
         assert exported["report_path"]
         assert exported["manifest_path"]
         assert exported["prediction_evaluation_report_path"]
+        assert exported["prediction_calibration_review_path"]
 
         manifest = _read_json(exported["manifest_path"])
         assert manifest["name"] == "prediction_eval_export"
         assert manifest["result_count"] == 2
         assert manifest["prediction_evaluation_entry_count"] == 1
         assert manifest["prediction_evaluation_report_path"]
+        assert manifest["prediction_calibration_review_count"] == 1
+        assert manifest["prediction_calibration_review_path"]
 
         prediction_report = _read_json(exported["prediction_evaluation_report_path"])
         assert prediction_report["name"] == "prediction_eval_export_prediction_evaluation"
@@ -63,6 +76,11 @@ def main() -> int:
         assert prediction_report["average_confidence_gap"] == -0.18
         assert prediction_report["average_caution_gap"] == 2.0
 
+        calibration_review = _read_json(exported["prediction_calibration_review_path"])
+        assert calibration_review["review_type"] == "prediction_calibration_review"
+        assert calibration_review["review_priority"] == "high"
+        assert calibration_review["primary_focus"] == "confidence_downside_review"
+
         replay_report = _read_json(exported["report_path"])
         assert replay_report["prediction_evaluation_summary"] == {
             "entry_count": 1,
@@ -72,6 +90,14 @@ def main() -> int:
             "high_priority_count": 1,
             "average_confidence_gap": -0.18,
             "average_caution_gap": 2.0,
+        }
+        assert replay_report["prediction_calibration_review_summary"] == {
+            "review_count": 1,
+            "latest_review_priority": "high",
+            "latest_primary_focus": "confidence_downside_review",
+            "latest_confidence_review": "lower_confidence_weight",
+            "latest_caution_review": "raise_caution_weight",
+            "latest_invalidation_review": "raise_invalidation_sensitivity",
         }
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -86,9 +112,13 @@ def main() -> int:
         assert manifest["prediction_evaluation_entry_count"] == 0
         assert manifest["prediction_evaluation_report_path"] is None
         assert exported["prediction_evaluation_report_path"] is None
+        assert manifest["prediction_calibration_review_count"] == 0
+        assert manifest["prediction_calibration_review_path"] is None
+        assert exported["prediction_calibration_review_path"] is None
 
         replay_report = _read_json(exported["report_path"])
         assert replay_report["prediction_evaluation_summary"] is None
+        assert replay_report["prediction_calibration_review_summary"] is None
 
     print("ok")
     return 0

@@ -41,6 +41,7 @@ class PredictionSystemBuildInput:
     )
     liquidity_board_history: dict[str, Any] | None = None
     regime_turning_point: dict[str, Any] | None = None
+    replay_feedback: dict[str, Any] | None = None
     external_context: dict[str, Any] | None = None
     position_context: dict[str, Any] | None = None
     diagnostics: dict[str, Any] | None = None
@@ -107,6 +108,14 @@ def _normalize_dict(value: dict[str, Any] | None) -> dict[str, Any]:
     return dict(value or {})
 
 
+def _normalize_external_context(inp: PredictionSystemBuildInput) -> dict[str, Any]:
+    out = _normalize_dict(inp.external_context)
+    replay_feedback = _normalize_dict(inp.replay_feedback)
+    if replay_feedback:
+        out["replay_feedback"] = replay_feedback
+    return out
+
+
 def _resolve_liquidity_board_history(inp: PredictionSystemBuildInput) -> dict[str, Any]:
     explicit = _normalize_dict(inp.liquidity_board_history)
     if explicit:
@@ -149,7 +158,7 @@ def _build_evidence_bundle(inp: PredictionSystemBuildInput) -> PredictionEvidenc
         health_digest=inp.health_digest,
         liquidity_board_history=_resolve_liquidity_board_history(inp),
         regime_turning_point=_resolve_regime_turning_point(inp),
-        external_context=_normalize_dict(inp.external_context),
+        external_context=_normalize_external_context(inp),
         position_context=_normalize_dict(inp.position_context),
     )
 

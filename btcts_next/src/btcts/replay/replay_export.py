@@ -24,6 +24,7 @@ def export_replay_results(
     results: List[Dict],
     out_root: Path,
     prediction_evaluation_entries: List[Dict] | None = None,
+    prediction_calibration_reviews: List[Dict] | None = None,
 ) -> Dict[str, str]:
     source_paths_str = [str(Path(p)) for p in source_paths]
     stamp = _utc_stamp()
@@ -37,6 +38,7 @@ def export_replay_results(
         source_paths=source_paths_str,
         results=results,
         prediction_evaluation_entries=prediction_evaluation_entries,
+        prediction_calibration_reviews=prediction_calibration_reviews,
     )
     report_path = write_json(session_dir / "replay_report.json", report)
 
@@ -55,6 +57,17 @@ def export_replay_results(
             )
         )
 
+    prediction_calibration_review_path = None
+    prediction_calibration_review_count = 0
+    if prediction_calibration_reviews:
+        prediction_calibration_review_count = len(prediction_calibration_reviews)
+        prediction_calibration_review_path = str(
+            write_json(
+                session_dir / "prediction_calibration_review.json",
+                prediction_calibration_reviews[-1],
+            )
+        )
+
     manifest = {
         "name": name,
         "created_at_utc": stamp,
@@ -63,6 +76,8 @@ def export_replay_results(
         "report_path": str(report_path),
         "prediction_evaluation_report_path": prediction_evaluation_report_path,
         "prediction_evaluation_entry_count": prediction_evaluation_entry_count,
+        "prediction_calibration_review_path": prediction_calibration_review_path,
+        "prediction_calibration_review_count": prediction_calibration_review_count,
         "result_count": len(results),
     }
     manifest_path = write_json(session_dir / "manifest.json", manifest)
@@ -72,6 +87,7 @@ def export_replay_results(
         "results_path": str(results_path),
         "report_path": str(report_path),
         "prediction_evaluation_report_path": prediction_evaluation_report_path,
+        "prediction_calibration_review_path": prediction_calibration_review_path,
         "manifest_path": str(manifest_path),
     }
 
@@ -87,4 +103,5 @@ def export_replay_session(
         results=session.output,
         out_root=out_root,
         prediction_evaluation_entries=session.prediction_evaluation_entries,
+        prediction_calibration_reviews=session.prediction_calibration_reviews,
     )

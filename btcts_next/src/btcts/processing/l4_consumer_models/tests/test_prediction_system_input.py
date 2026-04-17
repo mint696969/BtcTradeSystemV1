@@ -13,8 +13,10 @@ if str(_SRC_ROOT) not in sys.path:
 from btcts.processing.l4_consumer_models.shared import (  # noqa: E402
     HealthDigest,
     MarketSummaryBuildInput,
+    PredictionReplayFeedbackBuildInput,
     PredictionSystemBuildInput,
     build_market_summary,
+    build_prediction_replay_feedback,
     build_prediction_system_input,
 )
 
@@ -87,6 +89,21 @@ def main() -> int:
             market_summary=market_summary,
             health_digest=health_digest,
             requested_horizons=("10m", "30m", "10m", "bad"),
+            replay_feedback=build_prediction_replay_feedback(
+                PredictionReplayFeedbackBuildInput(
+                    calibration_review={
+                        "review_priority": "high",
+                        "primary_focus": "confidence_downside_review",
+                    },
+                    evaluation_report={
+                        "entry_count": 3,
+                        "average_confidence_gap": -0.18,
+                        "average_caution_gap": 1.0,
+                    },
+                    diagnostics={"source": "unit_test"},
+                )
+            ),
+            external_context={"operator_mode": "paper"},
             diagnostics={"caller": "unit_test"},
         )
     )
@@ -139,7 +156,23 @@ def main() -> int:
     )
     assert built.evidence_bundle.regime_turning_point["turning_point_risk"] == "high"
     assert built.evidence_bundle.regime_turning_point["continuity_bias"] == "fragile"
-    assert built.evidence_bundle.external_context == {}
+    assert built.evidence_bundle.external_context["operator_mode"] == "paper"
+    assert built.evidence_bundle.external_context["replay_feedback"]["feedback_type"] == (
+        "prediction_replay_feedback"
+    )
+    assert built.evidence_bundle.external_context["replay_feedback"]["review_priority"] == (
+        "high"
+    )
+    assert built.evidence_bundle.external_context["replay_feedback"]["primary_focus"] == (
+        "confidence_downside_review"
+    )
+    assert built.evidence_bundle.external_context["replay_feedback"]["entry_count"] == 3
+    assert built.evidence_bundle.external_context["replay_feedback"]["average_confidence_gap"] == (
+        -0.18
+    )
+    assert built.evidence_bundle.external_context["replay_feedback"]["diagnostics"][
+        "builder_type"
+    ] == "prediction_replay_feedback"
     assert built.evidence_bundle.position_context == {}
 
     assert built.evidence_trace.active_families == (

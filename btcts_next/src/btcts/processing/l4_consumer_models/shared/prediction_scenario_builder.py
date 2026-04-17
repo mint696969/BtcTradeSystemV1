@@ -26,6 +26,15 @@ def _safe_str(value: Any) -> str | None:
     return text or None
 
 
+def _safe_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except Exception:
+        return None
+
+
 def _clamp_confidence(value: float) -> float:
     if value < 0.0:
         return 0.0
@@ -34,7 +43,29 @@ def _clamp_confidence(value: float) -> float:
     return round(value, 2)
 
 
-def _resolve_current_caution_level(prediction_input: PredictionSystemInput | None) -> str:
+def _caution_level_to_rank(value: str) -> int:
+    table = {
+        "low": 1,
+        "medium": 2,
+        "high": 3,
+        "blocked": 4,
+    }
+    return table.get(value, 4)
+
+
+def _rank_to_caution_level(value: int) -> str:
+    if value <= 1:
+        return "low"
+    if value == 2:
+        return "medium"
+    if value == 3:
+        return "high"
+    return "blocked"
+
+
+def _resolve_base_current_caution_level(
+    prediction_input: PredictionSystemInput | None,
+) -> str:
     if prediction_input is None:
         return "blocked"
 
@@ -72,6 +103,94 @@ def _resolve_current_caution_level(prediction_input: PredictionSystemInput | Non
             return "medium"
 
     return "low"
+
+
+def _resolve_replay_feedback_caution_signal(
+    prediction_input: PredictionSystemInput | None,
+) -> int:
+    if prediction_input is None:
+        return 0
+
+    replay_feedback = dict(
+        prediction_input.evidence_bundle.external_context.get("replay_feedback") or {}
+    )
+    if not replay_feedback:
+        return 0
+
+    average_caution_gap = _safe_float(replay_feedback.get("average_caution_gap"))
+    caution_review = _safe_str(replay_feedback.get("caution_review"))
+
+    if caution_review == "raise_caution_weight":
+        return 1
+    if caution_review == "lower_caution_weight":
+        return -1
+
+    if average_caution_gap is not None:
+        if average_caution_gap >= 1.0:
+            return 1
+        if average_caution_gap <= -1.0:
+            return -1
+
+    return 0
+
+
+def _resolve_replay_feedback_caution_adjustment(
+    *,
+    prediction_input: PredictionSystemInput | None,
+    current_regime_state: str,
+    base_caution_level: str,
+) -> tuple[int, str]:
+    raw_signal = _resolve_replay_feedback_caution_signal(prediction_input)
+    if raw_signal == 0:
+        return (0, "none")
+
+    replay_feedback = {}
+    if prediction_input is not None:
+        replay_feedback = dict(
+            prediction_input.evidence_bundle.external_context.get("replay_feedback")
+            or {}
+        )
+    review_priority = _safe_str(replay_feedback.get("review_priority"))
+
+    if raw_signal < 0:
+        if base_caution_level != "medium":
+            return (0, "gated_non_relaxable_base")
+        if current_regime_state in {"transition", "reversal_watch"}:
+            return (0, "gated_fragile_regime")
+        if review_priority == "high":
+            return (0, "gated_high_priority")
+        return (-1, "lower_once")
+
+    if review_priority == "high":
+        return (1, "raise_once_high_priority")
+    return (1, "raise_once")
+
+
+def _apply_caution_adjustment(
+    *,
+    base_level: str,
+    caution_rank_adjustment: int,
+) -> str:
+    return _rank_to_caution_level(
+        _caution_level_to_rank(base_level) + caution_rank_adjustment
+    )
+
+
+def _resolve_current_caution_level(
+    *,
+    prediction_input: PredictionSystemInput | None,
+    current_regime_state: str,
+) -> str:
+    base_caution_level = _resolve_base_current_caution_level(prediction_input)
+    caution_rank_adjustment, _ = _resolve_replay_feedback_caution_adjustment(
+        prediction_input=prediction_input,
+        current_regime_state=current_regime_state,
+        base_caution_level=base_caution_level,
+    )
+    return _apply_caution_adjustment(
+        base_level=base_caution_level,
+        caution_rank_adjustment=caution_rank_adjustment,
+    )
 
 
 def _resolve_current_regime_state(prediction_input: PredictionSystemInput | None) -> str:
@@ -124,6 +243,50 @@ def _resolve_current_hypothesis_health(
     return "unknown"
 
 
+def _resolve_replay_feedback_confidence_adjustment(
+    prediction_input: PredictionSystemInput | None,
+) -> float:
+    if prediction_input is None:
+        return 0.0
+
+    replay_feedback = dict(
+        prediction_input.evidence_bundle.external_context.get("replay_feedback") or {}
+    )
+    if not replay_feedback:
+        return 0.0
+
+    average_confidence_gap = _safe_float(
+        replay_feedback.get("average_confidence_gap")
+    )
+    review_priority = _safe_str(replay_feedback.get("review_priority"))
+    confidence_review = _safe_str(replay_feedback.get("confidence_review"))
+
+    adjustment = 0.0
+
+    if average_confidence_gap is not None:
+        if average_confidence_gap <= -0.20:
+            adjustment -= 0.08
+        elif average_confidence_gap <= -0.10:
+            adjustment -= 0.05
+        elif average_confidence_gap >= 0.20:
+            adjustment += 0.05
+        elif average_confidence_gap >= 0.10:
+            adjustment += 0.03
+
+    if confidence_review == "lower_confidence_weight":
+        adjustment -= 0.04
+    elif confidence_review == "raise_confidence_weight":
+        adjustment += 0.04
+
+    if review_priority == "high":
+        if adjustment < 0.0:
+            adjustment -= 0.02
+        elif adjustment > 0.0:
+            adjustment += 0.01
+
+    return round(adjustment, 2)
+
+
 def _resolve_current_confidence(
     *,
     prediction_input: PredictionSystemInput | None,
@@ -151,6 +314,8 @@ def _resolve_current_confidence(
         base -= 0.07
     elif current_caution_level == "high":
         base -= 0.17
+
+    base += _resolve_replay_feedback_confidence_adjustment(prediction_input)
 
     return _clamp_confidence(base)
 
@@ -335,6 +500,27 @@ def _build_evidence_trace_summary(
     }
 
 
+def _build_replay_feedback_summary(
+    prediction_input: PredictionSystemInput | None,
+) -> dict[str, Any] | None:
+    if prediction_input is None:
+        return None
+
+    replay_feedback = dict(
+        prediction_input.evidence_bundle.external_context.get("replay_feedback") or {}
+    )
+    if not replay_feedback:
+        return None
+
+    return {
+        "review_priority": _safe_str(replay_feedback.get("review_priority")),
+        "primary_focus": _safe_str(replay_feedback.get("primary_focus")),
+        "entry_count": replay_feedback.get("entry_count"),
+        "average_confidence_gap": replay_feedback.get("average_confidence_gap"),
+        "average_caution_gap": replay_feedback.get("average_caution_gap"),
+    }
+
+
 def _build_evidence(prediction_input: PredictionSystemInput | None) -> dict[str, Any]:
     if prediction_input is None:
         return {
@@ -342,18 +528,23 @@ def _build_evidence(prediction_input: PredictionSystemInput | None) -> dict[str,
             "health_digest_present": False,
             "liquidity_board_history_present": False,
             "regime_turning_point_present": False,
+            "replay_feedback_present": False,
+            "replay_feedback_summary": None,
             "evidence_trace_summary": _build_evidence_trace_summary(prediction_input),
         }
 
     bundle = prediction_input.evidence_bundle
     summary = bundle.market_summary
     regime_turning_point = dict(bundle.regime_turning_point or {})
+    replay_feedback = dict(bundle.external_context.get("replay_feedback") or {})
 
     return {
         "market_summary_present": summary is not None,
         "health_digest_present": bundle.health_digest is not None,
         "liquidity_board_history_present": bool(bundle.liquidity_board_history),
         "regime_turning_point_present": bool(bundle.regime_turning_point),
+        "replay_feedback_present": bool(replay_feedback),
+        "replay_feedback_summary": _build_replay_feedback_summary(prediction_input),
         "summary_interpretation_bucket": None if summary is None else summary.interpretation_bucket,
         "summary_trust_state": None if summary is None else summary.trust_state,
         "summary_continuity_state": None if summary is None else summary.continuity_state,
@@ -373,8 +564,20 @@ def build_prediction_scenario_output(
     inp: PredictionScenarioBuildInput,
 ) -> PredictionScenarioOutput:
     prediction_input = inp.prediction_input
-    current_caution_level = _resolve_current_caution_level(prediction_input)
     current_regime_state = _resolve_current_regime_state(prediction_input)
+    base_current_caution_level = _resolve_base_current_caution_level(prediction_input)
+    (
+        replay_feedback_caution_adjustment,
+        replay_feedback_caution_adjustment_policy,
+    ) = _resolve_replay_feedback_caution_adjustment(
+        prediction_input=prediction_input,
+        current_regime_state=current_regime_state,
+        base_caution_level=base_current_caution_level,
+    )
+    current_caution_level = _apply_caution_adjustment(
+        base_level=base_current_caution_level,
+        caution_rank_adjustment=replay_feedback_caution_adjustment,
+    )
     current_hypothesis_health = _resolve_current_hypothesis_health(
         current_regime_state=current_regime_state,
         current_caution_level=current_caution_level,
@@ -441,6 +644,14 @@ def build_prediction_scenario_output(
             "active_family_count": len(prediction_input.evidence_trace.active_families),
             "missing_family_count": len(prediction_input.evidence_trace.missing_families),
             "caution_flag_count": len(prediction_input.evidence_trace.caution_flags),
+            "replay_feedback_present": bool(
+                prediction_input.evidence_bundle.external_context.get("replay_feedback")
+            ),
+            "replay_feedback_confidence_adjustment": _resolve_replay_feedback_confidence_adjustment(
+                prediction_input
+            ),
+            "replay_feedback_caution_adjustment": replay_feedback_caution_adjustment,
+            "replay_feedback_caution_adjustment_policy": replay_feedback_caution_adjustment_policy,
             **dict(inp.diagnostics or {}),
         },
     )

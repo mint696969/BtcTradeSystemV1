@@ -8,11 +8,29 @@ from typing import Dict, List
 from .prediction_evaluation_report import build_prediction_evaluation_report
 
 
+def _build_prediction_calibration_review_summary(
+    prediction_calibration_reviews: List[Dict] | None,
+) -> Dict | None:
+    if not prediction_calibration_reviews:
+        return None
+
+    latest_review = dict(prediction_calibration_reviews[-1] or {})
+    return {
+        "review_count": len(prediction_calibration_reviews),
+        "latest_review_priority": latest_review.get("review_priority"),
+        "latest_primary_focus": latest_review.get("primary_focus"),
+        "latest_confidence_review": latest_review.get("confidence_review"),
+        "latest_caution_review": latest_review.get("caution_review"),
+        "latest_invalidation_review": latest_review.get("invalidation_review"),
+    }
+
+
 def build_replay_report(
     name: str,
     source_paths: List[str],
     results: List[Dict],
     prediction_evaluation_entries: List[Dict] | None = None,
+    prediction_calibration_reviews: List[Dict] | None = None,
 ) -> Dict:
     board_count = 0
     trade_count = 0
@@ -69,4 +87,7 @@ def build_replay_report(
         "microstructure_event_count": microstructure_event_count,
         "event_name_counts": dict(sorted(event_name_counts.items())),
         "prediction_evaluation_summary": prediction_evaluation_summary,
+        "prediction_calibration_review_summary": _build_prediction_calibration_review_summary(
+            prediction_calibration_reviews
+        ),
     }
