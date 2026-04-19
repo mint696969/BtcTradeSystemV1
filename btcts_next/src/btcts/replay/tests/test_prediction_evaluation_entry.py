@@ -141,6 +141,32 @@ def main() -> int:
     assert entry["confidence_gap"] == -0.18
     assert entry["confidence_gap_signal"] == "overstated_confidence"
     assert entry["predicted_caution_level"] == "low"
+    assert entry["predicted_invalidation_state"] == "caution_increase"
+    assert entry["predicted_scenario_switch_hint"] == "watch_reversal_path"
+    predicted_trace = entry["predicted_scenario_trace"]
+    assert predicted_trace["trace_type"] == "prediction_scenario_trace"
+    assert predicted_trace["trace_version"] == "phase3.v1alpha1"
+    assert predicted_trace["regime_decision"] == (
+        "transition_sign:weakening_continuation"
+    )
+    assert predicted_trace["hypothesis_health_path"] == "caution_increase"
+    assert predicted_trace["caution_path"] == "low"
+    assert predicted_trace["invalidation_path"] == "caution_increase"
+    assert predicted_trace["switch_reason"] == "watch_reversal_path"
+
+    replay_feedback_effect = predicted_trace["replay_feedback_effect"]
+    assert replay_feedback_effect["caution_adjustment"] == 0
+    assert replay_feedback_effect["caution_policy"] == "none"
+    assert replay_feedback_effect["invalidation_adjustment"] == 0
+    assert replay_feedback_effect["invalidation_policy"] == "none"
+    assert replay_feedback_effect["invalidation_score"] == 0.0
+    assert replay_feedback_effect["scenario_trace_focus"] == "unknown"
+    assert replay_feedback_effect["trace_focus_material"] == {
+        "focus": "unknown",
+        "kind": "none",
+        "direction": "neutral",
+        "strength": 0.0,
+    }
     assert entry["realized_caution_level"] == "high"
     assert entry["caution_gap"] == 2
     assert entry["confidence_bias_hint"] == "balanced"
@@ -166,6 +192,9 @@ def main() -> int:
     assert empty["confidence_gap"] is None
     assert empty["confidence_gap_signal"] == "unknown"
     assert empty["caution_gap"] is None
+    assert empty["predicted_invalidation_state"] is None
+    assert empty["predicted_scenario_switch_hint"] is None
+    assert empty["predicted_scenario_trace"] == {}
     assert empty["confidence_bias_hint"] == "unknown"
     assert empty["caution_bias_hint"] == "unknown"
     assert empty["invalidation_sensitivity"] == "unknown"

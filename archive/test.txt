@@ -1,0 +1,4 @@
+# path: ./archive/test.txt
+# desc: Archived text artifact.
+
+gpt_room write test OK - 2026-04-19

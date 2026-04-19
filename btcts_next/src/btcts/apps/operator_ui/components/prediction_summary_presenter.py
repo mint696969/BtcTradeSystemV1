@@ -20,4 +20,37 @@ def prediction_snapshot_lines(prediction_widget) -> list[str]:
     ]
     if prediction_widget.health_caution_used_key == "true":
         lines.append("health_caution=on")
+
+    if prediction_widget.current_regime_state_key != "unknown":
+        lines.append(f"scenario_regime={prediction_widget.current_regime_state_key}")
+    if prediction_widget.current_hypothesis_health_key != "unknown":
+        lines.append(
+            f"hypothesis_health={prediction_widget.current_hypothesis_health_key}"
+        )
+    if prediction_widget.invalidation_state_key != "unknown":
+        lines.append(
+            f"invalidation_state={prediction_widget.invalidation_state_key}"
+        )
+    if prediction_widget.scenario_switch_hint_key != "unknown":
+        lines.append(
+            f"scenario_switch_hint={prediction_widget.scenario_switch_hint_key}"
+        )
+
+    if prediction_widget.trace_regime_decision_key != "unknown":
+        lines.append(
+            f"trace_regime_decision={prediction_widget.trace_regime_decision_key}"
+        )
+    if prediction_widget.trace_switch_reason_key != "unknown":
+        lines.append(
+            f"trace_switch_reason={prediction_widget.trace_switch_reason_key}"
+        )
+    if prediction_widget.trace_summary_key != "unknown":
+        lines.append(
+            f"trace_summary={prediction_widget.trace_summary_key}"
+        )
+    if prediction_widget.trace_focus_summary_key != "none":
+        lines.append(
+            f"trace_focus={prediction_widget.trace_focus_summary_key}"
+        )
+
     return lines

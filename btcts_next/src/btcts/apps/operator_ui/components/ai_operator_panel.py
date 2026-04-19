@@ -4,151 +4,141 @@
 from __future__ import annotations
 
 import streamlit as st
-from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
-    load_prediction_summary_widget_model,
-)
-from btcts.apps.operator_ui.components.market_summary_presenter import (
-    summary_widget_caption,
-)
-from btcts.apps.operator_ui.components.prediction_summary_presenter import (
-    prediction_snapshot_lines,
-)
-from btcts.apps.operator_ui.decision_log_store import append_decision
-from btcts.apps.operator_ui.ai_memory_store import (
-    append_memory,
-    load_recent_memory,
-)
-from btcts.apps.operator_ui.ai_runtime import (
-    default_mode,
-    generate_answer,
-)
-from btcts.apps.operator_ui.components.ai_operator_logic import (
-    operator_action,
-    operator_action_label,
-    operator_risk,
-    operator_risk_label,
-)
-from btcts.apps.operator_ui.components.ai_operator_state import (
-    analyze_operator_state,
-)
+
 from btcts.apps.operator_ui.components.ai_operator_actions import (
     ask_ai_why,
-    mark_as_watch,
-    open_research_from_operator_context,
+    mark_watch_item,
+    open_research_from_replay_context,
+)
+from btcts.apps.operator_ui.components.ai_operator_action_payloads import (
+    build_research_replay_context,
+    build_watch_item,
+)
+from btcts.apps.operator_ui.components.ai_operator_advisory import (
+    read_operator_advisory_answer,
+)
+from btcts.apps.operator_ui.components.ai_operator_persistence import (
+    persist_operator_decision,
 )
 from btcts.apps.operator_ui.components.ai_operator_presenter import (
-    build_decision_state,
     build_display_state,
+)
+from btcts.apps.operator_ui.components.ai_operator_display_payloads import (
+    build_operator_display_payloads,
+)
+from btcts.apps.operator_ui.components.ai_operator_display_sources import (
+    load_operator_display_sources,
+)
+from btcts.apps.operator_ui.components.ai_operator_runtime_state import (
+    ensure_operator_session_state,
+    load_operator_runtime_state,
+)
+from btcts.apps.operator_ui.components.ai_operator_support_contract import (
+    build_operator_support_contract,
 )
 
 from btcts.apps.operator_ui.ui_text import get_text
-from btcts.apps.operator_ui.ui_time import format_ui_ts
 
 
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
-    if "ai_operator_mode" not in st.session_state:
-        st.session_state.ai_operator_mode = default_mode()
-
-    if "ai_operator_memory" not in st.session_state:
-        st.session_state.ai_operator_memory = load_recent_memory(max_items=8)
+    ensure_operator_session_state(st.session_state)
 
     st.markdown(f"### {get_text(lang, 'ai_operator_title')}")
 
-    state = analyze_operator_state()
-    if not state:
+    runtime_state = load_operator_runtime_state(st.session_state)
+    if not runtime_state:
         st.warning(get_text(lang, "ai_operator_missing_data"))
         st.divider()
         return
 
-    summary_widget = load_market_summary_widget_model()
-    prediction_widget = load_prediction_summary_widget_model()
+    state = runtime_state["state"]
+    operator_memory = runtime_state["memory"]
 
-    latest_memory_entry = {
-        "spread": state["spread"],
-        "imbalance": state["imbalance"],
-        "delta": state["delta"],
-        "wall_ratio": state["wall_ratio"],
-    }
+    display_sources = load_operator_display_sources()
+    summary_widget = display_sources["summary_widget"]
+    prediction_widget = display_sources["prediction_widget"]
 
-    memory = st.session_state.ai_operator_memory
-    if not memory or any(
-        abs(latest_memory_entry[k] - memory[0][k]) > 1e-9
-        for k in latest_memory_entry
-    ):
-        st.session_state.ai_operator_memory = append_memory(
-            latest_memory_entry,
-            max_items_hint=8,
-        )
+    display_payloads = build_operator_display_payloads(
+        summary_widget=summary_widget,
+        prediction_widget=prediction_widget,
+        watch_note=st.session_state.get("ai_operator_watch_note"),
+        is_live_market=False,
+    )
+    operator_explanation_note = display_payloads["operator_explanation_note"]
 
-    action = operator_action(state)
-    risk = operator_risk(state)
-
-    operator_prompt = get_text(lang, "ai_operator_prompt")
-    answer, runtime_source = generate_answer(
-        mode=st.session_state.ai_operator_mode,
+    advisory_answer = read_operator_advisory_answer(
         lang=lang,
-        prompt=operator_prompt,
-        state=state,
-        note="",
-        memory=st.session_state.ai_operator_memory,
+        ai_mode=st.session_state.ai_operator_mode,
+        operator_prompt=get_text(lang, "ai_operator_prompt"),
         intent=get_text(lang, "ai_conversation_intent_decide"),
         style=get_text(lang, "ai_conversation_style_normal"),
-    )
-
-    decision_state = build_decision_state(
         state=state,
-        action=action,
-        risk=risk,
+        memory=operator_memory,
+        note=operator_explanation_note,
+    )
+    answer = advisory_answer["answer"]
+    runtime_source = advisory_answer["runtime_source"]
+    advisory_note_used = advisory_answer["advisory_note_used"]
+
+    support_contract = build_operator_support_contract(
+        state=state,
         runtime_source=runtime_source,
     )
-    decision_row = decision_state["decision_row"]
-    operator_context = decision_state["operator_context"]
+    action = support_contract["action"]
+    risk = support_contract["risk"]
+    decision_row = support_contract["decision_row"]
+    support_context = support_contract["support_context"]
+    research_replay_context = build_research_replay_context(support_context)
+    watch_item = build_watch_item(support_context)
 
-    merged_decisions, persisted = append_decision(
+    persist_operator_decision(
         decision_row,
+        st.session_state,
         max_items_hint=20,
     )
-    st.session_state.ai_operator_decision_log = merged_decisions
-    st.session_state.ai_operator_decision_persisted = persisted
 
     display_state = build_display_state(
         lang=lang,
         state=state,
+        action=action,
+        risk=risk,
         answer=answer,
         runtime_source=runtime_source,
         ai_mode=st.session_state.ai_operator_mode,
     )
     display_ai_mode = display_state["display_ai_mode"]
     is_live_market = display_state["is_live_market"]
+    display_action_label = display_state["display_action_label"]
+    display_risk_label = display_state["display_risk_label"]
+    display_notice_kind = display_state["display_notice_kind"]
     display_answer = display_state["display_answer"]
+    status_caption = display_state["status_caption"]
+    runtime_caption = display_state["runtime_caption"]
+
+    display_payloads = build_operator_display_payloads(
+        summary_widget=summary_widget,
+        prediction_widget=prediction_widget,
+        watch_note=st.session_state.get("ai_operator_watch_note"),
+        is_live_market=is_live_market,
+    )
+    watch_note_caption = display_payloads["watch_note_caption"]
+    summary_caption = display_payloads["summary_caption"]
+    prediction_lines = display_payloads["prediction_lines"]
 
     c1, c2, c3 = st.columns(3)
-    c1.metric(get_text(lang, "ai_operator_action"), operator_action_label(lang, action))
-    c2.metric(get_text(lang, "ai_operator_risk"), operator_risk_label(lang, risk))
+    c1.metric(get_text(lang, "ai_operator_action"), display_action_label)
+    c2.metric(get_text(lang, "ai_operator_risk"), display_risk_label)
     c3.metric(get_text(lang, "ai_operator_mode"), display_ai_mode)
 
-    if runtime_source == "fallback-local" and not is_live_market:
+    if display_notice_kind == "warning":
         st.warning(display_answer)
     else:
         st.info(display_answer)
 
-    st.caption(
-        f"regime={state['regime']} / best_strategy={state['best_strategy']} / "
-        f"pressure_bias={state['pressure_bias']} / ts={format_ui_ts(state['event_ts'], lang)}"
-    )
-    if is_live_market:
-        st.caption(
-            f"{get_text(lang, 'ai_runtime_source')}=live-local / "
-            f"market_source={state.get('data_source', 'unknown')}"
-        )
-    else:
-        st.caption(
-            f"{get_text(lang, 'ai_runtime_source')}={runtime_source} / "
-            f"market_source={state.get('data_source', 'unknown')}"
-        )
+    st.caption(status_caption)
+    st.caption(runtime_caption)
 
     b1, b2, b3, b4 = st.columns(4)
 
@@ -157,7 +147,7 @@ def render():
             get_text(lang, "ai_operator_open_research"),
             key="ai_operator_open_research",
         ):
-            open_research_from_operator_context(operator_context)
+            open_research_from_replay_context(research_replay_context)
 
     with b3:
         if st.button(
@@ -171,21 +161,17 @@ def render():
             get_text(lang, "ai_operator_mark_as_watch"),
             key="ai_operator_mark_watch",
         ):
-            mark_as_watch(operator_context)
+            mark_watch_item(watch_item)
 
-    watch_note = st.session_state.get("ai_operator_watch_note")
-    if watch_note and not is_live_market:
-        st.caption(
-            f"watch ts={watch_note.get('ts')} / "
-            f"regime={watch_note.get('regime')} / "
-            f"action={watch_note.get('action')} / "
-            f"risk={watch_note.get('risk')}"
-        )
+    if watch_note_caption:
+        st.caption(watch_note_caption)
 
-    if summary_widget:
-        st.caption(summary_widget_caption(summary_widget))
+    if summary_caption:
+        st.caption(summary_caption)
 
-    prediction_lines = prediction_snapshot_lines(prediction_widget)
+    if advisory_note_used:
+        st.caption("advisory context prepared")
+
     if prediction_lines:
         st.markdown("**Prediction snapshot**")
         for line in prediction_lines:

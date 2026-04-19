@@ -115,6 +115,9 @@ def build_prediction_evaluation_entry(
     predicted_regime_state = None
     predicted_confidence = None
     predicted_caution_level = None
+    predicted_invalidation_state = None
+    predicted_scenario_switch_hint = None
+    predicted_scenario_trace = {}
     market_uid = None
     event_ts = None
 
@@ -122,6 +125,9 @@ def build_prediction_evaluation_entry(
         predicted_regime_state = scenario_output.current_regime_state
         predicted_confidence = scenario_output.current_confidence
         predicted_caution_level = scenario_output.current_caution_level
+        predicted_invalidation_state = scenario_output.invalidation_state
+        predicted_scenario_switch_hint = scenario_output.scenario_switch_hint
+        predicted_scenario_trace = dict(scenario_output.scenario_trace or {})
         market_uid = scenario_output.market_uid
         event_ts = scenario_output.event_ts
 
@@ -173,6 +179,9 @@ def build_prediction_evaluation_entry(
         "confidence_gap": confidence_gap,
         "confidence_gap_signal": _resolve_confidence_gap_signal(confidence_gap),
         "predicted_caution_level": predicted_caution_level,
+        "predicted_invalidation_state": predicted_invalidation_state,
+        "predicted_scenario_switch_hint": predicted_scenario_switch_hint,
+        "predicted_scenario_trace": predicted_scenario_trace,
         "realized_caution_level": realized_caution_level,
         "caution_gap": _resolve_caution_gap(
             predicted_caution_level=predicted_caution_level,

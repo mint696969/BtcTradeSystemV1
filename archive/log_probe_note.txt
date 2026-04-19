@@ -1,0 +1,4 @@
+# path: ./archive/log_probe_note.txt
+# desc: Archived text artifact.
+
+reading uploaded regression log

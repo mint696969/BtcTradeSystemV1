@@ -82,6 +82,9 @@ def build_prediction_replay_feedback(
         "confidence_review": _safe_str(calibration_review.get("confidence_review")) or "unknown",
         "caution_review": _safe_str(calibration_review.get("caution_review")) or "unknown",
         "invalidation_review": _safe_str(calibration_review.get("invalidation_review")) or "unknown",
+        "scenario_trace_focus": _safe_str(
+            calibration_review.get("scenario_trace_focus")
+        ) or "unknown",
         "followup_actions": _normalize_followup_actions(
             calibration_review.get("followup_actions")
         ),

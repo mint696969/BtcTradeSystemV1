@@ -35,6 +35,18 @@ def _safe_float(value: Any) -> float | None:
         return None
 
 
+def _safe_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except Exception:
+        parsed = _safe_float(value)
+        if parsed is None:
+            return None
+        return int(parsed)
+
+
 def _clamp_confidence(value: float) -> float:
     if value < 0.0:
         return 0.0
@@ -164,6 +176,177 @@ def _resolve_replay_feedback_caution_adjustment(
     if review_priority == "high":
         return (1, "raise_once_high_priority")
     return (1, "raise_once")
+
+
+def _resolve_replay_feedback_invalidation_profile(
+    prediction_input: PredictionSystemInput | None,
+) -> dict[str, float]:
+    defaults = {
+        "minimum_entry_count": 2.0,
+        "raise_review_score": 1.0,
+        "lower_review_score": -1.0,
+        "missed_ratio_medium": 0.34,
+        "missed_ratio_high": 0.60,
+        "missed_ratio_medium_score": 1.0,
+        "missed_ratio_high_score": 2.0,
+        "high_priority_ratio_trigger": 0.50,
+        "high_priority_ratio_score": 1.0,
+        "trace_focus_switch_bias_score": 0.5,
+        "trace_focus_fragility_bias_score": 0.35,
+        "trace_focus_watch_bias_score": 0.2,
+        "trace_focus_context_bias_score": 0.1,
+    }
+
+    if prediction_input is None:
+        return defaults
+
+    replay_feedback = dict(
+        prediction_input.evidence_bundle.external_context.get("replay_feedback") or {}
+    )
+    profile = replay_feedback.get("invalidation_profile")
+    if not isinstance(profile, dict):
+        return defaults
+
+    merged = dict(defaults)
+    for key in defaults:
+        parsed = _safe_float(profile.get(key))
+        if parsed is not None:
+            merged[key] = parsed
+    return merged
+
+
+def _resolve_replay_feedback_trace_focus_material(
+    prediction_input: PredictionSystemInput | None,
+) -> dict[str, Any]:
+    defaults = {
+        "focus": "unknown",
+        "kind": "none",
+        "direction": "neutral",
+        "strength": 0.0,
+    }
+
+    if prediction_input is None:
+        return defaults
+
+    replay_feedback = dict(
+        prediction_input.evidence_bundle.external_context.get("replay_feedback") or {}
+    )
+    focus = _safe_str(replay_feedback.get("scenario_trace_focus")) or "unknown"
+    if focus in {"unknown", "none"}:
+        return {
+            "focus": focus,
+            "kind": "none",
+            "direction": "neutral",
+            "strength": 0.0,
+        }
+
+    if focus.startswith("switch_reason:"):
+        focus_value = focus.split(":", 1)[1]
+        if focus_value in {
+            "watch_reversal_path",
+            "prepare_reversal_switch",
+            "prepare_transition_switch",
+            "execute_transition_switch",
+        }:
+            return {
+                "focus": focus,
+                "kind": "switch_reason",
+                "direction": "switch_bias",
+                "strength": 1.0,
+            }
+        return {
+            "focus": focus,
+            "kind": "switch_reason",
+            "direction": "watch_bias",
+            "strength": 0.5,
+        }
+
+    if focus.startswith("regime_decision:"):
+        focus_value = focus.split(":", 1)[1]
+        if "weakening" in focus_value or "reanchor" in focus_value:
+            return {
+                "focus": focus,
+                "kind": "regime_decision",
+                "direction": "fragility_bias",
+                "strength": 0.75,
+            }
+        return {
+            "focus": focus,
+            "kind": "regime_decision",
+            "direction": "context_bias",
+            "strength": 0.5,
+        }
+
+    return {
+        "focus": focus,
+        "kind": "other",
+        "direction": "neutral",
+        "strength": 0.25,
+    }
+
+
+def _resolve_replay_feedback_invalidation_adjustment(
+    prediction_input: PredictionSystemInput | None,
+) -> tuple[int, str, float]:
+    if prediction_input is None:
+        return (0, "none", 0.0)
+
+    replay_feedback = dict(
+        prediction_input.evidence_bundle.external_context.get("replay_feedback") or {}
+    )
+    if not replay_feedback:
+        return (0, "none", 0.0)
+
+    profile = _resolve_replay_feedback_invalidation_profile(prediction_input)
+
+    entry_count = float(_safe_int(replay_feedback.get("entry_count")) or 0)
+    if entry_count < profile["minimum_entry_count"]:
+        return (0, "insufficient_entries", 0.0)
+
+    missed_count = float(_safe_int(replay_feedback.get("missed_count")) or 0)
+    high_priority_count = float(_safe_int(replay_feedback.get("high_priority_count")) or 0)
+    invalidation_review = _safe_str(replay_feedback.get("invalidation_review"))
+    trace_focus_material = _resolve_replay_feedback_trace_focus_material(
+        prediction_input
+    )
+
+    score = 0.0
+
+    if invalidation_review == "raise_invalidation_sensitivity":
+        score += profile["raise_review_score"]
+    elif invalidation_review == "lower_invalidation_sensitivity":
+        score += profile["lower_review_score"]
+
+    missed_ratio = missed_count / entry_count if entry_count > 0 else 0.0
+    high_priority_ratio = high_priority_count / entry_count if entry_count > 0 else 0.0
+
+    if missed_ratio >= profile["missed_ratio_high"]:
+        score += profile["missed_ratio_high_score"]
+    elif missed_ratio >= profile["missed_ratio_medium"]:
+        score += profile["missed_ratio_medium_score"]
+
+    if high_priority_ratio >= profile["high_priority_ratio_trigger"]:
+        score += profile["high_priority_ratio_score"]
+
+    trace_focus_direction = _safe_str(trace_focus_material.get("direction")) or "neutral"
+    if trace_focus_direction == "switch_bias":
+        score += profile["trace_focus_switch_bias_score"]
+    elif trace_focus_direction == "fragility_bias":
+        score += profile["trace_focus_fragility_bias_score"]
+    elif trace_focus_direction == "watch_bias":
+        score += profile["trace_focus_watch_bias_score"]
+    elif trace_focus_direction == "context_bias":
+        score += profile["trace_focus_context_bias_score"]
+
+    rounded_score = round(score, 2)
+
+    if rounded_score >= 3.0:
+        return (2, "raise_twice", rounded_score)
+    if rounded_score >= 1.0:
+        return (1, "raise_once", rounded_score)
+    if rounded_score <= -1.0:
+        return (-1, "lower_once", rounded_score)
+    return (0, "none", rounded_score)
 
 
 def _apply_caution_adjustment(
@@ -387,6 +570,9 @@ def _build_outlooks(
 
 def _build_invalidation_signals(
     prediction_input: PredictionSystemInput | None,
+    *,
+    replay_feedback_invalidation_adjustment: int = 0,
+    replay_feedback_invalidation_policy: str = "none",
 ) -> tuple[str, ...]:
     if prediction_input is None:
         return ("prediction_input_absent",)
@@ -423,6 +609,11 @@ def _build_invalidation_signals(
     if turning_point_risk in {"medium", "high"}:
         out.append(f"turning_point_risk:{turning_point_risk}")
 
+    if replay_feedback_invalidation_adjustment != 0:
+        out.append(
+            f"replay_feedback_invalidation:{replay_feedback_invalidation_policy}"
+        )
+
     for family in prediction_input.evidence_trace.missing_families:
         if family != "market_summary_anchor":
             out.append(f"missing:{family}")
@@ -434,6 +625,7 @@ def _resolve_invalidation_state(
     *,
     current_regime_state: str,
     current_hypothesis_health: str,
+    replay_feedback_invalidation_adjustment: int,
 ) -> str:
     if current_hypothesis_health in {
         "stable",
@@ -442,34 +634,71 @@ def _resolve_invalidation_state(
         "invalidated",
         "scenario_switch_required",
     }:
-        return current_hypothesis_health
+        base_state = current_hypothesis_health
+    elif current_regime_state == "transition":
+        base_state = "scenario_switch_required"
+    elif current_regime_state == "reversal_watch":
+        base_state = "caution_increase"
+    elif current_regime_state == "unstable":
+        base_state = "degraded"
+    elif current_regime_state == "no_trade":
+        base_state = "invalidated"
+    else:
+        base_state = "unknown"
 
-    if current_regime_state == "transition":
-        return "scenario_switch_required"
-    if current_regime_state == "reversal_watch":
+    if replay_feedback_invalidation_adjustment <= 0:
+        return base_state
+
+    if base_state == "stable":
         return "caution_increase"
-    if current_regime_state == "unstable":
+    if (
+        base_state == "caution_increase"
+        and replay_feedback_invalidation_adjustment >= 2
+    ):
         return "degraded"
-    if current_regime_state == "no_trade":
-        return "invalidated"
-    return "unknown"
+    return base_state
 
 
 def _resolve_scenario_switch_hint(
     *,
     current_regime_state: str,
     current_hypothesis_health: str,
+    invalidation_state: str,
+    replay_feedback_invalidation_adjustment: int,
 ) -> str:
-    if current_regime_state == "continuation" and current_hypothesis_health == "stable":
+    if current_regime_state == "continuation":
+        if invalidation_state == "stable":
+            return "hold_primary"
+        if invalidation_state == "caution_increase":
+            if replay_feedback_invalidation_adjustment > 0:
+                return "tighten_primary_watch"
+            return "hold_primary"
+        if invalidation_state == "degraded":
+            return "prepare_alternate_path"
+        if invalidation_state in {"invalidated", "scenario_switch_required"}:
+            return "exit_primary_bias"
         return "hold_primary"
+
     if current_regime_state == "reversal_watch":
+        if invalidation_state in {"degraded", "invalidated", "scenario_switch_required"}:
+            return "prepare_reversal_switch"
         return "watch_reversal_path"
+
     if current_regime_state == "transition":
+        if invalidation_state == "scenario_switch_required":
+            return "execute_transition_switch"
         return "prepare_transition_switch"
+
     if current_regime_state == "unstable":
+        if invalidation_state in {"invalidated", "scenario_switch_required"}:
+            return "rebuild_after_instability"
+        if current_hypothesis_health == "degraded":
+            return "reduce_participation"
         return "reduce_participation"
+
     if current_regime_state == "no_trade":
         return "maintain_no_trade"
+
     return "unknown"
 
 
@@ -500,6 +729,83 @@ def _build_evidence_trace_summary(
     }
 
 
+def _build_scenario_trace(
+    *,
+    prediction_input: PredictionSystemInput | None,
+    current_regime_state: str,
+    current_hypothesis_health: str,
+    current_caution_level: str,
+    invalidation_state: str,
+    scenario_switch_hint: str,
+    replay_feedback_caution_adjustment: int,
+    replay_feedback_caution_adjustment_policy: str,
+    replay_feedback_invalidation_adjustment: int,
+    replay_feedback_invalidation_policy: str,
+    replay_feedback_invalidation_score: float,
+    replay_feedback_scenario_trace_focus: str,
+    replay_feedback_trace_focus_material: dict[str, Any],
+) -> dict[str, Any]:
+    if prediction_input is None:
+        return {
+            "trace_type": "prediction_scenario_trace",
+            "trace_version": "phase3.v1alpha1",
+            "regime_decision": "prediction_input_absent",
+            "hypothesis_health_path": current_hypothesis_health,
+            "caution_path": current_caution_level,
+            "invalidation_path": invalidation_state,
+            "switch_reason": scenario_switch_hint,
+            "replay_feedback_effect": {
+                "caution_adjustment": replay_feedback_caution_adjustment,
+                "caution_policy": replay_feedback_caution_adjustment_policy,
+                "invalidation_adjustment": replay_feedback_invalidation_adjustment,
+                "invalidation_policy": replay_feedback_invalidation_policy,
+                "invalidation_score": replay_feedback_invalidation_score,
+                "scenario_trace_focus": replay_feedback_scenario_trace_focus,
+                "trace_focus_material": dict(replay_feedback_trace_focus_material),
+            },
+        }
+
+    bundle = prediction_input.evidence_bundle
+    summary = bundle.market_summary
+    regime_turning_point = dict(bundle.regime_turning_point or {})
+
+    if summary is None:
+        regime_decision = "market_summary_absent"
+    elif summary.interpretation_bucket == "reanchor_required":
+        regime_decision = "summary_reanchor_required"
+    elif summary.interpretation_bucket == "observe_only":
+        regime_decision = "summary_observe_only"
+    elif summary.continuity_state == "resynced":
+        regime_decision = "continuity_resynced"
+    else:
+        transition_sign = _safe_str(regime_turning_point.get("transition_sign"))
+        turning_point_risk = _safe_str(regime_turning_point.get("turning_point_risk"))
+        regime_decision = (
+            f"transition_sign:{transition_sign}"
+            if transition_sign is not None
+            else f"turning_point_risk:{turning_point_risk or 'low'}"
+        )
+
+    return {
+        "trace_type": "prediction_scenario_trace",
+        "trace_version": "phase3.v1alpha1",
+        "regime_decision": regime_decision,
+        "hypothesis_health_path": current_hypothesis_health,
+        "caution_path": current_caution_level,
+        "invalidation_path": invalidation_state,
+        "switch_reason": scenario_switch_hint,
+        "replay_feedback_effect": {
+            "caution_adjustment": replay_feedback_caution_adjustment,
+            "caution_policy": replay_feedback_caution_adjustment_policy,
+            "invalidation_adjustment": replay_feedback_invalidation_adjustment,
+            "invalidation_policy": replay_feedback_invalidation_policy,
+            "invalidation_score": replay_feedback_invalidation_score,
+            "scenario_trace_focus": replay_feedback_scenario_trace_focus,
+            "trace_focus_material": dict(replay_feedback_trace_focus_material),
+        },
+    }
+
+
 def _build_replay_feedback_summary(
     prediction_input: PredictionSystemInput | None,
 ) -> dict[str, Any] | None:
@@ -515,7 +821,13 @@ def _build_replay_feedback_summary(
     return {
         "review_priority": _safe_str(replay_feedback.get("review_priority")),
         "primary_focus": _safe_str(replay_feedback.get("primary_focus")),
+        "invalidation_review": _safe_str(replay_feedback.get("invalidation_review")),
+        "scenario_trace_focus": _safe_str(
+            replay_feedback.get("scenario_trace_focus")
+        ),
         "entry_count": replay_feedback.get("entry_count"),
+        "missed_count": replay_feedback.get("missed_count"),
+        "high_priority_count": replay_feedback.get("high_priority_count"),
         "average_confidence_gap": replay_feedback.get("average_confidence_gap"),
         "average_caution_gap": replay_feedback.get("average_caution_gap"),
     }
@@ -582,19 +894,44 @@ def build_prediction_scenario_output(
         current_regime_state=current_regime_state,
         current_caution_level=current_caution_level,
     )
+    (
+        replay_feedback_invalidation_adjustment,
+        replay_feedback_invalidation_policy,
+        replay_feedback_invalidation_score,
+    ) = _resolve_replay_feedback_invalidation_adjustment(prediction_input)
+    replay_feedback = {}
+    if prediction_input is not None:
+        replay_feedback = dict(
+            prediction_input.evidence_bundle.external_context.get("replay_feedback")
+            or {}
+        )
+    replay_feedback_scenario_trace_focus = (
+        _safe_str(replay_feedback.get("scenario_trace_focus")) or "unknown"
+    )
+    replay_feedback_trace_focus_material = (
+        _resolve_replay_feedback_trace_focus_material(prediction_input)
+    )
+
     current_confidence = _resolve_current_confidence(
         prediction_input=prediction_input,
         current_regime_state=current_regime_state,
         current_caution_level=current_caution_level,
     )
-    invalidation_signals = _build_invalidation_signals(prediction_input)
+    invalidation_signals = _build_invalidation_signals(
+        prediction_input,
+        replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
+        replay_feedback_invalidation_policy=replay_feedback_invalidation_policy,
+    )
     invalidation_state = _resolve_invalidation_state(
         current_regime_state=current_regime_state,
         current_hypothesis_health=current_hypothesis_health,
+        replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
     )
     scenario_switch_hint = _resolve_scenario_switch_hint(
         current_regime_state=current_regime_state,
         current_hypothesis_health=current_hypothesis_health,
+        invalidation_state=invalidation_state,
+        replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
     )
 
     if prediction_input is None:
@@ -607,12 +944,34 @@ def build_prediction_scenario_output(
             invalidation_state=invalidation_state,
             invalidation_signals=invalidation_signals,
             scenario_switch_hint=scenario_switch_hint,
+            scenario_trace=_build_scenario_trace(
+                prediction_input=prediction_input,
+                current_regime_state=current_regime_state,
+                current_hypothesis_health=current_hypothesis_health,
+                current_caution_level=current_caution_level,
+                invalidation_state=invalidation_state,
+                scenario_switch_hint=scenario_switch_hint,
+                replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
+                replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
+                replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
+                replay_feedback_invalidation_policy=replay_feedback_invalidation_policy,
+                replay_feedback_invalidation_score=replay_feedback_invalidation_score,
+                replay_feedback_scenario_trace_focus=replay_feedback_scenario_trace_focus,
+                replay_feedback_trace_focus_material=replay_feedback_trace_focus_material,
+            ),
             evidence=_build_evidence(prediction_input),
             diagnostics={
                 "builder_type": "prediction_scenario_output",
                 "active_family_count": 0,
                 "missing_family_count": 0,
                 "caution_flag_count": 0,
+                "replay_feedback_invalidation_adjustment": replay_feedback_invalidation_adjustment,
+                "replay_feedback_invalidation_adjustment_policy": replay_feedback_invalidation_policy,
+                "replay_feedback_invalidation_score": replay_feedback_invalidation_score,
+                "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
+                "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
+                "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
+                "replay_feedback_trace_focus_strength": replay_feedback_trace_focus_material["strength"],
                 **dict(inp.diagnostics or {}),
             },
         )
@@ -636,6 +995,21 @@ def build_prediction_scenario_output(
         invalidation_state=invalidation_state,
         invalidation_signals=invalidation_signals,
         scenario_switch_hint=scenario_switch_hint,
+        scenario_trace=_build_scenario_trace(
+            prediction_input=prediction_input,
+            current_regime_state=current_regime_state,
+            current_hypothesis_health=current_hypothesis_health,
+            current_caution_level=current_caution_level,
+            invalidation_state=invalidation_state,
+            scenario_switch_hint=scenario_switch_hint,
+            replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
+            replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
+            replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
+            replay_feedback_invalidation_policy=replay_feedback_invalidation_policy,
+            replay_feedback_invalidation_score=replay_feedback_invalidation_score,
+            replay_feedback_scenario_trace_focus=replay_feedback_scenario_trace_focus,
+            replay_feedback_trace_focus_material=replay_feedback_trace_focus_material,
+        ),
         evidence=_build_evidence(prediction_input),
         evidence_trace=prediction_input.evidence_trace,
         diagnostics={
@@ -652,6 +1026,13 @@ def build_prediction_scenario_output(
             ),
             "replay_feedback_caution_adjustment": replay_feedback_caution_adjustment,
             "replay_feedback_caution_adjustment_policy": replay_feedback_caution_adjustment_policy,
+            "replay_feedback_invalidation_adjustment": replay_feedback_invalidation_adjustment,
+            "replay_feedback_invalidation_adjustment_policy": replay_feedback_invalidation_policy,
+            "replay_feedback_invalidation_score": replay_feedback_invalidation_score,
+            "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
+            "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
+            "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
+            "replay_feedback_trace_focus_strength": replay_feedback_trace_focus_material["strength"],
             **dict(inp.diagnostics or {}),
         },
     )

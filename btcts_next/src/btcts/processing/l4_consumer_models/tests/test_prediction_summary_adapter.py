@@ -41,6 +41,8 @@ def main() -> int:
             "notable_events": ["fresh_source"],
             "alert_candidates": ["interpretation_review_required"],
             "health_digest_present": True,
+            "trace_regime_decision": "transition_sign:weakening_continuation",
+            "trace_switch_reason": "watch_reversal_path",
         },
         diagnostics={
             "health_digest_present": True,
@@ -66,7 +68,11 @@ def main() -> int:
     assert widget.health_caution_used_key == "true"
     assert widget.notable_tags == ["fresh_source"]
     assert widget.alert_tags == ["interpretation_review_required"]
-
+    assert widget.trace_regime_decision_key == "transition_sign:weakening_continuation"
+    assert widget.trace_switch_reason_key == "watch_reversal_path"
+    assert widget.trace_summary_key == "transition_sign:weakening_continuation / watch_reversal_path"
+    assert widget.trace_focus_summary_key == "none"
+    
     payload = prediction_summary_status_payload(summary)
     assert payload["prediction_type"] == "shared_prediction_summary"
     assert payload["prediction_version"] == "phase3.v1alpha1"

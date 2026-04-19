@@ -28,6 +28,14 @@ class PredictionSummaryWidgetModel:
     health_caution_used_key: str = "false"
     notable_tags: list[str] = field(default_factory=list)
     alert_tags: list[str] = field(default_factory=list)
+    current_regime_state_key: str = "unknown"
+    current_hypothesis_health_key: str = "unknown"
+    invalidation_state_key: str = "unknown"
+    scenario_switch_hint_key: str = "unknown"
+    trace_regime_decision_key: str = "unknown"
+    trace_switch_reason_key: str = "unknown"
+    trace_summary_key: str = "unknown"
+    trace_focus_summary_key: str = "none"
 
 
 def _key(value: Any, *, fallback: str) -> str:
@@ -62,6 +70,29 @@ def prediction_summary_widget_model(
         )
 
     evidence = dict(summary.evidence or {})
+
+    trace_regime_decision = evidence.get("trace_regime_decision")
+    trace_switch_reason = evidence.get("trace_switch_reason")
+
+    trace_summary_parts = []
+    if trace_regime_decision:
+        trace_summary_parts.append(str(trace_regime_decision))
+    if trace_switch_reason:
+        trace_summary_parts.append(str(trace_switch_reason))
+
+    trace_summary = " / ".join(trace_summary_parts) if trace_summary_parts else "unknown"
+
+    trace_focus_material = evidence.get("trace_focus_material") or {}
+    trace_focus_direction = str(trace_focus_material.get("direction") or "neutral")
+    trace_focus_strength = trace_focus_material.get("strength")
+
+    trace_focus_summary = "none"
+    if trace_focus_direction != "neutral":
+        if trace_focus_strength is not None:
+            trace_focus_summary = f"{trace_focus_direction}({trace_focus_strength})"
+        else:
+            trace_focus_summary = trace_focus_direction
+
     notable_tags = list(evidence.get("notable_events") or [])
     alert_tags = list(evidence.get("alert_candidates") or [])
     health_caution_used = bool(evidence.get("health_digest_present"))
@@ -99,6 +130,38 @@ def prediction_summary_widget_model(
         health_caution_used_key="true" if health_caution_used else "false",
         notable_tags=notable_tags,
         alert_tags=alert_tags,
+        current_regime_state_key=_key(
+            evidence.get("current_regime_state"),
+            fallback="unknown",
+        ),
+        current_hypothesis_health_key=_key(
+            evidence.get("current_hypothesis_health"),
+            fallback="unknown",
+        ),
+        invalidation_state_key=_key(
+            evidence.get("invalidation_state"),
+            fallback="unknown",
+        ),
+        scenario_switch_hint_key=_key(
+            evidence.get("scenario_switch_hint"),
+            fallback="unknown",
+        ),
+        trace_regime_decision_key=_key(
+            evidence.get("trace_regime_decision"),
+            fallback="unknown",
+        ),
+        trace_switch_reason_key=_key(
+            evidence.get("trace_switch_reason"),
+            fallback="unknown",
+        ),
+        trace_summary_key=_key(
+            trace_summary,
+            fallback="unknown",
+        ),
+        trace_focus_summary_key=_key(
+            trace_focus_summary,
+            fallback="none",
+        ),
     )
 
 

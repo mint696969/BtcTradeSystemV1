@@ -140,7 +140,11 @@ def main() -> int:
         assert scenario_output.evidence["replay_feedback_summary"] == {
             "review_priority": "normal",
             "primary_focus": "stability_review",
+            "invalidation_review": "keep_slow_invalidation",
+            "scenario_trace_focus": "none",
             "entry_count": 2,
+            "missed_count": 0,
+            "high_priority_count": 0,
             "average_confidence_gap": 0.0,
             "average_caution_gap": 0.0,
         }

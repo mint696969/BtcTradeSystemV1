@@ -37,6 +37,13 @@ def main() -> int:
         health_caution_used_key="true",
         notable_tags=["fresh_source"],
         alert_tags=["semantic_review"],
+        current_regime_state_key="reversal_watch",
+        current_hypothesis_health_key="caution_increase",
+        invalidation_state_key="caution_increase",
+        scenario_switch_hint_key="watch_reversal_path",
+        trace_regime_decision_key="transition_sign:weakening_continuation",
+        trace_switch_reason_key="watch_reversal_path",
+        trace_summary_key="transition_sign:weakening_continuation / watch_reversal_path",
     )
 
     lines = prediction_snapshot_lines(widget)
@@ -49,6 +56,16 @@ def main() -> int:
     assert "caution=medium" in lines
     assert "confidence=0.58" in lines
     assert "health_caution=on" in lines
+    assert "scenario_regime=reversal_watch" in lines
+    assert "hypothesis_health=caution_increase" in lines
+    assert "invalidation_state=caution_increase" in lines
+    assert "scenario_switch_hint=watch_reversal_path" in lines
+    assert "trace_regime_decision=transition_sign:weakening_continuation" in lines
+    assert "trace_switch_reason=watch_reversal_path" in lines
+    assert (
+        "trace_summary=transition_sign:weakening_continuation / watch_reversal_path"
+        in lines
+    )
 
     print("ok")
     return 0

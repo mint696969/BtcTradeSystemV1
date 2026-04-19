@@ -137,6 +137,26 @@ def main() -> int:
         "turning_point_risk:medium",
     )
     assert scenario_output.scenario_switch_hint == "watch_reversal_path"
+    assert scenario_output.scenario_trace["trace_type"] == "prediction_scenario_trace"
+    assert scenario_output.scenario_trace["trace_version"] == "phase3.v1alpha1"
+    assert scenario_output.scenario_trace["regime_decision"] == (
+        "transition_sign:weakening_continuation"
+    )
+    assert scenario_output.scenario_trace["hypothesis_health_path"] == "caution_increase"
+    assert scenario_output.scenario_trace["caution_path"] == "medium"
+    assert scenario_output.scenario_trace["invalidation_path"] == "caution_increase"
+    assert scenario_output.scenario_trace["switch_reason"] == "watch_reversal_path"
+    replay_feedback_effect = scenario_output.scenario_trace["replay_feedback_effect"]
+    assert replay_feedback_effect["caution_adjustment"] == 1
+    assert replay_feedback_effect["caution_policy"] == "raise_once_high_priority"
+    assert replay_feedback_effect["invalidation_adjustment"] == 0
+    assert replay_feedback_effect["invalidation_policy"] == "none"
+    assert replay_feedback_effect["invalidation_score"] == 0.0
+    assert replay_feedback_effect["scenario_trace_focus"] == "unknown"
+    assert replay_feedback_effect["trace_focus_material"]["focus"] == "unknown"
+    assert replay_feedback_effect["trace_focus_material"]["kind"] == "none"
+    assert replay_feedback_effect["trace_focus_material"]["direction"] == "neutral"
+    assert replay_feedback_effect["trace_focus_material"]["strength"] == 0.0
 
     assert scenario_output.evidence["market_summary_present"] is True
     assert scenario_output.evidence["health_digest_present"] is False
@@ -146,7 +166,11 @@ def main() -> int:
     assert scenario_output.evidence["replay_feedback_summary"] == {
         "review_priority": "high",
         "primary_focus": "confidence_downside_review",
+        "invalidation_review": "unknown",
+        "scenario_trace_focus": "unknown",
         "entry_count": 3,
+        "missed_count": 0,
+        "high_priority_count": 0,
         "average_confidence_gap": -0.18,
         "average_caution_gap": 1.0,
     }
@@ -180,6 +204,15 @@ def main() -> int:
     assert scenario_output.diagnostics["replay_feedback_caution_adjustment_policy"] == (
         "raise_once_high_priority"
     )
+    assert scenario_output.diagnostics["replay_feedback_invalidation_adjustment"] == 0
+    assert scenario_output.diagnostics["replay_feedback_invalidation_adjustment_policy"] == (
+        "none"
+    )
+    assert scenario_output.diagnostics["replay_feedback_invalidation_score"] == 0.0
+    assert scenario_output.diagnostics["replay_feedback_scenario_trace_focus"] == "unknown"
+    assert scenario_output.diagnostics["replay_feedback_trace_focus_kind"] == "none"
+    assert scenario_output.diagnostics["replay_feedback_trace_focus_direction"] == "neutral"
+    assert scenario_output.diagnostics["replay_feedback_trace_focus_strength"] == 0.0
     assert scenario_output.diagnostics["caller"] == "unit_test"
 
     blocked = build_prediction_scenario_output(PredictionScenarioBuildInput())

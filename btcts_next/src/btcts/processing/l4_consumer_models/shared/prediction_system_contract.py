@@ -74,6 +74,7 @@ class PredictionScenarioOutput:
     invalidation_state: str = "unknown"
     invalidation_signals: tuple[str, ...] = field(default_factory=tuple)
     scenario_switch_hint: str = "unknown"
+    scenario_trace: dict[str, Any] = field(default_factory=dict)
     evidence: dict[str, Any] = field(default_factory=dict)
     evidence_trace: PredictionEvidenceTrace = field(default_factory=PredictionEvidenceTrace)
     diagnostics: dict[str, Any] = field(default_factory=dict)

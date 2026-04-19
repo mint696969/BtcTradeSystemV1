@@ -1,3 +1,6 @@
+# path: ./archive/legacy_2026-04-04/docs/tools/watchdog_collector.ps1仕様書.md
+# desc: Archived note, specification, report, or reference document.
+
 watchdog_collector.ps1 仕様書（Phase1 / Supervisor）
 1. 目的
 

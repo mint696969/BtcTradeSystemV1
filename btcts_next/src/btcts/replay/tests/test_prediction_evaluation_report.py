@@ -27,6 +27,10 @@ def main() -> int:
                 "confidence_gap_signal": "balanced",
                 "confidence_bias_hint": "balanced",
                 "caution_bias_hint": "balanced",
+                "predicted_scenario_trace": {
+                    "regime_decision": "stable_continuation",
+                    "switch_reason": "hold_primary",
+                },
             },
             {
                 "regime_alignment": "partial",
@@ -36,6 +40,10 @@ def main() -> int:
                 "confidence_gap_signal": "overstated_confidence",
                 "confidence_bias_hint": "slightly_overstated",
                 "caution_bias_hint": "understated",
+                "predicted_scenario_trace": {
+                    "regime_decision": "weakening_continuation",
+                    "switch_reason": "watch_reversal_path",
+                },
             },
             {
                 "regime_alignment": "missed",
@@ -45,6 +53,10 @@ def main() -> int:
                 "confidence_gap_signal": "understated_confidence",
                 "confidence_bias_hint": "understated",
                 "caution_bias_hint": "balanced",
+                "predicted_scenario_trace": {
+                    "regime_decision": "weakening_continuation",
+                    "switch_reason": "watch_reversal_path",
+                },
             },
         ],
     )
@@ -82,6 +94,14 @@ def main() -> int:
         "balanced": 2,
         "understated": 1,
     }
+    assert report["scenario_trace_regime_decision_counts"] == {
+        "stable_continuation": 1,
+        "weakening_continuation": 2,
+    }
+    assert report["scenario_trace_switch_reason_counts"] == {
+        "hold_primary": 1,
+        "watch_reversal_path": 2,
+    }
 
     empty = build_prediction_evaluation_report("empty_eval", [])
     assert empty["name"] == "empty_eval"
@@ -97,6 +117,8 @@ def main() -> int:
     assert empty["confidence_gap_signal_counts"] == {}
     assert empty["confidence_bias_hint_counts"] == {}
     assert empty["caution_bias_hint_counts"] == {}
+    assert empty["scenario_trace_regime_decision_counts"] == {}
+    assert empty["scenario_trace_switch_reason_counts"] == {}
 
     print("ok")
     return 0

@@ -39,6 +39,8 @@ def build_prediction_evaluation_report(name: str, entries: list[dict]) -> dict:
     confidence_gap_signal_counts: dict[str, int] = {}
     confidence_bias_hint_counts: dict[str, int] = {}
     caution_bias_hint_counts: dict[str, int] = {}
+    scenario_trace_regime_decision_counts: dict[str, int] = {}
+    scenario_trace_switch_reason_counts: dict[str, int] = {}
 
     confidence_gap_values: list[float] = []
     caution_gap_values: list[float] = []
@@ -57,12 +59,30 @@ def build_prediction_evaluation_report(name: str, entries: list[dict]) -> dict:
         confidence_gap_signal = _safe_str(entry.get("confidence_gap_signal"))
         confidence_bias_hint = _safe_str(entry.get("confidence_bias_hint"))
         caution_bias_hint = _safe_str(entry.get("caution_bias_hint"))
+        scenario_trace = entry.get("predicted_scenario_trace") or {}
+        scenario_trace_regime_decision = None
+        scenario_trace_switch_reason = None
+        if isinstance(scenario_trace, dict):
+            scenario_trace_regime_decision = _safe_str(
+                scenario_trace.get("regime_decision")
+            )
+            scenario_trace_switch_reason = _safe_str(
+                scenario_trace.get("switch_reason")
+            )
 
         _bump(regime_alignment_counts, regime_alignment)
         _bump(replay_priority_counts, replay_priority)
         _bump(confidence_gap_signal_counts, confidence_gap_signal)
         _bump(confidence_bias_hint_counts, confidence_bias_hint)
         _bump(caution_bias_hint_counts, caution_bias_hint)
+        _bump(
+            scenario_trace_regime_decision_counts,
+            scenario_trace_regime_decision,
+        )
+        _bump(
+            scenario_trace_switch_reason_counts,
+            scenario_trace_switch_reason,
+        )
 
         if regime_alignment == "matched":
             matched_count += 1
@@ -102,4 +122,10 @@ def build_prediction_evaluation_report(name: str, entries: list[dict]) -> dict:
             sorted(confidence_bias_hint_counts.items())
         ),
         "caution_bias_hint_counts": dict(sorted(caution_bias_hint_counts.items())),
+        "scenario_trace_regime_decision_counts": dict(
+            sorted(scenario_trace_regime_decision_counts.items())
+        ),
+        "scenario_trace_switch_reason_counts": dict(
+            sorted(scenario_trace_switch_reason_counts.items())
+        ),
     }

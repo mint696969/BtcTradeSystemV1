@@ -34,6 +34,23 @@ def _safe_int(value: Any) -> int:
         return 0
 
 
+def _dominant_count_key(counts: dict[str, Any] | None) -> str:
+    if not isinstance(counts, dict):
+        return "unknown"
+
+    best_key = "unknown"
+    best_count = -1
+    for key, value in counts.items():
+        name = str(key).strip()
+        if not name:
+            continue
+        count = _safe_int(value)
+        if count > best_count:
+            best_key = name
+            best_count = count
+    return best_key
+
+
 def _resolve_review_priority(
     *,
     calibration_hint: PredictionCalibrationHint | None,
@@ -160,6 +177,34 @@ def _resolve_invalidation_review(
     return "keep_current_invalidation"
 
 
+def _resolve_scenario_trace_focus(
+    *,
+    evaluation_report: dict[str, Any],
+) -> str:
+    dominant_regime_decision = _dominant_count_key(
+        evaluation_report.get("scenario_trace_regime_decision_counts")
+    )
+    dominant_switch_reason = _dominant_count_key(
+        evaluation_report.get("scenario_trace_switch_reason_counts")
+    )
+    missed_count = _safe_int(evaluation_report.get("missed_count"))
+
+    if missed_count <= 0:
+        return "none"
+
+    if dominant_switch_reason in {
+        "watch_reversal_path",
+        "prepare_reversal_switch",
+        "execute_transition_switch",
+    }:
+        return f"switch_reason:{dominant_switch_reason}"
+
+    if dominant_regime_decision != "unknown":
+        return f"regime_decision:{dominant_regime_decision}"
+
+    return "none"
+
+
 def _build_followup_actions(
     *,
     primary_focus: str,
@@ -167,6 +212,7 @@ def _build_followup_actions(
     confidence_review: str,
     caution_review: str,
     invalidation_review: str,
+    scenario_trace_focus: str,
 ) -> tuple[str, ...]:
     out: list[str] = []
 
@@ -183,6 +229,8 @@ def _build_followup_actions(
         "keep_medium_invalidation",
     }:
         out.append(invalidation_review)
+    if scenario_trace_focus != "none":
+        out.append(f"trace_focus:{scenario_trace_focus}")
 
     return tuple(out or ["keep_current_course"])
 
@@ -213,6 +261,9 @@ def build_prediction_calibration_review(
         calibration_hint=calibration_hint,
         evaluation_report=evaluation_report,
     )
+    scenario_trace_focus = _resolve_scenario_trace_focus(
+        evaluation_report=evaluation_report,
+    )
 
     return {
         "review_type": "prediction_calibration_review",
@@ -222,18 +273,26 @@ def build_prediction_calibration_review(
         "confidence_review": confidence_review,
         "caution_review": caution_review,
         "invalidation_review": invalidation_review,
+        "scenario_trace_focus": scenario_trace_focus,
         "followup_actions": _build_followup_actions(
             primary_focus=primary_focus,
             review_priority=review_priority,
             confidence_review=confidence_review,
             caution_review=caution_review,
             invalidation_review=invalidation_review,
+            scenario_trace_focus=scenario_trace_focus,
         ),
         "diagnostics": {
             "builder_type": "prediction_calibration_review",
             "calibration_hint_present": calibration_hint is not None,
             "evaluation_report_present": bool(evaluation_report),
             "report_entry_count": _safe_int(evaluation_report.get("entry_count")),
+            "dominant_trace_regime_decision": _dominant_count_key(
+                evaluation_report.get("scenario_trace_regime_decision_counts")
+            ),
+            "dominant_trace_switch_reason": _dominant_count_key(
+                evaluation_report.get("scenario_trace_switch_reason_counts")
+            ),
             **dict(inp.diagnostics or {}),
         },
     }

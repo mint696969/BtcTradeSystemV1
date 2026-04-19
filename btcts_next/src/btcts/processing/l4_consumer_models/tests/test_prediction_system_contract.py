@@ -86,6 +86,15 @@ def main() -> int:
         invalidation_state="caution_increase",
         invalidation_signals=("continuity_weakening",),
         scenario_switch_hint="watch_reversal_path",
+        scenario_trace={
+            "trace_type": "prediction_scenario_trace",
+            "trace_version": "phase3.v1alpha1",
+            "regime_decision": "continuation_path",
+            "hypothesis_health_path": "stable",
+            "caution_path": "low",
+            "invalidation_path": "caution_increase",
+            "switch_reason": "watch_reversal_path",
+        },
         evidence={
             "market_summary_anchor_present": True,
             "health_digest_present": False,
@@ -111,6 +120,12 @@ def main() -> int:
     assert scenario_output.invalidation_state == "caution_increase"
     assert scenario_output.invalidation_signals == ("continuity_weakening",)
     assert scenario_output.scenario_switch_hint == "watch_reversal_path"
+    assert scenario_output.scenario_trace["trace_type"] == "prediction_scenario_trace"
+    assert scenario_output.scenario_trace["trace_version"] == "phase3.v1alpha1"
+    assert scenario_output.scenario_trace["regime_decision"] == "continuation_path"
+    assert scenario_output.scenario_trace["hypothesis_health_path"] == "stable"
+    assert scenario_output.scenario_trace["invalidation_path"] == "caution_increase"
+    assert scenario_output.scenario_trace["switch_reason"] == "watch_reversal_path"
     assert scenario_output.evidence["market_summary_anchor_present"] is True
     assert scenario_output.evidence_trace.active_families == (
         "market_summary_anchor",

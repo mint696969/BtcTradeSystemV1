@@ -1,0 +1,15 @@
+# path: ./archive/replay_exports/btc_bitflyer_replay_smoke_20260417T093702Z/manifest.json
+# desc: Archived project artifact.
+
+{
+  "name": "btc_bitflyer_replay_smoke",
+  "created_at_utc": "20260417T093702Z",
+  "source_paths": [
+    "D:\\btc_ts_hot\\data\\market_data\\exchange=bitflyer\\symbol=BTC_JPY\\type=market.orderbook.snapshot\\date=2026-04-17\\part-00001.jsonl"
+  ],
+  "results_path": "C:\\BtcTradeSystem\\tmp\\replay_exports\\btc_bitflyer_replay_smoke_20260417T093702Z\\replay_results.jsonl",
+  "report_path": "C:\\BtcTradeSystem\\tmp\\replay_exports\\btc_bitflyer_replay_smoke_20260417T093702Z\\replay_report.json",
+  "prediction_evaluation_report_path": null,
+  "prediction_evaluation_entry_count": 0,
+  "result_count": 37352
+}

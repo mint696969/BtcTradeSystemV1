@@ -25,6 +25,7 @@ def main() -> int:
                 "confidence_review": "lower_confidence_weight",
                 "caution_review": "raise_caution_weight",
                 "invalidation_review": "raise_invalidation_sensitivity",
+                "scenario_trace_focus": "switch_reason:watch_reversal_path",
                 "followup_actions": (
                     "schedule_replay_review",
                     "lower_confidence_weight",
@@ -51,6 +52,7 @@ def main() -> int:
     assert built["confidence_review"] == "lower_confidence_weight"
     assert built["caution_review"] == "raise_caution_weight"
     assert built["invalidation_review"] == "raise_invalidation_sensitivity"
+    assert built["scenario_trace_focus"] == "switch_reason:watch_reversal_path"
     assert built["followup_actions"] == (
         "schedule_replay_review",
         "lower_confidence_weight",
@@ -72,6 +74,7 @@ def main() -> int:
     )
     assert empty["review_priority"] == "normal"
     assert empty["primary_focus"] == "unknown"
+    assert empty["scenario_trace_focus"] == "unknown"
     assert empty["entry_count"] == 0
     assert empty["average_confidence_gap"] is None
     assert empty["followup_actions"] == ()
