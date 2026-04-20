@@ -152,6 +152,67 @@ def main() -> int:
             "caution=medium | "
             "confidence=0.72"
         )
+
+        tactic_payloads = payloads.build_operator_display_payloads(
+            summary_widget=None,
+            prediction_widget=None,
+            watch_note=None,
+            is_live_market=False,
+            tactic_context={
+                "primary_tactic_key": "reversal_prepare",
+                "proposal_state": "proposed",
+                "scenario_regime": "reversal_watch",
+                "rollback_ready": True,
+                "review_needed": True,
+                "diagnostics": {
+                    "parameter_trace": {"profile_kind": "candidate"},
+                    "selection_trace": {
+                        "selection_bias_tags": (
+                            "overlay:prefer_reversal_prepare",
+                        )
+                    },
+                },
+            },
+        )
+
+        assert tactic_payloads["tactic_context"] == {
+            "primary_tactic_key": "reversal_prepare",
+            "proposal_state": "proposed",
+            "scenario_regime": "reversal_watch",
+            "profile_kind": "candidate",
+            "rollback_ready": True,
+            "review_needed": True,
+            "selection_bias_tags": ("overlay:prefer_reversal_prepare",),
+        }
+        assert tactic_payloads["tactic_summary_lines"] == (
+            "operating_stance=reversal_prepare",
+            "scenario_regime=reversal_watch",
+            "proposal_state=proposed",
+            "profile_kind=candidate",
+            "review_needed=true",
+            "rollback_ready=true",
+            "selection_bias_tags=overlay:prefer_reversal_prepare",
+        )
+        assert tactic_payloads["tactic_explanation_note"] == (
+            "tactic_stance_context: "
+            "operating_stance=reversal_prepare | "
+            "scenario_regime=reversal_watch | "
+            "proposal_state=proposed | "
+            "profile_kind=candidate | "
+            "review_needed=true | "
+            "rollback_ready=true | "
+            "selection_bias_tags=overlay:prefer_reversal_prepare"
+        )
+        assert tactic_payloads["operator_explanation_note"] == (
+            "tactic_stance_context: "
+            "operating_stance=reversal_prepare | "
+            "scenario_regime=reversal_watch | "
+            "proposal_state=proposed | "
+            "profile_kind=candidate | "
+            "review_needed=true | "
+            "rollback_ready=true | "
+            "selection_bias_tags=overlay:prefer_reversal_prepare"
+        )
     finally:
         payloads.summary_widget_caption = original_summary_widget_caption
         payloads.prediction_snapshot_lines = original_prediction_snapshot_lines

@@ -42,6 +42,9 @@ def main() -> int:
     first_artifacts = builder.consume_result_artifacts(first)
     assert first_artifacts["evaluation_entry"] is None
     assert first_artifacts["calibration_review"] is None
+    assert first_artifacts["tactic_proposal_output"] is None
+    assert first_artifacts["tactic_review_record"] is None
+    assert first_artifacts["tactic_operation_record"] is None
 
     artifacts = builder.consume_result_artifacts(second)
 
@@ -66,6 +69,47 @@ def main() -> int:
     assert review["followup_actions"] == ("keep_slow_invalidation",)
     assert review["diagnostics"]["caller"] == "replay_prediction_artifact_builder"
     assert review["diagnostics"]["review_source"] == "cumulative_evaluation_entries"
+
+    tactic_proposal = artifacts["tactic_proposal_output"]
+    assert tactic_proposal is not None
+    assert tactic_proposal["proposal_type"] == "scenario_tactic_proposal_output"
+    assert tactic_proposal["source_kind"] == "prediction_scenario_output"
+    assert tactic_proposal["market_uid"] == "bitflyer.spot.BTC_JPY"
+    assert tactic_proposal["scenario_regime"] == "continuation"
+    assert tactic_proposal["primary_tactic_key"] in {
+        "observe_only",
+        "cautious_probe",
+        "continuation_follow",
+        "tighten_entry_gate",
+        "defensive_reduce_risk",
+        "maintain_no_trade",
+        "reversal_prepare",
+    }
+
+    tactic_review = artifacts["tactic_review_record"]
+    assert tactic_review is not None
+    assert tactic_review["review_type"] == "tactic_review_record"
+    assert tactic_review["selected_tactic_key"] == tactic_proposal["primary_tactic_key"]
+    assert tactic_review["decision_state"] == "proposed"
+    assert tactic_review["decision_reason"] == "replay_compare_capture"
+    assert tactic_review["diagnostics"]["caller"] == "replay_prediction_artifact_builder"
+    assert tactic_review["diagnostics"]["review_source"] == (
+        "pending_tactic_proposal_output"
+    )
+
+    tactic_operation = artifacts["tactic_operation_record"]
+    assert tactic_operation is not None
+    assert tactic_operation["operation_type"] == "tactic_operation_record"
+    assert tactic_operation["operation_state"] == "propose"
+    assert tactic_operation["selected_tactic_key"] == tactic_proposal["primary_tactic_key"]
+    assert tactic_operation["review_ref"] == tactic_review["review_id"]
+    assert tactic_operation["operation_reason"] == "replay_compare_capture"
+    assert tactic_operation["diagnostics"]["caller"] == (
+        "replay_prediction_artifact_builder"
+    )
+    assert tactic_operation["diagnostics"]["operation_source"] == (
+        "pending_tactic_review_record"
+    )
 
     print("ok")
     return 0

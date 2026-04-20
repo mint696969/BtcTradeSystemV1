@@ -95,12 +95,26 @@ def main() -> int:
         assert summary["processed_count"] == 2
         assert summary["prediction_evaluation_entry_count"] == 1
         assert summary["prediction_calibration_review_count"] == 1
+        assert summary["tactic_proposal_output_count"] == 1
+        assert summary["tactic_review_record_count"] == 1
+        assert summary["tactic_operation_record_count"] == 1
         assert len(session.prediction_evaluation_entries) == 1
         assert len(session.prediction_calibration_reviews) == 1
+        assert len(session.tactic_proposal_outputs) == 1
+        assert len(session.tactic_review_records) == 1
+        assert len(session.tactic_operation_records) == 1
         assert session.prediction_evaluation_entries[0]["entry_type"] == "prediction_evaluation_entry"
         assert session.prediction_evaluation_entries[0]["realized_max_adverse_bp"] == 0.0
         assert session.prediction_evaluation_entries[0]["realized_max_favorable_bp"] == 198.02
         assert session.prediction_calibration_reviews[0]["review_type"] == "prediction_calibration_review"
+        assert session.tactic_proposal_outputs[0]["proposal_type"] == (
+            "scenario_tactic_proposal_output"
+        )
+        assert session.tactic_review_records[0]["review_type"] == "tactic_review_record"
+        assert session.tactic_operation_records[0]["operation_type"] == (
+            "tactic_operation_record"
+        )
+        assert session.tactic_operation_records[0]["operation_state"] == "propose"
     finally:
         replay_runner.JsonlReplaySource = original_source
         replay_runner.ReplayEngine = original_engine

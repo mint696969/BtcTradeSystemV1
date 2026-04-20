@@ -15,11 +15,18 @@ def watch_jsonl_path() -> Path:
 
 
 def _normalize_watch(item: Dict[str, object]) -> Dict[str, object]:
+    tactic_summary_lines = tuple(
+        str(line).strip()
+        for line in (item.get("tactic_summary_lines") or ())
+        if str(line).strip()
+    )
+
     return {
         "ts": str(item.get("ts") or ""),
         "regime": str(item.get("regime") or ""),
         "action": str(item.get("action") or ""),
         "risk": str(item.get("risk") or ""),
+        "tactic_summary_lines": tactic_summary_lines,
     }
 
 
@@ -29,6 +36,8 @@ def _same_watch(a: Dict[str, object], b: Dict[str, object]) -> bool:
         and str(a.get("regime") or "") == str(b.get("regime") or "")
         and str(a.get("action") or "") == str(b.get("action") or "")
         and str(a.get("risk") or "") == str(b.get("risk") or "")
+        and tuple(a.get("tactic_summary_lines") or ())
+        == tuple(b.get("tactic_summary_lines") or ())
     )
 
 
@@ -42,7 +51,6 @@ def load_recent_watch_list(*, max_items: int = 12) -> List[Dict[str, object]]:
         except Exception:
             continue
 
-    out.reverse()
     return out[:max_items]
 
 

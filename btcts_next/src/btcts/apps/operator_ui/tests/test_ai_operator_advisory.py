@@ -44,6 +44,11 @@ def main() -> int:
                 "summary_context: caption=summary:market_summary\n"
                 "prediction_context: scenario_switch_hint=watch_reversal_path"
             ),
+            tactic_summary_lines=(
+                "operating_stance=reversal_prepare",
+                "scenario_regime=reversal_watch",
+                "proposal_state=proposed",
+            ),
         )
 
         assert built["answer"] == "mock-answer"
@@ -51,6 +56,12 @@ def main() -> int:
         assert built["advisory_note_used"] == (
             "Use the following explanation context when generating the advisory answer.\n"
             "Treat it as supporting context, not as a final decision contract.\n"
+            "Treat any tactic stance context as an operating stance proposal, not as an execution instruction.\n"
+            "Use the following tactic stance summary lines as ordered supporting context.\n"
+            "tactic_stance_summary_lines: "
+            "operating_stance=reversal_prepare | "
+            "scenario_regime=reversal_watch | "
+            "proposal_state=proposed\n"
             "watch_context: caption=watch ts=2026-04-17T02:30:00Z / "
             "regime=transition / action=trap_caution / risk=high\n"
             "summary_context: caption=summary:market_summary\n"
@@ -79,6 +90,7 @@ def main() -> int:
             },
             memory=[],
             note="",
+            tactic_summary_lines=(),
         )
 
         assert empty["answer"] == "mock-answer"

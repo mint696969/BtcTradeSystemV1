@@ -64,6 +64,18 @@ def run_replay(
             if calibration_review is not None:
                 session.add_prediction_calibration_review(calibration_review)
 
+            tactic_proposal_output = prediction_artifacts["tactic_proposal_output"]
+            if tactic_proposal_output is not None:
+                session.add_tactic_proposal_output(tactic_proposal_output)
+
+            tactic_review_record = prediction_artifacts["tactic_review_record"]
+            if tactic_review_record is not None:
+                session.add_tactic_review_record(tactic_review_record)
+
+            tactic_operation_record = prediction_artifacts["tactic_operation_record"]
+            if tactic_operation_record is not None:
+                session.add_tactic_operation_record(tactic_operation_record)
+
     return session
 
 

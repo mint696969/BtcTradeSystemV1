@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from typing import Any, TypedDict
 
@@ -18,7 +19,16 @@ from btcts.processing.l4_consumer_models.operator_ui import (
     prediction_summary_status_payload,
     prediction_summary_widget_model,
 )
-from btcts.processing.l4_consumer_models.shared import MarketSummary, PredictionSummary
+from btcts.processing.l4_consumer_models.shared import (
+    MarketSummary,
+    PredictionSummary,
+    PredictionScenarioBuildInput,
+    PredictionSystemBuildInput,
+    PredictionTacticBuildInput,
+    build_prediction_scenario_output,
+    build_prediction_system_input,
+    build_prediction_tactic_proposal_output,
+)
 from btcts.apps.operator_ui.components.prediction_summary_state import (
     load_prediction_summary_state,
 )
@@ -58,6 +68,14 @@ class PredictionSummaryUiBundle(TypedDict):
     summary: PredictionSummary
     status_payload: dict[str, Any]
     widget_model: PredictionSummaryWidgetModel
+
+
+def _materialize_payload(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if is_dataclass(value):
+        return dict(asdict(value))
+    return {}
 
 
 def load_market_summary_ui_bundle(
@@ -158,6 +176,46 @@ def load_prediction_summary_widget_model(
         include_health_caution=include_health_caution,
     )
     return prediction_summary_widget_model(summary)
+
+
+def load_prediction_tactic_proposal_payload(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+) -> dict[str, Any]:
+    market_summary = load_market_summary_bundle(
+        exchange=exchange,
+        symbol_raw=symbol_raw,
+    )
+    prediction_input = build_prediction_system_input(
+        PredictionSystemBuildInput(
+            market_summary=market_summary,
+            source_kind="operator_ui_market_state_bridge",
+            diagnostics={
+                "builder_type": "operator_ui_market_state_bridge",
+                "bridge_type": "prediction_tactic_proposal_payload",
+            },
+        )
+    )
+    scenario_output = build_prediction_scenario_output(
+        PredictionScenarioBuildInput(
+            prediction_input=prediction_input,
+            diagnostics={
+                "builder_type": "operator_ui_market_state_bridge",
+                "bridge_type": "prediction_tactic_proposal_payload",
+            },
+        )
+    )
+    tactic_output = build_prediction_tactic_proposal_output(
+        PredictionTacticBuildInput(
+            scenario_output=scenario_output,
+            diagnostics={
+                "builder_type": "operator_ui_market_state_bridge",
+                "bridge_type": "prediction_tactic_proposal_payload",
+            },
+        )
+    )
+    return _materialize_payload(tactic_output)
 
 
 def market_state_age_seconds(state: dict[str, Any] | None) -> float | None:

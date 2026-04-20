@@ -3,6 +3,13 @@
 
 from __future__ import annotations
 
+from btcts.apps.operator_ui.components.ai_operator_tactic_context import (
+    build_operator_tactic_context,
+)
+from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
+    build_tactic_stance_lines,
+    build_tactic_stance_note,
+)
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
@@ -76,6 +83,7 @@ def _build_operator_explanation_note(
     watch_note_caption: str | None,
     summary_caption: str | None,
     prediction_explanation_note: str,
+    tactic_explanation_note: str,
 ) -> str:
     parts: list[str] = []
 
@@ -90,6 +98,9 @@ def _build_operator_explanation_note(
     if prediction_explanation_note:
         parts.append(prediction_explanation_note)
 
+    if tactic_explanation_note:
+        parts.append(tactic_explanation_note)
+
     return "\n".join(parts)
 
 
@@ -99,6 +110,7 @@ def build_operator_display_payloads(
     prediction_widget,
     watch_note: dict | None,
     is_live_market: bool,
+    tactic_context: dict | None = None,
 ) -> dict:
     watch_note_caption = None
     if watch_note and not is_live_market:
@@ -117,10 +129,14 @@ def build_operator_display_payloads(
     prediction_explanation_note = _build_prediction_explanation_note(
         prediction_lines
     )
+    normalized_tactic_context = build_operator_tactic_context(tactic_context)
+    tactic_summary_lines = build_tactic_stance_lines(normalized_tactic_context)
+    tactic_explanation_note = build_tactic_stance_note(normalized_tactic_context)
     operator_explanation_note = _build_operator_explanation_note(
         watch_note_caption=watch_note_caption,
         summary_caption=summary_caption,
         prediction_explanation_note=prediction_explanation_note,
+        tactic_explanation_note=tactic_explanation_note,
     )
 
     return {
@@ -128,5 +144,8 @@ def build_operator_display_payloads(
         "summary_caption": summary_caption,
         "prediction_lines": prediction_lines,
         "prediction_explanation_note": prediction_explanation_note,
+        "tactic_context": normalized_tactic_context,
+        "tactic_summary_lines": tactic_summary_lines,
+        "tactic_explanation_note": tactic_explanation_note,
         "operator_explanation_note": operator_explanation_note,
     }

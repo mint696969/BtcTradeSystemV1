@@ -13,6 +13,9 @@ def build_research_replay_context(support_context: dict) -> dict:
         "kind_filter": "all",
         "event_filter": support_context.get("pressure_bias") or "",
         "filtered_rows": 1,
+        "tactic_summary_lines": tuple(
+            support_context.get("tactic_summary_lines") or ()
+        ),
     }
 
 
@@ -22,4 +25,7 @@ def build_watch_item(support_context: dict) -> dict:
         "regime": support_context.get("regime"),
         "action": support_context.get("advisory_action"),
         "risk": support_context.get("advisory_risk"),
+        "tactic_summary_lines": tuple(
+            support_context.get("tactic_summary_lines") or ()
+        ),
     }

@@ -11,6 +11,9 @@ from btcts.apps.operator_ui.components.market_state_bridge import (
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
+from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
+    build_tactic_stance_display_lines,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.ui_time import format_ui_ts
 from btcts.apps.operator_ui.watch_store import (
@@ -32,6 +35,7 @@ def _normalize_watch_item(item: dict) -> dict:
         "regime": item.get("regime"),
         "action": item.get("action"),
         "risk": item.get("risk"),
+        "tactic_summary_lines": tuple(item.get("tactic_summary_lines") or ()),
     }
 
 
@@ -91,6 +95,13 @@ def render():
                 f"action={item.get('action') or '-'} / "
                 f"risk={item.get('risk') or '-'}"
             )
+            tactic_summary_lines = tuple(item.get("tactic_summary_lines") or ())
+            if tactic_summary_lines:
+                for line in build_tactic_stance_display_lines(
+                    tactic_summary_lines,
+                    lang,
+                ):
+                    st.caption(line)
 
         with c2:
             if st.button(
@@ -115,6 +126,7 @@ def render():
                     "kind_filter": "all",
                     "event_filter": item.get("action") or "",
                     "filtered_rows": 1,
+                    "tactic_summary_lines": tuple(item.get("tactic_summary_lines") or ()),
                 }
                 st.session_state.ui_selected_page_key = "research"
                 st.rerun()

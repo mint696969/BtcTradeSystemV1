@@ -42,6 +42,25 @@ def main() -> int:
             "review_priority": "high",
         }
     )
+    session.add_tactic_proposal_output(
+        {
+            "proposal_type": "scenario_tactic_proposal_output",
+            "primary_tactic_key": "observe_only",
+        }
+    )
+    session.add_tactic_review_record(
+        {
+            "review_type": "tactic_review_record",
+            "selected_tactic_key": "observe_only",
+        }
+    )
+    session.add_tactic_operation_record(
+        {
+            "operation_type": "tactic_operation_record",
+            "operation_state": "hold",
+            "selected_tactic_key": "observe_only",
+        }
+    )
 
     summary = session.summary()
     assert summary["name"] == "prediction_artifact_session"
@@ -51,10 +70,16 @@ def main() -> int:
     assert summary["event_count"] == 2
     assert summary["prediction_evaluation_entry_count"] == 1
     assert summary["prediction_calibration_review_count"] == 1
+    assert summary["tactic_proposal_output_count"] == 1
+    assert summary["tactic_review_record_count"] == 1
+    assert summary["tactic_operation_record_count"] == 1
 
     assert len(session.output) == 2
     assert len(session.prediction_evaluation_entries) == 1
     assert len(session.prediction_calibration_reviews) == 1
+    assert len(session.tactic_proposal_outputs) == 1
+    assert len(session.tactic_review_records) == 1
+    assert len(session.tactic_operation_records) == 1
 
     print("ok")
     return 0

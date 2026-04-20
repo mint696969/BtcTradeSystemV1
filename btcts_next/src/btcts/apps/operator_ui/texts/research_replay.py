@@ -25,6 +25,7 @@ RESEARCH_REPLAY_TEXTS = {
         "research_storage_file_count": "File Count",
         "research_storage_latest_file": "Latest File",
         "research_storage_latest_size": "Latest Size(MB)",
+        "research_tactic_stance_summary_title": "Tactic stance summary",
 
         "replay_title": "Replay Lab",
         "replay_subtitle": "Review recent audit events and market memory as the foundation of future replay workflows.",
@@ -67,6 +68,7 @@ RESEARCH_REPLAY_TEXTS = {
         "research_storage_file_count": "ファイル数",
         "research_storage_latest_file": "最新ファイル",
         "research_storage_latest_size": "最新サイズ(MB)",
+        "research_tactic_stance_summary_title": "戦術スタンス要約",
 
         "replay_title": "Replay Lab",
         "replay_subtitle": "直近の audit イベントと市場状態メモリを見返し、将来の replay 機能の土台を確認します。",

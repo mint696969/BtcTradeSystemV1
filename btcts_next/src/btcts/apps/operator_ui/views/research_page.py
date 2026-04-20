@@ -16,6 +16,9 @@ from btcts.apps.operator_ui.components.market_state_bridge import (
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
+from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
+    build_tactic_stance_display_lines,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.replay import list_experiment_sessions, load_experiment_session
 from btcts.core import paths as core_paths
@@ -170,6 +173,17 @@ def _strategy_reports_df(rows: list[dict]) -> pd.DataFrame:
     return df
 
 
+def _replay_context_tactic_summary_lines(replay_ctx: dict | None) -> tuple[str, ...]:
+    if not isinstance(replay_ctx, dict):
+        return ()
+
+    return tuple(
+        str(line).strip()
+        for line in (replay_ctx.get("tactic_summary_lines") or ())
+        if str(line).strip()
+    )
+
+
 def render():
 
     lang = st.session_state.get("ui_lang", "en")
@@ -196,6 +210,17 @@ def render():
         st.caption(
             f"event_filter={replay_ctx.get('event_filter') or '-'}"
         )
+
+        tactic_summary_lines = _replay_context_tactic_summary_lines(replay_ctx)
+        if tactic_summary_lines:
+            st.markdown(
+                f"#### {get_text(lang, 'research_tactic_stance_summary_title')}"
+            )
+            for line in build_tactic_stance_display_lines(
+                tactic_summary_lines,
+                lang,
+            ):
+                st.markdown(f"- {line}")
 
         a1, a2, a3 = st.columns(3)
 

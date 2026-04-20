@@ -34,6 +34,27 @@ from .prediction_scenario_builder import (
     PredictionScenarioBuildInput,
     build_prediction_scenario_output,
 )
+from .prediction_tactic_contract import (
+    ScenarioTacticCandidate,
+    ScenarioTacticProposalOutput,
+    TacticParameterSetRef,
+    TacticReviewRecord,
+)
+from .prediction_tactic_builder import (
+    PredictionTacticBuildInput,
+    build_prediction_tactic_proposal_output,
+)
+from .prediction_tactic_review_builder import (
+    PredictionTacticReviewBuildInput,
+    build_prediction_tactic_review_record,
+)
+from .prediction_tactic_operation_contract import (
+    TacticOperationRecord,
+)
+from .prediction_tactic_operation_builder import (
+    PredictionTacticOperationBuildInput,
+    build_prediction_tactic_operation_record,
+)
 from .prediction_regime_turning_point import (
     PredictionRegimeTurningPointBuildInput,
     build_prediction_regime_turning_point,
@@ -71,6 +92,17 @@ __all__ = [
     "build_prediction_system_input",
     "PredictionScenarioBuildInput",
     "build_prediction_scenario_output",
+    "TacticParameterSetRef",
+    "ScenarioTacticCandidate",
+    "ScenarioTacticProposalOutput",
+    "TacticReviewRecord",
+    "TacticOperationRecord",
+    "PredictionTacticBuildInput",
+    "build_prediction_tactic_proposal_output",
+    "PredictionTacticReviewBuildInput",
+    "build_prediction_tactic_review_record",
+    "PredictionTacticOperationBuildInput",
+    "build_prediction_tactic_operation_record",
     "PredictionRegimeTurningPointBuildInput",
     "build_prediction_regime_turning_point",
     "PredictionLiquidityBoardHistoryBuildInput",

@@ -25,6 +25,9 @@ def export_replay_results(
     out_root: Path,
     prediction_evaluation_entries: List[Dict] | None = None,
     prediction_calibration_reviews: List[Dict] | None = None,
+    tactic_proposal_outputs: List[Dict] | None = None,
+    tactic_review_records: List[Dict] | None = None,
+    tactic_operation_records: List[Dict] | None = None,
 ) -> Dict[str, str]:
     source_paths_str = [str(Path(p)) for p in source_paths]
     stamp = _utc_stamp()
@@ -39,6 +42,9 @@ def export_replay_results(
         results=results,
         prediction_evaluation_entries=prediction_evaluation_entries,
         prediction_calibration_reviews=prediction_calibration_reviews,
+        tactic_proposal_outputs=tactic_proposal_outputs,
+        tactic_review_records=tactic_review_records,
+        tactic_operation_records=tactic_operation_records,
     )
     report_path = write_json(session_dir / "replay_report.json", report)
 
@@ -68,6 +74,39 @@ def export_replay_results(
             )
         )
 
+    tactic_proposal_output_path = None
+    tactic_proposal_output_count = 0
+    if tactic_proposal_outputs:
+        tactic_proposal_output_count = len(tactic_proposal_outputs)
+        tactic_proposal_output_path = str(
+            write_json(
+                session_dir / "tactic_proposal_output.json",
+                tactic_proposal_outputs[-1],
+            )
+        )
+
+    tactic_review_record_path = None
+    tactic_review_record_count = 0
+    if tactic_review_records:
+        tactic_review_record_count = len(tactic_review_records)
+        tactic_review_record_path = str(
+            write_json(
+                session_dir / "tactic_review_record.json",
+                tactic_review_records[-1],
+            )
+        )
+
+    tactic_operation_record_path = None
+    tactic_operation_record_count = 0
+    if tactic_operation_records:
+        tactic_operation_record_count = len(tactic_operation_records)
+        tactic_operation_record_path = str(
+            write_json(
+                session_dir / "tactic_operation_record.json",
+                tactic_operation_records[-1],
+            )
+        )
+
     manifest = {
         "name": name,
         "created_at_utc": stamp,
@@ -78,6 +117,12 @@ def export_replay_results(
         "prediction_evaluation_entry_count": prediction_evaluation_entry_count,
         "prediction_calibration_review_path": prediction_calibration_review_path,
         "prediction_calibration_review_count": prediction_calibration_review_count,
+        "tactic_proposal_output_path": tactic_proposal_output_path,
+        "tactic_proposal_output_count": tactic_proposal_output_count,
+        "tactic_review_record_path": tactic_review_record_path,
+        "tactic_review_record_count": tactic_review_record_count,
+        "tactic_operation_record_path": tactic_operation_record_path,
+        "tactic_operation_record_count": tactic_operation_record_count,
         "result_count": len(results),
     }
     manifest_path = write_json(session_dir / "manifest.json", manifest)
@@ -88,6 +133,9 @@ def export_replay_results(
         "report_path": str(report_path),
         "prediction_evaluation_report_path": prediction_evaluation_report_path,
         "prediction_calibration_review_path": prediction_calibration_review_path,
+        "tactic_proposal_output_path": tactic_proposal_output_path,
+        "tactic_review_record_path": tactic_review_record_path,
+        "tactic_operation_record_path": tactic_operation_record_path,
         "manifest_path": str(manifest_path),
     }
 
@@ -104,4 +152,7 @@ def export_replay_session(
         out_root=out_root,
         prediction_evaluation_entries=session.prediction_evaluation_entries,
         prediction_calibration_reviews=session.prediction_calibration_reviews,
+        tactic_proposal_outputs=session.tactic_proposal_outputs,
+        tactic_review_records=session.tactic_review_records,
+        tactic_operation_records=session.tactic_operation_records,
     )

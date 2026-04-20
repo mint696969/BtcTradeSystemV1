@@ -25,6 +25,11 @@ def main() -> int:
         "advisory_action": "trap_caution",
         "advisory_risk": "high",
         "runtime_source": "fallback-local",
+        "tactic_summary_lines": (
+            "operating_stance=reversal_prepare",
+            "scenario_regime=reversal_watch",
+            "proposal_state=proposed",
+        ),
     }
 
     research_replay_context = build_research_replay_context(support_context)
@@ -36,6 +41,11 @@ def main() -> int:
         "kind_filter": "all",
         "event_filter": "sell_pressure",
         "filtered_rows": 1,
+        "tactic_summary_lines": (
+            "operating_stance=reversal_prepare",
+            "scenario_regime=reversal_watch",
+            "proposal_state=proposed",
+        ),
     }
 
     watch_item = build_watch_item(support_context)
@@ -44,6 +54,11 @@ def main() -> int:
         "regime": "transition",
         "action": "trap_caution",
         "risk": "high",
+        "tactic_summary_lines": (
+            "operating_stance=reversal_prepare",
+            "scenario_regime=reversal_watch",
+            "proposal_state=proposed",
+        ),
     }
 
     print("ok")

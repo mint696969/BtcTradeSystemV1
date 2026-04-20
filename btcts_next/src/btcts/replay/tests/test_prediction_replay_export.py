@@ -50,6 +50,35 @@ def main() -> int:
                     "invalidation_review": "raise_invalidation_sensitivity",
                 }
             ],
+            tactic_proposal_outputs=[
+                {
+                    "proposal_type": "scenario_tactic_proposal_output",
+                    "primary_tactic_key": "cautious_probe",
+                    "proposal_state": "proposed",
+                    "scenario_regime": "continuation",
+                    "diagnostics": {
+                        "parameter_trace": {
+                            "profile_kind": "candidate",
+                        }
+                    },
+                }
+            ],
+            tactic_review_records=[
+                {
+                    "review_type": "tactic_review_record",
+                    "selected_tactic_key": "cautious_probe",
+                    "decision_state": "proposed",
+                    "rollback_target_ref": "baseline-default",
+                }
+            ],
+            tactic_operation_records=[
+                {
+                    "operation_type": "tactic_operation_record",
+                    "operation_state": "propose",
+                    "selected_tactic_key": "cautious_probe",
+                    "rollback_target_ref": "baseline-default",
+                }
+            ],
         )
 
         assert exported["session_dir"]
@@ -58,6 +87,9 @@ def main() -> int:
         assert exported["manifest_path"]
         assert exported["prediction_evaluation_report_path"]
         assert exported["prediction_calibration_review_path"]
+        assert exported["tactic_proposal_output_path"]
+        assert exported["tactic_review_record_path"]
+        assert exported["tactic_operation_record_path"]
 
         manifest = _read_json(exported["manifest_path"])
         assert manifest["name"] == "prediction_eval_export"
@@ -66,6 +98,12 @@ def main() -> int:
         assert manifest["prediction_evaluation_report_path"]
         assert manifest["prediction_calibration_review_count"] == 1
         assert manifest["prediction_calibration_review_path"]
+        assert manifest["tactic_proposal_output_count"] == 1
+        assert manifest["tactic_proposal_output_path"]
+        assert manifest["tactic_review_record_count"] == 1
+        assert manifest["tactic_review_record_path"]
+        assert manifest["tactic_operation_record_count"] == 1
+        assert manifest["tactic_operation_record_path"]
 
         prediction_report = _read_json(exported["prediction_evaluation_report_path"])
         assert prediction_report["name"] == "prediction_eval_export_prediction_evaluation"
@@ -99,6 +137,25 @@ def main() -> int:
             "latest_caution_review": "raise_caution_weight",
             "latest_invalidation_review": "raise_invalidation_sensitivity",
         }
+        assert replay_report["tactic_proposal_summary"] == {
+            "proposal_count": 1,
+            "latest_primary_tactic_key": "cautious_probe",
+            "latest_proposal_state": "proposed",
+            "latest_scenario_regime": "continuation",
+            "latest_profile_kind": "candidate",
+        }
+        assert replay_report["tactic_review_record_summary"] == {
+            "review_count": 1,
+            "latest_selected_tactic_key": "cautious_probe",
+            "latest_decision_state": "proposed",
+            "latest_rollback_target_ref": "baseline-default",
+        }
+        assert replay_report["tactic_operation_record_summary"] == {
+            "operation_count": 1,
+            "latest_operation_state": "propose",
+            "latest_selected_tactic_key": "cautious_probe",
+            "latest_rollback_target_ref": "baseline-default",
+        }
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         exported = export_replay_results(
@@ -115,10 +172,22 @@ def main() -> int:
         assert manifest["prediction_calibration_review_count"] == 0
         assert manifest["prediction_calibration_review_path"] is None
         assert exported["prediction_calibration_review_path"] is None
+        assert manifest["tactic_proposal_output_count"] == 0
+        assert manifest["tactic_proposal_output_path"] is None
+        assert exported["tactic_proposal_output_path"] is None
+        assert manifest["tactic_review_record_count"] == 0
+        assert manifest["tactic_review_record_path"] is None
+        assert exported["tactic_review_record_path"] is None
+        assert manifest["tactic_operation_record_count"] == 0
+        assert manifest["tactic_operation_record_path"] is None
+        assert exported["tactic_operation_record_path"] is None
 
         replay_report = _read_json(exported["report_path"])
         assert replay_report["prediction_evaluation_summary"] is None
         assert replay_report["prediction_calibration_review_summary"] is None
+        assert replay_report["tactic_proposal_summary"] is None
+        assert replay_report["tactic_review_record_summary"] is None
+        assert replay_report["tactic_operation_record_summary"] is None
 
     print("ok")
     return 0

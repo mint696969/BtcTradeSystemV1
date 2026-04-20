@@ -25,12 +25,62 @@ def _build_prediction_calibration_review_summary(
     }
 
 
+def _build_tactic_proposal_summary(
+    tactic_proposal_outputs: List[Dict] | None,
+) -> Dict | None:
+    if not tactic_proposal_outputs:
+        return None
+
+    latest_proposal = dict(tactic_proposal_outputs[-1] or {})
+    parameter_trace = dict(latest_proposal.get("diagnostics", {}).get("parameter_trace", {}) or {})
+    return {
+        "proposal_count": len(tactic_proposal_outputs),
+        "latest_primary_tactic_key": latest_proposal.get("primary_tactic_key"),
+        "latest_proposal_state": latest_proposal.get("proposal_state"),
+        "latest_scenario_regime": latest_proposal.get("scenario_regime"),
+        "latest_profile_kind": parameter_trace.get("profile_kind"),
+    }
+
+
+def _build_tactic_review_record_summary(
+    tactic_review_records: List[Dict] | None,
+) -> Dict | None:
+    if not tactic_review_records:
+        return None
+
+    latest_review = dict(tactic_review_records[-1] or {})
+    return {
+        "review_count": len(tactic_review_records),
+        "latest_selected_tactic_key": latest_review.get("selected_tactic_key"),
+        "latest_decision_state": latest_review.get("decision_state"),
+        "latest_rollback_target_ref": latest_review.get("rollback_target_ref"),
+    }
+
+
+def _build_tactic_operation_record_summary(
+    tactic_operation_records: List[Dict] | None,
+) -> Dict | None:
+    if not tactic_operation_records:
+        return None
+
+    latest_operation = dict(tactic_operation_records[-1] or {})
+    return {
+        "operation_count": len(tactic_operation_records),
+        "latest_operation_state": latest_operation.get("operation_state"),
+        "latest_selected_tactic_key": latest_operation.get("selected_tactic_key"),
+        "latest_rollback_target_ref": latest_operation.get("rollback_target_ref"),
+    }
+
+
 def build_replay_report(
     name: str,
     source_paths: List[str],
     results: List[Dict],
     prediction_evaluation_entries: List[Dict] | None = None,
     prediction_calibration_reviews: List[Dict] | None = None,
+    tactic_proposal_outputs: List[Dict] | None = None,
+    tactic_review_records: List[Dict] | None = None,
+    tactic_operation_records: List[Dict] | None = None,
 ) -> Dict:
     board_count = 0
     trade_count = 0
@@ -89,5 +139,14 @@ def build_replay_report(
         "prediction_evaluation_summary": prediction_evaluation_summary,
         "prediction_calibration_review_summary": _build_prediction_calibration_review_summary(
             prediction_calibration_reviews
+        ),
+        "tactic_proposal_summary": _build_tactic_proposal_summary(
+            tactic_proposal_outputs
+        ),
+        "tactic_review_record_summary": _build_tactic_review_record_summary(
+            tactic_review_records
+        ),
+        "tactic_operation_record_summary": _build_tactic_operation_record_summary(
+            tactic_operation_records
         ),
     }

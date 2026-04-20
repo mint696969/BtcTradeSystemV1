@@ -7,9 +7,20 @@ from btcts.apps.operator_ui.components.ai_operator_logic import (
     operator_action,
     operator_risk,
 )
+from btcts.apps.operator_ui.components.ai_operator_tactic_context import (
+    build_operator_tactic_context,
+)
+from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
+    build_tactic_stance_lines,
+)
 
 
-def build_operator_support_contract(*, state: dict, runtime_source: str) -> dict:
+def build_operator_support_contract(
+    *,
+    state: dict,
+    runtime_source: str,
+    tactic_context: dict | None = None,
+) -> dict:
     action = operator_action(state)
     risk = operator_risk(state)
 
@@ -37,6 +48,23 @@ def build_operator_support_contract(*, state: dict, runtime_source: str) -> dict
     elif state["wall_ratio"] < -0.25:
         wall_state = "ask_wall"
 
+    normalized_tactic_context = build_operator_tactic_context(tactic_context)
+    tactic_summary_lines = build_tactic_stance_lines(normalized_tactic_context)
+
+    support_context = {
+        "event_ts": state.get("event_ts"),
+        "regime": state.get("regime"),
+        "best_strategy": state.get("best_strategy"),
+        "pressure_bias": state.get("pressure_bias"),
+        "advisory_action": action,
+        "advisory_risk": risk,
+        "runtime_source": runtime_source,
+    }
+    if normalized_tactic_context:
+        support_context["tactic_context"] = normalized_tactic_context
+    if tactic_summary_lines:
+        support_context["tactic_summary_lines"] = tactic_summary_lines
+
     return {
         "action": action,
         "risk": risk,
@@ -51,13 +79,5 @@ def build_operator_support_contract(*, state: dict, runtime_source: str) -> dict
             "risk": risk,
             "runtime_source": runtime_source,
         },
-        "support_context": {
-            "event_ts": state.get("event_ts"),
-            "regime": state.get("regime"),
-            "best_strategy": state.get("best_strategy"),
-            "pressure_bias": state.get("pressure_bias"),
-            "advisory_action": action,
-            "advisory_risk": risk,
-            "runtime_source": runtime_source,
-        },
+        "support_context": support_context,
     }

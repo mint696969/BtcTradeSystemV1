@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 from btcts.processing.l4_consumer_models.shared import (
@@ -10,10 +11,16 @@ from btcts.processing.l4_consumer_models.shared import (
     PredictionCalibrationBuildInput,
     PredictionScenarioBuildInput,
     PredictionSystemBuildInput,
+    PredictionTacticBuildInput,
+    PredictionTacticOperationBuildInput,
+    PredictionTacticReviewBuildInput,
     build_market_summary,
     build_prediction_calibration_hint,
     build_prediction_scenario_output,
     build_prediction_system_input,
+    build_prediction_tactic_operation_record,
+    build_prediction_tactic_proposal_output,
+    build_prediction_tactic_review_record,
 )
 
 from .prediction_calibration_review import (
@@ -44,6 +51,14 @@ def _normalize_dict(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
     return dict(value)
+
+
+def _materialize_payload(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if is_dataclass(value):
+        return dict(asdict(value))
+    return {}
 
 
 def _collect_event_names(events: Any) -> list[str]:
@@ -244,6 +259,16 @@ def build_prediction_state_from_replay_result(
             },
         )
     )
+    tactic_proposal_output = build_prediction_tactic_proposal_output(
+        PredictionTacticBuildInput(
+            scenario_output=scenario_output,
+            diagnostics={
+                "builder_type": "replay_prediction_artifact_builder",
+                "record_id": result.get("record_id"),
+                "record_type": result.get("record_type"),
+            },
+        )
+    )
     calibration_hint = build_prediction_calibration_hint(
         PredictionCalibrationBuildInput(
             prediction_input=prediction_input,
@@ -260,6 +285,7 @@ def build_prediction_state_from_replay_result(
         "market_summary": market_summary,
         "prediction_input": prediction_input,
         "scenario_output": scenario_output,
+        "tactic_proposal_output": tactic_proposal_output,
         "calibration_hint": calibration_hint,
         "mid_price": _resolve_mid_price(result),
         "best_bid": _safe_float(result.get("best_bid")),
@@ -359,6 +385,10 @@ class ReplayPredictionArtifactBuilder:
 
         evaluation_entry = None
         calibration_review = None
+        tactic_proposal_output = None
+        tactic_review_record = None
+        tactic_operation_record = None
+
         if self._pending_prediction_state is not None:
             realized_outcome = _build_proxy_realized_outcome(
                 current_prediction_state=current_prediction_state,
@@ -382,10 +412,46 @@ class ReplayPredictionArtifactBuilder:
                 evaluation_entries=self._evaluation_entries,
             )
 
+            pending_tactic_proposal_output = self._pending_prediction_state[
+                "tactic_proposal_output"
+            ]
+            tactic_proposal_output = _materialize_payload(
+                pending_tactic_proposal_output
+            )
+            pending_tactic_review_record = build_prediction_tactic_review_record(
+                PredictionTacticReviewBuildInput(
+                    proposal_output=pending_tactic_proposal_output,
+                    review_ts=current_prediction_state["scenario_output"].event_ts,
+                    decision_state="proposed",
+                    decision_reason="replay_compare_capture",
+                    operator_note="auto_generated_by_replay_prediction_artifact_builder",
+                    diagnostics={
+                        "caller": "replay_prediction_artifact_builder",
+                        "review_source": "pending_tactic_proposal_output",
+                    },
+                )
+            )
+            tactic_review_record = _materialize_payload(pending_tactic_review_record)
+            tactic_operation_record = _materialize_payload(
+                build_prediction_tactic_operation_record(
+                    PredictionTacticOperationBuildInput(
+                        review_record=pending_tactic_review_record,
+                        operation_ts=current_prediction_state["scenario_output"].event_ts,
+                        diagnostics={
+                            "caller": "replay_prediction_artifact_builder",
+                            "operation_source": "pending_tactic_review_record",
+                        },
+                    )
+                )
+            )
+
         self._pending_prediction_state = current_prediction_state
         return {
             "evaluation_entry": evaluation_entry,
             "calibration_review": calibration_review,
+            "tactic_proposal_output": tactic_proposal_output,
+            "tactic_review_record": tactic_review_record,
+            "tactic_operation_record": tactic_operation_record,
         }
 
     def consume_result(self, result: dict[str, Any]) -> dict[str, Any] | None:

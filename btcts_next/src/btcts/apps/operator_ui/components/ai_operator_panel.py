@@ -23,6 +23,13 @@ from btcts.apps.operator_ui.components.ai_operator_persistence import (
 from btcts.apps.operator_ui.components.ai_operator_presenter import (
     build_display_state,
 )
+from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
+    advisory_support_caption,
+    build_tactic_stance_display_lines,
+    prediction_snapshot_section_title,
+    tactic_stance_section_title,
+    tactic_stance_support_caption,
+)
 from btcts.apps.operator_ui.components.ai_operator_display_payloads import (
     build_operator_display_payloads,
 )
@@ -59,14 +66,17 @@ def render():
     display_sources = load_operator_display_sources()
     summary_widget = display_sources["summary_widget"]
     prediction_widget = display_sources["prediction_widget"]
+    tactic_context = display_sources.get("tactic_context")
 
     display_payloads = build_operator_display_payloads(
         summary_widget=summary_widget,
         prediction_widget=prediction_widget,
         watch_note=st.session_state.get("ai_operator_watch_note"),
         is_live_market=False,
+        tactic_context=tactic_context,
     )
     operator_explanation_note = display_payloads["operator_explanation_note"]
+    advisory_tactic_summary_lines = display_payloads["tactic_summary_lines"]
 
     advisory_answer = read_operator_advisory_answer(
         lang=lang,
@@ -77,6 +87,7 @@ def render():
         state=state,
         memory=operator_memory,
         note=operator_explanation_note,
+        tactic_summary_lines=advisory_tactic_summary_lines,
     )
     answer = advisory_answer["answer"]
     runtime_source = advisory_answer["runtime_source"]
@@ -85,6 +96,7 @@ def render():
     support_contract = build_operator_support_contract(
         state=state,
         runtime_source=runtime_source,
+        tactic_context=tactic_context,
     )
     action = support_contract["action"]
     risk = support_contract["risk"]
@@ -122,10 +134,12 @@ def render():
         prediction_widget=prediction_widget,
         watch_note=st.session_state.get("ai_operator_watch_note"),
         is_live_market=is_live_market,
+        tactic_context=tactic_context,
     )
     watch_note_caption = display_payloads["watch_note_caption"]
     summary_caption = display_payloads["summary_caption"]
     prediction_lines = display_payloads["prediction_lines"]
+    tactic_summary_lines = display_payloads["tactic_summary_lines"]
 
     c1, c2, c3 = st.columns(3)
     c1.metric(get_text(lang, "ai_operator_action"), display_action_label)
@@ -169,11 +183,17 @@ def render():
     if summary_caption:
         st.caption(summary_caption)
 
+    if tactic_summary_lines:
+        st.markdown(f"**{tactic_stance_section_title(lang)}**")
+        st.caption(tactic_stance_support_caption(lang))
+        for line in build_tactic_stance_display_lines(tactic_summary_lines, lang):
+            st.markdown(f"- {line}")
+
     if advisory_note_used:
-        st.caption("advisory context prepared")
+        st.caption(advisory_support_caption(lang))
 
     if prediction_lines:
-        st.markdown("**Prediction snapshot**")
+        st.markdown(f"**{prediction_snapshot_section_title(lang)}**")
         for line in prediction_lines:
             st.markdown(f"- {line}")
 

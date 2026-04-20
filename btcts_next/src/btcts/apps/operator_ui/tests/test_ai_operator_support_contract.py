@@ -59,6 +59,42 @@ def main() -> int:
         "runtime_source": "external",
     }
 
+    tactic_contract = build_operator_support_contract(
+        state=state,
+        runtime_source="external",
+        tactic_context={
+            "primary_tactic_key": "continuation_follow",
+            "proposal_state": "proposed",
+            "scenario_regime": "continuation",
+            "rollback_ready": True,
+            "review_needed": True,
+            "diagnostics": {
+                "parameter_trace": {"profile_kind": "candidate"},
+                "selection_trace": {
+                    "selection_bias_tags": ("profile:candidate",)
+                },
+            },
+        },
+    )
+    assert tactic_contract["support_context"]["tactic_context"] == {
+        "primary_tactic_key": "continuation_follow",
+        "proposal_state": "proposed",
+        "scenario_regime": "continuation",
+        "profile_kind": "candidate",
+        "rollback_ready": True,
+        "review_needed": True,
+        "selection_bias_tags": ("profile:candidate",),
+    }
+    assert tactic_contract["support_context"]["tactic_summary_lines"] == (
+        "operating_stance=continuation_follow",
+        "scenario_regime=continuation",
+        "proposal_state=proposed",
+        "profile_kind=candidate",
+        "review_needed=true",
+        "rollback_ready=true",
+        "selection_bias_tags=profile:candidate",
+    )
+
     print("ok")
     return 0
 
