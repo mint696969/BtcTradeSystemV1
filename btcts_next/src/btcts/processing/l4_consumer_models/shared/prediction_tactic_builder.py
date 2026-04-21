@@ -229,6 +229,10 @@ def build_prediction_tactic_proposal_output(
         parameter_set_ref=parameter_set_bundle.active_parameter_set_ref,
     )
 
+    parameter_trace = dict(parameter_set_bundle.parameter_trace)
+    adoption_ready = bool(parameter_trace.get("adoption_ready"))
+    rollback_target_available = bool(parameter_trace.get("rollback_target_ref"))
+
     return ScenarioTacticProposalOutput(
         source_kind="prediction_scenario_output",
         market_uid=None if scenario_output is None else scenario_output.market_uid,
@@ -255,7 +259,10 @@ def build_prediction_tactic_proposal_output(
             "scenario_present": scenario_output is not None,
             "candidate_count": len(candidate_tactics),
             "comparison_set_count": len(parameter_set_bundle.comparison_set_refs),
-            "parameter_trace": dict(parameter_set_bundle.parameter_trace),
+            "adoption_ready": adoption_ready,
+            "rollback_target_available": rollback_target_available,
+            "selected_set_id": parameter_set_bundle.active_parameter_set_ref.set_id,
+            "parameter_trace": parameter_trace,
             "selection_trace": dict(selection_trace),
             **dict(inp.diagnostics or {}),
         },

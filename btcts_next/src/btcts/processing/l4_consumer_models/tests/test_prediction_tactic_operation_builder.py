@@ -48,6 +48,8 @@ def main() -> int:
         parameter_trace={
             "active_set_id": "candidate-continuation-follow",
             "profile_kind": "candidate",
+            "adoption_ready": True,
+            "rollback_target_ref": "baseline-default",
         },
         diagnostics={"source": "unit_test"},
     )
@@ -86,12 +88,20 @@ def main() -> int:
     assert operation.parameter_trace == {
         "active_set_id": "candidate-continuation-follow",
         "profile_kind": "candidate",
+        "adoption_ready": True,
+        "rollback_target_ref": "baseline-default",
     }
     assert operation.diagnostics["builder_type"] == (
         "prediction_tactic_operation_record"
     )
     assert operation.diagnostics["review_present"] is True
     assert operation.diagnostics["comparison_ref_count"] == 2
+    assert operation.diagnostics["adoption_ready"] is True
+    assert operation.diagnostics["rollback_target_available"] is True
+    assert (
+        operation.diagnostics["selected_set_id"]
+        == "candidate-continuation-follow"
+    )
     assert operation.diagnostics["caller"] == "unit_test"
 
     rollback_review = TacticReviewRecord(
@@ -123,6 +133,9 @@ def main() -> int:
     assert empty.selection_trace == {}
     assert empty.parameter_trace == {}
     assert empty.diagnostics["review_present"] is False
+    assert empty.diagnostics["adoption_ready"] is False
+    assert empty.diagnostics["rollback_target_available"] is False
+    assert empty.diagnostics["selected_set_id"] == "default"
 
     print("ok")
     return 0

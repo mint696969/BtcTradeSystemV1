@@ -26,6 +26,28 @@ def main() -> int:
                 "operating_stance=continuation_follow",
                 "scenario_regime=continuation",
                 "proposal_state=proposed",
+                "profile_kind=candidate",
+                "review_needed=true",
+                "rollback_ready=true",
+                "adoption_ready=true",
+                "rollback_target_available=true",
+                "selected_set_id=candidate-continuation-follow",
+                "rollback_target_ref=baseline-default",
+                "comparison_relation=candidate_vs_baseline",
+            ),
+            "tactic_interpretation_lines": (
+                "current set is being compared as a candidate relative to baseline",
+                "rollback review target is available: baseline-default",
+                "current set is adoption-ready for review, not an automatic decision",
+            ),
+            "primary_tactic_interpretation_line": (
+                "current set is being compared as a candidate relative to baseline"
+            ),
+            "tactic_primary_summary_line": (
+                "continuation_follow | "
+                "candidate_vs_baseline | "
+                "current set is being compared as a candidate relative to baseline | "
+                "review_only"
             ),
         }
     )
@@ -38,6 +60,28 @@ def main() -> int:
             "operating_stance=continuation_follow",
             "scenario_regime=continuation",
             "proposal_state=proposed",
+            "profile_kind=candidate",
+            "review_needed=true",
+            "rollback_ready=true",
+            "adoption_ready=true",
+            "rollback_target_available=true",
+            "selected_set_id=candidate-continuation-follow",
+            "rollback_target_ref=baseline-default",
+            "comparison_relation=candidate_vs_baseline",
+        ),
+        "tactic_interpretation_lines": (
+            "current set is being compared as a candidate relative to baseline",
+            "rollback review target is available: baseline-default",
+            "current set is adoption-ready for review, not an automatic decision",
+        ),
+        "primary_tactic_interpretation_line": (
+            "current set is being compared as a candidate relative to baseline"
+        ),
+        "tactic_primary_summary_line": (
+            "continuation_follow | "
+            "candidate_vs_baseline | "
+            "current set is being compared as a candidate relative to baseline | "
+            "review_only"
         ),
     }
 
@@ -48,6 +92,9 @@ def main() -> int:
         "action": None,
         "risk": None,
         "tactic_summary_lines": (),
+        "tactic_interpretation_lines": (),
+        "primary_tactic_interpretation_line": "",
+        "tactic_primary_summary_line": "",
     }
 
     print("ok")

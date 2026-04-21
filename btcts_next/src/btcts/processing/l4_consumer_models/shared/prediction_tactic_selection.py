@@ -22,6 +22,123 @@ def _normalize_overlay_refs(
     return tuple(out)
 
 
+def _has_any_overlay(
+    normalized_overlay_refs: tuple[str, ...],
+    *expected_refs: str,
+) -> bool:
+    for item in expected_refs:
+        if item in normalized_overlay_refs:
+            return True
+    return False
+
+
+def _can_promote_active_tactic(
+    *,
+    invalidation_state: str,
+    current_caution_level: str,
+) -> bool:
+    if invalidation_state in {"invalidated", "scenario_switch_required"}:
+        return False
+    if current_caution_level == "blocked":
+        return False
+    return True
+
+
+def _resolve_overlay_primary_tactic_key(
+    *,
+    normalized_overlay_refs: tuple[str, ...],
+    switch_hint: str,
+    invalidation_state: str,
+    current_regime_state: str,
+    current_caution_level: str,
+    current_confidence: float,
+    can_promote_active_tactic: bool,
+) -> str | None:
+    if _has_any_overlay(normalized_overlay_refs, "force_observe_only"):
+        if switch_hint == "maintain_no_trade":
+            return "maintain_no_trade"
+        if invalidation_state in {"invalidated", "scenario_switch_required"}:
+            return "maintain_no_trade"
+        return "observe_only"
+
+    if _has_any_overlay(normalized_overlay_refs, "prefer_defensive_reduce_risk"):
+        return "defensive_reduce_risk"
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_tighten_entry_gate")
+        and current_regime_state == "continuation"
+        and can_promote_active_tactic
+    ):
+        return "tighten_entry_gate"
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_reversal_prepare")
+        and current_regime_state != "no_trade"
+    ):
+        return "reversal_prepare"
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_continuation_follow")
+        and current_regime_state == "continuation"
+        and can_promote_active_tactic
+        and current_confidence >= 0.45
+    ):
+        return "continuation_follow"
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_cautious_probe")
+        and current_regime_state == "continuation"
+        and can_promote_active_tactic
+    ):
+        return "cautious_probe"
+
+    return None
+
+
+def _append_overlay_support_candidates(
+    *,
+    ordered_keys: list[tuple[str, int, str]],
+    primary_tactic_key: str,
+    scenario_output: PredictionScenarioOutput | None,
+    normalized_overlay_refs: tuple[str, ...],
+) -> None:
+    if scenario_output is None:
+        return
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_tighten_entry_gate")
+        and primary_tactic_key not in {"tighten_entry_gate", "maintain_no_trade"}
+        and scenario_output.current_regime_state == "continuation"
+    ):
+        ordered_keys.append(("tighten_entry_gate", 25, "overlay_support"))
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_continuation_follow")
+        and primary_tactic_key not in {"continuation_follow", "maintain_no_trade"}
+        and scenario_output.current_regime_state == "continuation"
+    ):
+        ordered_keys.append(("continuation_follow", 25, "overlay_support"))
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_cautious_probe")
+        and primary_tactic_key not in {"cautious_probe", "maintain_no_trade"}
+    ):
+        ordered_keys.append(("cautious_probe", 25, "overlay_support"))
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_reversal_prepare")
+        and primary_tactic_key not in {"reversal_prepare", "maintain_no_trade"}
+        and scenario_output.current_regime_state != "no_trade"
+    ):
+        ordered_keys.append(("reversal_prepare", 25, "overlay_support"))
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_defensive_reduce_risk")
+        and primary_tactic_key != "defensive_reduce_risk"
+    ):
+        ordered_keys.append(("defensive_reduce_risk", 25, "overlay_support"))
+
+
 def build_selection_trace(
     *,
     scenario_output: PredictionScenarioOutput | None,
@@ -93,15 +210,10 @@ def resolve_primary_tactic_key(
     current_caution_level = scenario_output.current_caution_level
     current_confidence = float(scenario_output.current_confidence or 0.0)
 
-    if "force_observe_only" in normalized_overlay_refs:
-        if switch_hint == "maintain_no_trade":
-            return "maintain_no_trade"
-        if invalidation_state in {"invalidated", "scenario_switch_required"}:
-            return "maintain_no_trade"
-        return "observe_only"
-
-    if "prefer_defensive_reduce_risk" in normalized_overlay_refs:
-        return "defensive_reduce_risk"
+    can_promote_active_tactic = _can_promote_active_tactic(
+        invalidation_state=invalidation_state,
+        current_caution_level=current_caution_level,
+    )
 
     if (
         normalized_profile_kind == "defensive"
@@ -110,19 +222,17 @@ def resolve_primary_tactic_key(
     ):
         return "defensive_reduce_risk"
 
-    if (
-        "prefer_reversal_prepare" in normalized_overlay_refs
-        and current_regime_state != "no_trade"
-    ):
-        return "reversal_prepare"
-
-    if (
-        "prefer_cautious_probe" in normalized_overlay_refs
-        and current_regime_state == "continuation"
-        and invalidation_state not in {"invalidated", "scenario_switch_required"}
-        and current_caution_level != "blocked"
-    ):
-        return "cautious_probe"
+    overlay_primary_tactic_key = _resolve_overlay_primary_tactic_key(
+        normalized_overlay_refs=normalized_overlay_refs,
+        switch_hint=switch_hint,
+        invalidation_state=invalidation_state,
+        current_regime_state=current_regime_state,
+        current_caution_level=current_caution_level,
+        current_confidence=current_confidence,
+        can_promote_active_tactic=can_promote_active_tactic,
+    )
+    if overlay_primary_tactic_key is not None:
+        return overlay_primary_tactic_key
 
     if switch_hint == "maintain_no_trade":
         return "maintain_no_trade"
@@ -193,27 +303,12 @@ def build_candidate_plan(
     ):
         ordered_keys.append(("defensive_reduce_risk", 25, "profile_support"))
 
-    if (
-        "prefer_cautious_probe" in normalized_overlay_refs
-        and scenario_output is not None
-        and primary_tactic_key not in {"cautious_probe", "maintain_no_trade"}
-    ):
-        ordered_keys.append(("cautious_probe", 25, "overlay_support"))
-
-    if (
-        "prefer_reversal_prepare" in normalized_overlay_refs
-        and scenario_output is not None
-        and primary_tactic_key not in {"reversal_prepare", "maintain_no_trade"}
-        and scenario_output.current_regime_state != "no_trade"
-    ):
-        ordered_keys.append(("reversal_prepare", 25, "overlay_support"))
-
-    if (
-        "prefer_defensive_reduce_risk" in normalized_overlay_refs
-        and scenario_output is not None
-        and primary_tactic_key != "defensive_reduce_risk"
-    ):
-        ordered_keys.append(("defensive_reduce_risk", 25, "overlay_support"))
+    _append_overlay_support_candidates(
+        ordered_keys=ordered_keys,
+        primary_tactic_key=primary_tactic_key,
+        scenario_output=scenario_output,
+        normalized_overlay_refs=normalized_overlay_refs,
+    )
 
     if (
         scenario_output is not None

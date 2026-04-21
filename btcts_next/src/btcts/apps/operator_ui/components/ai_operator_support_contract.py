@@ -11,6 +11,9 @@ from btcts.apps.operator_ui.components.ai_operator_tactic_context import (
     build_operator_tactic_context,
 )
 from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
+    build_primary_tactic_interpretation_line,
+    build_tactic_interpretation_lines,
+    build_tactic_primary_summary_line,
     build_tactic_stance_lines,
 )
 
@@ -50,6 +53,17 @@ def build_operator_support_contract(
 
     normalized_tactic_context = build_operator_tactic_context(tactic_context)
     tactic_summary_lines = build_tactic_stance_lines(normalized_tactic_context)
+    tactic_interpretation_lines = build_tactic_interpretation_lines(
+        normalized_tactic_context
+    )
+    primary_tactic_interpretation_line = (
+        build_primary_tactic_interpretation_line(
+            normalized_tactic_context
+        )
+    )
+    tactic_primary_summary_line = build_tactic_primary_summary_line(
+        normalized_tactic_context
+    )
 
     support_context = {
         "event_ts": state.get("event_ts"),
@@ -64,6 +78,16 @@ def build_operator_support_contract(
         support_context["tactic_context"] = normalized_tactic_context
     if tactic_summary_lines:
         support_context["tactic_summary_lines"] = tactic_summary_lines
+    if tactic_interpretation_lines:
+        support_context["tactic_interpretation_lines"] = tactic_interpretation_lines
+    if primary_tactic_interpretation_line:
+        support_context["primary_tactic_interpretation_line"] = (
+            primary_tactic_interpretation_line
+        )
+    if tactic_primary_summary_line:
+        support_context["tactic_primary_summary_line"] = (
+            tactic_primary_summary_line
+        )
 
     return {
         "action": action,

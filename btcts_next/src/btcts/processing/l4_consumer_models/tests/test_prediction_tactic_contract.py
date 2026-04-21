@@ -24,7 +24,7 @@ def main() -> int:
         set_version="v1",
         profile_kind="baseline",
         comparison_group="phase4a-entry",
-        is_active_candidate=True,
+        is_active_candidate=False,
     )
     candidate_ref = TacticParameterSetRef(
         set_id="candidate-cautious-probe",
@@ -96,9 +96,11 @@ def main() -> int:
 
     assert baseline_ref.ref_type == "tactic_parameter_set_ref"
     assert baseline_ref.profile_kind == "baseline"
+    assert baseline_ref.is_active_candidate is False
     assert candidate_ref.baseline_ref == "baseline-default"
     assert candidate_ref.overlay_refs == ("caution_overlay",)
     assert candidate_ref.rollback_parent_set_id == "baseline-default"
+    assert candidate_ref.is_active_candidate is True
 
     assert tactic_candidate.tactic_key == "cautious_probe"
     assert tactic_candidate.readiness == "watch"

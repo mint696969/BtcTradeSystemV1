@@ -165,7 +165,15 @@ def main() -> int:
                 "rollback_ready": True,
                 "review_needed": True,
                 "diagnostics": {
-                    "parameter_trace": {"profile_kind": "candidate"},
+                    "adoption_ready": True,
+                    "rollback_target_available": True,
+                    "selected_set_id": "candidate-reversal-watch",
+                    "parameter_trace": {
+                        "profile_kind": "candidate",
+                        "rollback_target_ref": "baseline-default",
+                        "comparison_relation": "candidate_vs_baseline",
+                        "overlay_influence": "overlay_bias",
+                    },
                     "selection_trace": {
                         "selection_bias_tags": (
                             "overlay:prefer_reversal_prepare",
@@ -182,6 +190,12 @@ def main() -> int:
             "profile_kind": "candidate",
             "rollback_ready": True,
             "review_needed": True,
+            "adoption_ready": True,
+            "rollback_target_available": True,
+            "selected_set_id": "candidate-reversal-watch",
+            "rollback_target_ref": "baseline-default",
+            "comparison_relation": "candidate_vs_baseline",
+            "overlay_influence": "overlay_bias",
             "selection_bias_tags": ("overlay:prefer_reversal_prepare",),
         }
         assert tactic_payloads["tactic_summary_lines"] == (
@@ -191,7 +205,29 @@ def main() -> int:
             "profile_kind=candidate",
             "review_needed=true",
             "rollback_ready=true",
+            "adoption_ready=true",
+            "rollback_target_available=true",
+            "selected_set_id=candidate-reversal-watch",
+            "rollback_target_ref=baseline-default",
+            "comparison_relation=candidate_vs_baseline",
+            "overlay_influence=overlay_bias",
             "selection_bias_tags=overlay:prefer_reversal_prepare",
+        )
+        assert tactic_payloads["tactic_interpretation_lines"] == (
+            "current set is being compared as a candidate relative to baseline",
+            "overlay influence is present, so the stance should be read as context-shaped",
+            "rollback review target is available: baseline-default",
+            "current set is adoption-ready for review, not an automatic decision",
+        )
+        assert (
+            tactic_payloads["primary_tactic_interpretation_line"]
+            == "overlay influence is present, so the stance should be read as context-shaped"
+        )
+        assert tactic_payloads["tactic_primary_summary_line"] == (
+            "reversal_prepare | "
+            "candidate_vs_baseline | "
+            "overlay influence is present, so the stance should be read as context-shaped | "
+            "review_only"
         )
         assert tactic_payloads["tactic_explanation_note"] == (
             "tactic_stance_context: "
@@ -201,6 +237,12 @@ def main() -> int:
             "profile_kind=candidate | "
             "review_needed=true | "
             "rollback_ready=true | "
+            "adoption_ready=true | "
+            "rollback_target_available=true | "
+            "selected_set_id=candidate-reversal-watch | "
+            "rollback_target_ref=baseline-default | "
+            "comparison_relation=candidate_vs_baseline | "
+            "overlay_influence=overlay_bias | "
             "selection_bias_tags=overlay:prefer_reversal_prepare"
         )
         assert tactic_payloads["operator_explanation_note"] == (
@@ -211,6 +253,12 @@ def main() -> int:
             "profile_kind=candidate | "
             "review_needed=true | "
             "rollback_ready=true | "
+            "adoption_ready=true | "
+            "rollback_target_available=true | "
+            "selected_set_id=candidate-reversal-watch | "
+            "rollback_target_ref=baseline-default | "
+            "comparison_relation=candidate_vs_baseline | "
+            "overlay_influence=overlay_bias | "
             "selection_bias_tags=overlay:prefer_reversal_prepare"
         )
     finally:

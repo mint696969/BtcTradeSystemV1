@@ -105,10 +105,31 @@ def main() -> int:
     assert proposal_output.diagnostics["scenario_present"] is True
     assert proposal_output.diagnostics["candidate_count"] == 2
     assert proposal_output.diagnostics["comparison_set_count"] == 2
+    assert proposal_output.diagnostics["adoption_ready"] is True
+    assert proposal_output.diagnostics["rollback_target_available"] is True
+    assert (
+        proposal_output.diagnostics["selected_set_id"]
+        == "candidate-reversal-watch"
+    )
     assert proposal_output.diagnostics["parameter_trace"]["profile_kind"] == "candidate"
     assert proposal_output.diagnostics["parameter_trace"]["overlay_refs"] == (
         "reversal_watch_overlay",
     )
+    assert proposal_output.diagnostics["parameter_trace"][
+        "comparison_profile_kinds"
+    ] == ("baseline", "candidate")
+    assert proposal_output.diagnostics["parameter_trace"][
+        "comparison_active_index"
+    ] == 1
+    assert proposal_output.diagnostics["parameter_trace"][
+        "comparison_baseline_available"
+    ] is True
+    assert proposal_output.diagnostics["parameter_trace"][
+        "comparison_relation"
+    ] == "candidate_vs_baseline"
+    assert proposal_output.diagnostics["parameter_trace"][
+        "overlay_influence"
+    ] == "overlay_bias"
     assert proposal_output.diagnostics["selection_trace"]["trace_type"] == (
         "tactic_selection_trace"
     )
@@ -155,6 +176,8 @@ def main() -> int:
     assert defensive_proposal.candidate_tactics[0].tactic_key == (
         "defensive_reduce_risk"
     )
+    assert defensive_proposal.diagnostics["adoption_ready"] is True
+    assert defensive_proposal.diagnostics["rollback_target_available"] is True
     assert defensive_proposal.diagnostics["parameter_trace"]["profile_kind"] == (
         "defensive"
     )
@@ -180,6 +203,9 @@ def main() -> int:
     assert blocked.candidate_tactics[0].tactic_key == "maintain_no_trade"
     assert blocked.explanation_trace["scenario_present"] is False
     assert blocked.diagnostics["scenario_present"] is False
+    assert blocked.diagnostics["adoption_ready"] is False
+    assert blocked.diagnostics["rollback_target_available"] is False
+    assert blocked.diagnostics["selected_set_id"] == "global_phase4a_default"
 
     print("ok")
     return 0

@@ -41,7 +41,7 @@ def _build_default_active_parameter_set_ref(
         set_version="v1",
         profile_kind="baseline",
         comparison_group="phase4a_entry",
-        is_active_candidate=True,
+        is_active_candidate=False,
     )
 
 
@@ -54,6 +54,16 @@ def _normalize_active_parameter_set_ref(
     return _build_default_active_parameter_set_ref(scenario_output)
 
 
+def _append_unique_ref(
+    refs: list[TacticParameterSetRef],
+    ref: TacticParameterSetRef,
+) -> None:
+    for existing in refs:
+        if existing.set_id == ref.set_id:
+            return
+    refs.append(ref)
+
+
 def _build_default_comparison_set_refs(
     active_parameter_set_ref: TacticParameterSetRef,
 ) -> tuple[TacticParameterSetRef, ...]:
@@ -61,16 +71,34 @@ def _build_default_comparison_set_refs(
 
     baseline_ref_id = _safe_str(active_parameter_set_ref.baseline_ref)
     if baseline_ref_id and baseline_ref_id != active_parameter_set_ref.set_id:
-        refs.append(
+        _append_unique_ref(
+            refs,
             TacticParameterSetRef(
                 set_id=baseline_ref_id,
                 set_version=active_parameter_set_ref.set_version,
                 profile_kind="baseline",
                 comparison_group=active_parameter_set_ref.comparison_group,
-            )
+            ),
         )
 
-    refs.append(active_parameter_set_ref)
+    rollback_parent_set_id = _safe_str(
+        active_parameter_set_ref.rollback_parent_set_id
+    )
+    if (
+        rollback_parent_set_id
+        and rollback_parent_set_id != active_parameter_set_ref.set_id
+    ):
+        _append_unique_ref(
+            refs,
+            TacticParameterSetRef(
+                set_id=rollback_parent_set_id,
+                set_version=active_parameter_set_ref.set_version,
+                profile_kind="rollback_parent",
+                comparison_group=active_parameter_set_ref.comparison_group,
+            ),
+        )
+
+    _append_unique_ref(refs, active_parameter_set_ref)
     return tuple(refs)
 
 
@@ -78,15 +106,56 @@ def _normalize_comparison_set_refs(
     active_parameter_set_ref: TacticParameterSetRef,
     comparison_set_refs: tuple[TacticParameterSetRef, ...] | None,
 ) -> tuple[TacticParameterSetRef, ...]:
-    if comparison_set_refs:
-        return comparison_set_refs
-    return _build_default_comparison_set_refs(active_parameter_set_ref)
+    if not comparison_set_refs:
+        return _build_default_comparison_set_refs(active_parameter_set_ref)
+
+    refs: list[TacticParameterSetRef] = []
+    for item in comparison_set_refs:
+        _append_unique_ref(refs, item)
+    _append_unique_ref(refs, active_parameter_set_ref)
+    return tuple(refs)
 
 
 def _build_parameter_trace(
     active_parameter_set_ref: TacticParameterSetRef,
     comparison_set_refs: tuple[TacticParameterSetRef, ...],
 ) -> dict[str, Any]:
+    rollback_target_ref = _safe_str(
+        active_parameter_set_ref.rollback_parent_set_id
+    ) or _safe_str(active_parameter_set_ref.baseline_ref)
+
+    comparison_set_ids = tuple(item.set_id for item in comparison_set_refs)
+    comparison_set_versions = tuple(
+        item.set_version for item in comparison_set_refs
+    )
+    comparison_profile_kinds = tuple(
+        item.profile_kind for item in comparison_set_refs
+    )
+    comparison_active_index = next(
+        (
+            index
+            for index, item in enumerate(comparison_set_refs)
+            if item.set_id == active_parameter_set_ref.set_id
+        ),
+        -1,
+    )
+    comparison_baseline_available = bool(
+        _safe_str(active_parameter_set_ref.baseline_ref)
+    )
+
+    comparison_relation = "standalone"
+    if comparison_baseline_available:
+        if active_parameter_set_ref.profile_kind == "baseline":
+            comparison_relation = "baseline_self_reference"
+        elif active_parameter_set_ref.is_active_candidate:
+            comparison_relation = "candidate_vs_baseline"
+        else:
+            comparison_relation = "profile_vs_baseline"
+
+    overlay_influence = "none"
+    if active_parameter_set_ref.overlay_refs:
+        overlay_influence = "overlay_bias"
+
     return {
         "active_set_id": active_parameter_set_ref.set_id,
         "active_set_version": active_parameter_set_ref.set_version,
@@ -95,8 +164,21 @@ def _build_parameter_trace(
         "overlay_refs": active_parameter_set_ref.overlay_refs,
         "comparison_group": active_parameter_set_ref.comparison_group,
         "rollback_parent_set_id": active_parameter_set_ref.rollback_parent_set_id,
-        "comparison_set_ids": tuple(item.set_id for item in comparison_set_refs),
+        "rollback_target_ref": rollback_target_ref,
+        "adoption_ready": bool(active_parameter_set_ref.is_active_candidate),
+        "comparison_set_ids": comparison_set_ids,
+        "comparison_set_versions": comparison_set_versions,
+        "comparison_profile_kinds": comparison_profile_kinds,
+        "comparison_active_index": comparison_active_index,
+        "comparison_baseline_available": comparison_baseline_available,
+        "comparison_relation": comparison_relation,
+        "overlay_influence": overlay_influence,
         "comparison_count": len(comparison_set_refs),
+        "comparison_has_active_candidate": any(
+            item.set_id == active_parameter_set_ref.set_id
+            and item.is_active_candidate
+            for item in comparison_set_refs
+        ),
     }
 
 

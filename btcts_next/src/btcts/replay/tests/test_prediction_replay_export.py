@@ -57,9 +57,20 @@ def main() -> int:
                     "proposal_state": "proposed",
                     "scenario_regime": "continuation",
                     "diagnostics": {
+                        "adoption_ready": True,
+                        "selected_set_id": "candidate-cautious-probe",
                         "parameter_trace": {
                             "profile_kind": "candidate",
-                        }
+                            "rollback_target_ref": "baseline-default",
+                            "comparison_profile_kinds": (
+                                "baseline",
+                                "candidate",
+                            ),
+                            "comparison_active_index": 1,
+                            "comparison_baseline_available": True,
+                            "comparison_relation": "candidate_vs_baseline",
+                            "overlay_influence": "overlay_bias",
+                        },
                     },
                 }
             ],
@@ -69,6 +80,21 @@ def main() -> int:
                     "selected_tactic_key": "cautious_probe",
                     "decision_state": "proposed",
                     "rollback_target_ref": "baseline-default",
+                    "parameter_trace": {
+                        "comparison_profile_kinds": (
+                            "baseline",
+                            "candidate",
+                        ),
+                        "comparison_active_index": 1,
+                        "comparison_baseline_available": True,
+                        "comparison_relation": "candidate_vs_baseline",
+                        "overlay_influence": "none",
+                    },
+                    "diagnostics": {
+                        "adoption_ready": True,
+                        "selected_set_id": "candidate-cautious-probe",
+                        "comparison_ref_count": 2,
+                    },
                 }
             ],
             tactic_operation_records=[
@@ -77,6 +103,21 @@ def main() -> int:
                     "operation_state": "propose",
                     "selected_tactic_key": "cautious_probe",
                     "rollback_target_ref": "baseline-default",
+                    "parameter_trace": {
+                        "comparison_profile_kinds": (
+                            "baseline",
+                            "candidate",
+                        ),
+                        "comparison_active_index": 1,
+                        "comparison_baseline_available": True,
+                        "comparison_relation": "candidate_vs_baseline",
+                        "overlay_influence": "none",
+                    },
+                    "diagnostics": {
+                        "adoption_ready": True,
+                        "selected_set_id": "candidate-cautious-probe",
+                        "comparison_ref_count": 2,
+                    },
                 }
             ],
         )
@@ -143,18 +184,76 @@ def main() -> int:
             "latest_proposal_state": "proposed",
             "latest_scenario_regime": "continuation",
             "latest_profile_kind": "candidate",
+            "latest_adoption_ready": True,
+            "latest_selected_set_id": "candidate-cautious-probe",
+            "latest_rollback_target_ref": "baseline-default",
+            "latest_comparison_profile_kinds": [
+                "baseline",
+                "candidate",
+            ],
+            "latest_comparison_active_index": 1,
+            "latest_comparison_baseline_available": True,
+            "latest_comparison_relation": "candidate_vs_baseline",
+            "latest_overlay_influence": "overlay_bias",
+            "latest_compare_friendly_summary_line": (
+                "cautious_probe | "
+                "candidate_vs_baseline | "
+                "overlay_bias_present | "
+                "selected_set=candidate-cautious-probe | "
+                "rollback_target=baseline-default | "
+                "adoption_ready_for_review | "
+                "review_only"
+            ),
         }
         assert replay_report["tactic_review_record_summary"] == {
             "review_count": 1,
             "latest_selected_tactic_key": "cautious_probe",
             "latest_decision_state": "proposed",
             "latest_rollback_target_ref": "baseline-default",
+            "latest_adoption_ready": True,
+            "latest_selected_set_id": "candidate-cautious-probe",
+            "latest_comparison_ref_count": 2,
+            "latest_comparison_profile_kinds": [
+                "baseline",
+                "candidate",
+            ],
+            "latest_comparison_active_index": 1,
+            "latest_comparison_baseline_available": True,
+            "latest_comparison_relation": "candidate_vs_baseline",
+            "latest_overlay_influence": "none",
+            "latest_compare_friendly_summary_line": (
+                "cautious_probe | "
+                "candidate_vs_baseline | "
+                "selected_set=candidate-cautious-probe | "
+                "rollback_target=baseline-default | "
+                "adoption_ready_for_review | "
+                "review_only"
+            ),
         }
         assert replay_report["tactic_operation_record_summary"] == {
             "operation_count": 1,
             "latest_operation_state": "propose",
             "latest_selected_tactic_key": "cautious_probe",
             "latest_rollback_target_ref": "baseline-default",
+            "latest_adoption_ready": True,
+            "latest_selected_set_id": "candidate-cautious-probe",
+            "latest_comparison_ref_count": 2,
+            "latest_comparison_profile_kinds": [
+                "baseline",
+                "candidate",
+            ],
+            "latest_comparison_active_index": 1,
+            "latest_comparison_baseline_available": True,
+            "latest_comparison_relation": "candidate_vs_baseline",
+            "latest_overlay_influence": "none",
+            "latest_compare_friendly_summary_line": (
+                "cautious_probe | "
+                "candidate_vs_baseline | "
+                "selected_set=candidate-cautious-probe | "
+                "rollback_target=baseline-default | "
+                "adoption_ready_for_review | "
+                "review_only"
+            ),
         }
 
     with tempfile.TemporaryDirectory() as tmp_dir:

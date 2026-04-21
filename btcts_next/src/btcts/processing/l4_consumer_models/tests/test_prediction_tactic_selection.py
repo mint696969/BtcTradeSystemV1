@@ -155,6 +155,75 @@ def main() -> int:
         "invalidation_state": "caution_increase",
     }
 
+    tighten_gate_overlay = PredictionScenarioOutput(
+        current_regime_state="continuation",
+        current_caution_level="medium",
+        current_confidence=0.38,
+        invalidation_state="stable",
+        scenario_switch_hint="hold_primary",
+    )
+    assert (
+        resolve_primary_tactic_key(
+            tighten_gate_overlay,
+            overlay_refs=("prefer_tighten_entry_gate",),
+        )
+        == "tighten_entry_gate"
+    )
+    assert build_candidate_plan(
+        primary_tactic_key="tighten_entry_gate",
+        scenario_output=tighten_gate_overlay,
+        overlay_refs=("prefer_tighten_entry_gate",),
+    ) == (
+        ("tighten_entry_gate", 10, "aligned"),
+        ("observe_only", 80, "fallback"),
+    )
+
+    continuation_overlay = PredictionScenarioOutput(
+        current_regime_state="continuation",
+        current_caution_level="low",
+        current_confidence=0.61,
+        invalidation_state="stable",
+        scenario_switch_hint="hold_primary",
+    )
+    assert (
+        resolve_primary_tactic_key(
+            continuation_overlay,
+            overlay_refs=("prefer_continuation_follow",),
+        )
+        == "continuation_follow"
+    )
+    assert build_candidate_plan(
+        primary_tactic_key="continuation_follow",
+        scenario_output=continuation_overlay,
+        overlay_refs=("prefer_continuation_follow",),
+    ) == (
+        ("continuation_follow", 10, "aligned"),
+        ("cautious_probe", 20, "supporting"),
+        ("observe_only", 80, "fallback"),
+    )
+    assert build_candidate_plan(
+        primary_tactic_key="observe_only",
+        scenario_output=continuation_overlay,
+        overlay_refs=("prefer_continuation_follow",),
+    ) == (
+        ("observe_only", 10, "aligned"),
+        ("continuation_follow", 25, "overlay_support"),
+    )
+    assert build_candidate_plan(
+        primary_tactic_key="observe_only",
+        scenario_output=continuation_overlay,
+        overlay_refs=(
+            "prefer_tighten_entry_gate",
+            "prefer_continuation_follow",
+            "prefer_cautious_probe",
+        ),
+    ) == (
+        ("observe_only", 10, "aligned"),
+        ("tighten_entry_gate", 25, "overlay_support"),
+        ("continuation_follow", 25, "overlay_support"),
+        ("cautious_probe", 25, "overlay_support"),
+    )
+
     blocked = None
     assert resolve_primary_tactic_key(blocked) == "maintain_no_trade"
     assert resolve_proposal_state("maintain_no_trade", blocked) == "blocked"

@@ -131,6 +131,11 @@ def build_prediction_tactic_operation_record(
         review_record,
         inp.rollback_target_ref,
     )
+    parameter_trace = (
+        {} if review_record is None else dict(review_record.parameter_trace)
+    )
+    adoption_ready = bool(parameter_trace.get("adoption_ready"))
+    rollback_target_available = rollback_target_ref is not None
 
     return TacticOperationRecord(
         operation_id=_build_operation_id(
@@ -156,15 +161,16 @@ def build_prediction_tactic_operation_record(
         selection_trace={}
         if review_record is None
         else dict(review_record.selection_trace),
-        parameter_trace={}
-        if review_record is None
-        else dict(review_record.parameter_trace),
+        parameter_trace=parameter_trace,
         diagnostics={
             "builder_type": "prediction_tactic_operation_record",
             "review_present": review_record is not None,
             "comparison_ref_count": 0
             if review_record is None
             else len(review_record.comparison_refs),
+            "adoption_ready": adoption_ready,
+            "rollback_target_available": rollback_target_available,
+            "selected_set_id": selected_parameter_set_ref.set_id,
             **dict(inp.diagnostics or {}),
         },
     )

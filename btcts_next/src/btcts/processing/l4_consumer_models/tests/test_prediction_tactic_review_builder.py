@@ -92,11 +92,26 @@ def main() -> int:
                 "overlay_refs": (),
                 "comparison_group": "phase4a-entry",
                 "rollback_parent_set_id": "baseline-default",
+                "rollback_target_ref": "baseline-default",
+                "adoption_ready": True,
                 "comparison_set_ids": (
                     "baseline-default",
                     "candidate-continuation-follow",
                 ),
+                "comparison_set_versions": (
+                    "v1",
+                    "v2",
+                ),
+                "comparison_profile_kinds": (
+                    "baseline",
+                    "candidate",
+                ),
+                "comparison_active_index": 1,
+                "comparison_baseline_available": True,
+                "comparison_relation": "candidate_vs_baseline",
+                "overlay_influence": "none",
                 "comparison_count": 2,
+                "comparison_has_active_candidate": True,
             },
         },
     )
@@ -157,11 +172,26 @@ def main() -> int:
         "overlay_refs": (),
         "comparison_group": "phase4a-entry",
         "rollback_parent_set_id": "baseline-default",
+        "rollback_target_ref": "baseline-default",
+        "adoption_ready": True,
         "comparison_set_ids": (
             "baseline-default",
             "candidate-continuation-follow",
         ),
+        "comparison_set_versions": (
+            "v1",
+            "v2",
+        ),
+        "comparison_profile_kinds": (
+            "baseline",
+            "candidate",
+        ),
+        "comparison_active_index": 1,
+        "comparison_baseline_available": True,
+        "comparison_relation": "candidate_vs_baseline",
+        "overlay_influence": "none",
         "comparison_count": 2,
+        "comparison_has_active_candidate": True,
     }
     assert review_record.diagnostics["builder_type"] == (
         "prediction_tactic_review_record"
@@ -170,6 +200,12 @@ def main() -> int:
     assert review_record.diagnostics["comparison_ref_count"] == 2
     assert review_record.diagnostics["selection_trace_present"] is True
     assert review_record.diagnostics["parameter_trace_present"] is True
+    assert review_record.diagnostics["adoption_ready"] is True
+    assert review_record.diagnostics["rollback_target_available"] is True
+    assert (
+        review_record.diagnostics["selected_set_id"]
+        == "candidate-continuation-follow"
+    )
     assert review_record.diagnostics["caller"] == "unit_test"
 
     empty_review = build_prediction_tactic_review_record(

@@ -20,6 +20,17 @@ def _normalize_watch(item: Dict[str, object]) -> Dict[str, object]:
         for line in (item.get("tactic_summary_lines") or ())
         if str(line).strip()
     )
+    tactic_interpretation_lines = tuple(
+        str(line).strip()
+        for line in (item.get("tactic_interpretation_lines") or ())
+        if str(line).strip()
+    )
+    primary_tactic_interpretation_line = str(
+        item.get("primary_tactic_interpretation_line") or ""
+    ).strip()
+    tactic_primary_summary_line = str(
+        item.get("tactic_primary_summary_line") or ""
+    ).strip()
 
     return {
         "ts": str(item.get("ts") or ""),
@@ -27,6 +38,9 @@ def _normalize_watch(item: Dict[str, object]) -> Dict[str, object]:
         "action": str(item.get("action") or ""),
         "risk": str(item.get("risk") or ""),
         "tactic_summary_lines": tactic_summary_lines,
+        "tactic_interpretation_lines": tactic_interpretation_lines,
+        "primary_tactic_interpretation_line": primary_tactic_interpretation_line,
+        "tactic_primary_summary_line": tactic_primary_summary_line,
     }
 
 
@@ -38,6 +52,12 @@ def _same_watch(a: Dict[str, object], b: Dict[str, object]) -> bool:
         and str(a.get("risk") or "") == str(b.get("risk") or "")
         and tuple(a.get("tactic_summary_lines") or ())
         == tuple(b.get("tactic_summary_lines") or ())
+        and tuple(a.get("tactic_interpretation_lines") or ())
+        == tuple(b.get("tactic_interpretation_lines") or ())
+        and str(a.get("primary_tactic_interpretation_line") or "")
+        == str(b.get("primary_tactic_interpretation_line") or "")
+        and str(a.get("tactic_primary_summary_line") or "")
+        == str(b.get("tactic_primary_summary_line") or "")
     )
 
 

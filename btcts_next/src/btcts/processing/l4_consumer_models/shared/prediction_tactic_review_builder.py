@@ -186,6 +186,8 @@ def build_prediction_tactic_review_record(
 
     selection_trace = _resolve_trace_payload(proposal_output, "selection_trace")
     parameter_trace = _resolve_trace_payload(proposal_output, "parameter_trace")
+    adoption_ready = bool(parameter_trace.get("adoption_ready"))
+    rollback_target_available = rollback_target_ref is not None
 
     return TacticReviewRecord(
         review_id=_build_review_id(
@@ -217,6 +219,9 @@ def build_prediction_tactic_review_record(
             "comparison_ref_count": len(comparison_refs),
             "selection_trace_present": bool(selection_trace),
             "parameter_trace_present": bool(parameter_trace),
+            "adoption_ready": adoption_ready,
+            "rollback_target_available": rollback_target_available,
+            "selected_set_id": selected_parameter_set_ref.set_id,
             **dict(inp.diagnostics or {}),
         },
     )

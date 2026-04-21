@@ -7,6 +7,9 @@ from btcts.apps.operator_ui.components.ai_operator_tactic_context import (
     build_operator_tactic_context,
 )
 from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
+    build_primary_tactic_interpretation_line,
+    build_tactic_interpretation_lines,
+    build_tactic_primary_summary_line,
     build_tactic_stance_lines,
     build_tactic_stance_note,
 )
@@ -131,6 +134,17 @@ def build_operator_display_payloads(
     )
     normalized_tactic_context = build_operator_tactic_context(tactic_context)
     tactic_summary_lines = build_tactic_stance_lines(normalized_tactic_context)
+    tactic_interpretation_lines = build_tactic_interpretation_lines(
+        normalized_tactic_context
+    )
+    primary_tactic_interpretation_line = (
+        build_primary_tactic_interpretation_line(
+            normalized_tactic_context
+        )
+    )
+    tactic_primary_summary_line = build_tactic_primary_summary_line(
+        normalized_tactic_context
+    )
     tactic_explanation_note = build_tactic_stance_note(normalized_tactic_context)
     operator_explanation_note = _build_operator_explanation_note(
         watch_note_caption=watch_note_caption,
@@ -146,6 +160,9 @@ def build_operator_display_payloads(
         "prediction_explanation_note": prediction_explanation_note,
         "tactic_context": normalized_tactic_context,
         "tactic_summary_lines": tactic_summary_lines,
+        "tactic_interpretation_lines": tactic_interpretation_lines,
+        "primary_tactic_interpretation_line": primary_tactic_interpretation_line,
+        "tactic_primary_summary_line": tactic_primary_summary_line,
         "tactic_explanation_note": tactic_explanation_note,
         "operator_explanation_note": operator_explanation_note,
     }

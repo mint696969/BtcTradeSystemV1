@@ -29,6 +29,30 @@ def main() -> int:
             "operating_stance=reversal_prepare",
             "scenario_regime=reversal_watch",
             "proposal_state=proposed",
+            "profile_kind=candidate",
+            "review_needed=true",
+            "rollback_ready=true",
+            "adoption_ready=true",
+            "rollback_target_available=true",
+            "selected_set_id=candidate-reversal-watch",
+            "rollback_target_ref=baseline-default",
+            "comparison_relation=candidate_vs_baseline",
+            "overlay_influence=overlay_bias",
+        ),
+        "tactic_interpretation_lines": (
+            "current set is being compared as a candidate relative to baseline",
+            "overlay influence is present, so the stance should be read as context-shaped",
+            "rollback review target is available: baseline-default",
+            "current set is adoption-ready for review, not an automatic decision",
+        ),
+        "primary_tactic_interpretation_line": (
+            "overlay influence is present, so the stance should be read as context-shaped"
+        ),
+        "tactic_primary_summary_line": (
+            "reversal_prepare | "
+            "candidate_vs_baseline | "
+            "overlay influence is present, so the stance should be read as context-shaped | "
+            "review_only"
         ),
     }
 
@@ -45,6 +69,30 @@ def main() -> int:
             "operating_stance=reversal_prepare",
             "scenario_regime=reversal_watch",
             "proposal_state=proposed",
+            "profile_kind=candidate",
+            "review_needed=true",
+            "rollback_ready=true",
+            "adoption_ready=true",
+            "rollback_target_available=true",
+            "selected_set_id=candidate-reversal-watch",
+            "rollback_target_ref=baseline-default",
+            "comparison_relation=candidate_vs_baseline",
+            "overlay_influence=overlay_bias",
+        ),
+        "tactic_interpretation_lines": (
+            "current set is being compared as a candidate relative to baseline",
+            "overlay influence is present, so the stance should be read as context-shaped",
+            "rollback review target is available: baseline-default",
+            "current set is adoption-ready for review, not an automatic decision",
+        ),
+        "primary_tactic_interpretation_line": (
+            "overlay influence is present, so the stance should be read as context-shaped"
+        ),
+        "tactic_primary_summary_line": (
+            "reversal_prepare | "
+            "candidate_vs_baseline | "
+            "overlay influence is present, so the stance should be read as context-shaped | "
+            "review_only"
         ),
     }
 
@@ -58,6 +106,30 @@ def main() -> int:
             "operating_stance=reversal_prepare",
             "scenario_regime=reversal_watch",
             "proposal_state=proposed",
+            "profile_kind=candidate",
+            "review_needed=true",
+            "rollback_ready=true",
+            "adoption_ready=true",
+            "rollback_target_available=true",
+            "selected_set_id=candidate-reversal-watch",
+            "rollback_target_ref=baseline-default",
+            "comparison_relation=candidate_vs_baseline",
+            "overlay_influence=overlay_bias",
+        ),
+        "tactic_interpretation_lines": (
+            "current set is being compared as a candidate relative to baseline",
+            "overlay influence is present, so the stance should be read as context-shaped",
+            "rollback review target is available: baseline-default",
+            "current set is adoption-ready for review, not an automatic decision",
+        ),
+        "primary_tactic_interpretation_line": (
+            "overlay influence is present, so the stance should be read as context-shaped"
+        ),
+        "tactic_primary_summary_line": (
+            "reversal_prepare | "
+            "candidate_vs_baseline | "
+            "overlay influence is present, so the stance should be read as context-shaped | "
+            "review_only"
         ),
     }
 

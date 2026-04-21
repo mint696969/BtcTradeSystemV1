@@ -69,7 +69,15 @@ def main() -> int:
             "rollback_ready": True,
             "review_needed": True,
             "diagnostics": {
-                "parameter_trace": {"profile_kind": "candidate"},
+                "adoption_ready": True,
+                "rollback_target_available": True,
+                "selected_set_id": "candidate-continuation-follow",
+                "parameter_trace": {
+                    "profile_kind": "candidate",
+                    "rollback_target_ref": "baseline-default",
+                    "comparison_relation": "candidate_vs_baseline",
+                    "overlay_influence": "none",
+                },
                 "selection_trace": {
                     "selection_bias_tags": ("profile:candidate",)
                 },
@@ -83,6 +91,12 @@ def main() -> int:
         "profile_kind": "candidate",
         "rollback_ready": True,
         "review_needed": True,
+        "adoption_ready": True,
+        "rollback_target_available": True,
+        "selected_set_id": "candidate-continuation-follow",
+        "rollback_target_ref": "baseline-default",
+        "comparison_relation": "candidate_vs_baseline",
+        "overlay_influence": "none",
         "selection_bias_tags": ("profile:candidate",),
     }
     assert tactic_contract["support_context"]["tactic_summary_lines"] == (
@@ -92,7 +106,28 @@ def main() -> int:
         "profile_kind=candidate",
         "review_needed=true",
         "rollback_ready=true",
+        "adoption_ready=true",
+        "rollback_target_available=true",
+        "selected_set_id=candidate-continuation-follow",
+        "rollback_target_ref=baseline-default",
+        "comparison_relation=candidate_vs_baseline",
         "selection_bias_tags=profile:candidate",
+    )
+    assert tactic_contract["support_context"]["tactic_interpretation_lines"] == (
+        "current set is being compared as a candidate relative to baseline",
+        "rollback review target is available: baseline-default",
+        "current set is adoption-ready for review, not an automatic decision",
+    )
+    assert (
+        tactic_contract["support_context"]["primary_tactic_interpretation_line"]
+        == "current set is being compared as a candidate relative to baseline"
+    )
+    assert (
+        tactic_contract["support_context"]["tactic_primary_summary_line"]
+        == "continuation_follow | "
+        "candidate_vs_baseline | "
+        "current set is being compared as a candidate relative to baseline | "
+        "review_only"
     )
 
     print("ok")

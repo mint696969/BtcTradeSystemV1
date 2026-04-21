@@ -12,6 +12,7 @@ from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
 from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
+    build_tactic_interpretation_display_lines,
     build_tactic_stance_display_lines,
 )
 from btcts.apps.operator_ui.ui_text import get_text
@@ -36,6 +37,15 @@ def _normalize_watch_item(item: dict) -> dict:
         "action": item.get("action"),
         "risk": item.get("risk"),
         "tactic_summary_lines": tuple(item.get("tactic_summary_lines") or ()),
+        "tactic_interpretation_lines": tuple(
+            item.get("tactic_interpretation_lines") or ()
+        ),
+        "primary_tactic_interpretation_line": str(
+            item.get("primary_tactic_interpretation_line") or ""
+        ),
+        "tactic_primary_summary_line": str(
+            item.get("tactic_primary_summary_line") or ""
+        ),
     }
 
 
@@ -103,6 +113,32 @@ def render():
                 ):
                     st.caption(line)
 
+            tactic_primary_summary_line = str(
+                item.get("tactic_primary_summary_line") or ""
+            ).strip()
+            if tactic_primary_summary_line:
+                st.caption(f"★ {tactic_primary_summary_line}")
+
+            primary_tactic_interpretation_line = str(
+                item.get("primary_tactic_interpretation_line") or ""
+            ).strip()
+            if primary_tactic_interpretation_line:
+                for line in build_tactic_interpretation_display_lines(
+                    (primary_tactic_interpretation_line,),
+                    lang,
+                ):
+                    st.caption(f"★ {line}")
+
+            tactic_interpretation_lines = tuple(
+                item.get("tactic_interpretation_lines") or ()
+            )
+            if tactic_interpretation_lines:
+                for line in build_tactic_interpretation_display_lines(
+                    tactic_interpretation_lines,
+                    lang,
+                ):
+                    st.caption(line)
+
         with c2:
             if st.button(
                 get_text(lang, "watch_list_replay"),
@@ -127,6 +163,15 @@ def render():
                     "event_filter": item.get("action") or "",
                     "filtered_rows": 1,
                     "tactic_summary_lines": tuple(item.get("tactic_summary_lines") or ()),
+                    "tactic_interpretation_lines": tuple(
+                        item.get("tactic_interpretation_lines") or ()
+                    ),
+                    "primary_tactic_interpretation_line": str(
+                        item.get("primary_tactic_interpretation_line") or ""
+                    ),
+                    "tactic_primary_summary_line": str(
+                        item.get("tactic_primary_summary_line") or ""
+                    ),
                 }
                 st.session_state.ui_selected_page_key = "research"
                 st.rerun()

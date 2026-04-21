@@ -16,6 +16,15 @@ def build_research_replay_context(support_context: dict) -> dict:
         "tactic_summary_lines": tuple(
             support_context.get("tactic_summary_lines") or ()
         ),
+        "tactic_interpretation_lines": tuple(
+            support_context.get("tactic_interpretation_lines") or ()
+        ),
+        "primary_tactic_interpretation_line": str(
+            support_context.get("primary_tactic_interpretation_line") or ""
+        ),
+        "tactic_primary_summary_line": str(
+            support_context.get("tactic_primary_summary_line") or ""
+        ),
     }
 
 
@@ -27,5 +36,14 @@ def build_watch_item(support_context: dict) -> dict:
         "risk": support_context.get("advisory_risk"),
         "tactic_summary_lines": tuple(
             support_context.get("tactic_summary_lines") or ()
+        ),
+        "tactic_interpretation_lines": tuple(
+            support_context.get("tactic_interpretation_lines") or ()
+        ),
+        "primary_tactic_interpretation_line": str(
+            support_context.get("primary_tactic_interpretation_line") or ""
+        ),
+        "tactic_primary_summary_line": str(
+            support_context.get("tactic_primary_summary_line") or ""
         ),
     }

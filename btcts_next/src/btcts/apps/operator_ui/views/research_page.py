@@ -17,6 +17,7 @@ from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
 from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
+    build_tactic_interpretation_display_lines,
     build_tactic_stance_display_lines,
 )
 from btcts.apps.operator_ui.ui_text import get_text
@@ -184,6 +185,41 @@ def _replay_context_tactic_summary_lines(replay_ctx: dict | None) -> tuple[str, 
     )
 
 
+def _replay_context_tactic_interpretation_lines(
+    replay_ctx: dict | None,
+) -> tuple[str, ...]:
+    if not isinstance(replay_ctx, dict):
+        return ()
+
+    return tuple(
+        str(line).strip()
+        for line in (replay_ctx.get("tactic_interpretation_lines") or ())
+        if str(line).strip()
+    )
+
+
+def _replay_context_primary_tactic_interpretation_line(
+    replay_ctx: dict | None,
+) -> str:
+    if not isinstance(replay_ctx, dict):
+        return ""
+
+    return str(
+        replay_ctx.get("primary_tactic_interpretation_line") or ""
+    ).strip()
+
+
+def _replay_context_tactic_primary_summary_line(
+    replay_ctx: dict | None,
+) -> str:
+    if not isinstance(replay_ctx, dict):
+        return ""
+
+    return str(
+        replay_ctx.get("tactic_primary_summary_line") or ""
+    ).strip()
+
+
 def render():
 
     lang = st.session_state.get("ui_lang", "en")
@@ -212,6 +248,15 @@ def render():
         )
 
         tactic_summary_lines = _replay_context_tactic_summary_lines(replay_ctx)
+        tactic_interpretation_lines = _replay_context_tactic_interpretation_lines(
+            replay_ctx
+        )
+        primary_tactic_interpretation_line = (
+            _replay_context_primary_tactic_interpretation_line(replay_ctx)
+        )
+        tactic_primary_summary_line = (
+            _replay_context_tactic_primary_summary_line(replay_ctx)
+        )
         if tactic_summary_lines:
             st.markdown(
                 f"#### {get_text(lang, 'research_tactic_stance_summary_title')}"
@@ -221,6 +266,23 @@ def render():
                 lang,
             ):
                 st.markdown(f"- {line}")
+
+        if tactic_primary_summary_line:
+            st.caption(f"★ {tactic_primary_summary_line}")
+
+        if primary_tactic_interpretation_line:
+            for line in build_tactic_interpretation_display_lines(
+                (primary_tactic_interpretation_line,),
+                lang,
+            ):
+                st.caption(f"★ {line}")
+
+        if tactic_interpretation_lines:
+            for line in build_tactic_interpretation_display_lines(
+                tactic_interpretation_lines,
+                lang,
+            ):
+                st.caption(line)
 
         a1, a2, a3 = st.columns(3)
 

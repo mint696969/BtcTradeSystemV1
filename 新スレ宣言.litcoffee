@@ -1,5 +1,7 @@
 疎通テスト
+Call the mpc.next44.com API with the health operation
 
+Call the mpc.next44.com API with the repo_list operation
 
 オーケストレーターでコケているだけで実装も復旧もしていて他のスレッドでは正常に使用できています。
 

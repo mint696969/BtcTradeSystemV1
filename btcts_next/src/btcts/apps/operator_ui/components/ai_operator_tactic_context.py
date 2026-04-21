@@ -16,6 +16,11 @@ def build_operator_tactic_context(tactic_payload: dict | None) -> dict:
     proposal_state = str(tactic_payload.get("proposal_state") or "").strip()
     scenario_regime = str(tactic_payload.get("scenario_regime") or "").strip()
 
+    selected_set_id = str(diagnostics.get("selected_set_id") or "").strip()
+    rollback_target_ref = str(
+        parameter_trace.get("rollback_target_ref") or ""
+    ).strip()
+
     normalized = {
         "primary_tactic_key": primary_tactic_key or "unknown",
         "proposal_state": proposal_state or "unknown",
@@ -24,6 +29,18 @@ def build_operator_tactic_context(tactic_payload: dict | None) -> dict:
         or "unknown",
         "rollback_ready": bool(tactic_payload.get("rollback_ready")),
         "review_needed": bool(tactic_payload.get("review_needed")),
+        "adoption_ready": bool(diagnostics.get("adoption_ready")),
+        "rollback_target_available": bool(
+            diagnostics.get("rollback_target_available")
+        ),
+        "selected_set_id": selected_set_id or "unknown",
+        "rollback_target_ref": rollback_target_ref,
+        "comparison_relation": str(
+            parameter_trace.get("comparison_relation") or ""
+        ).strip(),
+        "overlay_influence": str(
+            parameter_trace.get("overlay_influence") or ""
+        ).strip(),
         "selection_bias_tags": tuple(selection_trace.get("selection_bias_tags") or ()),
     }
 

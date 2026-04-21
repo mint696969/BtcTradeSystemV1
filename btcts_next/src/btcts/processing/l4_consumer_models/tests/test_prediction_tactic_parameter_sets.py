@@ -55,9 +55,61 @@ def main() -> int:
         "overlay_refs": ("reversal_watch_overlay", "risk_guard_overlay"),
         "comparison_group": "phase4a-entry",
         "rollback_parent_set_id": "baseline-default",
+        "rollback_target_ref": "baseline-default",
+        "adoption_ready": True,
         "comparison_set_ids": ("baseline-default", "candidate-reversal-watch"),
+        "comparison_set_versions": ("v2", "v2"),
+        "comparison_profile_kinds": ("baseline", "candidate"),
+        "comparison_active_index": 1,
+        "comparison_baseline_available": True,
+        "comparison_relation": "candidate_vs_baseline",
+        "overlay_influence": "overlay_bias",
         "comparison_count": 2,
+        "comparison_has_active_candidate": True,
     }
+
+    explicit_comparison_bundle = resolve_tactic_parameter_set_bundle(
+        scenario_output=scenario_output,
+        active_parameter_set_ref=candidate_ref,
+        comparison_set_refs=(
+            TacticParameterSetRef(
+                set_id="candidate-reversal-watch",
+                set_version="v2",
+                profile_kind="candidate",
+                comparison_group="phase4a-entry",
+                is_active_candidate=True,
+            ),
+            TacticParameterSetRef(
+                set_id="baseline-default",
+                set_version="v1",
+                profile_kind="baseline",
+                comparison_group="phase4a-entry",
+            ),
+        ),
+    )
+    assert explicit_comparison_bundle.comparison_set_refs == (
+        TacticParameterSetRef(
+            set_id="candidate-reversal-watch",
+            set_version="v2",
+            profile_kind="candidate",
+            comparison_group="phase4a-entry",
+            is_active_candidate=True,
+        ),
+        TacticParameterSetRef(
+            set_id="baseline-default",
+            set_version="v1",
+            profile_kind="baseline",
+            comparison_group="phase4a-entry",
+        ),
+    )
+    assert explicit_comparison_bundle.parameter_trace["comparison_count"] == 2
+    assert explicit_comparison_bundle.parameter_trace["adoption_ready"] is True
+    assert (
+        explicit_comparison_bundle.parameter_trace[
+            "comparison_has_active_candidate"
+        ]
+        is True
+    )
 
     default_bundle = resolve_tactic_parameter_set_bundle(
         scenario_output=scenario_output,
@@ -73,7 +125,19 @@ def main() -> int:
         default_bundle.active_parameter_set_ref,
     )
     assert default_bundle.rollback_ready is False
+    assert default_bundle.parameter_trace["rollback_target_ref"] is None
+    assert default_bundle.parameter_trace["adoption_ready"] is False
+    assert default_bundle.parameter_trace["comparison_profile_kinds"] == (
+        "baseline",
+    )
+    assert default_bundle.parameter_trace["comparison_active_index"] == 0
+    assert default_bundle.parameter_trace["comparison_baseline_available"] is False
+    assert default_bundle.parameter_trace["comparison_relation"] == "standalone"
+    assert default_bundle.parameter_trace["overlay_influence"] == "none"
     assert default_bundle.parameter_trace["comparison_count"] == 1
+    assert default_bundle.parameter_trace["comparison_has_active_candidate"] is (
+        False
+    )
 
     print("ok")
     return 0

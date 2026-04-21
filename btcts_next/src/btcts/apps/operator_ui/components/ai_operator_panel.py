@@ -25,8 +25,10 @@ from btcts.apps.operator_ui.components.ai_operator_presenter import (
 )
 from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
     advisory_support_caption,
+    build_tactic_interpretation_display_lines,
     build_tactic_stance_display_lines,
     prediction_snapshot_section_title,
+    tactic_interpretation_support_caption,
     tactic_stance_section_title,
     tactic_stance_support_caption,
 )
@@ -77,6 +79,15 @@ def render():
     )
     operator_explanation_note = display_payloads["operator_explanation_note"]
     advisory_tactic_summary_lines = display_payloads["tactic_summary_lines"]
+    advisory_tactic_interpretation_lines = display_payloads[
+        "tactic_interpretation_lines"
+    ]
+    advisory_primary_tactic_interpretation_line = display_payloads[
+        "primary_tactic_interpretation_line"
+    ]
+    advisory_tactic_primary_summary_line = display_payloads[
+        "tactic_primary_summary_line"
+    ]
 
     advisory_answer = read_operator_advisory_answer(
         lang=lang,
@@ -88,6 +99,11 @@ def render():
         memory=operator_memory,
         note=operator_explanation_note,
         tactic_summary_lines=advisory_tactic_summary_lines,
+        tactic_interpretation_lines=advisory_tactic_interpretation_lines,
+        primary_tactic_interpretation_line=(
+            advisory_primary_tactic_interpretation_line
+        ),
+        tactic_primary_summary_line=advisory_tactic_primary_summary_line,
     )
     answer = advisory_answer["answer"]
     runtime_source = advisory_answer["runtime_source"]
@@ -140,6 +156,11 @@ def render():
     summary_caption = display_payloads["summary_caption"]
     prediction_lines = display_payloads["prediction_lines"]
     tactic_summary_lines = display_payloads["tactic_summary_lines"]
+    tactic_interpretation_lines = display_payloads["tactic_interpretation_lines"]
+    primary_tactic_interpretation_line = display_payloads[
+        "primary_tactic_interpretation_line"
+    ]
+    tactic_primary_summary_line = display_payloads["tactic_primary_summary_line"]
 
     c1, c2, c3 = st.columns(3)
     c1.metric(get_text(lang, "ai_operator_action"), display_action_label)
@@ -188,6 +209,30 @@ def render():
         st.caption(tactic_stance_support_caption(lang))
         for line in build_tactic_stance_display_lines(tactic_summary_lines, lang):
             st.markdown(f"- {line}")
+
+        if (
+            tactic_primary_summary_line
+            or tactic_interpretation_lines
+            or primary_tactic_interpretation_line
+        ):
+            st.caption(tactic_interpretation_support_caption(lang))
+
+            if tactic_primary_summary_line:
+                st.caption(f"★ {tactic_primary_summary_line}")
+
+            if primary_tactic_interpretation_line:
+                for line in build_tactic_interpretation_display_lines(
+                    (primary_tactic_interpretation_line,),
+                    lang,
+                ):
+                    st.caption(f"★ {line}")
+
+            if tactic_interpretation_lines:
+                for line in build_tactic_interpretation_display_lines(
+                    tactic_interpretation_lines,
+                    lang,
+                ):
+                    st.caption(line)
 
     if advisory_note_used:
         st.caption(advisory_support_caption(lang))
