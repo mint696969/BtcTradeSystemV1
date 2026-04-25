@@ -60,11 +60,13 @@ def main() -> int:
                 "adoption_hint: the current set is marked as adoption-ready for review, not as an automatic decision.",
             ),
             primary_tactic_interpretation_line=(
-                "overlay_hint: overlay influence is present, so treat the stance as context-shaped rather than baseline-only."
+                "comparison_hint: current set is being read as a candidate relative to baseline."
             ),
             tactic_primary_summary_line=(
                 "reversal_prepare | "
                 "candidate_vs_baseline | "
+                "overlay_bias_present | "
+                "overlay_primary | "
                 "overlay influence is present, so the stance should be read as context-shaped | "
                 "review_only"
             ),
@@ -88,10 +90,12 @@ def main() -> int:
             "primary_tactic_stance_summary: "
             "reversal_prepare | "
             "candidate_vs_baseline | "
+            "overlay_bias_present | "
+            "overlay_primary | "
             "overlay influence is present, so the stance should be read as context-shaped | "
             "review_only\n"
             "Treat the following tactic stance interpretation as review guidance, not as a final decision.\n"
-            "primary_tactic_stance_interpretation: overlay_hint: overlay influence is present, so treat the stance as context-shaped rather than baseline-only.\n"
+            "primary_tactic_stance_interpretation: comparison_hint: current set is being read as a candidate relative to baseline.\n"
             "tactic_stance_interpretation: "
             "comparison_hint: current set is being read as a candidate relative to baseline. | "
             "overlay_hint: overlay influence is present, so treat the stance as context-shaped rather than baseline-only. | "
@@ -143,6 +147,8 @@ def main() -> int:
             tactic_primary_summary_line=(
                 "reversal_prepare | "
                 "candidate_vs_baseline | "
+                "overlay_bias_present | "
+                "overlay_primary | "
                 "explicit_hint: prefer explicit interpretation payload. | "
                 "review_only"
             ),
@@ -164,6 +170,8 @@ def main() -> int:
             "primary_tactic_stance_summary: "
             "reversal_prepare | "
             "candidate_vs_baseline | "
+            "overlay_bias_present | "
+            "overlay_primary | "
             "explicit_hint: prefer explicit interpretation payload. | "
             "review_only\n"
             "Treat the following tactic stance interpretation as review guidance, not as a final decision.\n"
@@ -174,6 +182,44 @@ def main() -> int:
         )
         assert len(calls) == 2
         assert calls[1]["note"] == explicit["advisory_note_used"]
+
+        explicit_without_summary = advisory.read_operator_advisory_answer(
+            lang="en",
+            ai_mode="local",
+            operator_prompt="Explain current market state",
+            intent="decide",
+            style="normal",
+            state={
+                "spread": 1200.0,
+                "imbalance": 0.22,
+                "delta": 0.31,
+                "wall_ratio": 0.18,
+            },
+            memory=[],
+            note="",
+            tactic_summary_lines=(),
+            tactic_interpretation_lines=(
+                "comparison_hint: current set is being read as a candidate relative to baseline.",
+                "adoption_hint: the current set is marked as adoption-ready for review, not as an automatic decision.",
+            ),
+            primary_tactic_interpretation_line="",
+            tactic_primary_summary_line="",
+        )
+
+        assert explicit_without_summary["answer"] == "mock-answer"
+        assert explicit_without_summary["runtime_source"] == "mock-runtime"
+        assert explicit_without_summary["advisory_note_used"] == (
+            "Use the following explanation context when generating the advisory answer.\n"
+            "Treat it as supporting context, not as a final decision contract.\n"
+            "Treat any tactic stance context as an operating stance proposal, not as an execution instruction.\n"
+            "Treat the following tactic stance interpretation as review guidance, not as a final decision.\n"
+            "primary_tactic_stance_interpretation: comparison_hint: current set is being read as a candidate relative to baseline.\n"
+            "tactic_stance_interpretation: "
+            "comparison_hint: current set is being read as a candidate relative to baseline. | "
+            "adoption_hint: the current set is marked as adoption-ready for review, not as an automatic decision."
+        )
+        assert len(calls) == 3
+        assert calls[2]["note"] == explicit_without_summary["advisory_note_used"]
 
         empty = advisory.read_operator_advisory_answer(
             lang="en",
@@ -198,8 +244,8 @@ def main() -> int:
         assert empty["answer"] == "mock-answer"
         assert empty["runtime_source"] == "mock-runtime"
         assert empty["advisory_note_used"] == ""
-        assert len(calls) == 3
-        assert calls[2]["note"] == ""
+        assert len(calls) == 4
+        assert calls[3]["note"] == ""
     finally:
         advisory.generate_answer = original_generate_answer
 

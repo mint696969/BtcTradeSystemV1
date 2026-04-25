@@ -11,6 +11,131 @@ from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.ui_time import format_ui_ts
 
 
+def _health_orderbook_active_event_observer_line(
+    orderbook_block: dict,
+) -> str:
+    normalized_block = dict(orderbook_block or {})
+
+    active_event_contracts = normalized_block.get("active_event_contracts") or []
+    if not isinstance(active_event_contracts, list):
+        active_event_contracts = []
+
+    active_event_names = normalized_block.get("active_event_names") or []
+    if not isinstance(active_event_names, list):
+        active_event_names = []
+
+    active_event_count = int(normalized_block.get("active_event_count") or 0)
+
+    if active_event_contracts:
+        first_event = dict(active_event_contracts[0] or {})
+        event_name = str(first_event.get("event_name") or "-").strip() or "-"
+        event_family = str(first_event.get("event_family") or "-").strip() or "-"
+        usage_grade = str(first_event.get("usage_grade") or "-").strip() or "-"
+        horizon = str(first_event.get("forecast_horizon_hint") or "-").strip() or "-"
+        side = str(first_event.get("side") or "-").strip() or "-"
+        suffix = (
+            f" +{len(active_event_contracts) - 1} more"
+            if len(active_event_contracts) > 1
+            else ""
+        )
+        return (
+            f"active_events={active_event_count} / "
+            f"{event_name} ({event_family} / {usage_grade} / {horizon} / {side})"
+            f"{suffix}"
+        )
+
+    normalized_names = [
+        str(name).strip()
+        for name in active_event_names
+        if str(name).strip()
+    ]
+    if normalized_names:
+        suffix = (
+            f" +{len(normalized_names) - 1} more"
+            if len(normalized_names) > 1
+            else ""
+        )
+        return f"active_events={active_event_count} / {normalized_names[0]}{suffix}"
+
+    return f"active_events={active_event_count} / none"
+
+
+def build_health_digest_block_captions(
+    *,
+    widget,
+    payload: dict | None,
+) -> dict[str, str]:
+    if widget is None or not payload:
+        return {
+            "collector_ingestion_observability": "health_digest unavailable",
+            "market_runtime_truth": "health_digest unavailable",
+            "semantic_observability": "health_digest unavailable",
+            "orderbook_active_event_observability": "health_digest unavailable",
+        }
+
+    collector_block = dict(payload.get("collector_ingestion_observability") or {})
+    market_block = dict(payload.get("market_runtime_truth") or {})
+    semantic_block = dict(payload.get("semantic_observability") or {})
+    orderbook_block = dict(payload.get("orderbook_active_event_observability") or {})
+
+    collector_runtime = dict(collector_block.get("collector_runtime") or {})
+    api_runtime = dict(collector_block.get("api_runtime") or {})
+    ws_runtime = dict(collector_block.get("ws_runtime") or {})
+    market_runtime = dict(market_block.get("market_runtime") or {})
+
+    freshness = str(getattr(widget, "freshness_key", None) or "UNKNOWN")
+    source_kind = str(getattr(widget, "source_kind", None) or "unknown")
+    event_ts = str(getattr(widget, "event_ts", None) or "-")
+    age_sec = getattr(widget, "age_sec", None)
+    age_text = "-" if age_sec is None else f"{float(age_sec):.1f}s"
+
+    collector_caption = (
+        f"collector_mode={collector_runtime.get('mode') or '-'} / "
+        f"collector_ok={collector_runtime.get('ok')} / "
+        f"api_mode={api_runtime.get('mode') or '-'} / "
+        f"ws_board={ws_runtime.get('board_state') or '-'} / "
+        f"ws_exec={ws_runtime.get('executions_state') or '-'} / "
+        f"freshness={collector_block.get('freshness') or freshness}"
+    )
+
+    market_caption = (
+        f"trust={market_runtime.get('trust_state') or '-'} / "
+        f"continuity={market_runtime.get('continuity_state') or '-'} / "
+        f"interpretation={market_runtime.get('interpretation_bucket') or '-'} / "
+        f"source={market_block.get('source_kind') or source_kind} / "
+        f"event_ts={market_block.get('event_ts') or event_ts}"
+    )
+
+    semantic_caption = (
+        f"observer_status={semantic_block.get('observer_status') or '-'} / "
+        f"wiring={semantic_block.get('runtime_wiring_status') or '-'} / "
+        f"observer_present={bool(semantic_block.get('observer_present'))} / "
+        f"summary_present={bool(semantic_block.get('usage_summary_present'))} / "
+        f"contract_rows_present={bool(semantic_block.get('contract_rows_present'))} / "
+        f"contract_rows={int(semantic_block.get('contract_rows_count') or 0)}"
+    )
+
+    orderbook_active_event_line = _health_orderbook_active_event_observer_line(
+        orderbook_block
+    )
+    orderbook_caption = (
+        f"wiring={orderbook_block.get('runtime_wiring_status') or '-'} / "
+        f"slots={int(orderbook_block.get('summary_slots_count') or 0)} / "
+        f"slots_present={','.join(list(orderbook_block.get('summary_slots_present') or [])) or '-'} / "
+        f"{orderbook_active_event_line} / "
+        f"persistence_present={bool(orderbook_block.get('persistence_present'))} / "
+        f"persistence_observable={bool(orderbook_block.get('persistence_observable'))} / "
+        f"age={age_text}"
+    )
+
+    return {
+        "collector_ingestion_observability": collector_caption,
+        "market_runtime_truth": market_caption,
+        "semantic_observability": semantic_caption,
+        "orderbook_active_event_observability": orderbook_caption,
+    }
+
+
 def build_health_digest_current_state_caption(
     *,
     widget,
@@ -18,6 +143,9 @@ def build_health_digest_current_state_caption(
 ) -> str:
     if widget is None or not payload:
         return "health_digest unavailable"
+
+    semantic_block = dict(payload.get("semantic_observability") or {})
+    orderbook_block = dict(payload.get("orderbook_active_event_observability") or {})
 
     freshness = str(getattr(widget, "freshness_key", None) or "UNKNOWN")
     semantic_wiring = str(getattr(widget, "semantic_wiring_key", None) or "missing")
@@ -28,23 +156,84 @@ def build_health_digest_current_state_caption(
         getattr(widget, "orderbook_contract_status_source_key", None) or "unknown"
     )
     source_kind = str(getattr(widget, "source_kind", None) or "unknown")
-    observer_present = bool(payload.get("semantic_usage_observer_present"))
-    usage_summary_present = bool(payload.get("semantic_usage_summary_present"))
-    contract_rows_present = bool(payload.get("semantic_usage_contract_rows_present"))
-    source_series_present = bool(payload.get("semantic_usage_source_series_present"))
-    persistence_present = bool(payload.get("orderbook_persistence_present"))
-    persistence_observable = payload.get("orderbook_persistence_observable")
+    observer_present = bool(
+        semantic_block.get("observer_present", payload.get("semantic_usage_observer_present"))
+    )
+    usage_summary_present = bool(
+        semantic_block.get(
+            "usage_summary_present",
+            payload.get("semantic_usage_summary_present"),
+        )
+    )
+    contract_rows_present = bool(
+        semantic_block.get(
+            "contract_rows_present",
+            payload.get("semantic_usage_contract_rows_present"),
+        )
+    )
+    source_series_present = bool(
+        semantic_block.get(
+            "source_series_present",
+            payload.get("semantic_usage_source_series_present"),
+        )
+    )
+    persistence_present = bool(
+        orderbook_block.get(
+            "persistence_present",
+            payload.get("orderbook_persistence_present"),
+        )
+    )
+    persistence_observable = orderbook_block.get(
+        "persistence_observable",
+        payload.get("orderbook_persistence_observable"),
+    )
     persistence_observable_text = (
         "unknown"
         if persistence_observable is None
         else str(bool(persistence_observable))
     )
-    semantic_rows = int(payload.get("semantic_usage_contract_rows_count") or 0)
-    summary_slots = int(payload.get("orderbook_summary_slots_count") or 0)
-    slots_present = ",".join(list(getattr(widget, "orderbook_summary_slots_present", []) or [])) or "-"
-    active_events = int(payload.get("orderbook_active_event_count") or 0)
-    active_event_names = ",".join(list(getattr(widget, "orderbook_active_event_names", []) or [])) or "-"
-    active_event_rows = int(payload.get("orderbook_active_event_contracts_count") or 0)
+    semantic_rows = int(
+        semantic_block.get(
+            "contract_rows_count",
+            payload.get("semantic_usage_contract_rows_count"),
+        )
+        or 0
+    )
+    summary_slots = int(
+        orderbook_block.get(
+            "summary_slots_count",
+            payload.get("orderbook_summary_slots_count"),
+        )
+        or 0
+    )
+    slots_present = ",".join(
+        list(
+            orderbook_block.get("summary_slots_present")
+            or getattr(widget, "orderbook_summary_slots_present", [])
+            or []
+        )
+    ) or "-"
+    active_events = int(
+        orderbook_block.get(
+            "active_event_count",
+            payload.get("orderbook_active_event_count"),
+        )
+        or 0
+    )
+    active_event_names = ",".join(
+        list(
+            orderbook_block.get("active_event_names")
+            or getattr(widget, "orderbook_active_event_names", [])
+            or []
+        )
+    ) or "-"
+    active_event_rows = int(
+        orderbook_block.get(
+            "active_event_contracts_count",
+            payload.get("orderbook_active_event_contracts_count"),
+        )
+        or 0
+    )
     age_sec = getattr(widget, "age_sec", None)
     age_text = "-" if age_sec is None else f"{float(age_sec):.1f}s"
     event_ts = str(getattr(widget, "event_ts", None) or "-")
@@ -119,6 +308,27 @@ def render_current_state_section(
                 widget=health_digest_widget,
                 payload=health_digest_payload,
             )
+        )
+
+        digest_block_captions = build_health_digest_block_captions(
+            widget=health_digest_widget,
+            payload=health_digest_payload,
+        )
+        st.caption(
+            "collector_ingestion_observability: "
+            + digest_block_captions["collector_ingestion_observability"]
+        )
+        st.caption(
+            "market_runtime_truth: "
+            + digest_block_captions["market_runtime_truth"]
+        )
+        st.caption(
+            "semantic_observability: "
+            + digest_block_captions["semantic_observability"]
+        )
+        st.caption(
+            "orderbook_active_event_observability: "
+            + digest_block_captions["orderbook_active_event_observability"]
         )
 
         m1, m2, m3, m4, m5 = st.columns(5)

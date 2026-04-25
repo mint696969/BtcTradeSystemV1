@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
+
+from ._env_utils import env_float, env_int
 
 from .config import load_config
 from .events import now_iso_utc
@@ -16,26 +17,6 @@ from .exploration_state import (
     write_exploration_daemon_status,
 )
 from .lock import acquire_daemon_lock, release_daemon_lock
-
-
-def _env_float(name: str, default: float) -> float:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except Exception:
-        return default
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except Exception:
-        return default
 
 
 def run_forever() -> int:
@@ -58,9 +39,9 @@ def run_forever() -> int:
         )
         return 2
 
-    loop_sleep_sec = max(0.05, _env_float("BTCTS_EXPLORATION_LOOP_SLEEP_SEC", 0.25))
-    max_failures = _env_int("BTCTS_EXPLORATION_MAX_FAILURES", 20)
-    failure_backoff_sec = max(1, _env_int("BTCTS_EXPLORATION_FAILURE_BACKOFF_SEC", 3))
+    loop_sleep_sec = max(0.05, env_float("BTCTS_EXPLORATION_LOOP_SLEEP_SEC", 0.25))
+    max_failures = env_int("BTCTS_EXPLORATION_MAX_FAILURES", 20)
+    failure_backoff_sec = max(1, env_int("BTCTS_EXPLORATION_FAILURE_BACKOFF_SEC", 3))
 
     cycle_no = 0
     consecutive_failures = 0

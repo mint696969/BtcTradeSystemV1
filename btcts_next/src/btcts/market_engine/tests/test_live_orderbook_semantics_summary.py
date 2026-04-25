@@ -16,6 +16,21 @@ from btcts.market_engine.market_state.live_orderbook_semantics import (
 from btcts.processing.l3_market_semantics.continuity.models import BookState
 
 
+_STABLE_EVENT_CONTRACT_KEYS = (
+    "contract_source",
+    "event_name",
+    "event_family",
+    "usage_grade",
+    "interpretation_bucket",
+    "meaning_version",
+    "trust_bucket",
+    "actionability",
+    "forecast_horizon_hint",
+    "half_life_sec",
+    "side",
+)
+
+
 def _prev_book() -> BookState:
     return BookState(
         best_bid=100.0,
@@ -125,6 +140,8 @@ def main() -> int:
         for event in summary["active_event_contracts"]
         if str(event.get("event_name")) == "support_candidate"
     )
+    for key in _STABLE_EVENT_CONTRACT_KEYS:
+        assert key in support_row
     assert support_row["meaning_version"] == "l3_event_usage_policy.v1alpha1"
     assert support_row["contract_source"] == "l3_event_usage_policy"
     assert support_row["trust_bucket"] == "degraded"

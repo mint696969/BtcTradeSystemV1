@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import safe_str
 from btcts.processing.l4_consumer_models.shared.prediction_system_contract import (
     PredictionScenarioOutput,
 )
@@ -20,13 +21,6 @@ class ResolvedTacticParameterSetBundle:
     comparison_set_refs: tuple[TacticParameterSetRef, ...]
     rollback_ready: bool
     parameter_trace: dict[str, Any]
-
-
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
 
 
 def _build_default_active_parameter_set_ref(
@@ -69,7 +63,7 @@ def _build_default_comparison_set_refs(
 ) -> tuple[TacticParameterSetRef, ...]:
     refs: list[TacticParameterSetRef] = []
 
-    baseline_ref_id = _safe_str(active_parameter_set_ref.baseline_ref)
+    baseline_ref_id = safe_str(active_parameter_set_ref.baseline_ref)
     if baseline_ref_id and baseline_ref_id != active_parameter_set_ref.set_id:
         _append_unique_ref(
             refs,
@@ -81,7 +75,7 @@ def _build_default_comparison_set_refs(
             ),
         )
 
-    rollback_parent_set_id = _safe_str(
+    rollback_parent_set_id = safe_str(
         active_parameter_set_ref.rollback_parent_set_id
     )
     if (
@@ -120,9 +114,9 @@ def _build_parameter_trace(
     active_parameter_set_ref: TacticParameterSetRef,
     comparison_set_refs: tuple[TacticParameterSetRef, ...],
 ) -> dict[str, Any]:
-    rollback_target_ref = _safe_str(
+    rollback_target_ref = safe_str(
         active_parameter_set_ref.rollback_parent_set_id
-    ) or _safe_str(active_parameter_set_ref.baseline_ref)
+    ) or safe_str(active_parameter_set_ref.baseline_ref)
 
     comparison_set_ids = tuple(item.set_id for item in comparison_set_refs)
     comparison_set_versions = tuple(
@@ -140,7 +134,7 @@ def _build_parameter_trace(
         -1,
     )
     comparison_baseline_available = bool(
-        _safe_str(active_parameter_set_ref.baseline_ref)
+        safe_str(active_parameter_set_ref.baseline_ref)
     )
 
     comparison_relation = "standalone"

@@ -6,6 +6,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import (
+    safe_float,
+    safe_str,
+)
+
 
 @dataclass(frozen=True)
 class MarketSummary:
@@ -68,24 +73,8 @@ class MarketSummaryBuildInput:
     source_kind: str | None = None
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except Exception:
-        return None
-
-
 def _pick_event_ts(row: dict[str, Any]) -> str | None:
-    return _safe_str(row.get("collector_ts")) or _safe_str(row.get("exchange_ts"))
+    return safe_str(row.get("collector_ts")) or safe_str(row.get("exchange_ts"))
 
 
 def _resolve_freshness(age_sec: float | None) -> str:
@@ -105,7 +94,7 @@ def _resolve_is_stale(freshness: str) -> bool | None:
 
 
 def _normalize_source_kind(value: Any) -> str:
-    normalized = _safe_str(value)
+    normalized = safe_str(value)
     return normalized or "unknown"
 
 
@@ -118,16 +107,16 @@ def _normalize_semantic_usage_contract_rows(row: dict[str, Any]) -> list[dict[st
     for item in raw_rows:
         if not isinstance(item, dict):
             continue
-        event_family = _safe_str(item.get("event_family"))
+        event_family = safe_str(item.get("event_family"))
         if event_family is None:
             continue
         out.append(
             {
-                "contract_source": _safe_str(item.get("contract_source")) or "unknown",
-                "interpretation_bucket": _safe_str(item.get("interpretation_bucket")),
-                "meaning_version": _safe_str(item.get("meaning_version")) or "unknown",
+                "contract_source": safe_str(item.get("contract_source")) or "unknown",
+                "interpretation_bucket": safe_str(item.get("interpretation_bucket")),
+                "meaning_version": safe_str(item.get("meaning_version")) or "unknown",
                 "event_family": event_family,
-                "usage_grade": _safe_str(item.get("usage_grade")) or "unknown",
+                "usage_grade": safe_str(item.get("usage_grade")) or "unknown",
             }
         )
     return out
@@ -146,7 +135,7 @@ def _normalize_orderbook_active_event_contracts(row: dict[str, Any]) -> list[dic
     for item in raw_rows:
         if not isinstance(item, dict):
             continue
-        event_name = _safe_str(item.get("event_name"))
+        event_name = safe_str(item.get("event_name"))
         if event_name is None:
             continue
         raw_consumer_allowed = item.get("consumer_allowed")
@@ -160,21 +149,21 @@ def _normalize_orderbook_active_event_contracts(row: dict[str, Any]) -> list[dic
 
         out.append(
             {
-                "contract_source": _safe_str(item.get("contract_source")) or "l3_event_usage_policy",
+                "contract_source": safe_str(item.get("contract_source")) or "l3_event_usage_policy",
                 "event_name": event_name,
-                "event_family": _safe_str(item.get("event_family")) or "unknown",
-                "usage_grade": _safe_str(item.get("usage_grade")) or "unknown",
-                "interpretation_bucket": _safe_str(item.get("interpretation_bucket")),
-                "meaning_version": _safe_str(item.get("meaning_version")) or "unknown",
+                "event_family": safe_str(item.get("event_family")) or "unknown",
+                "usage_grade": safe_str(item.get("usage_grade")) or "unknown",
+                "interpretation_bucket": safe_str(item.get("interpretation_bucket")),
+                "meaning_version": safe_str(item.get("meaning_version")) or "unknown",
                 "confidence": item.get("confidence"),
-                "trust_bucket": _safe_str(item.get("trust_bucket")) or "unknown",
+                "trust_bucket": safe_str(item.get("trust_bucket")) or "unknown",
                 "consumer_allowed": consumer_allowed,
-                "actionability": _safe_str(item.get("actionability")) or "unknown",
-                "forecast_horizon_hint": _safe_str(item.get("forecast_horizon_hint")) or "unknown",
+                "actionability": safe_str(item.get("actionability")) or "unknown",
+                "forecast_horizon_hint": safe_str(item.get("forecast_horizon_hint")) or "unknown",
                 "half_life_sec": item.get("half_life_sec"),
                 "invalidates_on": invalidates_on,
                 "evidence_refs": evidence_refs,
-                "side": _safe_str(item.get("side")),
+                "side": safe_str(item.get("side")),
             }
         )
     return out
@@ -190,7 +179,7 @@ def _normalize_orderbook_active_event_names(row: dict[str, Any]) -> list[str]:
     raw_names = summary.get("active_event_names")
     if isinstance(raw_names, list):
         for item in raw_names:
-            name = _safe_str(item)
+            name = safe_str(item)
             if name is not None:
                 out.append(name)
 
@@ -204,7 +193,7 @@ def _normalize_orderbook_active_event_names(row: dict[str, Any]) -> list[str]:
     for item in raw_rows:
         if not isinstance(item, dict):
             continue
-        name = _safe_str(item.get("event_name"))
+        name = safe_str(item.get("event_name"))
         if name is not None:
             out.append(name)
 
@@ -217,7 +206,7 @@ def _normalize_distribution(value: Any) -> dict[str, int]:
 
     out: dict[str, int] = {}
     for key, raw_value in value.items():
-        normalized_key = _safe_str(key)
+        normalized_key = safe_str(key)
         if normalized_key is None:
             continue
         try:
@@ -254,16 +243,16 @@ def _normalize_semantic_runtime_fields(
     if not isinstance(summary, dict):
         summary = {}
 
-    summary_source = _safe_str(summary.get("source_kind")) or "unknown"
-    contract_source = _safe_str(summary.get("contract_source")) or "unknown"
-    meaning_version = _safe_str(summary.get("meaning_version")) or "unknown"
+    summary_source = safe_str(summary.get("source_kind")) or "unknown"
+    contract_source = safe_str(summary.get("contract_source")) or "unknown"
+    meaning_version = safe_str(summary.get("meaning_version")) or "unknown"
     observer_status = (
-        _safe_str(row.get("semantic_observer_status"))
-        or _safe_str(summary.get("observer_status"))
+        safe_str(row.get("semantic_observer_status"))
+        or safe_str(summary.get("observer_status"))
         or "unknown"
     )
 
-    observer_present = _safe_str(row.get("semantic_observer_status")) is not None
+    observer_present = safe_str(row.get("semantic_observer_status")) is not None
     usage_summary_present = bool(summary)
     contract_rows_present = semantic_usage_contract_rows_count > 0
     contract_rows_count = int(semantic_usage_contract_rows_count)
@@ -368,7 +357,7 @@ def _normalize_orderbook_wiring_status(
     summary_slots_count: int,
     active_event_contracts_count: int,
 ) -> tuple[str, str]:
-    explicit_status = _safe_str(row.get("orderbook_semantics_contract_status"))
+    explicit_status = safe_str(row.get("orderbook_semantics_contract_status"))
     inferred_status = "missing"
     if summary_slots_count >= 4:
         inferred_status = "wired"
@@ -440,13 +429,13 @@ def build_market_summary(inp: MarketSummaryBuildInput) -> MarketSummary:
     diagnostics = dict(inp.diagnostics or {})
 
     event_ts = _pick_event_ts(row)
-    age_sec = _safe_float(diagnostics.get("preferred_row_age_sec"))
+    age_sec = safe_float(diagnostics.get("preferred_row_age_sec"))
     if age_sec is None:
-        age_sec = _safe_float(diagnostics.get("age_sec"))
+        age_sec = safe_float(diagnostics.get("age_sec"))
 
     freshness = _resolve_freshness(age_sec)
     if age_sec is None:
-        diagnostics_freshness = _safe_str(
+        diagnostics_freshness = safe_str(
             diagnostics.get("preferred_row_freshness") or diagnostics.get("freshness")
         )
         if diagnostics_freshness is not None:
@@ -454,13 +443,13 @@ def build_market_summary(inp: MarketSummaryBuildInput) -> MarketSummary:
 
     is_stale = _resolve_is_stale(freshness)
 
-    trust_state = _safe_str(row.get("trust_state"))
-    continuity_state = _safe_str(row.get("continuity_state"))
-    interpretation_bucket = _safe_str(row.get("interpretation_bucket"))
-    interpretation_reason = _safe_str(row.get("interpretation_reason"))
+    trust_state = safe_str(row.get("trust_state"))
+    continuity_state = safe_str(row.get("continuity_state"))
+    interpretation_bucket = safe_str(row.get("interpretation_bucket"))
+    interpretation_reason = safe_str(row.get("interpretation_reason"))
 
     source_kind = _normalize_source_kind(inp.source_kind or diagnostics.get("source_kind"))
-    source_series_id = _safe_str(
+    source_series_id = safe_str(
         row.get("source_series_id") or diagnostics.get("preferred_row_source_series_id")
     )
 
@@ -526,9 +515,9 @@ def build_market_summary(inp: MarketSummaryBuildInput) -> MarketSummary:
 
     return MarketSummary(
         summary_type="market_summary",
-        exchange=_safe_str(row.get("exchange")),
-        symbol_raw=_safe_str(row.get("symbol_raw") or row.get("symbol")),
-        market_uid=_safe_str(row.get("market_uid")),
+        exchange=safe_str(row.get("exchange")),
+        symbol_raw=safe_str(row.get("symbol_raw") or row.get("symbol")),
+        market_uid=safe_str(row.get("market_uid")),
         source_kind=source_kind,
         source_series_id=source_series_id,
         event_ts=event_ts,
@@ -539,9 +528,9 @@ def build_market_summary(inp: MarketSummaryBuildInput) -> MarketSummary:
         continuity_state=continuity_state,
         interpretation_bucket=interpretation_bucket,
         interpretation_reason=interpretation_reason,
-        market_state_label=_safe_str(row.get("market_state_label")),
-        participation_state=_safe_str(row.get("participation_state")),
-        liquidity_bias=_safe_str(row.get("liquidity_bias")),
+        market_state_label=safe_str(row.get("market_state_label")),
+        participation_state=safe_str(row.get("participation_state")),
+        liquidity_bias=safe_str(row.get("liquidity_bias")),
         semantic_summary_source=semantic_summary_source,
         semantic_contract_source=semantic_contract_source,
         semantic_meaning_version=semantic_meaning_version,

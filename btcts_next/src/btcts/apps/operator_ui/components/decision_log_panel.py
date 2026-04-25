@@ -11,6 +11,10 @@ from btcts.apps.operator_ui.components.market_state_bridge import (
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
+from btcts.apps.operator_ui.components.ai_operator_action_payloads import (
+    build_research_context_base,
+    build_watch_item,
+)
 from btcts.apps.operator_ui.decision_log_store import (
     decision_log_jsonl_path,
     load_recent_decisions,
@@ -86,15 +90,17 @@ def render():
                     get_text(lang, "decision_log_research"),
                     key=f"decision_log_research_{real_idx}",
                 ):
-                    st.session_state.research_replay_context = {
-                        "session_name": "ai_operator_decision_log",
-                        "start_ts": "",
-                        "end_ts": "",
-                        "jump_ts": item.get("ts") or "",
-                        "kind_filter": "all",
-                        "event_filter": item.get("action") or "",
-                        "filtered_rows": 1,
-                    }
+                    st.session_state.research_replay_context = (
+                        build_research_context_base(
+                            session_name="ai_operator_decision_log",
+                            start_ts="",
+                            end_ts="",
+                            jump_ts=item.get("ts") or "",
+                            kind_filter="all",
+                            event_filter=item.get("action") or "",
+                            filtered_rows=1,
+                        )
+                    )
                     st.session_state.ui_selected_page_key = "research"
                     st.rerun()
 
@@ -103,12 +109,26 @@ def render():
                     get_text(lang, "decision_log_watch"),
                     key=f"decision_log_watch_{real_idx}",
                 ):
-                    watch_row = {
-                        "ts": item.get("ts"),
-                        "regime": item.get("regime"),
-                        "action": item.get("action"),
-                        "risk": item.get("risk"),
-                    }
+                    watch_row = build_watch_item(
+                        {
+                            "event_ts": item.get("ts"),
+                            "regime": item.get("regime"),
+                            "advisory_action": item.get("action"),
+                            "advisory_risk": item.get("risk"),
+                            "tactic_summary_lines": tuple(
+                                item.get("tactic_summary_lines") or ()
+                            ),
+                            "tactic_interpretation_lines": tuple(
+                                item.get("tactic_interpretation_lines") or ()
+                            ),
+                            "primary_tactic_interpretation_line": str(
+                                item.get("primary_tactic_interpretation_line") or ""
+                            ),
+                            "tactic_primary_summary_line": str(
+                                item.get("tactic_primary_summary_line") or ""
+                            ),
+                        }
+                    )
                     merged_watch, persisted = append_watch(
                         watch_row,
                         max_items_hint=12,

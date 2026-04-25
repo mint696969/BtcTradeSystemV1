@@ -175,9 +175,12 @@ def main() -> int:
                         "overlay_influence": "overlay_bias",
                     },
                     "selection_trace": {
+                        "promotion_gate_state": "allowed",
+                        "overlay_primary_ref": "prefer_reversal_prepare",
+                        "overlay_application_mode": "primary_only",
                         "selection_bias_tags": (
                             "overlay:prefer_reversal_prepare",
-                        )
+                        ),
                     },
                 },
             },
@@ -196,6 +199,9 @@ def main() -> int:
             "rollback_target_ref": "baseline-default",
             "comparison_relation": "candidate_vs_baseline",
             "overlay_influence": "overlay_bias",
+            "promotion_gate_state": "allowed",
+            "overlay_primary_ref": "prefer_reversal_prepare",
+            "overlay_application_mode": "primary_only",
             "selection_bias_tags": ("overlay:prefer_reversal_prepare",),
         }
         assert tactic_payloads["tactic_summary_lines"] == (
@@ -216,17 +222,20 @@ def main() -> int:
         assert tactic_payloads["tactic_interpretation_lines"] == (
             "current set is being compared as a candidate relative to baseline",
             "overlay influence is present, so the stance should be read as context-shaped",
+            "overlay is acting as the primary selection input: prefer_reversal_prepare",
             "rollback review target is available: baseline-default",
             "current set is adoption-ready for review, not an automatic decision",
         )
         assert (
             tactic_payloads["primary_tactic_interpretation_line"]
-            == "overlay influence is present, so the stance should be read as context-shaped"
+            == "current set is being compared as a candidate relative to baseline"
         )
         assert tactic_payloads["tactic_primary_summary_line"] == (
             "reversal_prepare | "
             "candidate_vs_baseline | "
-            "overlay influence is present, so the stance should be read as context-shaped | "
+            "overlay_bias_present | "
+            "overlay_primary | "
+            "current set is being compared as a candidate relative to baseline | "
             "review_only"
         )
         assert tactic_payloads["tactic_explanation_note"] == (

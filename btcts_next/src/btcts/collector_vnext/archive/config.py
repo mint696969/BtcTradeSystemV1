@@ -7,6 +7,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from btcts.collector_vnext._env_utils import env_int
 from btcts.collector_vnext.config import load_config
 
 
@@ -21,16 +22,6 @@ DEFAULT_GC_PREFIXES = [
     "data/market_data",
     "data/collector_raw",
 ]
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = str(os.getenv(name, "") or "").strip()
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except Exception:
-        return default
 
 
 def _env_list(name: str, default: list[str]) -> list[str]:
@@ -92,13 +83,13 @@ def load_archive_config() -> ArchiveConfig:
         relative_prefixes=_env_list("BTCTS_ARCHIVE_RELATIVE_PREFIXES", []),
         copy_prefixes=_env_list("BTCTS_ARCHIVE_COPY_PREFIXES", []),
         gc_prefixes=_env_list("BTCTS_ARCHIVE_GC_PREFIXES", []),
-        scan_interval_sec=max(10, _env_int("BTCTS_ARCHIVE_SCAN_INTERVAL_SEC", 30)),
-        stable_age_sec=max(60, _env_int("BTCTS_ARCHIVE_STABLE_AGE_SEC", 600)),
-        copy_min_age_days=max(1, _env_int("BTCTS_ARCHIVE_COPY_MIN_AGE_DAYS", 1)),
-        gc_min_age_days=max(2, _env_int("BTCTS_ARCHIVE_GC_MIN_AGE_DAYS", 2)),
-        max_files_per_cycle=max(1, _env_int("BTCTS_ARCHIVE_MAX_FILES_PER_CYCLE", 64)),
-        max_bytes_per_cycle=max(1024 * 1024, _env_int("BTCTS_ARCHIVE_MAX_BYTES_PER_CYCLE", 256 * 1024 * 1024)),
+        scan_interval_sec=max(10, env_int("BTCTS_ARCHIVE_SCAN_INTERVAL_SEC", 30)),
+        stable_age_sec=max(60, env_int("BTCTS_ARCHIVE_STABLE_AGE_SEC", 600)),
+        copy_min_age_days=max(1, env_int("BTCTS_ARCHIVE_COPY_MIN_AGE_DAYS", 1)),
+        gc_min_age_days=max(2, env_int("BTCTS_ARCHIVE_GC_MIN_AGE_DAYS", 2)),
+        max_files_per_cycle=max(1, env_int("BTCTS_ARCHIVE_MAX_FILES_PER_CYCLE", 64)),
+        max_bytes_per_cycle=max(1024 * 1024, env_int("BTCTS_ARCHIVE_MAX_BYTES_PER_CYCLE", 256 * 1024 * 1024)),
         gc_enabled=_env_bool("BTCTS_ARCHIVE_GC_ENABLED", False),
         gc_dry_run=_env_bool("BTCTS_ARCHIVE_GC_DRY_RUN", True),
-        max_delete_files_per_cycle=max(1, _env_int("BTCTS_ARCHIVE_MAX_DELETE_FILES_PER_CYCLE", 32)),
+        max_delete_files_per_cycle=max(1, env_int("BTCTS_ARCHIVE_MAX_DELETE_FILES_PER_CYCLE", 32)),
     )

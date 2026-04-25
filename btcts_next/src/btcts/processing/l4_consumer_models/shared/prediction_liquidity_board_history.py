@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import safe_str
 from btcts.processing.l4_consumer_models.shared.health_digest import HealthDigest
 from btcts.processing.l4_consumer_models.shared.market_summary import MarketSummary
 
@@ -18,15 +19,8 @@ class PredictionLiquidityBoardHistoryBuildInput:
     diagnostics: dict[str, Any] | None = None
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
 def _resolve_source_kind(value: Any) -> str:
-    return _safe_str(value) or "market_summary_anchor"
+    return safe_str(value) or "market_summary_anchor"
 
 
 def _resolve_identity(
@@ -155,7 +149,7 @@ def _resolve_persistence_confidence(
             return "low"
 
         semantic_usage = dict(health_digest.semantic_usage or {})
-        observer_status = _safe_str(semantic_usage.get("observer_status"))
+        observer_status = safe_str(semantic_usage.get("observer_status"))
         if observer_status in {"broken", "unknown"}:
             return "low"
         if observer_status == "caution" and confidence == "high":
@@ -196,7 +190,7 @@ def _build_trigger_flags(
             out.append("health_digest_stale")
 
         semantic_usage = dict(health_digest.semantic_usage or {})
-        observer_status = _safe_str(semantic_usage.get("observer_status"))
+        observer_status = safe_str(semantic_usage.get("observer_status"))
         if observer_status is not None:
             out.append(f"health_observer:{observer_status}")
 

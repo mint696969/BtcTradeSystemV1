@@ -41,6 +41,15 @@ def build_operator_tactic_context(tactic_payload: dict | None) -> dict:
         "overlay_influence": str(
             parameter_trace.get("overlay_influence") or ""
         ).strip(),
+        "promotion_gate_state": str(
+            selection_trace.get("promotion_gate_state") or ""
+        ).strip(),
+        "overlay_primary_ref": str(
+            selection_trace.get("overlay_primary_ref") or ""
+        ).strip(),
+        "overlay_application_mode": str(
+            selection_trace.get("overlay_application_mode") or ""
+        ).strip(),
         "selection_bias_tags": tuple(selection_trace.get("selection_bias_tags") or ()),
     }
 

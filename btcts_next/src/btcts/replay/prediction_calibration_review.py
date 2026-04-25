@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from btcts.processing.l4_consumer_models.shared import PredictionCalibrationHint
+from btcts.processing.l4_consumer_models.shared._value_utils import safe_float
 
 
 @dataclass(frozen=True)
@@ -14,15 +15,6 @@ class PredictionCalibrationReviewBuildInput:
     calibration_hint: PredictionCalibrationHint | None = None
     evaluation_report: dict[str, Any] | None = None
     diagnostics: dict[str, Any] | None = None
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except Exception:
-        return None
 
 
 def _safe_int(value: Any) -> int:
@@ -74,8 +66,8 @@ def _resolve_primary_focus(
     calibration_hint: PredictionCalibrationHint | None,
     evaluation_report: dict[str, Any],
 ) -> str:
-    average_confidence_gap = _safe_float(evaluation_report.get("average_confidence_gap"))
-    average_caution_gap = _safe_float(evaluation_report.get("average_caution_gap"))
+    average_confidence_gap = safe_float(evaluation_report.get("average_confidence_gap"))
+    average_caution_gap = safe_float(evaluation_report.get("average_caution_gap"))
     missed_count = _safe_int(evaluation_report.get("missed_count"))
 
     if calibration_hint is not None:
@@ -111,7 +103,7 @@ def _resolve_confidence_review(
     calibration_hint: PredictionCalibrationHint | None,
     evaluation_report: dict[str, Any],
 ) -> str:
-    average_confidence_gap = _safe_float(evaluation_report.get("average_confidence_gap"))
+    average_confidence_gap = safe_float(evaluation_report.get("average_confidence_gap"))
 
     if calibration_hint is not None:
         if calibration_hint.confidence_bias == "slightly_overstated":
@@ -135,7 +127,7 @@ def _resolve_caution_review(
     calibration_hint: PredictionCalibrationHint | None,
     evaluation_report: dict[str, Any],
 ) -> str:
-    average_caution_gap = _safe_float(evaluation_report.get("average_caution_gap"))
+    average_caution_gap = safe_float(evaluation_report.get("average_caution_gap"))
 
     if calibration_hint is not None:
         if calibration_hint.caution_bias == "understated":

@@ -8,6 +8,9 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from btcts.apps.operator_ui.components.ai_operator_action_payloads import (
+    build_research_context_base,
+)
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
 )
@@ -376,15 +379,19 @@ def render():
                     "Open in Research",
                     key="replay_open_in_research",
                 ):
-                    st.session_state.research_replay_context = {
-                        "session_name": selected_name if "selected_name" in locals() else None,
-                        "start_ts": start_ts,
-                        "end_ts": end_ts,
-                        "jump_ts": jump_ts,
-                        "kind_filter": kind_filter,
-                        "event_filter": event_filter,
-                        "filtered_rows": int(len(results_df)),
-                    }
+                    st.session_state.research_replay_context = (
+                        build_research_context_base(
+                            session_name=(
+                                selected_name if "selected_name" in locals() else ""
+                            ),
+                            start_ts=start_ts,
+                            end_ts=end_ts,
+                            jump_ts=jump_ts,
+                            kind_filter=kind_filter,
+                            event_filter=event_filter,
+                            filtered_rows=int(len(results_df)),
+                        )
+                    )
                     st.session_state.ui_selected_page_key = "research"
                     st.rerun()
 

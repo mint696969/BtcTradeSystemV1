@@ -6,6 +6,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import (
+    safe_float,
+    safe_str,
+)
+
 
 @dataclass(frozen=True)
 class PredictionRealizedOutcomeBuildInput:
@@ -21,24 +26,8 @@ class PredictionRealizedOutcomeBuildInput:
     diagnostics: dict[str, Any] | None = None
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except Exception:
-        return None
-
-
 def _clamp_confidence(value: Any) -> float | None:
-    parsed = _safe_float(value)
+    parsed = safe_float(value)
     if parsed is None:
         return None
     if parsed < 0.0:
@@ -49,7 +38,7 @@ def _clamp_confidence(value: Any) -> float | None:
 
 
 def _round_optional(value: Any) -> float | None:
-    parsed = _safe_float(value)
+    parsed = safe_float(value)
     if parsed is None:
         return None
     return round(parsed, 2)
@@ -61,12 +50,12 @@ def build_prediction_realized_outcome(
     return {
         "outcome_type": "prediction_realized_outcome",
         "outcome_version": "phase3.v1alpha1",
-        "market_uid": _safe_str(inp.market_uid),
-        "event_ts": _safe_str(inp.event_ts),
-        "realized_horizon": _safe_str(inp.realized_horizon),
-        "realized_regime_state": _safe_str(inp.realized_regime_state),
+        "market_uid": safe_str(inp.market_uid),
+        "event_ts": safe_str(inp.event_ts),
+        "realized_horizon": safe_str(inp.realized_horizon),
+        "realized_regime_state": safe_str(inp.realized_regime_state),
         "realized_confidence": _clamp_confidence(inp.realized_confidence),
-        "realized_caution_level": _safe_str(inp.realized_caution_level),
+        "realized_caution_level": safe_str(inp.realized_caution_level),
         "realized_return_bp": _round_optional(inp.realized_return_bp),
         "realized_max_adverse_bp": _round_optional(inp.realized_max_adverse_bp),
         "realized_max_favorable_bp": _round_optional(inp.realized_max_favorable_bp),

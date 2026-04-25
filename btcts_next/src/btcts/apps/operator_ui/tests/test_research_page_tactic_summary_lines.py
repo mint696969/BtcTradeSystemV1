@@ -42,11 +42,13 @@ def main() -> int:
             "current set is adoption-ready for review, not an automatic decision",
         ),
         "primary_tactic_interpretation_line": (
-            "overlay influence is present, so the stance should be read as context-shaped"
+            "current set is being compared as a candidate relative to baseline"
         ),
         "tactic_primary_summary_line": (
             "reversal_prepare | "
             "candidate_vs_baseline | "
+            "overlay_bias_present | "
+            "overlay_primary | "
             "overlay influence is present, so the stance should be read as context-shaped | "
             "review_only"
         ),
@@ -72,11 +74,13 @@ def main() -> int:
         "current set is adoption-ready for review, not an automatic decision",
     )
     assert _replay_context_primary_tactic_interpretation_line(replay_ctx) == (
-        "overlay influence is present, so the stance should be read as context-shaped"
+        "current set is being compared as a candidate relative to baseline"
     )
     assert _replay_context_tactic_primary_summary_line(replay_ctx) == (
         "reversal_prepare | "
         "candidate_vs_baseline | "
+        "overlay_bias_present | "
+        "overlay_primary | "
         "overlay influence is present, so the stance should be read as context-shaped | "
         "review_only"
     )

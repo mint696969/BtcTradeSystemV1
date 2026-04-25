@@ -83,6 +83,9 @@ def build_health_digest_layer3_summary_caption(
     if widget is None or not payload:
         return "health_digest unavailable"
 
+    semantic_block = dict(payload.get("semantic_observability") or {})
+    orderbook_block = dict(payload.get("orderbook_active_event_observability") or {})
+
     semantic_wiring = str(getattr(widget, "semantic_wiring_key", None) or "missing")
     orderbook_wiring = str(getattr(widget, "orderbook_wiring_key", None) or "missing")
     semantic_source = str(getattr(widget, "semantic_summary_source_key", None) or "unknown")
@@ -91,18 +94,81 @@ def build_health_digest_layer3_summary_caption(
         getattr(widget, "orderbook_contract_status_source_key", None) or "unknown"
     )
     source_kind = str(getattr(widget, "source_kind", None) or "unknown")
-    observer_present = bool(payload.get("semantic_usage_observer_present"))
-    usage_summary_present = bool(payload.get("semantic_usage_summary_present"))
-    contract_rows_present = bool(payload.get("semantic_usage_contract_rows_present"))
-    source_series_present = bool(payload.get("semantic_usage_source_series_present"))
-    persistence_present = bool(payload.get("orderbook_persistence_present"))
-    persistence_observable = bool(payload.get("orderbook_persistence_observable"))
-    semantic_rows = int(payload.get("semantic_usage_contract_rows_count") or 0)
-    summary_slots = int(payload.get("orderbook_summary_slots_count") or 0)
-    slots_present = ",".join(list(getattr(widget, "orderbook_summary_slots_present", []) or [])) or "-"
-    active_events = int(payload.get("orderbook_active_event_count") or 0)
-    active_event_names = ",".join(list(getattr(widget, "orderbook_active_event_names", []) or [])) or "-"
-    active_event_rows = int(payload.get("orderbook_active_event_contracts_count") or 0)
+    observer_present = bool(
+        semantic_block.get("observer_present", payload.get("semantic_usage_observer_present"))
+    )
+    usage_summary_present = bool(
+        semantic_block.get(
+            "usage_summary_present",
+            payload.get("semantic_usage_summary_present"),
+        )
+    )
+    contract_rows_present = bool(
+        semantic_block.get(
+            "contract_rows_present",
+            payload.get("semantic_usage_contract_rows_present"),
+        )
+    )
+    source_series_present = bool(
+        semantic_block.get(
+            "source_series_present",
+            payload.get("semantic_usage_source_series_present"),
+        )
+    )
+    persistence_present = bool(
+        orderbook_block.get(
+            "persistence_present",
+            payload.get("orderbook_persistence_present"),
+        )
+    )
+    persistence_observable = bool(
+        orderbook_block.get(
+            "persistence_observable",
+            payload.get("orderbook_persistence_observable"),
+        )
+    )
+    semantic_rows = int(
+        semantic_block.get(
+            "contract_rows_count",
+            payload.get("semantic_usage_contract_rows_count"),
+        )
+        or 0
+    )
+    summary_slots = int(
+        orderbook_block.get(
+            "summary_slots_count",
+            payload.get("orderbook_summary_slots_count"),
+        )
+        or 0
+    )
+    slots_present = ",".join(
+        list(
+            orderbook_block.get("summary_slots_present")
+            or getattr(widget, "orderbook_summary_slots_present", [])
+            or []
+        )
+    ) or "-"
+    active_events = int(
+        orderbook_block.get(
+            "active_event_count",
+            payload.get("orderbook_active_event_count"),
+        )
+        or 0
+    )
+    active_event_names = ",".join(
+        list(
+            orderbook_block.get("active_event_names")
+            or getattr(widget, "orderbook_active_event_names", [])
+            or []
+        )
+    ) or "-"
+    active_event_rows = int(
+        orderbook_block.get(
+            "active_event_contracts_count",
+            payload.get("orderbook_active_event_contracts_count"),
+        )
+        or 0
+    )
     age_sec = getattr(widget, "age_sec", None)
     age_text = "-" if age_sec is None else f"{float(age_sec):.1f}s"
     event_ts = str(getattr(widget, "event_ts", None) or "-")

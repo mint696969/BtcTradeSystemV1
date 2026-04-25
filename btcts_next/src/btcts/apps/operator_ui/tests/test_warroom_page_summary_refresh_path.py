@@ -51,6 +51,51 @@ def main() -> int:
             "risk_monitor",
             "agent_panels",
         ]
+        assert warroom_page._warroom_reading_block_order() == (
+            "current_market_summary_reading",
+            "current_active_event_reading",
+            "current_tactic_prediction_reading",
+            "operator_support_review_reading",
+        )
+        assert warroom_page._warroom_reading_block_captions() == {
+            "current_market_summary_reading": (
+                "read current regime / source / compact market state first"
+            ),
+            "current_active_event_reading": (
+                "read active event / liquidity / graph context as current market evidence"
+            ),
+            "current_tactic_prediction_reading": (
+                "read tactic stance / prediction as review support, not execution"
+            ),
+            "operator_support_review_reading": (
+                "read watch / timeline / decision support as operator review context"
+            ),
+        }
+
+        original_load_market_summary_status_payload = (
+            warroom_page.load_market_summary_status_payload
+        )
+        try:
+            warroom_page.load_market_summary_status_payload = lambda: {
+                "orderbook_active_event_contracts": [
+                    {
+                        "event_name": "near_wall_continued",
+                        "event_family": "wall",
+                        "usage_grade": "strong",
+                        "actionability": "review",
+                        "forecast_horizon_hint": "short",
+                        "half_life_sec": 30,
+                        "side": "bid",
+                    }
+                ]
+            }
+            assert warroom_page._warroom_active_event_reading_caption() == (
+                "near_wall_continued (wall / strong / review / short / half_life=30 / bid)"
+            )
+        finally:
+            warroom_page.load_market_summary_status_payload = (
+                original_load_market_summary_status_payload
+            )
         for widget_id in target_widget_ids:
             warroom_page._render_fragmentable_warroom_widget(
                 widget_id,

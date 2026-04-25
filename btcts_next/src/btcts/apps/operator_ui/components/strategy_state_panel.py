@@ -8,11 +8,16 @@ import streamlit as st
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
     load_prediction_summary_widget_model,
+    load_prediction_tactic_proposal_payload,
+)
+from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
+    build_tactic_compact_reading_line,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
 )
 from btcts.apps.operator_ui.components.prediction_summary_presenter import (
+    prediction_compact_reading_line,
     prediction_snapshot_lines,
 )
 from btcts.apps.operator_ui.components.research_bridge import load_latest_experiment_payload
@@ -69,6 +74,7 @@ def render():
     best_name = str(best_strategy.get("strategy") or summary.get("best_strategy") or "unknown")
     summary_widget = load_market_summary_widget_model()
     prediction_widget = load_prediction_summary_widget_model()
+    tactic_payload = load_prediction_tactic_proposal_payload()
     total_pnl = float(best_strategy.get("total_pnl") or 0.0)
     wins = int(best_strategy.get("wins") or 0)
     losses = int(best_strategy.get("losses") or 0)
@@ -142,6 +148,14 @@ def render():
 
     if summary_widget:
         st.caption(summary_widget_caption(summary_widget))
+
+    tactic_reading = build_tactic_compact_reading_line(tactic_payload)
+    if tactic_reading != "tactic_reading unavailable":
+        st.caption(tactic_reading)
+
+    prediction_reading = prediction_compact_reading_line(prediction_widget)
+    if prediction_reading != "prediction_reading unavailable":
+        st.caption(prediction_reading)
 
     prediction_lines = prediction_snapshot_lines(prediction_widget)
     if prediction_lines:

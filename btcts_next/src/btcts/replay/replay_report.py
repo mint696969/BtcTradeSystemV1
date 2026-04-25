@@ -13,6 +13,7 @@ def _build_tactic_compare_friendly_summary_line(
     tactic_key: object,
     comparison_relation: object,
     overlay_influence: object,
+    overlay_application_mode: object,
     rollback_target_ref: object,
     adoption_ready: object,
     selected_set_id: object,
@@ -30,6 +31,14 @@ def _build_tactic_compare_friendly_summary_line(
     normalized_overlay = str(overlay_influence or "").strip()
     if normalized_overlay == "overlay_bias":
         parts.append("overlay_bias_present")
+
+    normalized_overlay_mode = str(overlay_application_mode or "").strip()
+    if normalized_overlay_mode == "primary_only":
+        parts.append("overlay_primary")
+    elif normalized_overlay_mode == "primary_and_support":
+        parts.append("overlay_primary_plus_support")
+    elif normalized_overlay_mode == "support_only":
+        parts.append("overlay_support_only")
 
     normalized_selected_set_id = str(selected_set_id or "").strip()
     if normalized_selected_set_id:
@@ -73,10 +82,12 @@ def _build_tactic_proposal_summary(
     latest_proposal = dict(tactic_proposal_outputs[-1] or {})
     diagnostics = dict(latest_proposal.get("diagnostics", {}) or {})
     parameter_trace = dict(diagnostics.get("parameter_trace", {}) or {})
+    selection_trace = dict(diagnostics.get("selection_trace", {}) or {})
     compare_friendly_summary_line = _build_tactic_compare_friendly_summary_line(
         tactic_key=latest_proposal.get("primary_tactic_key"),
         comparison_relation=parameter_trace.get("comparison_relation"),
         overlay_influence=parameter_trace.get("overlay_influence"),
+        overlay_application_mode=selection_trace.get("overlay_application_mode"),
         rollback_target_ref=parameter_trace.get("rollback_target_ref"),
         adoption_ready=diagnostics.get("adoption_ready"),
         selected_set_id=diagnostics.get("selected_set_id"),
@@ -105,6 +116,9 @@ def _build_tactic_proposal_summary(
         "latest_overlay_influence": parameter_trace.get(
             "overlay_influence"
         ),
+        "latest_overlay_application_mode": selection_trace.get(
+            "overlay_application_mode"
+        ),
         "latest_compare_friendly_summary_line": compare_friendly_summary_line,
     }
 
@@ -118,10 +132,12 @@ def _build_tactic_review_record_summary(
     latest_review = dict(tactic_review_records[-1] or {})
     diagnostics = dict(latest_review.get("diagnostics", {}) or {})
     parameter_trace = dict(latest_review.get("parameter_trace", {}) or {})
+    selection_trace = dict(latest_review.get("selection_trace", {}) or {})
     compare_friendly_summary_line = _build_tactic_compare_friendly_summary_line(
         tactic_key=latest_review.get("selected_tactic_key"),
         comparison_relation=parameter_trace.get("comparison_relation"),
         overlay_influence=parameter_trace.get("overlay_influence"),
+        overlay_application_mode=selection_trace.get("overlay_application_mode"),
         rollback_target_ref=latest_review.get("rollback_target_ref"),
         adoption_ready=diagnostics.get("adoption_ready"),
         selected_set_id=diagnostics.get("selected_set_id"),
@@ -149,6 +165,9 @@ def _build_tactic_review_record_summary(
         "latest_overlay_influence": parameter_trace.get(
             "overlay_influence"
         ),
+        "latest_overlay_application_mode": selection_trace.get(
+            "overlay_application_mode"
+        ),
         "latest_compare_friendly_summary_line": compare_friendly_summary_line,
     }
 
@@ -162,10 +181,12 @@ def _build_tactic_operation_record_summary(
     latest_operation = dict(tactic_operation_records[-1] or {})
     diagnostics = dict(latest_operation.get("diagnostics", {}) or {})
     parameter_trace = dict(latest_operation.get("parameter_trace", {}) or {})
+    selection_trace = dict(latest_operation.get("selection_trace", {}) or {})
     compare_friendly_summary_line = _build_tactic_compare_friendly_summary_line(
         tactic_key=latest_operation.get("selected_tactic_key"),
         comparison_relation=parameter_trace.get("comparison_relation"),
         overlay_influence=parameter_trace.get("overlay_influence"),
+        overlay_application_mode=selection_trace.get("overlay_application_mode"),
         rollback_target_ref=latest_operation.get("rollback_target_ref"),
         adoption_ready=diagnostics.get("adoption_ready"),
         selected_set_id=diagnostics.get("selected_set_id"),
@@ -192,6 +213,9 @@ def _build_tactic_operation_record_summary(
         ),
         "latest_overlay_influence": parameter_trace.get(
             "overlay_influence"
+        ),
+        "latest_overlay_application_mode": selection_trace.get(
+            "overlay_application_mode"
         ),
         "latest_compare_friendly_summary_line": compare_friendly_summary_line,
     }

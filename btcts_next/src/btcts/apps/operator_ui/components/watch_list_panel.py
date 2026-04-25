@@ -5,6 +5,11 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.ai_operator_action_payloads import (
+    build_research_context_base,
+    build_tactic_review_carry,
+    normalize_watch_item_payload,
+)
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
 )
@@ -13,6 +18,7 @@ from btcts.apps.operator_ui.components.market_summary_presenter import (
 )
 from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
     build_tactic_interpretation_display_lines,
+    build_tactic_primary_review_display_lines,
     build_tactic_stance_display_lines,
 )
 from btcts.apps.operator_ui.ui_text import get_text
@@ -31,22 +37,7 @@ def _ensure_watch_list():
 
 
 def _normalize_watch_item(item: dict) -> dict:
-    return {
-        "ts": item.get("ts"),
-        "regime": item.get("regime"),
-        "action": item.get("action"),
-        "risk": item.get("risk"),
-        "tactic_summary_lines": tuple(item.get("tactic_summary_lines") or ()),
-        "tactic_interpretation_lines": tuple(
-            item.get("tactic_interpretation_lines") or ()
-        ),
-        "primary_tactic_interpretation_line": str(
-            item.get("primary_tactic_interpretation_line") or ""
-        ),
-        "tactic_primary_summary_line": str(
-            item.get("tactic_primary_summary_line") or ""
-        ),
-    }
+    return normalize_watch_item_payload(item)
 
 
 def _sync_latest_watch_note():
@@ -116,18 +107,17 @@ def render():
             tactic_primary_summary_line = str(
                 item.get("tactic_primary_summary_line") or ""
             ).strip()
-            if tactic_primary_summary_line:
-                st.caption(f"★ {tactic_primary_summary_line}")
-
             primary_tactic_interpretation_line = str(
                 item.get("primary_tactic_interpretation_line") or ""
             ).strip()
-            if primary_tactic_interpretation_line:
-                for line in build_tactic_interpretation_display_lines(
-                    (primary_tactic_interpretation_line,),
-                    lang,
-                ):
-                    st.caption(f"★ {line}")
+            for line in build_tactic_primary_review_display_lines(
+                tactic_primary_summary_line=tactic_primary_summary_line,
+                primary_tactic_interpretation_line=(
+                    primary_tactic_interpretation_line
+                ),
+                lang=lang,
+            ):
+                st.caption(line)
 
             tactic_interpretation_lines = tuple(
                 item.get("tactic_interpretation_lines") or ()
@@ -155,23 +145,16 @@ def render():
                 key=f"watch_research_{idx}",
             ):
                 st.session_state.research_replay_context = {
-                    "session_name": "watch_list",
-                    "start_ts": "",
-                    "end_ts": "",
-                    "jump_ts": item.get("ts") or "",
-                    "kind_filter": "all",
-                    "event_filter": item.get("action") or "",
-                    "filtered_rows": 1,
-                    "tactic_summary_lines": tuple(item.get("tactic_summary_lines") or ()),
-                    "tactic_interpretation_lines": tuple(
-                        item.get("tactic_interpretation_lines") or ()
+                    **build_research_context_base(
+                        session_name="watch_list",
+                        start_ts="",
+                        end_ts="",
+                        jump_ts=item.get("ts") or "",
+                        kind_filter="all",
+                        event_filter=item.get("action") or "",
+                        filtered_rows=1,
                     ),
-                    "primary_tactic_interpretation_line": str(
-                        item.get("primary_tactic_interpretation_line") or ""
-                    ),
-                    "tactic_primary_summary_line": str(
-                        item.get("tactic_primary_summary_line") or ""
-                    ),
+                    **build_tactic_review_carry(item),
                 }
                 st.session_state.ui_selected_page_key = "research"
                 st.rerun()

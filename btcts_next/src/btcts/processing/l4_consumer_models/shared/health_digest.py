@@ -6,6 +6,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import (
+    safe_float,
+    safe_str,
+)
+
 
 @dataclass(frozen=True)
 class HealthDigest:
@@ -39,22 +44,6 @@ class HealthDigestBuildInput:
     source_kind: str | None = None
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except Exception:
-        return None
-
-
 def _safe_bool(value: Any) -> bool | None:
     if value is None:
         return None
@@ -69,11 +58,11 @@ def _safe_bool(value: Any) -> bool | None:
 
 
 def _normalize_source_kind(value: Any) -> str:
-    return _safe_str(value) or "unknown"
+    return safe_str(value) or "unknown"
 
 
 def _resolve_freshness(market_diagnostics: dict[str, Any]) -> str:
-    return _safe_str(market_diagnostics.get("preferred_row_freshness")) or "UNKNOWN"
+    return safe_str(market_diagnostics.get("preferred_row_freshness")) or "UNKNOWN"
 
 
 def _resolve_is_stale(freshness: str) -> bool | None:
@@ -83,7 +72,7 @@ def _resolve_is_stale(freshness: str) -> bool | None:
 
 
 def _pick_event_ts(market_state_row: dict[str, Any]) -> str | None:
-    return _safe_str(market_state_row.get("collector_ts")) or _safe_str(
+    return safe_str(market_state_row.get("collector_ts")) or safe_str(
         market_state_row.get("exchange_ts")
     )
 
@@ -93,11 +82,11 @@ def _normalize_collector_runtime(collector_state: dict[str, Any]) -> dict[str, A
     health_payload = collector_state.get("health") or {}
 
     return {
-        "mode": _safe_str(collector_state.get("mode")),
+        "mode": safe_str(collector_state.get("mode")),
         "ok": _safe_bool(health_payload.get("ok")),
-        "runtime_kind": _safe_str(status_payload.get("runtime_kind")),
-        "daemon_runtime_kind": _safe_str(status_payload.get("daemon_runtime_kind")),
-        "status_source": _safe_str(status_payload.get("source_kind")) or "collector_state",
+        "runtime_kind": safe_str(status_payload.get("runtime_kind")),
+        "daemon_runtime_kind": safe_str(status_payload.get("daemon_runtime_kind")),
+        "status_source": safe_str(status_payload.get("source_kind")) or "collector_state",
     }
 
 
@@ -109,14 +98,14 @@ def _normalize_api_runtime(collector_state: dict[str, Any]) -> dict[str, Any]:
     rate_view = market_data_rate or bitflyer
 
     return {
-        "provider": _safe_str(rate_view.get("provider")) or "bitflyer",
-        "mode": _safe_str(rate_view.get("mode")),
-        "utilization": _safe_float(rate_view.get("utilization")),
-        "target_utilization": _safe_float(rate_view.get("target_utilization")),
-        "hard_cap_utilization": _safe_float(rate_view.get("hard_cap_utilization")),
+        "provider": safe_str(rate_view.get("provider")) or "bitflyer",
+        "mode": safe_str(rate_view.get("mode")),
+        "utilization": safe_float(rate_view.get("utilization")),
+        "target_utilization": safe_float(rate_view.get("target_utilization")),
+        "hard_cap_utilization": safe_float(rate_view.get("hard_cap_utilization")),
         "requests_60s": int(rate_view.get("requests_60s") or 0),
         "requests_300s": int(rate_view.get("requests_300s") or 0),
-        "last_429_ts": _safe_str(rate_view.get("last_429_ts")),
+        "last_429_ts": safe_str(rate_view.get("last_429_ts")),
     }
 
 
@@ -126,12 +115,12 @@ def _normalize_ws_runtime(collector_state: dict[str, Any]) -> dict[str, Any]:
     ws_executions_lane = status_payload.get("ws_executions_lane") or {}
 
     return {
-        "board_state": _safe_str(ws_board_lane.get("state")),
-        "board_last_error": _safe_str(ws_board_lane.get("last_error")),
-        "executions_state": _safe_str(ws_executions_lane.get("state")),
-        "executions_last_error": _safe_str(ws_executions_lane.get("last_error")),
-        "board_freshness": _safe_str(ws_board_lane.get("freshness")),
-        "executions_freshness": _safe_str(ws_executions_lane.get("freshness")),
+        "board_state": safe_str(ws_board_lane.get("state")),
+        "board_last_error": safe_str(ws_board_lane.get("last_error")),
+        "executions_state": safe_str(ws_executions_lane.get("state")),
+        "executions_last_error": safe_str(ws_executions_lane.get("last_error")),
+        "board_freshness": safe_str(ws_board_lane.get("freshness")),
+        "executions_freshness": safe_str(ws_executions_lane.get("freshness")),
     }
 
 
@@ -140,20 +129,20 @@ def _normalize_market_runtime(
     market_diagnostics: dict[str, Any],
 ) -> dict[str, Any]:
     return {
-        "trust_state": _safe_str(
+        "trust_state": safe_str(
             market_state_row.get("trust_state")
             or market_diagnostics.get("preferred_row_trust_state")
         ),
-        "continuity_state": _safe_str(
+        "continuity_state": safe_str(
             market_state_row.get("continuity_state")
             or market_diagnostics.get("preferred_row_continuity_state")
         ),
-        "interpretation_bucket": _safe_str(
+        "interpretation_bucket": safe_str(
             market_state_row.get("interpretation_bucket")
             or market_diagnostics.get("preferred_row_interpretation_bucket")
         ),
-        "interpretation_reason": _safe_str(market_state_row.get("interpretation_reason")),
-        "source_series_id": _safe_str(
+        "interpretation_reason": safe_str(market_state_row.get("interpretation_reason")),
+        "source_series_id": safe_str(
             market_state_row.get("source_series_id")
             or market_diagnostics.get("preferred_row_source_series_id")
         ),
@@ -167,11 +156,11 @@ def _normalize_semantic_usage(
     runtime_contract_summary: dict[str, Any],
 ) -> dict[str, Any]:
     return {
-        "summary_source": _safe_str(semantic_usage_summary.get("source_kind")) or "unknown",
-        "observer_status": _safe_str(semantic_usage_summary.get("observer_status")) or "unknown",
+        "summary_source": safe_str(semantic_usage_summary.get("source_kind")) or "unknown",
+        "observer_status": safe_str(semantic_usage_summary.get("observer_status")) or "unknown",
         "summary": dict(semantic_usage_summary),
         "contract_rows": list(semantic_usage_rows),
-        "runtime_wiring_status": _safe_str(runtime_contract_summary.get("wiring_status")) or "missing",
+        "runtime_wiring_status": safe_str(runtime_contract_summary.get("wiring_status")) or "missing",
         "observer_present": bool(runtime_contract_summary.get("observer_present")),
         "usage_summary_present": bool(runtime_contract_summary.get("usage_summary_present")),
         "contract_rows_present": bool(runtime_contract_summary.get("contract_rows_present")),
@@ -182,10 +171,10 @@ def _normalize_semantic_usage(
 
 def _normalize_orderbook_runtime(orderbook_runtime_summary: dict[str, Any]) -> dict[str, Any]:
     return {
-        "contract_status_source": _safe_str(orderbook_runtime_summary.get("contract_status_source"))
+        "contract_status_source": safe_str(orderbook_runtime_summary.get("contract_status_source"))
         or "unknown",
-        "wiring_status": _safe_str(orderbook_runtime_summary.get("wiring_status")) or "missing",
-        "freshness": _safe_str(orderbook_runtime_summary.get("freshness")) or "UNKNOWN",
+        "wiring_status": safe_str(orderbook_runtime_summary.get("wiring_status")) or "missing",
+        "freshness": safe_str(orderbook_runtime_summary.get("freshness")) or "UNKNOWN",
         "summary_slots_present": list(orderbook_runtime_summary.get("summary_slots_present") or []),
         "summary_slots_count": int(
             orderbook_runtime_summary.get("summary_slots_count")
@@ -215,18 +204,18 @@ def build_health_digest(inp: HealthDigestBuildInput) -> HealthDigest:
     freshness = _resolve_freshness(market_diagnostics)
 
     diagnostics = {
-        "market_diag_source_kind": _safe_str(market_diagnostics.get("source_kind")),
-        "preferred_row_age_sec": _safe_float(market_diagnostics.get("preferred_row_age_sec")),
-        "preferred_row_freshness": _safe_str(market_diagnostics.get("preferred_row_freshness")),
+        "market_diag_source_kind": safe_str(market_diagnostics.get("source_kind")),
+        "preferred_row_age_sec": safe_float(market_diagnostics.get("preferred_row_age_sec")),
+        "preferred_row_freshness": safe_str(market_diagnostics.get("preferred_row_freshness")),
     }
 
     return HealthDigest(
         digest_type="health_digest",
         digest_version="v1alpha1",
         source_kind=_normalize_source_kind(inp.source_kind or "health_data_service"),
-        exchange=_safe_str(market_state_row.get("exchange")),
-        symbol_raw=_safe_str(market_state_row.get("symbol_raw") or market_state_row.get("symbol")),
-        market_uid=_safe_str(market_state_row.get("market_uid")),
+        exchange=safe_str(market_state_row.get("exchange")),
+        symbol_raw=safe_str(market_state_row.get("symbol_raw") or market_state_row.get("symbol")),
+        market_uid=safe_str(market_state_row.get("market_uid")),
         event_ts=_pick_event_ts(market_state_row),
         freshness=freshness,
         is_stale=_resolve_is_stale(freshness),

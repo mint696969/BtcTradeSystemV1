@@ -63,6 +63,9 @@ def main() -> int:
         "rollback_target_ref": "baseline-default",
         "comparison_relation": "candidate_vs_baseline",
         "overlay_influence": "overlay_bias",
+        "promotion_gate_state": "allowed",
+        "overlay_primary_ref": "prefer_reversal_prepare",
+        "overlay_application_mode": "primary_only",
         "selection_bias_tags": ("overlay:prefer_reversal_prepare",),
     }
     assert build_tactic_stance_lines(tactic_context) == (
@@ -135,16 +138,19 @@ def main() -> int:
     assert build_tactic_interpretation_lines(tactic_context) == (
         "current set is being compared as a candidate relative to baseline",
         "overlay influence is present, so the stance should be read as context-shaped",
+        "overlay is acting as the primary selection input: prefer_reversal_prepare",
         "rollback review target is available: baseline-default",
         "current set is adoption-ready for review, not an automatic decision",
     )
     assert build_primary_tactic_interpretation_line(tactic_context) == (
-        "overlay influence is present, so the stance should be read as context-shaped"
+        "current set is being compared as a candidate relative to baseline"
     )
     assert build_tactic_primary_summary_line(tactic_context) == (
         "reversal_prepare | "
         "candidate_vs_baseline | "
-        "overlay influence is present, so the stance should be read as context-shaped | "
+        "overlay_bias_present | "
+        "overlay_primary | "
+        "current set is being compared as a candidate relative to baseline | "
         "review_only"
     )
     assert build_tactic_interpretation_display_lines(
@@ -153,6 +159,7 @@ def main() -> int:
     ) == (
         "Interpretation: current set is being compared as a candidate relative to baseline",
         "Interpretation: overlay influence is present, so the stance should be read as context-shaped",
+        "Interpretation: overlay is acting as the primary selection input: prefer_reversal_prepare",
         "Interpretation: rollback review target is available: baseline-default",
         "Interpretation: current set is adoption-ready for review, not an automatic decision",
     )
@@ -162,6 +169,7 @@ def main() -> int:
     ) == (
         "解釈: current set is being compared as a candidate relative to baseline",
         "解釈: overlay influence is present, so the stance should be read as context-shaped",
+        "解釈: overlay is acting as the primary selection input: prefer_reversal_prepare",
         "解釈: rollback review target is available: baseline-default",
         "解釈: current set is adoption-ready for review, not an automatic decision",
     )

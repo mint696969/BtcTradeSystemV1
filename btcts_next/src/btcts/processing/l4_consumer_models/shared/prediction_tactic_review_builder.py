@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import safe_str
 from btcts.processing.l4_consumer_models.shared.prediction_tactic_contract import (
     ScenarioTacticProposalOutput,
     TacticParameterSetRef,
@@ -28,18 +29,11 @@ class PredictionTacticReviewBuildInput:
     diagnostics: dict[str, Any] | None = None
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
 def _resolve_selected_tactic_key(
     proposal_output: ScenarioTacticProposalOutput | None,
     selected_tactic_key: str | None,
 ) -> str:
-    provided = _safe_str(selected_tactic_key)
+    provided = safe_str(selected_tactic_key)
     if provided is not None:
         return provided
     if proposal_output is None:
@@ -79,15 +73,15 @@ def _resolve_rollback_target_ref(
     rollback_target_ref: str | None,
     selected_parameter_set_ref: TacticParameterSetRef,
 ) -> str | None:
-    provided = _safe_str(rollback_target_ref)
+    provided = safe_str(rollback_target_ref)
     if provided is not None:
         return provided
 
-    parent = _safe_str(selected_parameter_set_ref.rollback_parent_set_id)
+    parent = safe_str(selected_parameter_set_ref.rollback_parent_set_id)
     if parent is not None:
         return parent
 
-    baseline = _safe_str(selected_parameter_set_ref.baseline_ref)
+    baseline = safe_str(selected_parameter_set_ref.baseline_ref)
     if baseline is not None:
         return baseline
 
@@ -126,7 +120,7 @@ def _build_review_id(
     if proposal_output is None:
         return None
 
-    scenario_ref = _safe_str(proposal_output.scenario_ref) or "unknown_scenario"
+    scenario_ref = safe_str(proposal_output.scenario_ref) or "unknown_scenario"
     if review_ts is not None:
         return f"{scenario_ref}:{selected_tactic_key}:{review_ts}"
     return f"{scenario_ref}:{selected_tactic_key}"
@@ -138,7 +132,7 @@ def _build_proposal_ref(
     if proposal_output is None:
         return None
 
-    scenario_ref = _safe_str(proposal_output.scenario_ref) or "unknown_scenario"
+    scenario_ref = safe_str(proposal_output.scenario_ref) or "unknown_scenario"
     return f"proposal:{scenario_ref}"
 
 
@@ -165,7 +159,7 @@ def build_prediction_tactic_review_record(
     inp: PredictionTacticReviewBuildInput,
 ) -> TacticReviewRecord:
     proposal_output = inp.proposal_output
-    decision_state = _safe_str(inp.decision_state) or "proposed"
+    decision_state = safe_str(inp.decision_state) or "proposed"
     selected_tactic_key = _resolve_selected_tactic_key(
         proposal_output,
         inp.selected_tactic_key,

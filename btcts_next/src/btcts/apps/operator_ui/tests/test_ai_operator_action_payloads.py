@@ -11,8 +11,10 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.apps.operator_ui.components.ai_operator_action_payloads import (  # noqa: E402
+    build_research_context_base,
     build_research_replay_context,
     build_watch_item,
+    normalize_watch_item_payload,
 )
 
 
@@ -131,6 +133,24 @@ def main() -> int:
             "overlay influence is present, so the stance should be read as context-shaped | "
             "review_only"
         ),
+    }
+
+    assert build_research_context_base(
+        session_name="watch_list",
+        start_ts="",
+        end_ts="",
+        jump_ts="2026-04-23T10:00:00Z",
+        kind_filter="all",
+        event_filter="observe",
+        filtered_rows=1,
+    ) == {
+        "session_name": "watch_list",
+        "start_ts": "",
+        "end_ts": "",
+        "jump_ts": "2026-04-23T10:00:00Z",
+        "kind_filter": "all",
+        "event_filter": "observe",
+        "filtered_rows": 1,
     }
 
     print("ok")

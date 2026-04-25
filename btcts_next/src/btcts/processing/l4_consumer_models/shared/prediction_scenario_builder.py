@@ -6,6 +6,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import (
+    safe_float,
+    safe_str,
+)
 from btcts.processing.l4_consumer_models.shared.prediction_system_contract import (
     PredictionScenarioHorizonOutput,
     PredictionScenarioOutput,
@@ -19,29 +23,13 @@ class PredictionScenarioBuildInput:
     diagnostics: dict[str, Any] | None = None
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except Exception:
-        return None
-
-
 def _safe_int(value: Any) -> int | None:
     if value is None:
         return None
     try:
         return int(value)
     except Exception:
-        parsed = _safe_float(value)
+        parsed = safe_float(value)
         if parsed is None:
             return None
         return int(parsed)
@@ -101,14 +89,14 @@ def _resolve_base_current_caution_level(
             return "high"
 
         market_runtime = dict(health_digest.market_runtime or {})
-        digest_bucket = _safe_str(market_runtime.get("interpretation_bucket"))
+        digest_bucket = safe_str(market_runtime.get("interpretation_bucket"))
         if digest_bucket == "reanchor_required":
             return "blocked"
         if digest_bucket == "observe_only":
             return "medium"
 
         semantic_usage = dict(health_digest.semantic_usage or {})
-        observer_status = _safe_str(semantic_usage.get("observer_status"))
+        observer_status = safe_str(semantic_usage.get("observer_status"))
         if observer_status in {"broken", "unknown"}:
             return "high"
         if observer_status == "caution":
@@ -129,8 +117,8 @@ def _resolve_replay_feedback_caution_signal(
     if not replay_feedback:
         return 0
 
-    average_caution_gap = _safe_float(replay_feedback.get("average_caution_gap"))
-    caution_review = _safe_str(replay_feedback.get("caution_review"))
+    average_caution_gap = safe_float(replay_feedback.get("average_caution_gap"))
+    caution_review = safe_str(replay_feedback.get("caution_review"))
 
     if caution_review == "raise_caution_weight":
         return 1
@@ -162,7 +150,7 @@ def _resolve_replay_feedback_caution_adjustment(
             prediction_input.evidence_bundle.external_context.get("replay_feedback")
             or {}
         )
-    review_priority = _safe_str(replay_feedback.get("review_priority"))
+    review_priority = safe_str(replay_feedback.get("review_priority"))
 
     if raw_signal < 0:
         if base_caution_level != "medium":
@@ -209,7 +197,7 @@ def _resolve_replay_feedback_invalidation_profile(
 
     merged = dict(defaults)
     for key in defaults:
-        parsed = _safe_float(profile.get(key))
+        parsed = safe_float(profile.get(key))
         if parsed is not None:
             merged[key] = parsed
     return merged
@@ -231,7 +219,7 @@ def _resolve_replay_feedback_trace_focus_material(
     replay_feedback = dict(
         prediction_input.evidence_bundle.external_context.get("replay_feedback") or {}
     )
-    focus = _safe_str(replay_feedback.get("scenario_trace_focus")) or "unknown"
+    focus = safe_str(replay_feedback.get("scenario_trace_focus")) or "unknown"
     if focus in {"unknown", "none"}:
         return {
             "focus": focus,
@@ -305,7 +293,7 @@ def _resolve_replay_feedback_invalidation_adjustment(
 
     missed_count = float(_safe_int(replay_feedback.get("missed_count")) or 0)
     high_priority_count = float(_safe_int(replay_feedback.get("high_priority_count")) or 0)
-    invalidation_review = _safe_str(replay_feedback.get("invalidation_review"))
+    invalidation_review = safe_str(replay_feedback.get("invalidation_review"))
     trace_focus_material = _resolve_replay_feedback_trace_focus_material(
         prediction_input
     )
@@ -328,7 +316,7 @@ def _resolve_replay_feedback_invalidation_adjustment(
     if high_priority_ratio >= profile["high_priority_ratio_trigger"]:
         score += profile["high_priority_ratio_score"]
 
-    trace_focus_direction = _safe_str(trace_focus_material.get("direction")) or "neutral"
+    trace_focus_direction = safe_str(trace_focus_material.get("direction")) or "neutral"
     if trace_focus_direction == "switch_bias":
         score += profile["trace_focus_switch_bias_score"]
     elif trace_focus_direction == "fragility_bias":
@@ -393,8 +381,8 @@ def _resolve_current_regime_state(prediction_input: PredictionSystemInput | None
     if summary.continuity_state == "resynced":
         return "transition"
 
-    transition_sign = _safe_str(regime_turning_point.get("transition_sign"))
-    turning_point_risk = _safe_str(regime_turning_point.get("turning_point_risk"))
+    transition_sign = safe_str(regime_turning_point.get("transition_sign"))
+    turning_point_risk = safe_str(regime_turning_point.get("turning_point_risk"))
 
     if transition_sign in {"transition_underway", "active_transition"}:
         return "transition"
@@ -438,11 +426,11 @@ def _resolve_replay_feedback_confidence_adjustment(
     if not replay_feedback:
         return 0.0
 
-    average_confidence_gap = _safe_float(
+    average_confidence_gap = safe_float(
         replay_feedback.get("average_confidence_gap")
     )
-    review_priority = _safe_str(replay_feedback.get("review_priority"))
-    confidence_review = _safe_str(replay_feedback.get("confidence_review"))
+    review_priority = safe_str(replay_feedback.get("review_priority"))
+    confidence_review = safe_str(replay_feedback.get("confidence_review"))
 
     adjustment = 0.0
 
@@ -535,7 +523,7 @@ def _build_outlooks(
         return ()
 
     regime_turning_point = dict(prediction_input.evidence_bundle.regime_turning_point or {})
-    turning_point_risk = _safe_str(regime_turning_point.get("turning_point_risk")) or "low"
+    turning_point_risk = safe_str(regime_turning_point.get("turning_point_risk")) or "low"
 
     regime_bias, continuation_likelihood, reversal_likelihood = _resolve_horizon_shape(
         current_regime_state=current_regime_state,
@@ -601,11 +589,11 @@ def _build_invalidation_signals(
     if health_digest is not None and health_digest.is_stale is True:
         out.append("health_digest_stale")
 
-    transition_sign = _safe_str(regime_turning_point.get("transition_sign"))
+    transition_sign = safe_str(regime_turning_point.get("transition_sign"))
     if transition_sign is not None:
         out.append(f"transition_sign:{transition_sign}")
 
-    turning_point_risk = _safe_str(regime_turning_point.get("turning_point_risk"))
+    turning_point_risk = safe_str(regime_turning_point.get("turning_point_risk"))
     if turning_point_risk in {"medium", "high"}:
         out.append(f"turning_point_risk:{turning_point_risk}")
 
@@ -778,8 +766,8 @@ def _build_scenario_trace(
     elif summary.continuity_state == "resynced":
         regime_decision = "continuity_resynced"
     else:
-        transition_sign = _safe_str(regime_turning_point.get("transition_sign"))
-        turning_point_risk = _safe_str(regime_turning_point.get("turning_point_risk"))
+        transition_sign = safe_str(regime_turning_point.get("transition_sign"))
+        turning_point_risk = safe_str(regime_turning_point.get("turning_point_risk"))
         regime_decision = (
             f"transition_sign:{transition_sign}"
             if transition_sign is not None
@@ -819,10 +807,10 @@ def _build_replay_feedback_summary(
         return None
 
     return {
-        "review_priority": _safe_str(replay_feedback.get("review_priority")),
-        "primary_focus": _safe_str(replay_feedback.get("primary_focus")),
-        "invalidation_review": _safe_str(replay_feedback.get("invalidation_review")),
-        "scenario_trace_focus": _safe_str(
+        "review_priority": safe_str(replay_feedback.get("review_priority")),
+        "primary_focus": safe_str(replay_feedback.get("primary_focus")),
+        "invalidation_review": safe_str(replay_feedback.get("invalidation_review")),
+        "scenario_trace_focus": safe_str(
             replay_feedback.get("scenario_trace_focus")
         ),
         "entry_count": replay_feedback.get("entry_count"),
@@ -866,8 +854,8 @@ def _build_evidence(prediction_input: PredictionSystemInput | None) -> dict[str,
         "orderbook_active_event_count": None
         if summary is None
         else summary.orderbook_active_event_count,
-        "transition_sign": _safe_str(regime_turning_point.get("transition_sign")),
-        "turning_point_risk": _safe_str(regime_turning_point.get("turning_point_risk")),
+        "transition_sign": safe_str(regime_turning_point.get("transition_sign")),
+        "turning_point_risk": safe_str(regime_turning_point.get("turning_point_risk")),
         "evidence_trace_summary": _build_evidence_trace_summary(prediction_input),
     }
 
@@ -906,7 +894,7 @@ def build_prediction_scenario_output(
             or {}
         )
     replay_feedback_scenario_trace_focus = (
-        _safe_str(replay_feedback.get("scenario_trace_focus")) or "unknown"
+        safe_str(replay_feedback.get("scenario_trace_focus")) or "unknown"
     )
     replay_feedback_trace_focus_material = (
         _resolve_replay_feedback_trace_focus_material(prediction_input)

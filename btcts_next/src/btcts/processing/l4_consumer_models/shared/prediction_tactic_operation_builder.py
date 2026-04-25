@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import safe_str
 from btcts.processing.l4_consumer_models.shared.prediction_tactic_contract import (
     TacticParameterSetRef,
     TacticReviewRecord,
@@ -26,18 +27,11 @@ class PredictionTacticOperationBuildInput:
     diagnostics: dict[str, Any] | None = None
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
 def _resolve_operation_state(
     review_record: TacticReviewRecord | None,
     operation_state: str | None,
 ) -> str:
-    provided = _safe_str(operation_state)
+    provided = safe_str(operation_state)
     if provided is not None:
         return provided
 
@@ -70,7 +64,7 @@ def _resolve_operation_reason(
     review_record: TacticReviewRecord | None,
     operation_reason: str | None,
 ) -> str | None:
-    provided = _safe_str(operation_reason)
+    provided = safe_str(operation_reason)
     if provided is not None:
         return provided
     if review_record is None:
@@ -82,7 +76,7 @@ def _resolve_rollback_target_ref(
     review_record: TacticReviewRecord | None,
     rollback_target_ref: str | None,
 ) -> str | None:
-    provided = _safe_str(rollback_target_ref)
+    provided = safe_str(rollback_target_ref)
     if provided is not None:
         return provided
     if review_record is None:
@@ -99,9 +93,9 @@ def _build_operation_id(
     if review_record is None:
         return None
 
-    review_ref = _safe_str(review_record.review_id)
+    review_ref = safe_str(review_record.review_id)
     if review_ref is None:
-        review_ref = _safe_str(review_record.scenario_ref)
+        review_ref = safe_str(review_record.scenario_ref)
 
     if review_ref is None:
         return None

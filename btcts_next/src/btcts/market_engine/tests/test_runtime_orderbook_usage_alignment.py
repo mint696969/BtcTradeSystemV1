@@ -20,6 +20,15 @@ from btcts.market_engine.runtime import MarketEngineRuntime
 from btcts.processing.l3_market_semantics.continuity.models import BookState
 
 
+_STABLE_USAGE_ALIGNMENT_KEYS = (
+    "event_name",
+    "event_family",
+    "usage_grade",
+    "interpretation_bucket",
+    "trust_bucket",
+)
+
+
 def _cfg() -> MarketEngineConfig:
     return MarketEngineConfig(
         exchange="bitflyer",
@@ -122,17 +131,15 @@ def main() -> int:
     contracts = result.market_state.orderbook_semantics_summary.get("active_event_contracts") or []
 
     assert result.market_state.interpretation_bucket == "observe_only"
-    assert any(str(event.get("event_name")) == "support_candidate" for event in contracts)
-    assert any(
-        str(event.get("event_name")) == "support_candidate"
-        and str(event.get("usage_grade")) == "watch"
+    support_contract = next(
+        event
         for event in contracts
+        if str(event.get("event_name")) == "support_candidate"
     )
-    assert not any(
-        str(event.get("event_name")) == "support_candidate"
-        and str(event.get("usage_grade")) == "strong"
-        for event in contracts
-    )
+    for key in _STABLE_USAGE_ALIGNMENT_KEYS:
+        assert key in support_contract
+    assert str(support_contract.get("usage_grade")) == "watch"
+    assert str(support_contract.get("usage_grade")) != "strong"
 
     print("ok")
     return 0

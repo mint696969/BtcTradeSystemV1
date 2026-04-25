@@ -9,6 +9,44 @@ def _dist_text(distribution: dict[str, int]) -> str:
         return "-"
     return ",".join(f"{key}:{distribution[key]}" for key in sorted(distribution))
 
+
+def active_event_compact_reading_line(summary_payload: dict | None) -> str:
+    if not summary_payload:
+        return "active_event_reading unavailable"
+
+    active_event_contracts = list(summary_payload.get("orderbook_active_event_contracts") or [])
+    if not active_event_contracts:
+        active_event_names = [
+            str(name).strip()
+            for name in (summary_payload.get("orderbook_active_event_names") or [])
+            if str(name).strip()
+        ]
+        if not active_event_names:
+            return "active_event_reading unavailable"
+        first_name = active_event_names[0]
+        suffix = f" +{len(active_event_names) - 1} more" if len(active_event_names) > 1 else ""
+        return f"{first_name}{suffix}"
+
+    first_event = dict(active_event_contracts[0] or {})
+    event_name = str(first_event.get("event_name") or "-").strip() or "-"
+    event_family = str(first_event.get("event_family") or "-").strip() or "-"
+    usage_grade = str(first_event.get("usage_grade") or "-").strip() or "-"
+    actionability = str(first_event.get("actionability") or "-").strip() or "-"
+    horizon = str(first_event.get("forecast_horizon_hint") or "-").strip() or "-"
+    half_life_sec = first_event.get("half_life_sec")
+    half_life_text = "-" if half_life_sec in (None, "") else str(half_life_sec)
+    side = str(first_event.get("side") or "-").strip() or "-"
+
+    suffix = f" +{len(active_event_contracts) - 1} more" if len(active_event_contracts) > 1 else ""
+
+    return (
+        f"{event_name} "
+        f"({event_family} / {usage_grade} / {actionability} / {horizon} / "
+        f"half_life={half_life_text} / {side})"
+        f"{suffix}"
+    )
+
+
 def summary_widget_caption(summary_widget) -> str:
     notable_text = "-" if not summary_widget.notable_tags else ",".join(summary_widget.notable_tags)
     alert_text = "-" if not summary_widget.alert_tags else ",".join(summary_widget.alert_tags)

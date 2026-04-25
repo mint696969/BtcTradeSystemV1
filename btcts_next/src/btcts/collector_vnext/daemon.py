@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 import time
+
+from ._env_utils import env_int
 
 from pathlib import Path
 
@@ -105,16 +106,6 @@ def _summarize_rate_state(rate_state: dict) -> dict:
     }
 
 
-def _env_int(name: str, default: int) -> int:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except Exception:
-        return default
-
-
 def _emit_loop_status(
     cfg,
     cycle_no: int,
@@ -197,9 +188,9 @@ def run_forever() -> int:
         )
         return 2
 
-    interval_sec = _env_int("BTCTS_LOOP_INTERVAL_SEC", 15)
-    max_failures = _env_int("BTCTS_MAX_FAILURES", 10)
-    failure_backoff_sec = _env_int("BTCTS_FAILURE_BACKOFF_SEC", 10)
+    interval_sec = env_int("BTCTS_LOOP_INTERVAL_SEC", 15)
+    max_failures = env_int("BTCTS_MAX_FAILURES", 10)
+    failure_backoff_sec = env_int("BTCTS_FAILURE_BACKOFF_SEC", 10)
 
     consecutive_failures = 0
     cycle_no = 0

@@ -44,6 +44,11 @@ def main() -> int:
         selection_trace={
             "trace_type": "tactic_selection_trace",
             "primary_tactic_key": "continuation_follow",
+            "promotion_gate_state": "allowed",
+            "can_promote_active_tactic": True,
+            "overlay_primary_ref": "prefer_continuation_follow",
+            "overlay_support_tactic_keys": ("continuation_follow",),
+            "overlay_application_mode": "primary_only",
         },
         parameter_trace={
             "active_set_id": "candidate-continuation-follow",
@@ -84,6 +89,11 @@ def main() -> int:
     assert operation.selection_trace == {
         "trace_type": "tactic_selection_trace",
         "primary_tactic_key": "continuation_follow",
+        "promotion_gate_state": "allowed",
+        "can_promote_active_tactic": True,
+        "overlay_primary_ref": "prefer_continuation_follow",
+        "overlay_support_tactic_keys": ("continuation_follow",),
+        "overlay_application_mode": "primary_only",
     }
     assert operation.parameter_trace == {
         "active_set_id": "candidate-continuation-follow",

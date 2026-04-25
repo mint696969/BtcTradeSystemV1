@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List
 
+from ._env_utils import env_int
+
 
 def _env_str(name: str, default: str) -> str:
     v = os.getenv(name, "").strip()
@@ -20,16 +22,6 @@ def _env_str_fallback(names: List[str], default: str) -> str:
         if v:
             return v
     return default
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except Exception:
-        return default
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -111,8 +103,8 @@ def load_config() -> CollectorConfig:
     ws_ssl_verify = _env_bool("BTCTS_WS_SSL_VERIFY", True)
 
     rotation = RotationPolicy(
-        max_bytes=_env_int("BTCTS_ROTATE_MAX_BYTES", 128 * 1024 * 1024),
-        max_lines=_env_int("BTCTS_ROTATE_MAX_LINES", 200_000),
+        max_bytes=env_int("BTCTS_ROTATE_MAX_BYTES", 128 * 1024 * 1024),
+        max_lines=env_int("BTCTS_ROTATE_MAX_LINES", 200_000),
     )
 
     return CollectorConfig(

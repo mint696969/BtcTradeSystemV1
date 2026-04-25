@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import safe_str
 from btcts.processing.l4_consumer_models.shared.prediction_system_contract import (
     PredictionScenarioOutput,
 )
@@ -36,13 +37,6 @@ class PredictionTacticBuildInput:
     diagnostics: dict[str, Any] | None = None
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
 def _resolve_reason_refs(
     scenario_output: PredictionScenarioOutput | None,
     primary_tactic_key: str,
@@ -57,7 +51,7 @@ def _resolve_reason_refs(
         f"primary_tactic:{primary_tactic_key}",
     ]
 
-    trace_focus = _safe_str(
+    trace_focus = safe_str(
         (
             scenario_output.scenario_trace.get("replay_feedback_effect", {})
             or {}
@@ -159,8 +153,8 @@ def _build_scenario_ref(
     if scenario_output is None:
         return None
 
-    market_uid = _safe_str(scenario_output.market_uid)
-    event_ts = _safe_str(scenario_output.event_ts)
+    market_uid = safe_str(scenario_output.market_uid)
+    event_ts = safe_str(scenario_output.event_ts)
 
     if market_uid and event_ts:
         return f"{market_uid}@{event_ts}"

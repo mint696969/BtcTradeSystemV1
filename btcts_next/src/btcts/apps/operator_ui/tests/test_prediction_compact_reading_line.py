@@ -1,5 +1,5 @@
-# path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_strategy_state_prediction_snapshot.py
-# desc: Verify strategy_state_panel can reuse shared prediction snapshot helper safely.
+# path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_prediction_compact_reading_line.py
+# desc: Verify prediction presenter exposes a compact reading line for WarRoom / strategy-state use.
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ if str(_SRC_ROOT) not in sys.path:
 
 from btcts.apps.operator_ui.components.prediction_summary_presenter import (  # noqa: E402
     prediction_compact_reading_line,
-    prediction_snapshot_lines,
 )
 from btcts.processing.l4_consumer_models.operator_ui import (  # noqa: E402
     PredictionSummaryWidgetModel,
@@ -24,7 +23,7 @@ def main() -> int:
         widget_kind="shared_prediction_summary",
         freshness_key="LIVE",
         horizon_key="short",
-        caution_level_key="low",
+        caution_level_key="medium",
         short_horizon_bias_key="bullish",
         continuation_likelihood_key="medium",
         mean_reversion_likelihood_key="medium",
@@ -38,26 +37,25 @@ def main() -> int:
         health_caution_used_key="false",
         notable_tags=["fresh_source"],
         alert_tags=[],
+        current_regime_state_key="continuation",
+        current_hypothesis_health_key="healthy",
+        invalidation_state_key="stable",
+        scenario_switch_hint_key="watch_reversal_path",
+        trace_regime_decision_key="continuation_bias",
+        trace_switch_reason_key="none",
+        trace_summary_key="transition_sign:weakening_continuation / watch_reversal_path",
+        trace_focus_summary_key="reversal_watch",
     )
 
-    compact = prediction_compact_reading_line(widget)
-    assert compact == (
+    line = prediction_compact_reading_line(widget)
+    assert line == (
         "prediction_reading=bullish / "
-        "caution=low / "
-        "switch=unknown / "
-        "trace=unknown"
+        "caution=medium / "
+        "switch=watch_reversal_path / "
+        "trace=transition_sign:weakening_continuation / watch_reversal_path"
     )
 
-    lines = prediction_snapshot_lines(widget)
-    assert "bias=bullish" in lines
-    assert "continuation=medium" in lines
-    assert "mean_reversion=medium" in lines
-    assert "regime_risk=low" in lines
-    assert "liquidity_risk=low" in lines
-    assert "execution_hint=favorable" in lines
-    assert "caution=low" in lines
-    assert "confidence=0.68" in lines
-    assert "health_caution=on" not in lines
+    assert prediction_compact_reading_line(None) == "prediction_reading unavailable"
 
     print("ok")
     return 0

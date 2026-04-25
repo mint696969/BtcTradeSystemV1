@@ -5,25 +5,14 @@ from __future__ import annotations
 
 from typing import Any
 
-
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except Exception:
-        return None
+from btcts.processing.l4_consumer_models.shared._value_utils import (
+    safe_float,
+    safe_str,
+)
 
 
 def _bump(counter: dict[str, int], key: str | None) -> None:
-    normalized = _safe_str(key) or "unknown"
+    normalized = safe_str(key) or "unknown"
     counter[normalized] = counter.get(normalized, 0) + 1
 
 
@@ -54,19 +43,19 @@ def build_prediction_evaluation_report(name: str, entries: list[dict]) -> dict:
         if not isinstance(entry, dict):
             continue
 
-        regime_alignment = _safe_str(entry.get("regime_alignment"))
-        replay_priority = _safe_str(entry.get("replay_priority"))
-        confidence_gap_signal = _safe_str(entry.get("confidence_gap_signal"))
-        confidence_bias_hint = _safe_str(entry.get("confidence_bias_hint"))
-        caution_bias_hint = _safe_str(entry.get("caution_bias_hint"))
+        regime_alignment = safe_str(entry.get("regime_alignment"))
+        replay_priority = safe_str(entry.get("replay_priority"))
+        confidence_gap_signal = safe_str(entry.get("confidence_gap_signal"))
+        confidence_bias_hint = safe_str(entry.get("confidence_bias_hint"))
+        caution_bias_hint = safe_str(entry.get("caution_bias_hint"))
         scenario_trace = entry.get("predicted_scenario_trace") or {}
         scenario_trace_regime_decision = None
         scenario_trace_switch_reason = None
         if isinstance(scenario_trace, dict):
-            scenario_trace_regime_decision = _safe_str(
+            scenario_trace_regime_decision = safe_str(
                 scenario_trace.get("regime_decision")
             )
-            scenario_trace_switch_reason = _safe_str(
+            scenario_trace_switch_reason = safe_str(
                 scenario_trace.get("switch_reason")
             )
 
@@ -94,11 +83,11 @@ def build_prediction_evaluation_report(name: str, entries: list[dict]) -> dict:
         if replay_priority == "high":
             high_priority_count += 1
 
-        confidence_gap = _safe_float(entry.get("confidence_gap"))
+        confidence_gap = safe_float(entry.get("confidence_gap"))
         if confidence_gap is not None:
             confidence_gap_values.append(confidence_gap)
 
-        caution_gap = _safe_float(entry.get("caution_gap"))
+        caution_gap = safe_float(entry.get("caution_gap"))
         if caution_gap is not None:
             caution_gap_values.append(caution_gap)
 

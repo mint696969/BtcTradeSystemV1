@@ -252,6 +252,50 @@ def _distribution_text(values: list[str]) -> str:
     )
 
 
+def build_active_event_observer_compact_line(
+    *,
+    layer3_orderbook_runtime_summary: dict,
+) -> str:
+    runtime_summary = dict(layer3_orderbook_runtime_summary or {})
+
+    active_event_contracts = runtime_summary.get("active_event_contracts") or []
+    if not isinstance(active_event_contracts, list):
+        active_event_contracts = []
+
+    active_event_names = runtime_summary.get("active_event_names") or []
+    if not isinstance(active_event_names, list):
+        active_event_names = []
+
+    active_event_count = int(
+        runtime_summary.get("active_event_count") or len(active_event_contracts) or 0
+    )
+
+    if active_event_contracts:
+        first_event = dict(active_event_contracts[0] or {})
+        event_name = str(first_event.get("event_name") or "-").strip() or "-"
+        event_family = str(first_event.get("event_family") or "-").strip() or "-"
+        usage_grade = str(first_event.get("usage_grade") or "-").strip() or "-"
+        horizon = str(first_event.get("forecast_horizon_hint") or "-").strip() or "-"
+        side = str(first_event.get("side") or "-").strip() or "-"
+        suffix = f" +{len(active_event_contracts) - 1} more" if len(active_event_contracts) > 1 else ""
+        return (
+            f"active_events={active_event_count} / "
+            f"{event_name} ({event_family} / {usage_grade} / {horizon} / {side})"
+            f"{suffix}"
+        )
+
+    normalized_names = [
+        str(name).strip()
+        for name in active_event_names
+        if str(name).strip()
+    ]
+    if normalized_names:
+        suffix = f" +{len(normalized_names) - 1} more" if len(normalized_names) > 1 else ""
+        return f"active_events={active_event_count} / {normalized_names[0]}{suffix}"
+
+    return f"active_events={active_event_count} / none"
+
+
 def build_semantic_contract_observer_caption(
     *,
     layer3_semantic_usage_summary: dict,
@@ -583,6 +627,12 @@ def render_layer3_chart_panel(
             active_event_names = layer3_orderbook_runtime_summary.get("active_event_names") or []
             if not isinstance(active_event_names, list):
                 active_event_names = []
+
+            st.caption(
+                build_active_event_observer_compact_line(
+                    layer3_orderbook_runtime_summary=layer3_orderbook_runtime_summary,
+                )
+            )
 
             st.caption(
                 get_text(lang, "health_caption_orderbook_active_events_prefix")

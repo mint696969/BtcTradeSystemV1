@@ -4,10 +4,11 @@
 from __future__ import annotations
 
 import json
-import os
 import sys
 import threading
 import time
+
+from ._env_utils import env_float, env_int
 
 from .config import load_config
 from .events import now_iso_utc
@@ -20,26 +21,6 @@ from .unified_state import (
 )
 from .unified_ws_board_lane import UnifiedWsBoardLane
 from .unified_ws_executions_lane import UnifiedWsExecutionsLane
-
-
-def _env_float(name: str, default: float) -> float:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return default
-    try:
-        return float(raw)
-    except Exception:
-        return default
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = os.getenv(name, "").strip()
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except Exception:
-        return default
 
 
 def _active_stop_request(cfg) -> dict:
@@ -193,9 +174,9 @@ def run_forever() -> int:
         )
         return 2
 
-    loop_sleep_sec = max(0.05, _env_float("BTCTS_UNIFIED_LOOP_SLEEP_SEC", 0.25))
-    max_failures = _env_int("BTCTS_UNIFIED_MAX_FAILURES", 20)
-    failure_backoff_sec = max(1, _env_int("BTCTS_UNIFIED_FAILURE_BACKOFF_SEC", 3))
+    loop_sleep_sec = max(0.05, env_float("BTCTS_UNIFIED_LOOP_SLEEP_SEC", 0.25))
+    max_failures = env_int("BTCTS_UNIFIED_MAX_FAILURES", 20)
+    failure_backoff_sec = max(1, env_int("BTCTS_UNIFIED_FAILURE_BACKOFF_SEC", 3))
 
     cycle_no = 0
     consecutive_failures = 0

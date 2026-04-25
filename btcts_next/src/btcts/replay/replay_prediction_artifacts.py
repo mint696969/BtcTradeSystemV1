@@ -22,6 +22,7 @@ from btcts.processing.l4_consumer_models.shared import (
     build_prediction_tactic_proposal_output,
     build_prediction_tactic_review_record,
 )
+from btcts.processing.l4_consumer_models.shared._value_utils import safe_float
 
 from .prediction_calibration_review import (
     PredictionCalibrationReviewBuildInput,
@@ -36,15 +37,6 @@ from .prediction_realized_outcome import (
     PredictionRealizedOutcomeBuildInput,
     build_prediction_realized_outcome,
 )
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except Exception:
-        return None
 
 
 def _normalize_dict(value: Any) -> dict[str, Any]:
@@ -106,8 +98,8 @@ def _resolve_market_uid(exchange: str, symbol_raw: str) -> str:
 
 
 def _resolve_mid_price(result: dict[str, Any]) -> float | None:
-    best_bid = _safe_float(result.get("best_bid"))
-    best_ask = _safe_float(result.get("best_ask"))
+    best_bid = safe_float(result.get("best_bid"))
+    best_ask = safe_float(result.get("best_ask"))
 
     if best_bid is not None and best_ask is not None:
         return round((best_bid + best_ask) / 2.0, 2)
@@ -138,7 +130,7 @@ def _resolve_realized_excursions(
 
     candidate_moves: list[float] = []
 
-    current_mid_price = _safe_float(current_prediction_state.get("mid_price"))
+    current_mid_price = safe_float(current_prediction_state.get("mid_price"))
     if current_mid_price is not None:
         mid_move = _price_to_bp(
             anchor_price=anchor_mid_price,
@@ -147,7 +139,7 @@ def _resolve_realized_excursions(
         if mid_move is not None:
             candidate_moves.append(mid_move)
 
-    current_best_bid = _safe_float(current_prediction_state.get("best_bid"))
+    current_best_bid = safe_float(current_prediction_state.get("best_bid"))
     if current_best_bid is not None:
         bid_move = _price_to_bp(
             anchor_price=anchor_mid_price,
@@ -156,7 +148,7 @@ def _resolve_realized_excursions(
         if bid_move is not None:
             candidate_moves.append(bid_move)
 
-    current_best_ask = _safe_float(current_prediction_state.get("best_ask"))
+    current_best_ask = safe_float(current_prediction_state.get("best_ask"))
     if current_best_ask is not None:
         ask_move = _price_to_bp(
             anchor_price=anchor_mid_price,
@@ -288,8 +280,8 @@ def build_prediction_state_from_replay_result(
         "tactic_proposal_output": tactic_proposal_output,
         "calibration_hint": calibration_hint,
         "mid_price": _resolve_mid_price(result),
-        "best_bid": _safe_float(result.get("best_bid")),
-        "best_ask": _safe_float(result.get("best_ask")),
+        "best_bid": safe_float(result.get("best_bid")),
+        "best_ask": safe_float(result.get("best_ask")),
     }
 
 
@@ -300,7 +292,7 @@ def _build_proxy_realized_outcome(
     realized_horizon: str,
 ) -> dict[str, Any]:
     scenario_output = current_prediction_state["scenario_output"]
-    current_mid_price = _safe_float(current_prediction_state.get("mid_price"))
+    current_mid_price = safe_float(current_prediction_state.get("mid_price"))
 
     realized_return_bp = _price_to_bp(
         anchor_price=previous_mid_price,
@@ -330,8 +322,8 @@ def _build_proxy_realized_outcome(
                 "realized_outcome_source": "next_step_proxy",
                 "anchor_mid_price": previous_mid_price,
                 "current_mid_price": current_mid_price,
-                "current_best_bid": _safe_float(current_prediction_state.get("best_bid")),
-                "current_best_ask": _safe_float(current_prediction_state.get("best_ask")),
+                "current_best_bid": safe_float(current_prediction_state.get("best_bid")),
+                "current_best_ask": safe_float(current_prediction_state.get("best_ask")),
                 "realized_window_mode": "single_step_quote_envelope",
             },
         )

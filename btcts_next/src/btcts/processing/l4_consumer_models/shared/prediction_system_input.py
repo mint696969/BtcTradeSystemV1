@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import safe_str
 from btcts.processing.l4_consumer_models.shared.health_digest import HealthDigest
 from btcts.processing.l4_consumer_models.shared.market_summary import MarketSummary
 from btcts.processing.l4_consumer_models.shared.prediction_liquidity_board_history import (
@@ -47,15 +48,8 @@ class PredictionSystemBuildInput:
     diagnostics: dict[str, Any] | None = None
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
 def _normalize_source_kind(value: Any) -> str:
-    return _safe_str(value) or DEFAULT_PREDICTION_SYSTEM_SOURCE_KIND
+    return safe_str(value) or DEFAULT_PREDICTION_SYSTEM_SOURCE_KIND
 
 
 def _normalize_requested_horizons(
@@ -66,7 +60,7 @@ def _normalize_requested_horizons(
 
     out: list[str] = []
     for item in value:
-        normalized = _safe_str(item)
+        normalized = safe_str(item)
         if normalized not in DEFAULT_REQUESTED_HORIZONS:
             continue
         if normalized in out:

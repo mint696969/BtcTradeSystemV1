@@ -10,6 +10,10 @@ from btcts.processing.l4_consumer_models.shared import (
     PredictionCalibrationHint,
     PredictionScenarioOutput,
 )
+from btcts.processing.l4_consumer_models.shared._value_utils import (
+    safe_float,
+    safe_str,
+)
 
 
 @dataclass(frozen=True)
@@ -18,22 +22,6 @@ class PredictionEvaluationBuildInput:
     calibration_hint: PredictionCalibrationHint | None = None
     realized_outcome: dict[str, Any] | None = None
     diagnostics: dict[str, Any] | None = None
-
-
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
-def _safe_float(value: Any) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except Exception:
-        return None
 
 
 def _resolve_regime_alignment(
@@ -131,15 +119,15 @@ def build_prediction_evaluation_entry(
         market_uid = scenario_output.market_uid
         event_ts = scenario_output.event_ts
 
-    realized_regime_state = _safe_str(realized_outcome.get("realized_regime_state"))
-    realized_confidence = _safe_float(realized_outcome.get("realized_confidence"))
-    realized_caution_level = _safe_str(realized_outcome.get("realized_caution_level"))
-    realized_horizon = _safe_str(realized_outcome.get("realized_horizon"))
-    realized_return_bp = _safe_float(realized_outcome.get("realized_return_bp"))
-    realized_max_adverse_bp = _safe_float(
+    realized_regime_state = safe_str(realized_outcome.get("realized_regime_state"))
+    realized_confidence = safe_float(realized_outcome.get("realized_confidence"))
+    realized_caution_level = safe_str(realized_outcome.get("realized_caution_level"))
+    realized_horizon = safe_str(realized_outcome.get("realized_horizon"))
+    realized_return_bp = safe_float(realized_outcome.get("realized_return_bp"))
+    realized_max_adverse_bp = safe_float(
         realized_outcome.get("realized_max_adverse_bp")
     )
-    realized_max_favorable_bp = _safe_float(
+    realized_max_favorable_bp = safe_float(
         realized_outcome.get("realized_max_favorable_bp")
     )
 

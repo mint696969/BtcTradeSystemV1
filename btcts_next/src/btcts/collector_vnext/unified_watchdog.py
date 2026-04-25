@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 import time
+from ._env_utils import env_int
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -29,16 +30,6 @@ from .unified_state import (
     write_unified_daemon_stop_request,
     write_unified_supervisor_status,
 )
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = str(os.getenv(name, "") or "").strip()
-    if not raw:
-        return default
-    try:
-        return int(raw)
-    except Exception:
-        return default
 
 
 def _parse_ts(value: str | None) -> datetime | None:
@@ -436,11 +427,11 @@ def run_forever() -> int:
         )
         return 2
 
-    graceful_timeout_sec = _env_int("BTCTS_UNIFIED_GRACEFUL_TIMEOUT_SEC", 30)
-    restart_backoff_sec = _env_int("BTCTS_UNIFIED_SUPERVISOR_BACKOFF_SEC", 3)
-    max_failures = _env_int("BTCTS_UNIFIED_SUPERVISOR_MAX_FAILURES", 10)
-    request_max_age_sec = _env_int("BTCTS_UNIFIED_REQUEST_MAX_AGE_SEC", 600)
-    safe_stop_timeout_sec = _env_int("BTCTS_UNIFIED_SAFE_STOP_TIMEOUT_SEC", 180)
+    graceful_timeout_sec = env_int("BTCTS_UNIFIED_GRACEFUL_TIMEOUT_SEC", 30)
+    restart_backoff_sec = env_int("BTCTS_UNIFIED_SUPERVISOR_BACKOFF_SEC", 3)
+    max_failures = env_int("BTCTS_UNIFIED_SUPERVISOR_MAX_FAILURES", 10)
+    request_max_age_sec = env_int("BTCTS_UNIFIED_REQUEST_MAX_AGE_SEC", 600)
+    safe_stop_timeout_sec = env_int("BTCTS_UNIFIED_SAFE_STOP_TIMEOUT_SEC", 180)
 
     proc: subprocess.Popen | None = None
     consecutive_failures = 0

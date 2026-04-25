@@ -44,6 +44,80 @@ def _can_promote_active_tactic(
     return True
 
 
+def _resolve_promotion_gate_state(
+    *,
+    invalidation_state: str,
+    current_caution_level: str,
+) -> str:
+    if invalidation_state in {"invalidated", "scenario_switch_required"}:
+        return "blocked_by_invalidation"
+    if current_caution_level == "blocked":
+        return "blocked_by_caution"
+    return "allowed"
+
+
+def _resolve_overlay_primary_ref(
+    *,
+    normalized_overlay_refs: tuple[str, ...],
+    switch_hint: str,
+    invalidation_state: str,
+    current_regime_state: str,
+    current_confidence: float,
+    can_promote_active_tactic: bool,
+) -> str | None:
+    if _has_any_overlay(normalized_overlay_refs, "force_observe_only"):
+        return "force_observe_only"
+
+    if _has_any_overlay(normalized_overlay_refs, "prefer_defensive_reduce_risk"):
+        return "prefer_defensive_reduce_risk"
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_tighten_entry_gate")
+        and current_regime_state == "continuation"
+        and can_promote_active_tactic
+    ):
+        return "prefer_tighten_entry_gate"
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_reversal_prepare")
+        and current_regime_state != "no_trade"
+    ):
+        return "prefer_reversal_prepare"
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_continuation_follow")
+        and current_regime_state == "continuation"
+        and can_promote_active_tactic
+        and current_confidence >= 0.45
+    ):
+        return "prefer_continuation_follow"
+
+    if (
+        _has_any_overlay(normalized_overlay_refs, "prefer_cautious_probe")
+        and current_regime_state == "continuation"
+        and can_promote_active_tactic
+    ):
+        return "prefer_cautious_probe"
+
+    return None
+
+
+def _resolve_overlay_support_tactic_keys(
+    *,
+    primary_tactic_key: str,
+    scenario_output: PredictionScenarioOutput | None,
+    normalized_overlay_refs: tuple[str, ...],
+) -> tuple[str, ...]:
+    ordered_keys: list[tuple[str, int, str]] = []
+    _append_overlay_support_candidates(
+        ordered_keys=ordered_keys,
+        primary_tactic_key=primary_tactic_key,
+        scenario_output=scenario_output,
+        normalized_overlay_refs=normalized_overlay_refs,
+    )
+    return tuple(tactic_key for tactic_key, _, _ in ordered_keys)
+
+
 def _resolve_overlay_primary_tactic_key(
     *,
     normalized_overlay_refs: tuple[str, ...],
@@ -157,18 +231,62 @@ def build_selection_trace(
     for item in normalized_overlay_refs:
         selection_bias_tags.append(f"overlay:{item}")
 
+    scenario_switch_hint = None
+    scenario_regime = None
+    current_caution_level = None
+    invalidation_state = None
+    promotion_gate_state = None
+    can_promote_active_tactic = None
+    overlay_primary_ref = None
+    overlay_support_tactic_keys: tuple[str, ...] = ()
+
     if scenario_output is not None:
-        if scenario_output.current_caution_level in {"high", "blocked"}:
+        scenario_switch_hint = scenario_output.scenario_switch_hint
+        scenario_regime = scenario_output.current_regime_state
+        current_caution_level = scenario_output.current_caution_level
+        invalidation_state = scenario_output.invalidation_state
+
+        if current_caution_level in {"high", "blocked"}:
             selection_bias_tags.append(
-                f"caution:{scenario_output.current_caution_level}"
+                f"caution:{current_caution_level}"
             )
-        if scenario_output.invalidation_state in {
+        if invalidation_state in {
             "invalidated",
             "scenario_switch_required",
         }:
             selection_bias_tags.append(
-                f"invalidation:{scenario_output.invalidation_state}"
+                f"invalidation:{invalidation_state}"
             )
+
+        promotion_gate_state = _resolve_promotion_gate_state(
+            invalidation_state=invalidation_state,
+            current_caution_level=current_caution_level,
+        )
+        can_promote_active_tactic = _can_promote_active_tactic(
+            invalidation_state=invalidation_state,
+            current_caution_level=current_caution_level,
+        )
+        overlay_primary_ref = _resolve_overlay_primary_ref(
+            normalized_overlay_refs=normalized_overlay_refs,
+            switch_hint=scenario_switch_hint,
+            invalidation_state=invalidation_state,
+            current_regime_state=scenario_regime,
+            current_confidence=float(scenario_output.current_confidence or 0.0),
+            can_promote_active_tactic=can_promote_active_tactic,
+        )
+        overlay_support_tactic_keys = _resolve_overlay_support_tactic_keys(
+            primary_tactic_key=primary_tactic_key,
+            scenario_output=scenario_output,
+            normalized_overlay_refs=normalized_overlay_refs,
+        )
+
+    overlay_application_mode = "none"
+    if overlay_primary_ref and overlay_support_tactic_keys:
+        overlay_application_mode = "primary_and_support"
+    elif overlay_primary_ref:
+        overlay_application_mode = "primary_only"
+    elif overlay_support_tactic_keys:
+        overlay_application_mode = "support_only"
 
     return {
         "trace_type": "tactic_selection_trace",
@@ -177,18 +295,15 @@ def build_selection_trace(
         "profile_kind": normalized_profile_kind,
         "overlay_refs": normalized_overlay_refs,
         "selection_bias_tags": tuple(selection_bias_tags),
-        "scenario_switch_hint": None
-        if scenario_output is None
-        else scenario_output.scenario_switch_hint,
-        "scenario_regime": None
-        if scenario_output is None
-        else scenario_output.current_regime_state,
-        "current_caution_level": None
-        if scenario_output is None
-        else scenario_output.current_caution_level,
-        "invalidation_state": None
-        if scenario_output is None
-        else scenario_output.invalidation_state,
+        "scenario_switch_hint": scenario_switch_hint,
+        "scenario_regime": scenario_regime,
+        "current_caution_level": current_caution_level,
+        "invalidation_state": invalidation_state,
+        "promotion_gate_state": promotion_gate_state,
+        "can_promote_active_tactic": can_promote_active_tactic,
+        "overlay_primary_ref": overlay_primary_ref,
+        "overlay_support_tactic_keys": overlay_support_tactic_keys,
+        "overlay_application_mode": overlay_application_mode,
     }
 
 

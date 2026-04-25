@@ -15,6 +15,21 @@ from btcts.market_engine.execution.replay_engine import ReplayEngine
 from btcts.market_engine.profiles import BitflyerProfile
 
 
+_STABLE_EVENT_CONTRACT_KEYS = (
+    "contract_source",
+    "event_name",
+    "event_family",
+    "usage_grade",
+    "interpretation_bucket",
+    "meaning_version",
+    "trust_bucket",
+    "actionability",
+    "forecast_horizon_hint",
+    "half_life_sec",
+    "side",
+)
+
+
 def _snapshot_event() -> dict:
     return {
         "record_type": "market.orderbook.snapshot",
@@ -117,10 +132,10 @@ def _orderbook_semantics_fingerprint(step) -> tuple:
     summary = step.orderbook_semantics_summary or {}
     active_contracts = tuple(
         (
-            str(event.get("event_name")),
-            str(event.get("event_family")),
-            str(event.get("usage_grade")),
-            str(event.get("side")),
+            *tuple(
+                event.get(key) if key == "half_life_sec" else str(event.get(key) or "")
+                for key in _STABLE_EVENT_CONTRACT_KEYS
+            ),
         )
         for event in (summary.get("active_event_contracts") or [])
     )
@@ -176,6 +191,9 @@ def main() -> int:
     assert "active_event_count" in final_summary
     assert "active_event_names" in final_summary
     assert "active_event_contracts" in final_summary
+    for event in (final_summary.get("active_event_contracts") or []):
+        for key in _STABLE_EVENT_CONTRACT_KEYS:
+            assert key in event
 
     print("ok")
     return 0

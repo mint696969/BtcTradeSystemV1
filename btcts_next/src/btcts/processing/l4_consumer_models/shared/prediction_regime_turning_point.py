@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import safe_str
 from btcts.processing.l4_consumer_models.shared.health_digest import HealthDigest
 from btcts.processing.l4_consumer_models.shared.market_summary import MarketSummary
 
@@ -18,15 +19,8 @@ class PredictionRegimeTurningPointBuildInput:
     diagnostics: dict[str, Any] | None = None
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
 def _resolve_source_kind(value: Any) -> str:
-    return _safe_str(value) or "market_summary_anchor"
+    return safe_str(value) or "market_summary_anchor"
 
 
 def _resolve_identity(
@@ -87,14 +81,14 @@ def _resolve_transition_sign(
             return "weakening_continuation"
 
         market_runtime = dict(health_digest.market_runtime or {})
-        digest_bucket = _safe_str(market_runtime.get("interpretation_bucket"))
+        digest_bucket = safe_str(market_runtime.get("interpretation_bucket"))
         if digest_bucket == "reanchor_required":
             return "transition_underway"
         if digest_bucket == "observe_only":
             return "weakening_continuation"
 
         semantic_usage = dict(health_digest.semantic_usage or {})
-        observer_status = _safe_str(semantic_usage.get("observer_status"))
+        observer_status = safe_str(semantic_usage.get("observer_status"))
         if observer_status == "caution":
             return "weakening_continuation"
         if observer_status in {"broken", "unknown"}:
@@ -134,14 +128,14 @@ def _resolve_turning_point_risk(
             return "high"
 
         market_runtime = dict(health_digest.market_runtime or {})
-        digest_bucket = _safe_str(market_runtime.get("interpretation_bucket"))
+        digest_bucket = safe_str(market_runtime.get("interpretation_bucket"))
         if digest_bucket == "reanchor_required":
             return "high"
         if digest_bucket == "observe_only":
             return "medium"
 
         semantic_usage = dict(health_digest.semantic_usage or {})
-        observer_status = _safe_str(semantic_usage.get("observer_status"))
+        observer_status = safe_str(semantic_usage.get("observer_status"))
         if observer_status in {"broken", "unknown"}:
             return "high"
         if observer_status == "caution":
@@ -207,7 +201,7 @@ def _build_trigger_flags(
             out.append("health_digest_stale")
 
         semantic_usage = dict(health_digest.semantic_usage or {})
-        observer_status = _safe_str(semantic_usage.get("observer_status"))
+        observer_status = safe_str(semantic_usage.get("observer_status"))
         if observer_status is not None:
             out.append(f"health_observer:{observer_status}")
 

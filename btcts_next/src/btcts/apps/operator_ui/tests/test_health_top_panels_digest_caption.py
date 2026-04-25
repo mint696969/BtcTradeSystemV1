@@ -97,6 +97,22 @@ def main() -> int:
     caption = build_health_digest_layer3_summary_caption(
         widget=widget,
         payload={
+            "semantic_observability": {
+                "observer_present": True,
+                "usage_summary_present": True,
+                "contract_rows_present": True,
+                "contract_rows_count": 2,
+                "source_series_present": True,
+            },
+            "orderbook_active_event_observability": {
+                "persistence_present": False,
+                "persistence_observable": True,
+                "summary_slots_count": 3,
+                "summary_slots_present": ["near_wall", "support", "persistence"],
+                "active_event_count": 1,
+                "active_event_names": ["near_wall_continued"],
+                "active_event_contracts_count": 1,
+            },
             "semantic_usage_observer_present": True,
             "semantic_usage_summary_present": True,
             "semantic_usage_contract_rows_present": True,

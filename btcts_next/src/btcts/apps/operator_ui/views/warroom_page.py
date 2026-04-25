@@ -23,6 +23,12 @@ from btcts.apps.operator_ui.components import trade_flow_monitor
 from btcts.apps.operator_ui.components import watch_list_panel
 from btcts.apps.operator_ui.components import warroom_header
 from btcts.apps.operator_ui.components import warroom_timeline
+from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_status_payload,
+)
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    active_event_compact_reading_line,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -54,6 +60,125 @@ _GRAPH_WIDGET_RENDERERS = {
     "liquidity_pressure": liquidity_pressure_panel.render,
     "trade_flow_monitor": trade_flow_monitor.render,
 }
+
+
+def _warroom_reading_block_order() -> tuple[str, ...]:
+    return (
+        "current_market_summary_reading",
+        "current_active_event_reading",
+        "current_tactic_prediction_reading",
+        "operator_support_review_reading",
+    )
+
+
+def _warroom_reading_block_captions() -> dict[str, str]:
+    return {
+        "current_market_summary_reading": (
+            "read current regime / source / compact market state first"
+        ),
+        "current_active_event_reading": (
+            "read active event / liquidity / graph context as current market evidence"
+        ),
+        "current_tactic_prediction_reading": (
+            "read tactic stance / prediction as review support, not execution"
+        ),
+        "operator_support_review_reading": (
+            "read watch / timeline / decision support as operator review context"
+        ),
+    }
+
+
+def _warroom_active_event_reading_caption() -> str:
+    summary_payload = load_market_summary_status_payload()
+    return active_event_compact_reading_line(summary_payload)
+
+
+def _render_warroom_primary_reading_overview(
+    *,
+    fragment_enabled: bool,
+) -> None:
+    _render_fragmentable_warroom_widget(
+        "warroom_header",
+        warroom_header.render,
+        fragment_enabled=fragment_enabled,
+    )
+
+    with live_shell.slot_widget_from_meta(
+        warroom_widget_slot("warroom_alert_engine")
+    ):
+        warroom_alert_engine.render()
+
+    with live_shell.slot_widget_from_meta(
+        warroom_widget_slot("ai_operator_panel")
+    ):
+        ai_operator_panel.render()
+
+
+def _render_warroom_active_event_and_graph_reading(
+    *,
+    fragment_enabled: bool,
+) -> None:
+    _render_fragmentable_warroom_widget(
+        "market_regime",
+        market_regime_panel.render,
+        fragment_enabled=fragment_enabled,
+    )
+
+    graph_widget_bundles = [
+        warroom_graph_widget_bundle(widget_id)
+        for widget_id in warroom_graph_widget_ids()
+    ]
+    for bundle in graph_widget_bundles:
+        _render_graph_widget_bundle(
+            bundle,
+            fragment_enabled=fragment_enabled,
+        )
+
+
+def _render_warroom_tactic_prediction_reading(
+    *,
+    fragment_enabled: bool,
+) -> None:
+    _render_fragmentable_warroom_widget(
+        "ai_signal",
+        ai_signal_panel.render,
+        fragment_enabled=fragment_enabled,
+    )
+
+    _render_fragmentable_warroom_widget(
+        "strategy_state",
+        strategy_state_panel.render,
+        fragment_enabled=fragment_enabled,
+    )
+
+    _render_fragmentable_warroom_widget(
+        "risk_monitor",
+        risk_monitor_panel.render,
+        fragment_enabled=fragment_enabled,
+    )
+
+    _render_fragmentable_warroom_widget(
+        "agent_panels",
+        agent_panels.render,
+        fragment_enabled=fragment_enabled,
+    )
+
+
+def _render_warroom_operator_support_review() -> None:
+    with live_shell.slot_widget_from_meta(
+        warroom_widget_slot("decision_log_panel")
+    ):
+        decision_log_panel.render()
+
+    with live_shell.slot_widget_from_meta(
+        warroom_widget_slot("watch_list_panel")
+    ):
+        watch_list_panel.render()
+
+    with live_shell.slot_widget_from_meta(
+        warroom_widget_slot("warroom_timeline")
+    ):
+        warroom_timeline.render()
 
 
 def _render_fragmentable_warroom_widget(
@@ -199,83 +324,53 @@ def render():
         label=get_text(lang, "ui_label_overview"),
         zone_kind="overview",
     ):
-        _render_fragmentable_warroom_widget(
-            "warroom_header",
-            warroom_header.render,
+        block_captions = _warroom_reading_block_captions()
+        st.caption(
+            "warroom_reading_blocks="
+            + " > ".join(_warroom_reading_block_order())
+        )
+        st.caption(
+            "current_market_summary_reading: "
+            + block_captions["current_market_summary_reading"]
+        )
+        _render_warroom_primary_reading_overview(
             fragment_enabled=fragment_enabled,
         )
-
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("warroom_alert_engine")
-        ):
-            warroom_alert_engine.render()
-
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("ai_operator_panel")
-        ):
-            ai_operator_panel.render()
-    with live_shell.zone_container(
-        label=get_text(lang, "ui_label_operator_support"),
-        zone_kind="secondary",
-    ):
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("decision_log_panel")
-        ):
-            decision_log_panel.render()
-
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("watch_list_panel")
-        ):
-            watch_list_panel.render()
-
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("warroom_timeline")
-        ):
-            warroom_timeline.render()
 
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_primary_live"),
         zone_kind="primary_live",
     ):
-        _render_fragmentable_warroom_widget(
-            "market_regime",
-            market_regime_panel.render,
+        block_captions = _warroom_reading_block_captions()
+        st.caption(
+            "current_active_event_reading: "
+            + block_captions["current_active_event_reading"]
+        )
+        st.caption(
+            "active_event_compact: "
+            + _warroom_active_event_reading_caption()
+        )
+        _render_warroom_active_event_and_graph_reading(
+            fragment_enabled=fragment_enabled,
+        )
+        st.caption(
+            "current_tactic_prediction_reading: "
+            + block_captions["current_tactic_prediction_reading"]
+        )
+        _render_warroom_tactic_prediction_reading(
             fragment_enabled=fragment_enabled,
         )
 
-        graph_widget_bundles = [
-            warroom_graph_widget_bundle(widget_id)
-            for widget_id in warroom_graph_widget_ids()
-        ]
-        for bundle in graph_widget_bundles:
-            _render_graph_widget_bundle(
-                bundle,
-                fragment_enabled=fragment_enabled,
-            )
-
-        _render_fragmentable_warroom_widget(
-            "ai_signal",
-            ai_signal_panel.render,
-            fragment_enabled=fragment_enabled,
+    with live_shell.zone_container(
+        label=get_text(lang, "ui_label_operator_support"),
+        zone_kind="secondary",
+    ):
+        block_captions = _warroom_reading_block_captions()
+        st.caption(
+            "operator_support_review_reading: "
+            + block_captions["operator_support_review_reading"]
         )
-
-        _render_fragmentable_warroom_widget(
-            "strategy_state",
-            strategy_state_panel.render,
-            fragment_enabled=fragment_enabled,
-        )
-
-        _render_fragmentable_warroom_widget(
-            "risk_monitor",
-            risk_monitor_panel.render,
-            fragment_enabled=fragment_enabled,
-        )
-
-        _render_fragmentable_warroom_widget(
-            "agent_panels",
-            agent_panels.render,
-            fragment_enabled=fragment_enabled,
-        )
+        _render_warroom_operator_support_review()
 
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         slot_rows = get_registered_slots("warroom")

@@ -11,6 +11,7 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.apps.operator_ui.components.health_chart_panels import (  # noqa: E402
+    build_active_event_observer_compact_line,
     build_semantic_contract_observer_caption,
 )
 
@@ -187,6 +188,53 @@ def main() -> int:
     assert "active_event_names=near_wall_continued,support_candidate" in summary_first
     assert "persistence_present=False" in summary_first
     assert "persistence_observable=True" in summary_first
+
+    compact = build_active_event_observer_compact_line(
+        layer3_orderbook_runtime_summary={
+            "active_event_count": 2,
+            "active_event_names": [
+                "near_wall_continued",
+                "support_candidate",
+            ],
+            "active_event_contracts": [
+                {
+                    "event_name": "near_wall_continued",
+                    "event_family": "wall",
+                    "usage_grade": "strong",
+                    "forecast_horizon_hint": "short",
+                    "side": "bid",
+                },
+                {
+                    "event_name": "support_candidate",
+                    "event_family": "support_resistance",
+                    "usage_grade": "watch",
+                    "forecast_horizon_hint": "short",
+                    "side": "bid",
+                },
+            ],
+        },
+    )
+    assert compact == (
+        "active_events=2 / "
+        "near_wall_continued (wall / strong / short / bid) +1 more"
+    )
+
+    fallback_compact = build_active_event_observer_compact_line(
+        layer3_orderbook_runtime_summary={
+            "active_event_count": 2,
+            "active_event_names": [
+                "near_wall_continued",
+                "support_candidate",
+            ],
+        },
+    )
+    assert fallback_compact == "active_events=2 / near_wall_continued +1 more"
+
+    empty_compact = build_active_event_observer_compact_line(
+        layer3_orderbook_runtime_summary={},
+    )
+    assert empty_compact == "active_events=0 / none"
+
 
     empty = build_semantic_contract_observer_caption(
         layer3_semantic_usage_summary={},

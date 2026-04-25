@@ -6,6 +6,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared._value_utils import safe_str
 from btcts.processing.l4_consumer_models.shared.health_digest import HealthDigest
 from btcts.processing.l4_consumer_models.shared.market_summary import MarketSummary
 
@@ -40,20 +41,13 @@ class PredictionSummaryBuildInput:
     horizon: str = "short"
 
 
-def _safe_str(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
-
-
 def _normalize_source_kind(value: Any) -> str:
-    normalized = _safe_str(value)
+    normalized = safe_str(value)
     return normalized or "market_summary_anchor"
 
 
 def _normalize_horizon(value: Any) -> str:
-    normalized = _safe_str(value)
+    normalized = safe_str(value)
     if normalized in {"micro", "short"}:
         return normalized
     return "short"
@@ -77,21 +71,21 @@ def _resolve_caution_level(
             return "high"
 
         market_runtime = dict(health_digest.market_runtime or {})
-        digest_bucket = _safe_str(market_runtime.get("interpretation_bucket"))
+        digest_bucket = safe_str(market_runtime.get("interpretation_bucket"))
         if digest_bucket == "reanchor_required":
             return "blocked"
         if digest_bucket == "observe_only":
             return "medium"
 
         semantic_usage = dict(health_digest.semantic_usage or {})
-        observer_status = _safe_str(semantic_usage.get("observer_status"))
+        observer_status = safe_str(semantic_usage.get("observer_status"))
         if observer_status in {"broken", "unknown"}:
             return "high"
         if observer_status == "caution":
             return "medium"
 
         orderbook_runtime = dict(health_digest.orderbook_runtime or {})
-        digest_wiring_status = _safe_str(orderbook_runtime.get("wiring_status"))
+        digest_wiring_status = safe_str(orderbook_runtime.get("wiring_status"))
         if digest_wiring_status == "missing":
             return "high"
 
@@ -224,12 +218,12 @@ def _build_evidence(
 
         semantic_usage = dict(health_digest.semantic_usage or {})
         evidence["health_semantic_observer_status"] = (
-            _safe_str(semantic_usage.get("observer_status")) or "unknown"
+            safe_str(semantic_usage.get("observer_status")) or "unknown"
         )
 
         orderbook_runtime = dict(health_digest.orderbook_runtime or {})
         evidence["health_orderbook_wiring_status"] = (
-            _safe_str(orderbook_runtime.get("wiring_status")) or "missing"
+            safe_str(orderbook_runtime.get("wiring_status")) or "missing"
         )
     else:
         evidence["health_digest_present"] = False

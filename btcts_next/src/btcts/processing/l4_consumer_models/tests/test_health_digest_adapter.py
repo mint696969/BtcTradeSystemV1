@@ -134,6 +134,26 @@ def main() -> int:
     assert payload["digest_version"] == "v1alpha1"
     assert payload["source_kind"] == "health_data_service"
     assert payload["freshness"] == "LIVE"
+    assert payload["health_observer_block_order"] == (
+        "collector_ingestion_observability",
+        "market_runtime_truth",
+        "semantic_observability",
+        "orderbook_active_event_observability",
+    )
+    assert payload["collector_ingestion_observability"]["collector_runtime"]["mode"] == "unified"
+    assert payload["collector_ingestion_observability"]["api_runtime"]["mode"] == "normal"
+    assert payload["collector_ingestion_observability"]["ws_runtime"]["board_state"] == "healthy"
+    assert payload["market_runtime_truth"]["market_runtime"]["trust_state"] == "trusted"
+    assert payload["semantic_observability"]["observer_present"] is True
+    assert payload["semantic_observability"]["usage_summary_present"] is True
+    assert payload["semantic_observability"]["contract_rows_present"] is True
+    assert payload["semantic_observability"]["contract_rows_kind"] == "event_family_contract_rows"
+    assert payload["semantic_observability"]["contract_rows_count"] == 1
+    assert payload["semantic_observability"]["source_series_present"] is True
+    assert payload["orderbook_active_event_observability"]["contract_status_source"] == "market_state_orderbook_contract_status"
+    assert payload["orderbook_active_event_observability"]["runtime_wiring_status"] == "partial"
+    assert payload["orderbook_active_event_observability"]["near_wall_present"] is True
+
     assert payload["semantic_usage_observer_present"] is True
     assert payload["semantic_usage_summary_present"] is True
     assert payload["semantic_usage_contract_rows_present"] is True
@@ -155,6 +175,19 @@ def main() -> int:
     assert payload["orderbook_active_event_contracts_kind"] == "active_event_contract_rows"
     assert payload["orderbook_active_event_contracts_count"] == 1
     assert payload["orderbook_active_event_contracts"][0]["event_name"] == "near_wall_continued"
+
+    assert payload["orderbook_active_event_observability"]["support_present"] is True
+    assert payload["orderbook_active_event_observability"]["resistance_present"] is False
+    assert payload["orderbook_active_event_observability"]["persistence_present"] is False
+    assert payload["orderbook_active_event_observability"]["persistence_observable"] is True
+    assert payload["orderbook_active_event_observability"]["summary_slots_kind"] == "summary_slot_names"
+    assert payload["orderbook_active_event_observability"]["summary_slots_count"] == 2
+    assert payload["orderbook_active_event_observability"]["summary_slots_present"] == ["near_wall", "support"]
+    assert payload["orderbook_active_event_observability"]["active_event_names"] == ["near_wall_continued"]
+    assert payload["orderbook_active_event_observability"]["active_event_count"] == 1
+    assert payload["orderbook_active_event_observability"]["active_event_contracts_kind"] == "active_event_contract_rows"
+    assert payload["orderbook_active_event_observability"]["active_event_contracts_count"] == 1
+    assert payload["orderbook_active_event_observability"]["active_event_contracts"][0]["event_name"] == "near_wall_continued"
 
     empty_widget = health_digest_widget_model(None)
     assert empty_widget.widget_kind == "health_digest"

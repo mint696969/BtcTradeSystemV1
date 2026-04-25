@@ -110,6 +110,11 @@ def main() -> int:
         "scenario_regime": "continuation",
         "current_caution_level": "low",
         "invalidation_state": "stable",
+        "promotion_gate_state": "allowed",
+        "can_promote_active_tactic": True,
+        "overlay_primary_ref": "prefer_cautious_probe",
+        "overlay_support_tactic_keys": (),
+        "overlay_application_mode": "primary_only",
     }
 
     defensive_profile = PredictionScenarioOutput(
@@ -134,26 +139,7 @@ def main() -> int:
         ("defensive_reduce_risk", 10, "aligned"),
         ("observe_only", 80, "fallback"),
     )
-    assert build_selection_trace(
-        scenario_output=defensive_profile,
-        primary_tactic_key="defensive_reduce_risk",
-        profile_kind="defensive",
-        overlay_refs=("prefer_cautious_probe",),
-    ) == {
-        "trace_type": "tactic_selection_trace",
-        "primary_tactic_key": "defensive_reduce_risk",
-        "scenario_present": True,
-        "profile_kind": "defensive",
-        "overlay_refs": ("prefer_cautious_probe",),
-        "selection_bias_tags": (
-            "profile:defensive",
-            "overlay:prefer_cautious_probe",
-        ),
-        "scenario_switch_hint": "hold_primary",
-        "scenario_regime": "continuation",
-        "current_caution_level": "medium",
-        "invalidation_state": "caution_increase",
-    }
+
 
     tighten_gate_overlay = PredictionScenarioOutput(
         current_regime_state="continuation",
@@ -223,6 +209,43 @@ def main() -> int:
         ("continuation_follow", 25, "overlay_support"),
         ("cautious_probe", 25, "overlay_support"),
     )
+    assert build_selection_trace(
+        scenario_output=continuation_overlay,
+        primary_tactic_key="observe_only",
+        overlay_refs=(
+            "prefer_tighten_entry_gate",
+            "prefer_continuation_follow",
+            "prefer_cautious_probe",
+        ),
+    ) == {
+        "trace_type": "tactic_selection_trace",
+        "primary_tactic_key": "observe_only",
+        "scenario_present": True,
+        "profile_kind": None,
+        "overlay_refs": (
+            "prefer_tighten_entry_gate",
+            "prefer_continuation_follow",
+            "prefer_cautious_probe",
+        ),
+        "selection_bias_tags": (
+            "overlay:prefer_tighten_entry_gate",
+            "overlay:prefer_continuation_follow",
+            "overlay:prefer_cautious_probe",
+        ),
+        "scenario_switch_hint": "hold_primary",
+        "scenario_regime": "continuation",
+        "current_caution_level": "low",
+        "invalidation_state": "stable",
+        "promotion_gate_state": "allowed",
+        "can_promote_active_tactic": True,
+        "overlay_primary_ref": "prefer_tighten_entry_gate",
+        "overlay_support_tactic_keys": (
+            "tighten_entry_gate",
+            "continuation_follow",
+            "cautious_probe",
+        ),
+        "overlay_application_mode": "primary_and_support",
+    }
 
     blocked = None
     assert resolve_primary_tactic_key(blocked) == "maintain_no_trade"

@@ -26,6 +26,7 @@ from btcts.apps.operator_ui.components.ai_operator_presenter import (
 from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
     advisory_support_caption,
     build_tactic_interpretation_display_lines,
+    build_tactic_primary_review_display_lines,
     build_tactic_stance_display_lines,
     prediction_snapshot_section_title,
     tactic_interpretation_support_caption,
@@ -217,15 +218,14 @@ def render():
         ):
             st.caption(tactic_interpretation_support_caption(lang))
 
-            if tactic_primary_summary_line:
-                st.caption(f"★ {tactic_primary_summary_line}")
-
-            if primary_tactic_interpretation_line:
-                for line in build_tactic_interpretation_display_lines(
-                    (primary_tactic_interpretation_line,),
-                    lang,
-                ):
-                    st.caption(f"★ {line}")
+            for line in build_tactic_primary_review_display_lines(
+                tactic_primary_summary_line=tactic_primary_summary_line,
+                primary_tactic_interpretation_line=(
+                    primary_tactic_interpretation_line
+                ),
+                lang=lang,
+            ):
+                st.caption(line)
 
             if tactic_interpretation_lines:
                 for line in build_tactic_interpretation_display_lines(

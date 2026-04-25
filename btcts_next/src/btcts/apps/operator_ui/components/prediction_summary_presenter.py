@@ -4,6 +4,27 @@
 from __future__ import annotations
 
 
+def prediction_compact_reading_line(prediction_widget) -> str:
+    if not prediction_widget:
+        return "prediction_reading unavailable"
+
+    bias = str(getattr(prediction_widget, "short_horizon_bias_key", None) or "unknown")
+    caution = str(getattr(prediction_widget, "caution_level_key", None) or "unknown")
+    switch_hint = str(
+        getattr(prediction_widget, "scenario_switch_hint_key", None) or "unknown"
+    )
+    trace_summary = str(
+        getattr(prediction_widget, "trace_summary_key", None) or "unknown"
+    )
+
+    return (
+        f"prediction_reading={bias} / "
+        f"caution={caution} / "
+        f"switch={switch_hint} / "
+        f"trace={trace_summary}"
+    )
+
+
 def prediction_snapshot_lines(prediction_widget) -> list[str]:
     if not prediction_widget:
         return []

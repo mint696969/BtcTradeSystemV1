@@ -71,6 +71,9 @@ def main() -> int:
                             "comparison_relation": "candidate_vs_baseline",
                             "overlay_influence": "overlay_bias",
                         },
+                        "selection_trace": {
+                            "overlay_application_mode": "primary_only",
+                        },
                     },
                 }
             ],
@@ -80,6 +83,9 @@ def main() -> int:
                     "selected_tactic_key": "cautious_probe",
                     "decision_state": "proposed",
                     "rollback_target_ref": "baseline-default",
+                    "selection_trace": {
+                        "overlay_application_mode": "support_only",
+                    },
                     "parameter_trace": {
                         "comparison_profile_kinds": (
                             "baseline",
@@ -103,6 +109,9 @@ def main() -> int:
                     "operation_state": "propose",
                     "selected_tactic_key": "cautious_probe",
                     "rollback_target_ref": "baseline-default",
+                    "selection_trace": {
+                        "overlay_application_mode": "support_only",
+                    },
                     "parameter_trace": {
                         "comparison_profile_kinds": (
                             "baseline",
@@ -195,10 +204,12 @@ def main() -> int:
             "latest_comparison_baseline_available": True,
             "latest_comparison_relation": "candidate_vs_baseline",
             "latest_overlay_influence": "overlay_bias",
+            "latest_overlay_application_mode": "primary_only",
             "latest_compare_friendly_summary_line": (
                 "cautious_probe | "
                 "candidate_vs_baseline | "
                 "overlay_bias_present | "
+                "overlay_primary | "
                 "selected_set=candidate-cautious-probe | "
                 "rollback_target=baseline-default | "
                 "adoption_ready_for_review | "
@@ -221,9 +232,11 @@ def main() -> int:
             "latest_comparison_baseline_available": True,
             "latest_comparison_relation": "candidate_vs_baseline",
             "latest_overlay_influence": "none",
+            "latest_overlay_application_mode": "support_only",
             "latest_compare_friendly_summary_line": (
                 "cautious_probe | "
                 "candidate_vs_baseline | "
+                "overlay_support_only | "
                 "selected_set=candidate-cautious-probe | "
                 "rollback_target=baseline-default | "
                 "adoption_ready_for_review | "
@@ -246,9 +259,11 @@ def main() -> int:
             "latest_comparison_baseline_available": True,
             "latest_comparison_relation": "candidate_vs_baseline",
             "latest_overlay_influence": "none",
+            "latest_overlay_application_mode": "support_only",
             "latest_compare_friendly_summary_line": (
                 "cautious_probe | "
                 "candidate_vs_baseline | "
+                "overlay_support_only | "
                 "selected_set=candidate-cautious-probe | "
                 "rollback_target=baseline-default | "
                 "adoption_ready_for_review | "

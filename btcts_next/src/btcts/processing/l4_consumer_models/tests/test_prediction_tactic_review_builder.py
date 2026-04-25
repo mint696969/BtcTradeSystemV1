@@ -69,6 +69,11 @@ def main() -> int:
                     "profile:candidate",
                     "overlay:prefer_cautious_probe",
                 ),
+                "promotion_gate_state": "allowed",
+                "can_promote_active_tactic": True,
+                "overlay_primary_ref": "prefer_cautious_probe",
+                "overlay_support_tactic_keys": ("cautious_probe",),
+                "overlay_application_mode": "primary_and_support",
             }
         },
         diagnostics={
@@ -83,6 +88,11 @@ def main() -> int:
                     "profile:candidate",
                     "overlay:prefer_cautious_probe",
                 ),
+                "promotion_gate_state": "allowed",
+                "can_promote_active_tactic": True,
+                "overlay_primary_ref": "prefer_cautious_probe",
+                "overlay_support_tactic_keys": ("cautious_probe",),
+                "overlay_application_mode": "primary_and_support",
             },
             "parameter_trace": {
                 "active_set_id": "candidate-continuation-follow",
@@ -163,6 +173,11 @@ def main() -> int:
             "profile:candidate",
             "overlay:prefer_cautious_probe",
         ),
+        "promotion_gate_state": "allowed",
+        "can_promote_active_tactic": True,
+        "overlay_primary_ref": "prefer_cautious_probe",
+        "overlay_support_tactic_keys": ("cautious_probe",),
+        "overlay_application_mode": "primary_and_support",
     }
     assert review_record.parameter_trace == {
         "active_set_id": "candidate-continuation-follow",

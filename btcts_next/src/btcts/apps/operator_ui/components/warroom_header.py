@@ -98,6 +98,30 @@ def _regime_label(regime: str, lang: str) -> str:
     return mapping.get(regime, regime or get_text(lang, "warroom_value_unknown"))
 
 
+def build_warroom_market_reading_caption(
+    *,
+    state: dict | None,
+) -> str:
+    if not state:
+        return "warroom_reading unavailable"
+
+    regime = str(state.get("regime") or "unknown")
+    source = str(state.get("source_label") or state.get("source") or "unknown")
+    prediction_bias = str(state.get("prediction_bias") or "unknown")
+    prediction_caution = str(state.get("prediction_caution") or "unknown")
+    prediction_switch_hint = str(state.get("prediction_switch_hint") or "unknown")
+    prediction_trace_summary = str(state.get("prediction_trace_summary") or "-")
+
+    return (
+        f"market_reading={regime} / "
+        f"source={source} / "
+        f"prediction_bias={prediction_bias} / "
+        f"prediction_caution={prediction_caution} / "
+        f"prediction_switch_hint={prediction_switch_hint} / "
+        f"prediction_trace={prediction_trace_summary}"
+    )
+
+
 def _analyze_live_or_fallback():
     return build_warroom_header_state()
 
@@ -147,6 +171,11 @@ def render():
             spread=spread,
             imbalance=imbalance,
             wall_ratio=wall_ratio,
+        )
+    )
+    st.caption(
+        build_warroom_market_reading_caption(
+            state=state,
         )
     )
     st.caption(
