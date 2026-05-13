@@ -1,0 +1,272 @@
+# path: ./tools/test_phase4a_replay_market_engine_parity_total_guard.py
+# desc: Phase 4-A replay / market_engine parity total guard integrated with post Phase C boundary guard.
+
+from __future__ import annotations
+
+from _btcts_bootstrap import ensure_btcts_on_syspath
+ensure_btcts_on_syspath()
+
+import json
+import py_compile
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Dict, List
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+GUARD_SPECS = [
+    {
+        "path": "tools/test_phase4a_post_phasec_total_guard.py",
+        "kind": "json_ok",
+        "role": "post_phasec_boundary_total_guard",
+    },
+    {
+        "path": "btcts_next/src/btcts/market_engine/tests/test_replay_realtime_parity.py",
+        "kind": "plain_ok",
+        "role": "replay_realtime_parity",
+    },
+    {
+        "path": "btcts_next/src/btcts/market_engine/tests/test_runtime_orderbook_usage_alignment.py",
+        "kind": "plain_ok",
+        "role": "runtime_orderbook_usage_alignment",
+    },
+    {
+        "path": "btcts_next/src/btcts/market_engine/tests/test_live_orderbook_semantics_summary.py",
+        "kind": "plain_ok",
+        "role": "live_orderbook_semantics_summary",
+    },
+    {
+        "path": "btcts_next/src/btcts/market_engine/tests/test_market_state_flow.py",
+        "kind": "plain_ok",
+        "role": "market_state_flow",
+    },
+    {
+        "path": "btcts_next/src/btcts/market_engine/tests/test_foundation_flow.py",
+        "kind": "plain_ok",
+        "role": "market_engine_foundation_flow",
+    },
+    {
+        "path": "tools/test_market_engine_short_soak_gate.py",
+        "kind": "json_ok",
+        "role": "market_engine_short_soak_gate",
+    },
+    {
+        "path": "tools/test_market_engine_interpretation_audit.py",
+        "kind": "json_interpretation_audit",
+        "role": "market_engine_interpretation_audit",
+    },
+    {
+        "path": "tools/test_l3_event_usage_audit.py",
+        "kind": "json_ok",
+        "role": "l3_event_usage_policy_audit",
+    },
+    {
+        "path": "btcts_next/src/btcts/processing/l3_market_semantics/orderbook/tests/test_event_usage_policy_contract.py",
+        "kind": "plain_ok",
+        "role": "l3_event_usage_policy_contract",
+    },
+    {
+        "path": "btcts_next/src/btcts/replay/tests/test_replay_prediction_feedback.py",
+        "kind": "plain_ok",
+        "role": "replay_prediction_feedback_bridge",
+    },
+    {
+        "path": "btcts_next/src/btcts/replay/tests/test_replay_runner_prediction_feedback_scenario_bridge.py",
+        "kind": "plain_ok",
+        "role": "replay_runner_prediction_feedback_scenario_bridge",
+    },
+    {
+        "path": "btcts_next/src/btcts/processing/l4_consumer_models/tests/test_prediction_replay_feedback_builder.py",
+        "kind": "plain_ok",
+        "role": "prediction_replay_feedback_builder",
+    },
+    {
+        "path": "btcts_next/src/btcts/processing/l4_consumer_models/tests/test_prediction_tactic_contract.py",
+        "kind": "plain_ok",
+        "role": "prediction_tactic_contract",
+    },
+    {
+        "path": "btcts_next/src/btcts/processing/l4_consumer_models/tests/test_prediction_tactic_review_builder.py",
+        "kind": "plain_ok",
+        "role": "prediction_tactic_review_builder",
+    },
+    {
+        "path": "btcts_next/src/btcts/processing/l4_consumer_models/tests/test_prediction_tactic_operation_builder.py",
+        "kind": "plain_ok",
+        "role": "prediction_tactic_operation_builder",
+    },
+    {
+        "path": "btcts_next/src/btcts/processing/l4_consumer_models/tests/test_prediction_tactic_selection.py",
+        "kind": "plain_ok",
+        "role": "prediction_tactic_selection",
+    },
+]
+
+
+def _compile_guard_scripts(failures: List[str]) -> Dict[str, Any]:
+    passed: List[str] = []
+    failed: List[Dict[str, str]] = []
+
+    for spec in GUARD_SPECS:
+        rel_path = str(spec["path"])
+        path = REPO_ROOT / rel_path
+        if not path.exists():
+            failed.append({"path": rel_path, "error": "missing"})
+            failures.append(f"guard script missing: {rel_path}")
+            continue
+
+        try:
+            py_compile.compile(str(path), doraise=True)
+            passed.append(rel_path)
+        except Exception as exc:
+            failed.append({"path": rel_path, "error": str(exc)})
+            failures.append(f"guard script py_compile failed: {rel_path}: {exc}")
+
+    return {
+        "passed_count": len(passed),
+        "failed": failed,
+    }
+
+
+def _parse_json(stdout: str, rel_path: str, failures: List[str]) -> Dict[str, Any] | None:
+    try:
+        parsed = json.loads(stdout)
+    except Exception as exc:
+        failures.append(f"{rel_path} did not emit valid JSON: {exc}")
+        return None
+
+    if not isinstance(parsed, dict):
+        failures.append(f"{rel_path} JSON output must be an object")
+        return None
+
+    return parsed
+
+
+def _validate_result(
+    *,
+    rel_path: str,
+    kind: str,
+    proc: subprocess.CompletedProcess[str],
+    failures: List[str],
+) -> Dict[str, Any]:
+    stdout = proc.stdout or ""
+    stderr = proc.stderr or ""
+    stdout_stripped = stdout.strip()
+
+    result: Dict[str, Any] = {
+        "returncode": proc.returncode,
+        "ok": False,
+        "kind": kind,
+        "phase": None,
+        "json": None,
+        "stdout_tail": stdout[-2000:],
+        "stderr_tail": stderr[-2000:],
+    }
+
+    if kind == "plain_ok":
+        ok = proc.returncode == 0 and stdout_stripped == "ok"
+        if not ok:
+            failures.append(f"{rel_path} must emit plain 'ok'")
+        result["ok"] = bool(ok)
+        return result
+
+    if kind == "json_ok":
+        parsed = _parse_json(stdout, rel_path, failures)
+        result["json"] = parsed
+        if isinstance(parsed, dict):
+            result["phase"] = parsed.get("phase")
+            failures_value = parsed.get("failures", [])
+            ok = proc.returncode == 0 and parsed.get("ok") is True and failures_value == []
+            if not ok:
+                failures.append(f"{rel_path} must return ok:true and no failures")
+            result["ok"] = bool(ok)
+        return result
+
+    if kind == "json_interpretation_audit":
+        parsed = _parse_json(stdout, rel_path, failures)
+        result["json"] = parsed
+        if isinstance(parsed, dict):
+            cases = parsed.get("runtime_interpretation_cases")
+            buckets = parsed.get("review_policy_buckets")
+            ok = (
+                proc.returncode == 0
+                and parsed.get("profile_name") == "bitflyer"
+                and isinstance(cases, list)
+                and len(cases) >= 10
+                and isinstance(buckets, list)
+                and len(buckets) > 0
+            )
+            if not ok:
+                failures.append(
+                    f"{rel_path} must emit bitflyer interpretation audit with cases and review policy buckets"
+                )
+            result["ok"] = bool(ok)
+        return result
+
+    failures.append(f"unknown guard kind for {rel_path}: {kind}")
+    return result
+
+
+def _run_guard(spec: Dict[str, Any], failures: List[str]) -> Dict[str, Any]:
+    rel_path = str(spec["path"])
+    kind = str(spec["kind"])
+    path = REPO_ROOT / rel_path
+
+    if not path.exists():
+        failures.append(f"guard script missing: {rel_path}")
+        return {
+            "returncode": None,
+            "ok": False,
+            "kind": kind,
+            "phase": None,
+            "json": None,
+            "stdout_tail": "",
+            "stderr_tail": "",
+        }
+
+    proc = subprocess.run(
+        [sys.executable, str(path)],
+        cwd=str(REPO_ROOT),
+        text=True,
+        capture_output=True,
+        timeout=300,
+    )
+
+    return _validate_result(
+        rel_path=rel_path,
+        kind=kind,
+        proc=proc,
+        failures=failures,
+    )
+
+
+def main() -> int:
+    failures: List[str] = []
+
+    compile_result = _compile_guard_scripts(failures)
+    guard_results = {
+        str(spec["path"]): {
+            "role": spec["role"],
+            **_run_guard(spec, failures),
+        }
+        for spec in GUARD_SPECS
+    }
+
+    summary = {
+        "phase": "phase4a_replay_market_engine_parity_total_guard",
+        "checks": {
+            "compile": compile_result,
+            "guards": guard_results,
+        },
+        "failures": failures,
+        "ok": len(failures) == 0,
+    }
+
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return 0 if not failures else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
