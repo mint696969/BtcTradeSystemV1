@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from btcts.ingestion.event_types import EventType
-from btcts.ingestion.l2_canonical.orderbook.book_rebuilder import OrderBookRebuilder
+from btcts.ingestion.l2_canonical import OrderBookRebuilder
 from btcts.market_engine.profiles.base import ExchangeProfile
 from btcts.processing.l3_market_semantics.orderbook import (
     SignalState,

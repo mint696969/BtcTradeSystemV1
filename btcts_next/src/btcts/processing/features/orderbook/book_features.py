@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
-from btcts.ingestion.l2_canonical.orderbook.book_state import OrderBookState
+from btcts.ingestion.l2_canonical import OrderBookState
 
 
 def orderbook_imbalance(book: OrderBookState, *, levels: int = 10) -> Optional[float]:

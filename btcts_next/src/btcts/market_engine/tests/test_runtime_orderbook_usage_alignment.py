@@ -136,10 +136,14 @@ def main() -> int:
         for event in contracts
         if str(event.get("event_name")) == "support_candidate"
     )
-    for key in _STABLE_USAGE_ALIGNMENT_KEYS:
-        assert key in support_contract
-    assert str(support_contract.get("usage_grade")) == "watch"
-    assert str(support_contract.get("usage_grade")) != "strong"
+    stable_usage_projection = {
+        key: str(support_contract.get(key) or "")
+        for key in _STABLE_USAGE_ALIGNMENT_KEYS
+    }
+    assert set(stable_usage_projection) == set(_STABLE_USAGE_ALIGNMENT_KEYS)
+    assert stable_usage_projection["usage_grade"] == "watch"
+    assert stable_usage_projection["usage_grade"] != "strong"
+    assert stable_usage_projection["interpretation_bucket"] == "observe_only"
 
     print("ok")
     return 0

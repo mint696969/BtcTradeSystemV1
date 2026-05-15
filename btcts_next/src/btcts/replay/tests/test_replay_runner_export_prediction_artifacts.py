@@ -55,7 +55,17 @@ class _DummyPipeline:
                 "record_type": "market.orderbook.snapshot",
                 "event_ts": "2026-04-17T04:20:00Z",
                 "kind": "board",
-                "result": {"signal": "watch", "events": []},
+                "result": {
+                    "signal": "watch",
+                    "events": [
+                        {
+                            "event_name": "support_candidate",
+                            "event_family": "support_resistance",
+                            "usage_grade": "strong",
+                            "interpretation_bucket": "allow_structural_use",
+                        }
+                    ],
+                },
                 "signal": {"state": "watch"},
                 "events": [{"event_name": "support_candidate"}],
                 "best_bid": 100.0,
@@ -68,7 +78,17 @@ class _DummyPipeline:
                 "record_type": "market.orderbook.diff",
                 "event_ts": "2026-04-17T04:25:00Z",
                 "kind": "board",
-                "result": {"signal": "watch", "events": []},
+                "result": {
+                    "signal": "watch",
+                    "events": [
+                        {
+                            "event_name": "resistance_candidate",
+                            "event_family": "support_resistance",
+                            "usage_grade": "watch",
+                            "interpretation_bucket": "observe_only",
+                        }
+                    ],
+                },
                 "signal": {"state": "watch"},
                 "events": [{"event_name": "resistance_candidate"}],
                 "best_bid": 101.0,
@@ -120,6 +140,11 @@ def main() -> int:
             assert manifest["prediction_calibration_review_count"] == 1
             assert manifest["prediction_calibration_review_path"]
 
+            assert replay_report["signal_count"] == 2
+            assert replay_report["event_name_counts"] == {
+                "resistance_candidate": 1,
+                "support_candidate": 1,
+            }
             assert replay_report["prediction_evaluation_summary"] is not None
             assert replay_report["prediction_evaluation_summary"]["entry_count"] == 1
             assert replay_report["prediction_calibration_review_summary"] is not None

@@ -65,7 +65,21 @@ def main() -> int:
                     "summary_slots_present": ["near_wall", "support", "persistence"],
                     "active_event_count": 1,
                     "active_event_names": ["support_candidate"],
-                    "active_event_contracts": [],
+                    "active_event_contracts": [
+                        {
+                            "contract_source": "l3_event_usage_policy",
+                            "event_name": "support_candidate",
+                            "event_family": "support_resistance",
+                            "usage_grade": "strong",
+                            "interpretation_bucket": "allow_structural_use",
+                            "meaning_version": "l3_event_usage_policy.v1alpha1",
+                            "trust_bucket": "trusted",
+                            "actionability": "review",
+                            "forecast_horizon_hint": "short",
+                            "half_life_sec": 30,
+                            "side": "bid",
+                        }
+                    ],
                 },
                 "orderbook_persistence_observable": True,
             },
@@ -76,6 +90,11 @@ def main() -> int:
             },
         )
     )
+
+    assert market_summary.orderbook_active_event_contracts[0]["event_name"] == "support_candidate"
+    assert market_summary.orderbook_active_event_contracts[0]["meaning_version"] == "l3_event_usage_policy.v1alpha1"
+    assert market_summary.orderbook_active_event_contracts[0]["usage_grade"] == "strong"
+    assert market_summary.orderbook_active_event_contracts[0]["interpretation_bucket"] == "allow_structural_use"
 
     prediction_input = build_prediction_system_input(
         PredictionSystemBuildInput(

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from btcts.ingestion.l2_canonical.orderbook.book_state import OrderBookState
+from btcts.ingestion.l2_canonical import OrderBookState
 from btcts.processing.l3_market_semantics.continuity.models import BookState
 from btcts.processing.l3_market_semantics.event_usage_policy import (
     enrich_event_contracts_for_bucket,

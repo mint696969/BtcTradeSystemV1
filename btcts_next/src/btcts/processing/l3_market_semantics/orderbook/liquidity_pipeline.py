@@ -5,8 +5,7 @@ from __future__ import annotations
 
 from typing import Dict, Optional
 
-from btcts.ingestion.l2_canonical.orderbook.book_rebuilder import OrderBookRebuilder
-from btcts.ingestion.l2_canonical.orderbook.book_state import OrderBookState
+from btcts.ingestion.l2_canonical import OrderBookRebuilder, OrderBookState
 from btcts.processing.features.orderbook.book_features import depth_summary
 
 from .liquidity_signals import liquidity_pressure_signal, liquidity_pull_signal, wall_signal

@@ -128,26 +128,40 @@ def _series_fingerprint(step) -> tuple:
     )
 
 
-def _orderbook_semantics_fingerprint(step) -> tuple:
-    summary = step.orderbook_semantics_summary or {}
-    active_contracts = tuple(
-        (
-            *tuple(
-                event.get(key) if key == "half_life_sec" else str(event.get(key) or "")
-                for key in _STABLE_EVENT_CONTRACT_KEYS
-            ),
-        )
+def _stable_event_contract_projection(event: dict) -> dict:
+    return {
+        key: event.get(key) if key == "half_life_sec" else str(event.get(key) or "")
+        for key in _STABLE_EVENT_CONTRACT_KEYS
+    }
+
+
+def _stable_event_contracts_projection(summary: dict) -> list[dict]:
+    return [
+        _stable_event_contract_projection(dict(event or {}))
         for event in (summary.get("active_event_contracts") or [])
-    )
-    return (
-        str(step.orderbook_semantics_contract_status),
-        bool(step.orderbook_persistence_observable),
-        tuple(summary.get("summary_slots_present") or []),
-        int(summary.get("summary_slots_count") or 0),
-        int(summary.get("active_event_count") or 0),
-        tuple(summary.get("active_event_names") or []),
-        active_contracts,
-    )
+    ]
+
+
+def _orderbook_semantics_fingerprint(step) -> dict:
+    summary = step.orderbook_semantics_summary or {}
+    return {
+        "contract_status": str(step.orderbook_semantics_contract_status),
+        "persistence_observable": bool(step.orderbook_persistence_observable),
+        "summary_slots_present": list(summary.get("summary_slots_present") or []),
+        "summary_slots_count": int(summary.get("summary_slots_count") or 0),
+        "active_event_count": int(summary.get("active_event_count") or 0),
+        "active_event_names": list(summary.get("active_event_names") or []),
+        "active_event_contracts_stable_subset": _stable_event_contracts_projection(summary),
+    }
+
+
+def _assert_replay_realtime_parity(replay_step, realtime_step) -> None:
+    assert _book_fingerprint(replay_step) == _book_fingerprint(realtime_step), "book fingerprint mismatch"
+    assert _series_fingerprint(replay_step) == _series_fingerprint(realtime_step), "series fingerprint mismatch"
+    assert (
+        _orderbook_semantics_fingerprint(replay_step)
+        == _orderbook_semantics_fingerprint(realtime_step)
+    ), "orderbook semantics stable subset mismatch"
 
 
 def main() -> int:
@@ -174,9 +188,7 @@ def main() -> int:
     assert len(realtime_results) == len(replay_results)
 
     for replay_step, realtime_step in zip(replay_results, realtime_results):
-        assert _book_fingerprint(replay_step) == _book_fingerprint(realtime_step)
-        assert _series_fingerprint(replay_step) == _series_fingerprint(realtime_step)
-        assert _orderbook_semantics_fingerprint(replay_step) == _orderbook_semantics_fingerprint(realtime_step)
+        _assert_replay_realtime_parity(replay_step, realtime_step)
 
     final_replay = replay_results[-1]
     assert final_replay.book_state.best_bid == 100.5

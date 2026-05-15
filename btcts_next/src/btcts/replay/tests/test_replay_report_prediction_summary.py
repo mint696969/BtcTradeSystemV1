@@ -18,7 +18,20 @@ def main() -> int:
         name="prediction_summary_in_replay_report",
         source_paths=["D:/dummy/source.jsonl"],
         results=[
-            {"kind": "board", "result": {"signal": "watch", "events": []}},
+            {
+                "kind": "board",
+                "result": {
+                    "signal": "watch",
+                    "events": [
+                        {
+                            "event_name": "support_candidate",
+                            "event_family": "support_resistance",
+                            "usage_grade": "strong",
+                            "interpretation_bucket": "allow_structural_use",
+                        }
+                    ],
+                },
+            },
             {"kind": "trade", "microstructure": []},
         ],
         prediction_evaluation_entries=[
@@ -38,6 +51,8 @@ def main() -> int:
     assert report["result_count"] == 2
     assert report["board_count"] == 1
     assert report["trade_count"] == 1
+    assert report["signal_count"] == 1
+    assert report["event_name_counts"] == {"support_candidate": 1}
     assert report["prediction_evaluation_summary"] == {
         "entry_count": 1,
         "matched_count": 0,

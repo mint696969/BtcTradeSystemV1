@@ -25,7 +25,22 @@ def main() -> int:
         name="prediction_session_export",
         source_paths=["D:/dummy/replay_source.jsonl"],
     )
-    session.add({"kind": "board", "result": {"signal": "watch", "events": []}})
+    session.add(
+        {
+            "kind": "board",
+            "result": {
+                "signal": "watch",
+                "events": [
+                    {
+                        "event_name": "support_candidate",
+                        "event_family": "support_resistance",
+                        "usage_grade": "strong",
+                        "interpretation_bucket": "allow_structural_use",
+                    }
+                ],
+            },
+        }
+    )
     session.add_prediction_evaluation_entry(
         {
             "regime_alignment": "partial",
@@ -63,6 +78,8 @@ def main() -> int:
         assert manifest["prediction_calibration_review_path"]
 
         replay_report = _read_json(exported["report_path"])
+        assert replay_report["signal_count"] == 1
+        assert replay_report["event_name_counts"] == {"support_candidate": 1}
         assert replay_report["prediction_evaluation_summary"] == {
             "entry_count": 1,
             "matched_count": 0,

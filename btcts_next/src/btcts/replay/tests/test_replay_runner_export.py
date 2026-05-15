@@ -20,17 +20,24 @@ def main() -> int:
     original_export_replay_session = replay_runner.export_replay_session
 
     try:
+        captured_export_kwargs = {}
+
         replay_runner.run_replay = lambda **kwargs: ReplaySession(
             name=kwargs["name"],
             source_paths=[str(Path(p)) for p in kwargs["paths"]],
         )
-        replay_runner.export_replay_session = lambda **kwargs: {
-            "session_dir": str(Path(kwargs["out_root"]) / "dummy_session"),
-            "report_path": str(Path(kwargs["out_root"]) / "dummy_report.json"),
-            "manifest_path": str(Path(kwargs["out_root"]) / "dummy_manifest.json"),
-            "results_path": str(Path(kwargs["out_root"]) / "dummy_results.jsonl"),
-            "prediction_evaluation_report_path": None,
-        }
+
+        def _fake_export_replay_session(**kwargs):
+            captured_export_kwargs.update(kwargs)
+            return {
+                "session_dir": str(Path(kwargs["out_root"]) / "dummy_session"),
+                "report_path": str(Path(kwargs["out_root"]) / "dummy_report.json"),
+                "manifest_path": str(Path(kwargs["out_root"]) / "dummy_manifest.json"),
+                "results_path": str(Path(kwargs["out_root"]) / "dummy_results.jsonl"),
+                "prediction_evaluation_report_path": None,
+            }
+
+        replay_runner.export_replay_session = _fake_export_replay_session
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             session, artifacts = replay_runner.run_and_export_replay(
@@ -41,6 +48,8 @@ def main() -> int:
 
         assert session.name == "runner_export_test"
         assert session.source_paths == ["D:\\dummy\\replay_source.jsonl"]
+        assert captured_export_kwargs["session"] is session
+        assert captured_export_kwargs["out_root"] == Path(tmp_dir)
         assert artifacts["session_dir"].endswith("dummy_session")
         assert artifacts["report_path"].endswith("dummy_report.json")
         assert artifacts["manifest_path"].endswith("dummy_manifest.json")

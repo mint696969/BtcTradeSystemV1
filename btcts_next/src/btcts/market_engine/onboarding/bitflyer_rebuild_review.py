@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass
 from statistics import mean
 from typing import Any
 
-from btcts.ingestion.l2_canonical.orderbook.book_rebuilder import OrderBookRebuilder
+from btcts.ingestion.l2_canonical import OrderBookRebuilder
 from btcts.market_engine.onboarding.review_policy import evaluate_rebuild_case
 from btcts.market_engine.onboarding.rebuild_validator import RebuildValidator
 from btcts.market_engine.onboarding.stream_classifier import StreamClassifier

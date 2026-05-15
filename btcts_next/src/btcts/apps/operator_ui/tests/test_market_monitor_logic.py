@@ -47,10 +47,16 @@ def main() -> int:
         "interpretation_reason": "board_reason",
     }
     resolved_override = monitor_status_values(board_override, state, summary)
-    assert resolved_override["trust_state"] == "board_trusted"
-    assert resolved_override["continuity_state"] == "board_continuous"
-    assert resolved_override["interpretation_bucket"] == "board_allow"
-    assert resolved_override["interpretation_reason"] == "board_reason"
+    assert resolved_override["trust_state"] == "trusted"
+    assert resolved_override["continuity_state"] == "continuous"
+    assert resolved_override["interpretation_bucket"] == "allow_structural_use"
+    assert resolved_override["interpretation_reason"] == "summary_side_reason"
+
+    resolved_board_fallback = monitor_status_values(board_override, None, None)
+    assert resolved_board_fallback["trust_state"] == "board_trusted"
+    assert resolved_board_fallback["continuity_state"] == "board_continuous"
+    assert resolved_board_fallback["interpretation_bucket"] == "board_allow"
+    assert resolved_board_fallback["interpretation_reason"] == "board_reason"
 
     contract_caption = summary_contract_caption(
         lang="en",

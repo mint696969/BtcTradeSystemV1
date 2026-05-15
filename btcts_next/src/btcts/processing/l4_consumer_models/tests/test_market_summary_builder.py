@@ -139,9 +139,16 @@ def main() -> int:
                     "active_event_count": 1,
                     "active_event_contracts": [
                         {
+                            "contract_source": "l3_event_usage_policy",
                             "event_name": "near_wall_continued",
                             "event_family": "wall",
                             "usage_grade": "strong",
+                            "interpretation_bucket": "allow_structural_use",
+                            "meaning_version": "l3_event_usage_policy.v1alpha1",
+                            "trust_bucket": "trusted",
+                            "actionability": "review",
+                            "forecast_horizon_hint": "short",
+                            "half_life_sec": 30,
                             "side": "bid",
                         }
                     ],
@@ -184,6 +191,35 @@ def main() -> int:
         stale_missing.orderbook_contract_status_source
         == "orderbook_summary_inference_overrode_missing"
     )
+    stable_orderbook_projection = {
+        key: stale_missing.orderbook_active_event_contracts[0].get(key)
+        for key in (
+            "contract_source",
+            "event_name",
+            "event_family",
+            "usage_grade",
+            "interpretation_bucket",
+            "meaning_version",
+            "trust_bucket",
+            "actionability",
+            "forecast_horizon_hint",
+            "half_life_sec",
+            "side",
+        )
+    }
+    assert stable_orderbook_projection == {
+        "contract_source": "l3_event_usage_policy",
+        "event_name": "near_wall_continued",
+        "event_family": "wall",
+        "usage_grade": "strong",
+        "interpretation_bucket": "allow_structural_use",
+        "meaning_version": "l3_event_usage_policy.v1alpha1",
+        "trust_bucket": "trusted",
+        "actionability": "review",
+        "forecast_horizon_hint": "short",
+        "half_life_sec": 30,
+        "side": "bid",
+    }
     assert stale_missing.orderbook_persistence_observable is True
 
     empty = build_market_summary(MarketSummaryBuildInput())

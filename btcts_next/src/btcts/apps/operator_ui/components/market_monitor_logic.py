@@ -4,35 +4,50 @@
 from __future__ import annotations
 
 
+def _pick_status_value(
+    key: str,
+    *,
+    board: dict,
+    state: dict | None,
+    summary: dict | None,
+):
+    # UI must prefer L4/shared summary or market state over lower-level board payload.
+    # Board is only a fallback surfacing source.
+    return (
+        (summary.get(key) if summary else None)
+        or (state.get(key) if state else None)
+        or board.get(key)
+    )
+
+
 def monitor_status_values(
     board: dict,
     state: dict | None,
     summary: dict | None = None,
 ) -> dict:
-    trust_state = (
-        board.get("trust_state")
-        or (summary.get("trust_state") if summary else None)
-        or (state.get("trust_state") if state else None)
-    )
-    continuity_state = (
-        board.get("continuity_state")
-        or (summary.get("continuity_state") if summary else None)
-        or (state.get("continuity_state") if state else None)
-    )
-    interpretation_bucket = (
-        board.get("interpretation_bucket")
-        or (summary.get("interpretation_bucket") if summary else None)
-        or (state.get("interpretation_bucket") if state else None)
-    )
-    interpretation_reason = (
-        board.get("interpretation_reason")
-        or (summary.get("interpretation_reason") if summary else None)
-        or (state.get("interpretation_reason") if state else None)
-    )
-
     return {
-        "trust_state": trust_state,
-        "continuity_state": continuity_state,
-        "interpretation_bucket": interpretation_bucket,
-        "interpretation_reason": interpretation_reason,
+        "trust_state": _pick_status_value(
+            "trust_state",
+            board=board,
+            state=state,
+            summary=summary,
+        ),
+        "continuity_state": _pick_status_value(
+            "continuity_state",
+            board=board,
+            state=state,
+            summary=summary,
+        ),
+        "interpretation_bucket": _pick_status_value(
+            "interpretation_bucket",
+            board=board,
+            state=state,
+            summary=summary,
+        ),
+        "interpretation_reason": _pick_status_value(
+            "interpretation_reason",
+            board=board,
+            state=state,
+            summary=summary,
+        ),
     }

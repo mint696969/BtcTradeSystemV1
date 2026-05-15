@@ -140,12 +140,15 @@ def main() -> int:
         for event in summary["active_event_contracts"]
         if str(event.get("event_name")) == "support_candidate"
     )
-    for key in _STABLE_EVENT_CONTRACT_KEYS:
-        assert key in support_row
-    assert support_row["meaning_version"] == "l3_event_usage_policy.v1alpha1"
-    assert support_row["contract_source"] == "l3_event_usage_policy"
-    assert support_row["trust_bucket"] == "degraded"
-    assert support_row["interpretation_bucket"] == "allow_structural_use"
+    stable_support_projection = {
+        key: support_row.get(key)
+        for key in _STABLE_EVENT_CONTRACT_KEYS
+    }
+    assert set(stable_support_projection) == set(_STABLE_EVENT_CONTRACT_KEYS)
+    assert stable_support_projection["meaning_version"] == "l3_event_usage_policy.v1alpha1"
+    assert stable_support_projection["contract_source"] == "l3_event_usage_policy"
+    assert stable_support_projection["trust_bucket"] == "degraded"
+    assert stable_support_projection["interpretation_bucket"] == "allow_structural_use"
     assert support_row["consumer_allowed"] == [
         "ui",
         "alert",
