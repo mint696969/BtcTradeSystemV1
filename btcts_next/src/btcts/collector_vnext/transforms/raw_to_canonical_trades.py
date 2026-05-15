@@ -1,9 +1,11 @@
 # path: ./btcts_next/src/btcts/collector_vnext/transforms/raw_to_canonical_trades.py
-# desc: Canonical trade transforms (1 trade = 1 event).
+# desc: Collector runtime adapter from REST executions payload to L2 canonical trade payloads.
 
 from __future__ import annotations
 
 from typing import Any, Dict, List
+
+from btcts.ingestion.l2_canonical import make_trade_event_payload
 
 
 def canonical_trades(source_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -17,24 +19,15 @@ def canonical_trades(source_payload: Dict[str, Any]) -> List[Dict[str, Any]]:
         if not isinstance(row, dict):
             continue
 
-        try:
-            side = row.get("side")
-            price = float(row.get("price"))
-            size = float(row.get("size"))
-            exec_id = row.get("id")
-        except Exception:
-            continue
-
-        out.append(
-            {
-                "trade_id": exec_id,
-                "side": side,
-                "price": price,
-                "size": size,
-                "notional": price * size,
-                "liquidity_role": "taker",
-                "trade_ts": row.get("exec_date"),
-            }
+        trade = make_trade_event_payload(
+            trade_id=row.get("id"),
+            side=row.get("side"),
+            price=row.get("price"),
+            size=row.get("size"),
+            trade_ts=row.get("exec_date"),
+            liquidity_role="taker",
         )
+        if trade is not None:
+            out.append(trade)
 
     return out

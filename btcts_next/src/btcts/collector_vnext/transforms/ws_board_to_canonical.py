@@ -1,11 +1,12 @@
 # path: ./btcts_next/src/btcts/collector_vnext/transforms/ws_board_to_canonical.py
-# desc: Convert adapter-normalized WS board levels to canonical orderbook events.
+# desc: Collector runtime adapter from venue-normalized WS board levels to L2 canonical orderbook payloads.
 
 from __future__ import annotations
 
 from typing import Any, Dict, Protocol
 
 from btcts.collector_vnext.venue_adapters.bitflyer_board import NormalizedBoardLevels
+from btcts.ingestion.l2_canonical import make_orderbook_event_payload
 
 
 class BoardLevelsAdapter(Protocol):
@@ -20,18 +21,9 @@ def canonical_board_event(
     adapter: BoardLevelsAdapter,
 ) -> Dict[str, Any]:
     levels = adapter.extract_board_levels(payload)
-    bids = levels.bids
-    asks = levels.asks
 
-    return {
-        "event_type": "snapshot" if snapshot else "delta",
-        "snapshot_id": None,
-        "base_snapshot_id": None,
-        "prev_event_id": None,
-        "continuity_state": "unknown",
-        "rebuild_required": False,
-        "is_gap_fill": False,
-        "is_resync": False,
-        "bids": bids,
-        "asks": asks,
-    }
+    return make_orderbook_event_payload(
+        event_type="snapshot" if snapshot else "delta",
+        bids=levels.bids,
+        asks=levels.asks,
+    )

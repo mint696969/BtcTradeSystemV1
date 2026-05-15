@@ -25,6 +25,8 @@ from .events import (
 from .ids import SequenceManager, make_stream_session_id
 from .providers.bitflyer_ws import connect_and_stream_executions
 from .providers.bitflyer_ws_board import connect_and_stream_board
+from .transforms.board_structural_hints import apply_board_structural_hints
+from .transforms.trade_structural_hints import apply_trade_structural_hints
 from .transforms.ws_board_to_canonical import canonical_board_event
 from .transforms.ws_trade_to_canonical import canonical_ws_trade
 from .venue_adapters.bitflyer_board import BitflyerBoardVenueAdapter
@@ -94,56 +96,21 @@ def emit_ws_trade_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
         trade = canonical_ws_trade(msg.payload)
 
         if trade:
-            trade["integration_hint"] = {
-                "integration_domain": "trade_native_id",
-                "transport_role": "realtime_primary",
-                "unified_key_hint": str(trade["trade_id"]) if trade.get("trade_id") is not None else None,
-                "dedupe_domain": "trade_native_id",
-                "unified_view_policy": "event_dedupe_by_native_id",
-            }
-            trade["dedupe_hint"] = {
-                "entity_kind": "trade",
-                "unified_key": {
-                    "exchange": "bitflyer",
-                    "instrument_id": f"bitflyer.spot.{cfg.symbol}",
-                    "source_event_id": str(trade["trade_id"]) if trade.get("trade_id") is not None else None,
-                },
-                "native_id_required": True,
-                "fallback_key_enabled": False,
-                "provenance_policy": {
-                    "seen_in_rest": False,
-                    "seen_in_ws": True,
-                },
-            }
-
-            trade["completeness_hint"] = {
-                "evaluation_unit": "trade_event",
-                "completeness": "mostly_complete",
-                "confidence_hint": "medium_high",
-                "completeness_basis": {
-                    "exchange_present": True,
-                    "instrument_id_present": True,
-                    "source_event_id_present": trade.get("trade_id") is not None,
-                    "price_present": trade.get("price") is not None,
-                    "size_present": trade.get("size") is not None,
-                    "side_present": trade.get("side") is not None,
-                    "event_ts_present": trade.get("trade_ts") is not None,
-                    "seen_in_rest": False,
-                    "seen_in_ws": True,
-                },
-                "policy_note": "native trade id exists and core fields are present, but provenance is single-sided",
-            }
-
-            trade["origin_hint"] = {
-                "source_layer": "collector",
-                "provider": "bitflyer_ws",
-                "transport": "websocket",
-                "endpoint_or_channel": "executions_ws",
-                "origin_role": "realtime_primary",
-                "collector_id": cfg.collector_id,
-                "stream_session_id": stream_session_id,
-                "description": "primary realtime trade stream",
-            }
+            apply_trade_structural_hints(
+                trade,
+                exchange="bitflyer",
+                symbol=cfg.symbol,
+                channel="executions_ws",
+                provider="bitflyer_ws",
+                transport="websocket",
+                transport_role="realtime_primary",
+                origin_role="realtime_primary",
+                collector_id=cfg.collector_id,
+                stream_session_id=stream_session_id,
+                seen_in_rest=False,
+                seen_in_ws=True,
+                description="primary realtime trade stream",
+            )
 
             canonical_ctx = EnvelopeContext(
                 config=cfg,
@@ -468,79 +435,23 @@ def emit_ws_board_smoke(seq: SequenceManager, session_id: str) -> Dict[str, obje
                 canonical_payload["is_gap_fill"] = False
                 canonical_payload["is_resync"] = bool(canonical_payload.get("is_resync", False))
 
-                canonical_payload["integration_hint"] = {
-                    "integration_domain": "board_continuity_series",
-                    "transport_role": "stream_snapshot" if is_snapshot else "stream_delta",
-                    "series_key_hint": (
-                        f"ws:{stream_session_id}:{current_base_snapshot_id}"
-                        if current_base_snapshot_id is not None
-                        else f"ws:{stream_session_id}:unknown_base"
-                    ),
-                    "unified_view_policy": "series_based_not_event_dedupe",
-                }
-                canonical_payload["dedupe_hint"] = {
-                    "entity_kind": "board",
-                    "event_dedupe_key": {
-                        "exchange": "bitflyer",
-                        "instrument_id": f"bitflyer.spot.{cfg.symbol}",
-                        "channel": "board_ws",
-                        "source_event_id": current_event_id,
-                    },
-                    "series_key": {
-                        "exchange": "bitflyer",
-                        "instrument_id": f"bitflyer.spot.{cfg.symbol}",
-                        "channel": "board_ws",
-                        "base_snapshot_id": current_base_snapshot_id,
-                        "stream_session_id": stream_session_id,
-                    },
-                    "continuity_policy": {
-                        "mode": "conservative",
-                        "mix_unknown": False,
-                        "split_on_gap": True,
-                        "split_on_resync": True,
-                        "continuous_only_when": continuity_state == "continuous",
-                    },
-                }
-
-                canonical_payload["completeness_hint"] = {
-                    "evaluation_unit": "board_series",
-                    "completeness": (
-                        "complete"
-                        if continuity_state == "continuous" and current_base_snapshot_id is not None and not canonical_payload.get("is_resync", False)
-                        else "mostly_complete"
-                        if continuity_state == "resynced" and current_base_snapshot_id is not None
-                        else "gap_detected"
-                        if continuity_state == "gap_detected"
-                        else "unknown"
-                    ),
-                    "confidence_hint": (
-                        "high"
-                        if continuity_state == "continuous" and current_base_snapshot_id is not None and not canonical_payload.get("is_resync", False)
-                        else "medium_high"
-                        if continuity_state == "resynced" and current_base_snapshot_id is not None
-                        else "low"
-                    ),
-                    "completeness_basis": {
-                        "base_snapshot_id_present": current_base_snapshot_id is not None,
-                        "stream_session_id_present": bool(stream_session_id),
-                        "source_event_id_present": current_event_id is not None,
-                        "continuity_state": continuity_state,
-                        "is_resync": bool(canonical_payload.get("is_resync", False)),
-                        "transport_role": "stream_snapshot" if is_snapshot else "stream_delta",
-                    },
-                    "policy_note": "board completeness is evaluated conservatively by continuity series, not by single event",
-                }
-
-                canonical_payload["origin_hint"] = {
-                    "source_layer": "collector",
-                    "provider": "bitflyer_ws_board",
-                    "transport": "websocket",
-                    "endpoint_or_channel": "board_ws",
-                    "origin_role": "realtime_orderbook_stream",
-                    "collector_id": cfg.collector_id,
-                    "stream_session_id": stream_session_id,
-                    "description": "realtime board snapshot/diff stream",
-                }
+                apply_board_structural_hints(
+                    canonical_payload,
+                    exchange="bitflyer",
+                    symbol=cfg.symbol,
+                    channel="board_ws",
+                    provider="bitflyer_ws_board",
+                    transport="websocket",
+                    transport_role="stream_snapshot" if is_snapshot else "stream_delta",
+                    origin_role="realtime_orderbook_stream",
+                    collector_id=cfg.collector_id,
+                    stream_session_id=stream_session_id,
+                    current_event_id=current_event_id,
+                    base_snapshot_id=current_base_snapshot_id,
+                    continuity_state=continuity_state,
+                    is_resync=bool(canonical_payload.get("is_resync", False)),
+                    description="realtime board snapshot/diff stream",
+                )
 
                 canonical_ctx = EnvelopeContext(
                     config=cfg,

@@ -15,6 +15,7 @@ from .config import load_config
 from .events import EnvelopeContext, EventType, now_iso_utc, make_record
 from .ids import SequenceManager, make_stream_session_id
 from .providers.bitflyer_ws_board import connect_and_stream_board
+from .transforms.board_structural_hints import apply_board_structural_hints
 from .transforms.ws_board_to_canonical import canonical_board_event
 from .unified_state import write_unified_origin_status
 from .venue_adapters.bitflyer_board import BitflyerBoardVenueAdapter
@@ -94,6 +95,8 @@ class UnifiedWsBoardLane:
             "unified_board_ws",
         )
         board_event_no = 0
+        last_board_event_id: Optional[str] = None
+        current_base_snapshot_id: Optional[str] = None
         reconnect_backoff_sec = max(
             0.5,
             self._env_float("BTCTS_UNIFIED_WS_BOARD_RECONNECT_BACKOFF_SEC", 2.0),
@@ -138,7 +141,6 @@ class UnifiedWsBoardLane:
                     if stop_event.is_set():
                         break
 
-                    board_event_no += 1
                     message_kind = self.adapter.classify_board_message_kind(
                         channel=msg.channel,
                         payload=msg.payload,
@@ -146,6 +148,9 @@ class UnifiedWsBoardLane:
                     if message_kind == "unknown":
                         continue
 
+                    board_event_no += 1
+
+                    lane_snapshot = self.snapshot()
                     is_snapshot = message_kind == "snapshot"
                     record_type = (
                         EventType.MARKET_ORDERBOOK_SNAPSHOT
@@ -195,26 +200,43 @@ class UnifiedWsBoardLane:
                         snapshot=is_snapshot,
                         adapter=self.adapter,
                     )
-                    current_event_id = f"bitflyer:unified:board_ws:{stream_session_id}:{board_event_no}"
-                    canonical_payload["stream_event_no"] = board_event_no
-                    canonical_payload["continuity_state"] = "continuous"
-                    canonical_payload["base_snapshot_id"] = (
-                        current_event_id if is_snapshot else None
+                    event_id_kind = "snapshot" if is_snapshot else "delta"
+                    current_event_id = (
+                        f"bitflyer:unified:board_ws:{stream_session_id}:{event_id_kind}:{board_event_no}"
                     )
-                    canonical_payload["prev_event_id"] = None
-                    canonical_payload["rebuild_required"] = False
+
+                    if is_snapshot:
+                        current_base_snapshot_id = current_event_id
+
+                    continuity_state = (
+                        "continuous" if current_base_snapshot_id is not None else "unknown"
+                    )
+
+                    canonical_payload["stream_event_no"] = board_event_no
+                    canonical_payload["snapshot_id"] = current_event_id if is_snapshot else None
+                    canonical_payload["continuity_state"] = continuity_state
+                    canonical_payload["base_snapshot_id"] = current_base_snapshot_id
+                    canonical_payload["prev_event_id"] = last_board_event_id
+                    canonical_payload["rebuild_required"] = current_base_snapshot_id is None and not is_snapshot
                     canonical_payload["is_gap_fill"] = False
                     canonical_payload["is_resync"] = False
-                    canonical_payload["origin_hint"] = {
-                        "source_layer": "collector",
-                        "provider": provider_name,
-                        "transport": "websocket",
-                        "endpoint_or_channel": "board_ws",
-                        "origin_role": "realtime_orderbook_stream",
-                        "collector_id": self.cfg.collector_id,
-                        "stream_session_id": stream_session_id,
-                        "description": "unified realtime board snapshot/diff stream",
-                    }
+                    apply_board_structural_hints(
+                        canonical_payload,
+                        exchange="bitflyer",
+                        symbol=self.cfg.symbol,
+                        channel="board_ws",
+                        provider=provider_name,
+                        transport="websocket",
+                        transport_role="stream_snapshot" if is_snapshot else "stream_delta",
+                        origin_role="realtime_orderbook_stream",
+                        collector_id=self.cfg.collector_id,
+                        stream_session_id=stream_session_id,
+                        current_event_id=current_event_id,
+                        base_snapshot_id=current_base_snapshot_id,
+                        continuity_state=continuity_state,
+                        is_resync=False,
+                        description="unified realtime board snapshot/diff stream",
+                    )
 
                     canonical_ctx = EnvelopeContext(
                         config=self.cfg,
@@ -245,7 +267,7 @@ class UnifiedWsBoardLane:
                         record=canonical_record,
                     )
 
-                    lane_snapshot = self.snapshot()
+                    last_board_event_id = current_event_id
 
                     self._set_state(
                         lane_state="live",
@@ -258,6 +280,10 @@ class UnifiedWsBoardLane:
                     self._write_origin_status()
 
             except Exception as exc:
+                # Break board continuity chain across provider reconnects.
+                last_board_event_id = None
+                current_base_snapshot_id = None
+
                 lane_snapshot = self.snapshot()
                 next_restart_count = int(lane_snapshot.get("restart_count") or 0) + 1
 
