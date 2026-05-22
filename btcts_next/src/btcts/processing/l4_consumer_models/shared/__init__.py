@@ -11,6 +11,10 @@ Rules:
 - widget-library-free
 """
 
+from .active_event_reading import (
+    ACTIVE_EVENT_STABLE_KEYS,
+    build_active_event_compact_rows,
+)
 from .health_digest import HealthDigest, HealthDigestBuildInput, build_health_digest
 from .market_summary import MarketSummary, MarketSummaryBuildInput, build_market_summary
 from .prediction_summary import (
@@ -73,6 +77,8 @@ from .prediction_replay_feedback import (
 )
 
 __all__ = [
+    "ACTIVE_EVENT_STABLE_KEYS",
+    "build_active_event_compact_rows",
     "HealthDigest",
     "HealthDigestBuildInput",
     "build_health_digest",
@@ -112,3 +118,11 @@ __all__ = [
     "PredictionReplayFeedbackBuildInput",
     "build_prediction_replay_feedback",
 ]
+
+
+from .prediction_direction_builder import (
+    PredictionDirectionBuildInput,
+    build_prediction_direction_input_from_scenario,
+    build_prediction_direction_output,
+    prediction_direction_output_to_snapshot,
+)

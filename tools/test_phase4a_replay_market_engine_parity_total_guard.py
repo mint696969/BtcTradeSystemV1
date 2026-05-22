@@ -102,6 +102,36 @@ GUARD_SPECS = [
         "kind": "plain_ok",
         "role": "prediction_tactic_selection",
     },
+    {
+        "path": "tools/test_phase4a_ai_ui_prediction_tactic_consumer_boundary_audit.py",
+        "kind": "json_ok",
+        "role": "ai_ui_prediction_tactic_consumer_boundary_audit",
+    },
+    {
+        "path": "tools/test_phase4a_phase_d_l4_health_warroom_compact_reading_guard.py",
+        "kind": "json_ok",
+        "role": "phase_d_l4_health_warroom_compact_reading_guard",
+    },
+    {
+        "path": "tools/test_phase4a_phase_e_warroom_operational_reading_guard.py",
+        "kind": "json_ok",
+        "role": "phase_e_warroom_operational_reading_guard",
+    },
+    {
+        "path": "tools/test_phase4a_phase_e_health_operational_reading_guard.py",
+        "kind": "json_ok",
+        "role": "phase_e_health_operational_reading_guard",
+    },
+    {
+        "path": "tools/test_phase4a_direction_position_execution_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "direction_position_execution_entry_criteria_guard",
+    },
+    {
+        "path": "tools/test_phase4a_direction_read_only_boundary_guard.py",
+        "kind": "json_ok",
+        "role": "direction_read_only_boundary_guard",
+    },
 ]
 
 
@@ -231,7 +261,7 @@ def _run_guard(spec: Dict[str, Any], failures: List[str]) -> Dict[str, Any]:
         cwd=str(REPO_ROOT),
         text=True,
         capture_output=True,
-        timeout=300,
+        timeout=900,
     )
 
     return _validate_result(
