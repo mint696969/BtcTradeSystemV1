@@ -6,6 +6,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared.active_event_reading import (
+    build_active_event_compact_rows,
+)
 from btcts.processing.l4_consumer_models.shared._value_utils import (
     safe_float,
     safe_str,
@@ -50,6 +53,7 @@ class MarketSummary:
     semantic_consumer_distribution: dict[str, int] = field(default_factory=dict)
     semantic_usage_contract_rows: list[dict[str, Any]] = field(default_factory=list)
     orderbook_active_event_contracts: list[dict[str, Any]] = field(default_factory=list)
+    orderbook_active_event_compact_rows: list[dict[str, Any]] = field(default_factory=list)
     orderbook_active_event_names: list[str] = field(default_factory=list)
     orderbook_active_event_count: int = 0
     orderbook_summary_slots_present: list[str] = field(default_factory=list)
@@ -477,6 +481,9 @@ def build_market_summary(inp: MarketSummaryBuildInput) -> MarketSummary:
         semantic_usage_contract_rows_count=len(semantic_usage_contract_rows),
     )
     orderbook_active_event_contracts = _normalize_orderbook_active_event_contracts(row)
+    orderbook_active_event_compact_rows = build_active_event_compact_rows(
+        orderbook_active_event_contracts
+    )
     orderbook_active_event_names = _normalize_orderbook_active_event_names(row)
     orderbook_active_event_count = _normalize_orderbook_active_event_count(
         row,
@@ -550,6 +557,7 @@ def build_market_summary(inp: MarketSummaryBuildInput) -> MarketSummary:
         semantic_consumer_distribution=semantic_consumer_distribution,
         semantic_usage_contract_rows=semantic_usage_contract_rows,
         orderbook_active_event_contracts=orderbook_active_event_contracts,
+        orderbook_active_event_compact_rows=orderbook_active_event_compact_rows,
         orderbook_active_event_names=orderbook_active_event_names,
         orderbook_active_event_count=orderbook_active_event_count,
         orderbook_summary_slots_present=orderbook_summary_slots_present,

@@ -6,9 +6,11 @@ from __future__ import annotations
 import streamlit as st
 
 from btcts.apps.operator_ui.components.market_state_bridge import (
+    load_market_summary_status_payload,
     load_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
+    active_event_compact_reading_line,
     summary_widget_caption,
 )
 from btcts.apps.operator_ui.components.warroom_header_state import (
@@ -122,6 +124,32 @@ def build_warroom_market_reading_caption(
     )
 
 
+def build_warroom_operational_reading_caption(
+    *,
+    state: dict | None,
+    summary_payload: dict | None,
+) -> str:
+    if not state and not summary_payload:
+        return "operational_reading unavailable"
+
+    state_map = dict(state or {})
+    regime = str(state_map.get("regime") or "unknown")
+    source = str(state_map.get("source_label") or state_map.get("source") or "unknown")
+    prediction_bias = str(state_map.get("prediction_bias") or "unknown")
+    prediction_caution = str(state_map.get("prediction_caution") or "unknown")
+    active_event_line = active_event_compact_reading_line(summary_payload)
+
+    return (
+        f"operational_reading={regime} / "
+        f"source={source} / "
+        f"active_event={active_event_line} / "
+        f"prediction_bias={prediction_bias} / "
+        f"prediction_caution={prediction_caution} / "
+        "review_mode=operator_review_only / "
+        "execution=not_instruction"
+    )
+
+
 def _analyze_live_or_fallback():
     return build_warroom_header_state()
 
@@ -137,6 +165,7 @@ def render():
         return
 
     summary_widget = load_market_summary_widget_model()
+    summary_payload = load_market_summary_status_payload()
 
     regime = state.get("regime") or "unknown"
     best_strategy = state.get("best_strategy") or "-"
@@ -176,6 +205,12 @@ def render():
     st.caption(
         build_warroom_market_reading_caption(
             state=state,
+        )
+    )
+    st.caption(
+        build_warroom_operational_reading_caption(
+            state=state,
+            summary_payload=summary_payload,
         )
     )
     st.caption(

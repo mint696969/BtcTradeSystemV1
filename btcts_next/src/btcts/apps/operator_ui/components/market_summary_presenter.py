@@ -14,8 +14,12 @@ def active_event_compact_reading_line(summary_payload: dict | None) -> str:
     if not summary_payload:
         return "active_event_reading unavailable"
 
-    active_event_contracts = list(summary_payload.get("orderbook_active_event_contracts") or [])
-    if not active_event_contracts:
+    active_event_rows = list(
+        summary_payload.get("orderbook_active_event_compact_rows")
+        or summary_payload.get("orderbook_active_event_contracts")
+        or []
+    )
+    if not active_event_rows:
         active_event_names = [
             str(name).strip()
             for name in (summary_payload.get("orderbook_active_event_names") or [])
@@ -27,7 +31,7 @@ def active_event_compact_reading_line(summary_payload: dict | None) -> str:
         suffix = f" +{len(active_event_names) - 1} more" if len(active_event_names) > 1 else ""
         return f"{first_name}{suffix}"
 
-    first_event = dict(active_event_contracts[0] or {})
+    first_event = dict(active_event_rows[0] or {})
     event_name = str(first_event.get("event_name") or "-").strip() or "-"
     event_family = str(first_event.get("event_family") or "-").strip() or "-"
     usage_grade = str(first_event.get("usage_grade") or "-").strip() or "-"
@@ -37,7 +41,7 @@ def active_event_compact_reading_line(summary_payload: dict | None) -> str:
     half_life_text = "-" if half_life_sec in (None, "") else str(half_life_sec)
     side = str(first_event.get("side") or "-").strip() or "-"
 
-    suffix = f" +{len(active_event_contracts) - 1} more" if len(active_event_contracts) > 1 else ""
+    suffix = f" +{len(active_event_rows) - 1} more" if len(active_event_rows) > 1 else ""
 
     return (
         f"{event_name} "

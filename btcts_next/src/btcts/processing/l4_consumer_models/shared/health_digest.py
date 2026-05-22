@@ -6,6 +6,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from btcts.processing.l4_consumer_models.shared.active_event_reading import (
+    build_active_event_compact_rows,
+)
 from btcts.processing.l4_consumer_models.shared._value_utils import (
     safe_float,
     safe_str,
@@ -170,6 +173,10 @@ def _normalize_semantic_usage(
 
 
 def _normalize_orderbook_runtime(orderbook_runtime_summary: dict[str, Any]) -> dict[str, Any]:
+    active_event_contracts = list(
+        orderbook_runtime_summary.get("active_event_contracts") or []
+    )
+
     return {
         "contract_status_source": safe_str(orderbook_runtime_summary.get("contract_status_source"))
         or "unknown",
@@ -188,7 +195,10 @@ def _normalize_orderbook_runtime(orderbook_runtime_summary: dict[str, Any]) -> d
         "persistence_observable": bool(orderbook_runtime_summary.get("persistence_observable")),
         "active_event_count": int(orderbook_runtime_summary.get("active_event_count") or 0),
         "active_event_names": list(orderbook_runtime_summary.get("active_event_names") or []),
-        "active_event_contracts": list(orderbook_runtime_summary.get("active_event_contracts") or []),
+        "active_event_contracts": active_event_contracts,
+        "active_event_compact_rows": build_active_event_compact_rows(
+            active_event_contracts
+        ),
     }
 
 

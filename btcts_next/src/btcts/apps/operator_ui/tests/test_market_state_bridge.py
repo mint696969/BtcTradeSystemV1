@@ -247,6 +247,21 @@ def main() -> int:
     assert summary_payload["orderbook_summary_slots_present"] == ["near_wall"]
     assert summary_payload["orderbook_active_event_names"] == ["near_wall_continued"]
     assert summary_payload["orderbook_active_event_count"] == 1
+    assert summary_payload["orderbook_active_event_compact_rows_kind"] == "active_event_stable_subset_rows"
+    assert summary_payload["orderbook_active_event_compact_rows_count"] == 1
+    assert summary_payload["orderbook_active_event_compact_rows"][0] == {
+        "contract_source": "l3_event_usage_policy",
+        "event_name": "near_wall_continued",
+        "event_family": "wall",
+        "meaning_version": "l3_event_usage_policy.v1alpha1",
+        "usage_grade": "strong",
+        "interpretation_bucket": "allow_structural_use",
+        "trust_bucket": "trusted",
+        "actionability": "actionable",
+        "forecast_horizon_hint": "short",
+        "half_life_sec": 30,
+        "side": "bid",
+    }
     assert summary_payload["orderbook_active_event_contracts_kind"] == "active_event_contract_rows"
     assert summary_payload["orderbook_active_event_contracts_count"] == 1
     assert summary_payload["orderbook_active_event_contracts"][0]["contract_source"] == "l3_event_usage_policy"

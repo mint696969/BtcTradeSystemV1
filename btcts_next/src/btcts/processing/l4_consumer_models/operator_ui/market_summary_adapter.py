@@ -159,6 +159,9 @@ def market_summary_status_payload(summary: MarketSummary | None) -> dict[str, An
 
     semantic_usage_contract_rows = list(summary.semantic_usage_contract_rows)
     orderbook_active_event_contracts = list(summary.orderbook_active_event_contracts)
+    orderbook_active_event_compact_rows = list(
+        summary.orderbook_active_event_compact_rows
+    )
     orderbook_summary_slots_present = list(summary.orderbook_summary_slots_present)
 
     return {
@@ -213,6 +216,11 @@ def market_summary_status_payload(summary: MarketSummary | None) -> dict[str, An
         "orderbook_summary_slots_present": orderbook_summary_slots_present,
         "orderbook_active_event_names": list(summary.orderbook_active_event_names),
         "orderbook_active_event_count": int(summary.orderbook_active_event_count),
+        "orderbook_active_event_compact_rows_kind": "active_event_stable_subset_rows",
+        "orderbook_active_event_compact_rows_count": len(
+            orderbook_active_event_compact_rows
+        ),
+        "orderbook_active_event_compact_rows": orderbook_active_event_compact_rows,
         "orderbook_active_event_contracts_kind": "active_event_contract_rows",
         "orderbook_active_event_contracts_count": len(orderbook_active_event_contracts),
         "orderbook_active_event_contracts": orderbook_active_event_contracts,

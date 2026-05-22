@@ -14,6 +14,7 @@ from btcts.apps.operator_ui.components.health_top_panels import (  # noqa: E402
     build_health_digest_api_summary_caption,
     build_health_digest_collector_summary_caption,
     build_health_digest_layer3_summary_caption,
+    build_health_digest_operational_reading_caption,
     build_health_digest_ws_summary_caption,
 )
 from btcts.processing.l4_consumer_models.operator_ui import (  # noqa: E402
@@ -111,7 +112,25 @@ def main() -> int:
                 "summary_slots_present": ["near_wall", "support", "persistence"],
                 "active_event_count": 1,
                 "active_event_names": ["near_wall_continued"],
+                "active_event_compact_rows_count": 1,
+                "active_event_compact_rows": [
+                    {
+                        "event_name": "near_wall_continued",
+                        "event_family": "wall",
+                        "usage_grade": "strong",
+                        "actionability": "review",
+                        "forecast_horizon_hint": "short",
+                        "half_life_sec": 30,
+                        "side": "bid",
+                    }
+                ],
                 "active_event_contracts_count": 1,
+                "active_event_contracts": [
+                    {
+                        "event_name": "raw_contract_should_not_be_used",
+                        "event_family": "raw_contract",
+                    }
+                ],
             },
             "semantic_usage_observer_present": True,
             "semantic_usage_summary_present": True,
@@ -122,6 +141,7 @@ def main() -> int:
             "orderbook_persistence_observable": True,
             "orderbook_summary_slots_count": 3,
             "orderbook_active_event_count": 1,
+            "orderbook_active_event_compact_rows_count": 1,
             "orderbook_active_event_contracts_count": 1,
         },
     )
@@ -142,15 +162,56 @@ def main() -> int:
     assert "slots_present=near_wall,support,persistence" in caption
     assert "active_events=1" in caption
     assert "active_event_names=near_wall_continued" in caption
+    assert "active_event_compact_rows=1" in caption
     assert "active_event_rows=1" in caption
     assert "age=5.0s" in caption
     assert "event_ts=2026-04-11T15:00:00Z" in caption
+
+    operational_caption = build_health_digest_operational_reading_caption(
+        widget=widget,
+        payload={
+            "orderbook_active_event_observability": {
+                "active_event_names": ["near_wall_continued"],
+                "active_event_compact_rows": [
+                    {
+                        "event_name": "near_wall_continued",
+                        "event_family": "wall",
+                        "usage_grade": "strong",
+                        "actionability": "review",
+                        "forecast_horizon_hint": "short",
+                        "half_life_sec": 30,
+                        "side": "bid",
+                    }
+                ],
+                "active_event_contracts": [
+                    {
+                        "event_name": "raw_contract_should_not_be_used",
+                        "event_family": "raw_contract",
+                    }
+                ],
+            }
+        },
+    )
+    assert "health_operational_reading=allow_structural_use" in operational_caption
+    assert "trust=trusted" in operational_caption
+    assert "continuity=continuous" in operational_caption
+    assert "observer_status=healthy" in operational_caption
+    assert "active_event=near_wall_continued" in operational_caption
+    assert "source=health_data_service" in operational_caption
+    assert "review_mode=operator_review_only" in operational_caption
+    assert "execution=not_instruction" in operational_caption
 
     empty_caption = build_health_digest_layer3_summary_caption(
         widget=None,
         payload=None,
     )
     assert empty_caption == "health_digest unavailable"
+
+    empty_operational_caption = build_health_digest_operational_reading_caption(
+        widget=None,
+        payload=None,
+    )
+    assert empty_operational_caption == "health_operational_reading unavailable"
 
     print("ok")
     return 0

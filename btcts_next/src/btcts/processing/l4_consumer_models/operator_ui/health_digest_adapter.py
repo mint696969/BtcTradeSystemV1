@@ -186,6 +186,9 @@ def health_digest_status_payload(digest: HealthDigest | None) -> dict[str, Any]:
     semantic_contract_rows = list(semantic_usage.get("contract_rows") or [])
     orderbook_summary_slots_present = list(orderbook_runtime.get("summary_slots_present") or [])
     orderbook_active_event_names = list(orderbook_runtime.get("active_event_names") or [])
+    orderbook_active_event_compact_rows = list(
+        orderbook_runtime.get("active_event_compact_rows") or []
+    )
     orderbook_active_event_contracts = list(orderbook_runtime.get("active_event_contracts") or [])
 
     return {
@@ -245,6 +248,9 @@ def health_digest_status_payload(digest: HealthDigest | None) -> dict[str, Any]:
             "summary_slots_present": orderbook_summary_slots_present,
             "active_event_names": orderbook_active_event_names,
             "active_event_count": _number(orderbook_runtime.get("active_event_count")),
+            "active_event_compact_rows_kind": "active_event_stable_subset_rows",
+            "active_event_compact_rows_count": len(orderbook_active_event_compact_rows),
+            "active_event_compact_rows": orderbook_active_event_compact_rows,
             "active_event_contracts_kind": "active_event_contract_rows",
             "active_event_contracts_count": len(orderbook_active_event_contracts),
             "active_event_contracts": orderbook_active_event_contracts,
@@ -271,6 +277,9 @@ def health_digest_status_payload(digest: HealthDigest | None) -> dict[str, Any]:
         "orderbook_summary_slots_present": orderbook_summary_slots_present,
         "orderbook_active_event_names": orderbook_active_event_names,
         "orderbook_active_event_count": _number(orderbook_runtime.get("active_event_count")),
+        "orderbook_active_event_compact_rows_kind": "active_event_stable_subset_rows",
+        "orderbook_active_event_compact_rows_count": len(orderbook_active_event_compact_rows),
+        "orderbook_active_event_compact_rows": orderbook_active_event_compact_rows,
         "orderbook_active_event_contracts_kind": "active_event_contract_rows",
         "orderbook_active_event_contracts_count": len(orderbook_active_event_contracts),
         "orderbook_active_event_contracts": orderbook_active_event_contracts,

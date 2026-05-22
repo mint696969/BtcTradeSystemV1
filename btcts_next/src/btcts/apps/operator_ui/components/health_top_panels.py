@@ -9,6 +9,9 @@ import streamlit as st
 
 from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.components.health_continuity import render_continuity_rail
+from btcts.apps.operator_ui.components.market_summary_presenter import (
+    active_event_compact_reading_line,
+)
 from btcts.apps.operator_ui.components.slot_definitions import health_widget_slot
 
 
@@ -162,6 +165,13 @@ def build_health_digest_layer3_summary_caption(
             or []
         )
     ) or "-"
+    active_event_compact_rows = int(
+        orderbook_block.get(
+            "active_event_compact_rows_count",
+            payload.get("orderbook_active_event_compact_rows_count"),
+        )
+        or 0
+    )
     active_event_rows = int(
         orderbook_block.get(
             "active_event_contracts_count",
@@ -191,9 +201,58 @@ def build_health_digest_layer3_summary_caption(
         f"slots_present={slots_present} / "
         f"active_events={active_events} / "
         f"active_event_names={active_event_names} / "
+        f"active_event_compact_rows={active_event_compact_rows} / "
         f"active_event_rows={active_event_rows} / "
         f"age={age_text} / "
         f"event_ts={event_ts}"
+    )
+
+
+def build_health_digest_operational_reading_caption(
+    *,
+    widget,
+    payload: dict | None,
+) -> str:
+    if widget is None or not payload:
+        return "health_operational_reading unavailable"
+
+    orderbook_block = dict(payload.get("orderbook_active_event_observability") or {})
+
+    trust = str(getattr(widget, "trust_key", None) or "unknown")
+    continuity = str(getattr(widget, "continuity_key", None) or "unknown")
+    interpretation = str(getattr(widget, "interpretation_key", None) or "unknown")
+    observer_status = str(getattr(widget, "semantic_observer_status_key", None) or "unknown")
+    source_kind = str(getattr(widget, "source_kind", None) or "unknown")
+
+    active_event_line = active_event_compact_reading_line(
+        {
+            "orderbook_active_event_compact_rows": list(
+                orderbook_block.get("active_event_compact_rows")
+                or payload.get("orderbook_active_event_compact_rows")
+                or []
+            ),
+            "orderbook_active_event_contracts": list(
+                orderbook_block.get("active_event_contracts")
+                or payload.get("orderbook_active_event_contracts")
+                or []
+            ),
+            "orderbook_active_event_names": list(
+                orderbook_block.get("active_event_names")
+                or getattr(widget, "orderbook_active_event_names", [])
+                or []
+            ),
+        }
+    )
+
+    return (
+        f"health_operational_reading={interpretation} / "
+        f"trust={trust} / "
+        f"continuity={continuity} / "
+        f"observer_status={observer_status} / "
+        f"active_event={active_event_line} / "
+        f"source={source_kind} / "
+        "review_mode=operator_review_only / "
+        "execution=not_instruction"
     )
 
 
@@ -266,6 +325,7 @@ def render_layer3_summary_metric(
     get_text: Callable[[str, str], str],
     layer3_summary_label: Callable[[dict, dict, str], str],
     digest_caption: str | None = None,
+    operational_reading_caption: str | None = None,
 ) -> None:
     st.metric(
         get_text(lang, "health_summary_layer3"),
@@ -273,6 +333,8 @@ def render_layer3_summary_metric(
     )
     if digest_caption:
         st.caption(digest_caption)
+    if operational_reading_caption:
+        st.caption(operational_reading_caption)
 
 
 def render_overview_summary_panel(

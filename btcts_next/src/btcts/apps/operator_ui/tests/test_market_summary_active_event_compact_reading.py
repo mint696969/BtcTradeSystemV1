@@ -18,7 +18,7 @@ from btcts.apps.operator_ui.components.market_summary_presenter import (  # noqa
 def main() -> int:
     line = active_event_compact_reading_line(
         {
-            "orderbook_active_event_contracts": [
+            "orderbook_active_event_compact_rows": [
                 {
                     "event_name": "near_wall_continued",
                     "event_family": "wall",
@@ -37,7 +37,14 @@ def main() -> int:
                     "half_life_sec": 30,
                     "side": "bid",
                 },
-            ]
+            ],
+            "orderbook_active_event_contracts": [
+                {
+                    "event_name": "should_not_be_used_when_compact_rows_exist",
+                    "event_family": "raw_contract",
+                    "usage_grade": "unknown",
+                }
+            ],
         }
     )
     assert (

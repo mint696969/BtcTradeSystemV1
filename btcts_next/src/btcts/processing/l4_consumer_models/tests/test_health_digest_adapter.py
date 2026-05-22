@@ -94,6 +94,21 @@ def main() -> int:
             "persistence_observable": True,
             "active_event_count": 1,
             "active_event_names": ["near_wall_continued"],
+            "active_event_compact_rows": [
+                {
+                    "contract_source": "l3_event_usage_policy",
+                    "event_name": "near_wall_continued",
+                    "event_family": "wall",
+                    "meaning_version": "l3_event_usage_policy.v1alpha1",
+                    "usage_grade": "strong",
+                    "interpretation_bucket": "allow_structural_use",
+                    "trust_bucket": "trusted",
+                    "actionability": "review",
+                    "forecast_horizon_hint": "short",
+                    "half_life_sec": 30,
+                    "side": "bid",
+                }
+            ],
             "active_event_contracts": [
                 {
                     "event_name": "near_wall_continued",
@@ -172,6 +187,10 @@ def main() -> int:
     assert payload["orderbook_summary_slots_present"] == ["near_wall", "support"]
     assert payload["orderbook_active_event_names"] == ["near_wall_continued"]
     assert payload["orderbook_active_event_count"] == 1
+    assert payload["orderbook_active_event_compact_rows_kind"] == "active_event_stable_subset_rows"
+    assert payload["orderbook_active_event_compact_rows_count"] == 1
+    assert payload["orderbook_active_event_compact_rows"][0]["event_name"] == "near_wall_continued"
+    assert payload["orderbook_active_event_compact_rows"][0]["meaning_version"] == "l3_event_usage_policy.v1alpha1"
     assert payload["orderbook_active_event_contracts_kind"] == "active_event_contract_rows"
     assert payload["orderbook_active_event_contracts_count"] == 1
     assert payload["orderbook_active_event_contracts"][0]["event_name"] == "near_wall_continued"
@@ -185,6 +204,19 @@ def main() -> int:
     assert payload["orderbook_active_event_observability"]["summary_slots_present"] == ["near_wall", "support"]
     assert payload["orderbook_active_event_observability"]["active_event_names"] == ["near_wall_continued"]
     assert payload["orderbook_active_event_observability"]["active_event_count"] == 1
+    assert (
+        payload["orderbook_active_event_observability"]["active_event_compact_rows_kind"]
+        == "active_event_stable_subset_rows"
+    )
+    assert payload["orderbook_active_event_observability"]["active_event_compact_rows_count"] == 1
+    assert (
+        payload["orderbook_active_event_observability"]["active_event_compact_rows"][0]["event_name"]
+        == "near_wall_continued"
+    )
+    assert (
+        payload["orderbook_active_event_observability"]["active_event_compact_rows"][0]["meaning_version"]
+        == "l3_event_usage_policy.v1alpha1"
+    )
     assert payload["orderbook_active_event_observability"]["active_event_contracts_kind"] == "active_event_contract_rows"
     assert payload["orderbook_active_event_observability"]["active_event_contracts_count"] == 1
     assert payload["orderbook_active_event_observability"]["active_event_contracts"][0]["event_name"] == "near_wall_continued"

@@ -26,6 +26,7 @@ from btcts.apps.operator_ui.components.health_top_panels import (
     build_health_digest_api_summary_caption,
     build_health_digest_collector_summary_caption,
     build_health_digest_layer3_summary_caption,
+    build_health_digest_operational_reading_caption,
     build_health_digest_ws_summary_caption,
     render_api_summary_metric,
     render_collector_summary_metric,
@@ -531,6 +532,10 @@ def render():
             widget=health_digest_bundle["widget"],
             payload=health_digest_bundle["payload"],
         )
+        operational_reading_caption = build_health_digest_operational_reading_caption(
+            widget=health_digest_bundle["widget"],
+            payload=health_digest_bundle["payload"],
+        )
 
         render_layer3_summary_metric(
             lang=lang,
@@ -539,6 +544,7 @@ def render():
             get_text=get_text,
             layer3_summary_label=_layer3_summary_label,
             digest_caption=digest_caption,
+            operational_reading_caption=operational_reading_caption,
         )
 
     def _render_api_chart_section() -> None:
