@@ -247,6 +247,56 @@ def _check_data_inventory(failures: List[str]) -> Dict[str, Any]:
     }
 
 
+
+def _check_probe_implementation(failures: List[str]) -> Dict[str, Any]:
+    rel_path = "tools/probe_phase4a_read_only_real_data_validation_inventory.py"
+    text = _read_text(rel_path)
+    missing: List[str] = []
+    forbidden: List[str] = []
+
+    required = [
+        "phase4a_read_only_real_data_validation_inventory_probe",
+        "writes_only_to_tmp_work",
+        "does_not_write_to_data_root",
+        "does_not_write_to_d_drive_hot_runtime",
+        "does_not_mutate_collector_state",
+        "OUT_DIR = REPO_ROOT / \"tmp\" / \"work\" / \"phase4a_real_data_validation_probe\"",
+        "target_partition",
+        "board_snapshot",
+        "executions_ws",
+    ]
+    forbidden_fragments = [
+        "btcts_next/src/btcts/apps/operator_ui",
+        "btcts_next/src/btcts/market_engine",
+        "btcts_next/src/btcts/execution",
+        "btcts_next/src/btcts/broker",
+        "shutil.rmtree",
+        "place_order",
+        "broker_order",
+        "live_order_placement",
+        "auto_trade",
+    ]
+
+    if not text:
+        failures.append(f"read-only real-data inventory probe missing: {rel_path}")
+        return {"missing_count": 1, "missing": ["__file__"], "forbidden_count": 0, "forbidden": []}
+
+    for fragment in required:
+        if fragment not in text:
+            missing.append(fragment)
+            failures.append(f"read-only real-data inventory probe fragment missing: {fragment}")
+    for fragment in forbidden_fragments:
+        if fragment in text:
+            forbidden.append(fragment)
+            failures.append(f"read-only real-data inventory probe forbidden fragment: {fragment}")
+
+    return {
+        "missing_count": len(missing),
+        "missing": missing,
+        "forbidden_count": len(forbidden),
+        "forbidden": forbidden,
+    }
+
 def _check_no_probe_runtime_opening(failures: List[str]) -> Dict[str, Any]:
     hits: List[Dict[str, str]] = []
     candidate_paths = [
@@ -258,10 +308,26 @@ def _check_no_probe_runtime_opening(failures: List[str]) -> Dict[str, Any]:
         if not path.exists():
             continue
         text = path.read_text(encoding="utf-8")
+        tmp_output_only = all(
+            fragment in text
+            for fragment in [
+                'OUT_DIR = REPO_ROOT / "tmp" / "work" / "phase4a_real_data_validation_probe"',
+                "allowed_root = OUT_DIR.resolve()",
+                "if allowed_root not in [out_path, *out_path.parents]:",
+                "OUT_DIR.mkdir(parents=True, exist_ok=True)",
+                "out_path.write_text(",
+                '"writes_only_to_tmp_work": True',
+                '"does_not_write_to_data_root": True',
+                '"does_not_write_to_d_drive_hot_runtime": True',
+            ]
+        )
         for token in FORBIDDEN_MUTATION_TOKENS:
-            if token in text:
-                hits.append({"path": rel_path, "token": token})
-                failures.append(f"real-data validation probe contains forbidden mutation/runtime token: {rel_path}: {token}")
+            if token not in text:
+                continue
+            if tmp_output_only and token in {".write_text(", "mkdir("}:
+                continue
+            hits.append({"path": rel_path, "token": token})
+            failures.append(f"real-data validation probe contains forbidden mutation/runtime token: {rel_path}: {token}")
 
     forbidden_path_hits: List[str] = []
     for rel in FORBIDDEN_PROBE_LOCATIONS:
@@ -289,6 +355,7 @@ def main() -> int:
     primary_guard_connection = _check_primary_guard_connection_static(failures)
     docs = _check_docs(failures)
     data_inventory = _check_data_inventory(failures)
+    probe_implementation = _check_probe_implementation(failures)
     no_probe_runtime_opening = _check_no_probe_runtime_opening(failures)
 
     summary = {
@@ -299,6 +366,7 @@ def main() -> int:
             "primary_guard_connection": primary_guard_connection,
             "docs": docs,
             "data_inventory": data_inventory,
+            "probe_implementation": probe_implementation,
             "no_probe_runtime_opening": no_probe_runtime_opening,
         },
         "failures": failures,
