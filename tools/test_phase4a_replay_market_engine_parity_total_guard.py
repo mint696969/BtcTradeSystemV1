@@ -157,6 +157,11 @@ GUARD_SPECS = [
         "kind": "json_ok",
         "role": "direction_unconnected_scope_cleanup_guard",
     },
+    {
+        "path": "tools/test_phase4a_position_review_hint_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "position_review_hint_entry_criteria_guard",
+    },
 ]
 
 

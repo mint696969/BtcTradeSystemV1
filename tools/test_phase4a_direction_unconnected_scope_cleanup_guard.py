@@ -100,6 +100,7 @@ ALLOWED_NEGATIVE_ASSERTION_TOKEN_FILES = {
     "btcts_next/src/btcts/replay/tests/test_replay_prediction_artifacts.py",
     "btcts_next/src/btcts/processing/l4_consumer_models/tests/test_prediction_direction_contract_boundary.py",
     "btcts_next/src/btcts/processing/l4_consumer_models/tests/test_prediction_direction_builder.py",
+    "btcts_next/src/btcts/processing/l4_consumer_models/tests/test_prediction_position_review_hint_contract.py",
 }
 
 

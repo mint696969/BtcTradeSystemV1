@@ -5,8 +5,10 @@ from .prediction_direction_contract import (
     HorizonDirectionReading,
     PredictionDirectionOutput,
 )
+from .prediction_position_review_hint_contract import PredictionPositionReviewHint
 
 __all__ = [
     "HorizonDirectionReading",
     "PredictionDirectionOutput",
+    "PredictionPositionReviewHint",
 ]
