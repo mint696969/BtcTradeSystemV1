@@ -167,6 +167,11 @@ GUARD_SPECS = [
         "kind": "json_ok",
         "role": "execution_review_hint_entry_criteria_guard",
     },
+    {
+        "path": "tools/test_phase4a_read_only_real_data_validation_probe_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "read_only_real_data_validation_probe_entry_criteria_guard",
+    },
 ]
 
 
