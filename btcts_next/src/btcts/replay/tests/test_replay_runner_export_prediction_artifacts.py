@@ -127,18 +127,23 @@ def main() -> int:
             assert summary["processed_count"] == 2
             assert summary["prediction_evaluation_entry_count"] == 1
             assert summary["prediction_calibration_review_count"] == 1
+            assert summary["prediction_direction_snapshot_count"] == 1
 
             assert artifacts["prediction_evaluation_report_path"]
             assert artifacts["prediction_calibration_review_path"]
+            assert artifacts["prediction_direction_snapshot_path"]
             manifest = _read_json(artifacts["manifest_path"])
             replay_report = _read_json(artifacts["report_path"])
             prediction_report = _read_json(artifacts["prediction_evaluation_report_path"])
             calibration_review = _read_json(artifacts["prediction_calibration_review_path"])
+            direction_snapshot = _read_json(artifacts["prediction_direction_snapshot_path"])
 
             assert manifest["prediction_evaluation_entry_count"] == 1
             assert manifest["prediction_evaluation_report_path"]
             assert manifest["prediction_calibration_review_count"] == 1
             assert manifest["prediction_calibration_review_path"]
+            assert manifest["prediction_direction_snapshot_count"] == 1
+            assert manifest["prediction_direction_snapshot_path"]
 
             assert replay_report["signal_count"] == 2
             assert replay_report["event_name_counts"] == {
@@ -149,10 +154,52 @@ def main() -> int:
             assert replay_report["prediction_evaluation_summary"]["entry_count"] == 1
             assert replay_report["prediction_calibration_review_summary"] is not None
             assert replay_report["prediction_calibration_review_summary"]["review_count"] == 1
+            assert replay_report["prediction_direction_summary"] is not None
+            assert replay_report["prediction_direction_summary"]["snapshot_count"] == 1
+            assert replay_report["prediction_direction_summary"]["latest_source_kind"] == (
+                "replay_artifact_only"
+            )
+            assert replay_report["prediction_direction_summary"]["latest_read_only_contract"] is True
+            assert replay_report["prediction_direction_summary"]["latest_not_runtime_wiring"] is True
+            assert replay_report["prediction_direction_summary"]["latest_not_ui_wiring"] is True
+            assert replay_report["prediction_direction_summary"][
+                "latest_diagnostic_quality_version"
+            ] == "phase4a.direction_artifact_diagnostics.v1"
+            assert replay_report["prediction_direction_summary"][
+                "latest_diagnostic_quality_ok"
+            ] is True
+            assert replay_report["prediction_direction_summary"][
+                "latest_diagnostic_quality_passed_count"
+            ] == 9
+            assert replay_report["direction_replay_calibration_review_material"] is not None
+            assert replay_report["direction_replay_calibration_review_material"][
+                "material_type"
+            ] == "direction_replay_calibration_review_material"
+            assert replay_report["direction_replay_calibration_review_material"][
+                "review_only"
+            ] is True
+            assert replay_report["direction_replay_calibration_review_material"][
+                "not_runtime_wiring"
+            ] is True
+            assert replay_report["direction_replay_calibration_review_material"][
+                "not_ui_wiring"
+            ] is True
 
             assert prediction_report["entry_type"] == "prediction_evaluation_report"
             assert prediction_report["entry_count"] == 1
             assert calibration_review["review_type"] == "prediction_calibration_review"
+            assert direction_snapshot["prediction_type"] == "direction"
+            assert direction_snapshot["source_kind"] == "replay_artifact_only"
+            assert direction_snapshot["read_only_contract"] is True
+            assert direction_snapshot["not_runtime_wiring"] is True
+            assert direction_snapshot["not_ui_wiring"] is True
+            assert direction_snapshot["diagnostics"]["artifact_only"] is True
+            assert direction_snapshot["diagnostics"]["diagnostic_quality"][
+                "quality_version"
+            ] == "phase4a.direction_artifact_diagnostics.v1"
+            assert direction_snapshot["diagnostics"]["diagnostic_quality"][
+                "runtime_wiring_closed"
+            ] is True
     finally:
         replay_runner.JsonlReplaySource = original_source
         replay_runner.ReplayEngine = original_engine

@@ -45,6 +45,7 @@ def main() -> int:
     assert first_artifacts["tactic_proposal_output"] is None
     assert first_artifacts["tactic_review_record"] is None
     assert first_artifacts["tactic_operation_record"] is None
+    assert first_artifacts["prediction_direction_snapshot"] is None
 
     artifacts = builder.consume_result_artifacts(second)
 
@@ -96,6 +97,18 @@ def main() -> int:
     assert tactic_review["diagnostics"]["review_source"] == (
         "pending_tactic_proposal_output"
     )
+
+    direction_snapshot = artifacts["prediction_direction_snapshot"]
+    assert direction_snapshot is not None
+    assert direction_snapshot["prediction_type"] == "direction"
+    assert direction_snapshot["source_kind"] == "replay_artifact_only"
+    assert direction_snapshot["read_only_contract"] is True
+    assert direction_snapshot["not_runtime_wiring"] is True
+    assert direction_snapshot["not_ui_wiring"] is True
+    assert direction_snapshot["diagnostics"]["artifact_only"] is True
+    assert "position_size" not in direction_snapshot
+    assert "order_size" not in direction_snapshot
+    assert "broker_account" not in direction_snapshot
 
     tactic_operation = artifacts["tactic_operation_record"]
     assert tactic_operation is not None

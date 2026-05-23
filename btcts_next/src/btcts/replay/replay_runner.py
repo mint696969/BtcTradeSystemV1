@@ -76,6 +76,14 @@ def run_replay(
             if tactic_operation_record is not None:
                 session.add_tactic_operation_record(tactic_operation_record)
 
+            prediction_direction_snapshot = prediction_artifacts[
+                "prediction_direction_snapshot"
+            ]
+            if prediction_direction_snapshot is not None:
+                session.add_prediction_direction_snapshot(
+                    prediction_direction_snapshot
+                )
+
     return session
 
 

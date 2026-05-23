@@ -35,6 +35,7 @@ def main() -> int:
                 "manifest_path": str(Path(kwargs["out_root"]) / "dummy_manifest.json"),
                 "results_path": str(Path(kwargs["out_root"]) / "dummy_results.jsonl"),
                 "prediction_evaluation_report_path": None,
+                "prediction_direction_snapshot_path": None,
             }
 
         replay_runner.export_replay_session = _fake_export_replay_session

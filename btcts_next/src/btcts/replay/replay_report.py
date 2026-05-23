@@ -172,6 +172,156 @@ def _build_tactic_review_record_summary(
     }
 
 
+def _build_prediction_direction_summary(
+    prediction_direction_snapshots: List[Dict] | None,
+) -> Dict | None:
+    if not prediction_direction_snapshots:
+        return None
+
+    latest_snapshot = dict(prediction_direction_snapshots[-1] or {})
+    diagnostics = dict(latest_snapshot.get("diagnostics", {}) or {})
+    diagnostic_quality = dict(diagnostics.get("diagnostic_quality", {}) or {})
+    diagnostic_quality_required_flags = [
+        "scenario_ref_present",
+        "market_uid_present",
+        "event_ts_present",
+        "scenario_regime_bias_present",
+        "artifact_only_marker_present",
+        "read_only_marker_present",
+        "runtime_wiring_closed",
+        "ui_wiring_closed",
+        "market_engine_wiring_closed",
+    ]
+    diagnostic_quality_passed_count = sum(
+        1
+        for key in diagnostic_quality_required_flags
+        if diagnostic_quality.get(key) is True
+    )
+    horizon_readings = list(
+        latest_snapshot.get("horizon_direction_readings", []) or []
+    )
+    horizon_count = len(horizon_readings)
+    caution_count = 0
+    horizon_labels: list[str] = []
+    for reading in horizon_readings:
+        if not isinstance(reading, dict):
+            continue
+        horizon = str(reading.get("horizon") or "").strip()
+        if horizon:
+            horizon_labels.append(horizon)
+        if reading.get("caution_flag") is True:
+            caution_count += 1
+
+    return {
+        "snapshot_count": len(prediction_direction_snapshots),
+        "latest_prediction_type": latest_snapshot.get("prediction_type"),
+        "latest_source_kind": latest_snapshot.get("source_kind"),
+        "latest_market_uid": latest_snapshot.get("market_uid"),
+        "latest_event_ts": latest_snapshot.get("event_ts"),
+        "latest_scenario_ref": latest_snapshot.get("scenario_ref"),
+        "latest_primary_direction_bias": latest_snapshot.get(
+            "primary_direction_bias"
+        ),
+        "latest_horizon_count": horizon_count,
+        "latest_horizons": horizon_labels,
+        "latest_caution_horizon_count": caution_count,
+        "latest_evidence_trace_ref_count": len(
+            latest_snapshot.get("evidence_trace_refs", []) or []
+        ),
+        "latest_artifact_only": diagnostics.get("artifact_only"),
+        "latest_read_only_contract": latest_snapshot.get("read_only_contract"),
+        "latest_not_runtime_wiring": latest_snapshot.get("not_runtime_wiring"),
+        "latest_not_ui_wiring": latest_snapshot.get("not_ui_wiring"),
+        "latest_diagnostic_quality_version": diagnostic_quality.get(
+            "quality_version"
+        ),
+        "latest_diagnostic_quality_passed_count": (
+            diagnostic_quality_passed_count
+        ),
+        "latest_diagnostic_quality_required_count": len(
+            diagnostic_quality_required_flags
+        ),
+        "latest_diagnostic_quality_ok": diagnostic_quality_passed_count
+        == len(diagnostic_quality_required_flags),
+    }
+
+
+def _build_direction_replay_calibration_review_material(
+    prediction_direction_summary: Dict | None,
+) -> Dict | None:
+    if not prediction_direction_summary:
+        return None
+
+    latest_source_kind = prediction_direction_summary.get("latest_source_kind")
+    read_only_contract = prediction_direction_summary.get(
+        "latest_read_only_contract"
+    )
+    not_runtime_wiring = prediction_direction_summary.get(
+        "latest_not_runtime_wiring"
+    )
+    not_ui_wiring = prediction_direction_summary.get("latest_not_ui_wiring")
+    diagnostic_quality_ok = prediction_direction_summary.get(
+        "latest_diagnostic_quality_ok"
+    )
+    caution_horizon_count = int(
+        prediction_direction_summary.get("latest_caution_horizon_count") or 0
+    )
+    evidence_ref_count = int(
+        prediction_direction_summary.get("latest_evidence_trace_ref_count") or 0
+    )
+    horizon_count = int(
+        prediction_direction_summary.get("latest_horizon_count") or 0
+    )
+
+    review_flags: list[str] = []
+    if latest_source_kind != "replay_artifact_only":
+        review_flags.append("unexpected_source_kind")
+    if read_only_contract is not True:
+        review_flags.append("read_only_contract_missing")
+    if not_runtime_wiring is not True:
+        review_flags.append("runtime_wiring_not_closed")
+    if not_ui_wiring is not True:
+        review_flags.append("ui_wiring_not_closed")
+    if diagnostic_quality_ok is not True:
+        review_flags.append("diagnostic_quality_review_required")
+    if caution_horizon_count > 0:
+        review_flags.append("caution_horizon_review")
+    if evidence_ref_count == 0:
+        review_flags.append("evidence_trace_review_required")
+    if horizon_count == 0:
+        review_flags.append("horizon_coverage_review_required")
+
+    if not review_flags:
+        review_flags.append("keep_current_course")
+
+    review_priority = "normal"
+    if diagnostic_quality_ok is not True or horizon_count == 0:
+        review_priority = "high"
+    elif caution_horizon_count > 0 or evidence_ref_count == 0:
+        review_priority = "medium"
+
+    return {
+        "material_type": "direction_replay_calibration_review_material",
+        "material_version": "phase4a.direction_replay_calibration_review.v1",
+        "source_kind": "replay_report_prediction_direction_summary",
+        "review_only": True,
+        "read_only_contract": True,
+        "not_runtime_wiring": True,
+        "not_ui_wiring": True,
+        "not_market_engine_wiring": True,
+        "snapshot_count": prediction_direction_summary.get("snapshot_count"),
+        "latest_primary_direction_bias": prediction_direction_summary.get(
+            "latest_primary_direction_bias"
+        ),
+        "latest_horizon_count": horizon_count,
+        "latest_caution_horizon_count": caution_horizon_count,
+        "latest_evidence_trace_ref_count": evidence_ref_count,
+        "latest_diagnostic_quality_ok": diagnostic_quality_ok,
+        "review_priority": review_priority,
+        "review_flags": review_flags,
+    }
+
+
 def _build_tactic_operation_record_summary(
     tactic_operation_records: List[Dict] | None,
 ) -> Dict | None:
@@ -230,6 +380,7 @@ def build_replay_report(
     tactic_proposal_outputs: List[Dict] | None = None,
     tactic_review_records: List[Dict] | None = None,
     tactic_operation_records: List[Dict] | None = None,
+    prediction_direction_snapshots: List[Dict] | None = None,
 ) -> Dict:
     board_count = 0
     trade_count = 0
@@ -276,6 +427,10 @@ def build_replay_report(
                     microstructure_event_count += 1
                     event_name_counts[event_name] = event_name_counts.get(event_name, 0) + 1
 
+    prediction_direction_summary = _build_prediction_direction_summary(
+        prediction_direction_snapshots
+    )
+
     return {
         "name": name,
         "source_paths": source_paths,
@@ -297,5 +452,11 @@ def build_replay_report(
         ),
         "tactic_operation_record_summary": _build_tactic_operation_record_summary(
             tactic_operation_records
+        ),
+        "prediction_direction_summary": prediction_direction_summary,
+        "direction_replay_calibration_review_material": (
+            _build_direction_replay_calibration_review_material(
+                prediction_direction_summary
+            )
         ),
     }

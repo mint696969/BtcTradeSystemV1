@@ -38,6 +38,18 @@ SCAN_ROOTS_FOR_WIRING = [
     "btcts_next/src/btcts/market_engine",
 ]
 
+ALLOWED_REPLAY_ARTIFACT_DIRECTION_REFERENCES = {
+    "btcts_next/src/btcts/replay/replay_prediction_artifacts.py",
+    "btcts_next/src/btcts/replay/replay_runner.py",
+    "btcts_next/src/btcts/replay/replay_session.py",
+    "btcts_next/src/btcts/replay/replay_export.py",
+    "btcts_next/src/btcts/replay/replay_report.py",
+    "btcts_next/src/btcts/replay/tests/test_replay_prediction_artifacts.py",
+    "btcts_next/src/btcts/replay/tests/test_replay_runner_export_prediction_artifacts.py",
+    "btcts_next/src/btcts/replay/tests/test_prediction_replay_export.py",
+    "btcts_next/src/btcts/replay/tests/test_replay_runner_export.py",
+}
+
 ALLOWED_DIRECTION_REFERENCES = {
     "btcts_next/src/btcts/processing/l4_consumer_models/contracts/__init__.py",
     "btcts_next/src/btcts/processing/l4_consumer_models/shared/__init__.py",
@@ -70,6 +82,13 @@ def _read_text(rel_path: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _compile_cfile_for(rel_path: str) -> str:
+    cache_root = REPO_ROOT / "tmp" / "_guard_py_compile_cache" / "direction_read_only_boundary"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    safe_name = rel_path.replace("/", "__").replace("\\", "__") + ".pyc"
+    return str(cache_root / safe_name)
+
+
 def _compile_targets(failures: List[str]) -> Dict[str, Any]:
     passed: List[str] = []
     failed: List[Dict[str, str]] = []
@@ -82,7 +101,7 @@ def _compile_targets(failures: List[str]) -> Dict[str, Any]:
             continue
 
         try:
-            py_compile.compile(str(path), doraise=True)
+            py_compile.compile(str(path), cfile=_compile_cfile_for(rel_path), doraise=True)
             passed.append(rel_path)
         except Exception as exc:
             failed.append({"path": rel_path, "error": str(exc)})
@@ -176,7 +195,11 @@ def _check_no_downstream_wiring(failures: List[str]) -> Dict[str, Any]:
 
         for path in root.rglob("*.py"):
             rel = str(path.relative_to(REPO_ROOT)).replace("\\", "/")
-            if rel in ALLOWED_DIRECTION_REFERENCES:
+            allowed_replay_artifact_reference = (
+                rel in ALLOWED_REPLAY_ARTIFACT_DIRECTION_REFERENCES
+                and rel.startswith("btcts_next/src/btcts/replay/")
+            )
+            if rel in ALLOWED_DIRECTION_REFERENCES or allowed_replay_artifact_reference:
                 continue
 
             text = path.read_text(encoding="utf-8")
@@ -184,7 +207,7 @@ def _check_no_downstream_wiring(failures: List[str]) -> Dict[str, Any]:
                 if token in text:
                     hits.append({"path": rel, "token": token})
                     failures.append(
-                        f"Direction builder/contract is wired downstream before read-only guard opens it: {rel}: {token}"
+                        f"Direction builder/contract is wired outside artifact-only replay entry before runtime guard opens it: {rel}: {token}"
                     )
 
     return {

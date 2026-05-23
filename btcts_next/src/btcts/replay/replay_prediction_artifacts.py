@@ -24,6 +24,11 @@ from btcts.processing.l4_consumer_models.shared import (
 )
 from btcts.processing.l4_consumer_models.shared._value_utils import safe_float
 
+from btcts.processing.l4_consumer_models.shared import (
+    build_prediction_direction_input_from_scenario,
+    build_prediction_direction_output,
+    prediction_direction_output_to_snapshot,
+)
 from .prediction_calibration_review import (
     PredictionCalibrationReviewBuildInput,
     build_prediction_calibration_review,
@@ -261,6 +266,41 @@ def build_prediction_state_from_replay_result(
             },
         )
     )
+    direction_input = build_prediction_direction_input_from_scenario(
+        scenario_ref=f"replay.scenario.{result.get('record_id') or 'unknown'}",
+        source_kind="replay_artifact_only",
+        market_uid=scenario_output.market_uid,
+        event_ts=scenario_output.event_ts,
+        scenario_regime_bias=scenario_output.current_regime_state,
+        diagnostics={
+            "builder_type": "replay_prediction_artifact_builder",
+            "artifact_entry": "direction_read_only_snapshot",
+            "artifact_only": True,
+            "read_only_contract": True,
+            "not_runtime_wiring": True,
+            "not_ui_wiring": True,
+            "not_market_engine_wiring": True,
+            "record_id": result.get("record_id"),
+            "record_type": result.get("record_type"),
+            "diagnostic_quality": {
+                "quality_version": "phase4a.direction_artifact_diagnostics.v1",
+                "scenario_ref_present": True,
+                "market_uid_present": bool(scenario_output.market_uid),
+                "event_ts_present": bool(scenario_output.event_ts),
+                "scenario_regime_bias_present": bool(
+                    scenario_output.current_regime_state
+                ),
+                "artifact_only_marker_present": True,
+                "read_only_marker_present": True,
+                "runtime_wiring_closed": True,
+                "ui_wiring_closed": True,
+                "market_engine_wiring_closed": True,
+            },
+        },
+    )
+    direction_output = build_prediction_direction_output(direction_input)
+    prediction_direction_snapshot = prediction_direction_output_to_snapshot(direction_output)
+
     calibration_hint = build_prediction_calibration_hint(
         PredictionCalibrationBuildInput(
             prediction_input=prediction_input,
@@ -278,6 +318,7 @@ def build_prediction_state_from_replay_result(
         "prediction_input": prediction_input,
         "scenario_output": scenario_output,
         "tactic_proposal_output": tactic_proposal_output,
+        "prediction_direction_snapshot": prediction_direction_snapshot,
         "calibration_hint": calibration_hint,
         "mid_price": _resolve_mid_price(result),
         "best_bid": safe_float(result.get("best_bid")),
@@ -380,6 +421,7 @@ class ReplayPredictionArtifactBuilder:
         tactic_proposal_output = None
         tactic_review_record = None
         tactic_operation_record = None
+        prediction_direction_snapshot = None
 
         if self._pending_prediction_state is not None:
             realized_outcome = _build_proxy_realized_outcome(
@@ -436,6 +478,9 @@ class ReplayPredictionArtifactBuilder:
                     )
                 )
             )
+            prediction_direction_snapshot = dict(
+                self._pending_prediction_state["prediction_direction_snapshot"]
+            )
 
         self._pending_prediction_state = current_prediction_state
         return {
@@ -444,6 +489,7 @@ class ReplayPredictionArtifactBuilder:
             "tactic_proposal_output": tactic_proposal_output,
             "tactic_review_record": tactic_review_record,
             "tactic_operation_record": tactic_operation_record,
+            "prediction_direction_snapshot": prediction_direction_snapshot,
         }
 
     def consume_result(self, result: dict[str, Any]) -> dict[str, Any] | None:

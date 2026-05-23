@@ -132,7 +132,39 @@ GUARD_SPECS = [
         "kind": "json_ok",
         "role": "direction_read_only_boundary_guard",
     },
+    {
+        "path": "tools/test_phase4a_direction_replay_artifact_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "direction_replay_artifact_entry_criteria_guard",
+    },
+    {
+        "path": "tools/test_phase4a_direction_replay_artifact_entry_close_guard.py",
+        "kind": "json_ok",
+        "role": "direction_replay_artifact_entry_close_guard",
+    },
+    {
+        "path": "tools/test_phase4a_direction_replay_calibration_review_material_entry_guard.py",
+        "kind": "json_ok",
+        "role": "direction_replay_calibration_review_material_entry_guard",
+    },
+    {
+        "path": "tools/test_phase4a_direction_replay_material_slice_audit.py",
+        "kind": "json_ok",
+        "role": "direction_replay_material_slice_audit",
+    },
+    {
+        "path": "tools/test_phase4a_direction_unconnected_scope_cleanup_guard.py",
+        "kind": "json_ok",
+        "role": "direction_unconnected_scope_cleanup_guard",
+    },
 ]
+
+
+def _compile_cfile_for(rel_path: str) -> str:
+    cache_root = REPO_ROOT / "tmp" / "_guard_py_compile_cache" / "replay_market_engine_parity_total"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    safe_name = rel_path.replace("/", "__").replace("\\", "__") + ".pyc"
+    return str(cache_root / safe_name)
 
 
 def _compile_guard_scripts(failures: List[str]) -> Dict[str, Any]:
@@ -148,7 +180,7 @@ def _compile_guard_scripts(failures: List[str]) -> Dict[str, Any]:
             continue
 
         try:
-            py_compile.compile(str(path), doraise=True)
+            py_compile.compile(str(path), cfile=_compile_cfile_for(rel_path), doraise=True)
             passed.append(rel_path)
         except Exception as exc:
             failed.append({"path": rel_path, "error": str(exc)})

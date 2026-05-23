@@ -69,6 +69,13 @@ def _read_text(rel_path: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _compile_cfile_for(rel_path: str) -> str:
+    cache_root = REPO_ROOT / "tmp" / "_guard_py_compile_cache" / "direction_position_execution"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    safe_name = rel_path.replace("/", "__").replace("\\", "__") + ".pyc"
+    return str(cache_root / safe_name)
+
+
 def _compile_targets(failures: List[str]) -> Dict[str, Any]:
     passed: List[str] = []
     failed: List[Dict[str, str]] = []
@@ -81,7 +88,7 @@ def _compile_targets(failures: List[str]) -> Dict[str, Any]:
             continue
 
         try:
-            py_compile.compile(str(path), doraise=True)
+            py_compile.compile(str(path), cfile=_compile_cfile_for(rel_path), doraise=True)
             passed.append(rel_path)
         except Exception as exc:
             failed.append({"path": rel_path, "error": str(exc)})

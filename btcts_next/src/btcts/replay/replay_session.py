@@ -18,6 +18,7 @@ class ReplaySession:
     tactic_proposal_outputs: List[Dict] = field(default_factory=list)
     tactic_review_records: List[Dict] = field(default_factory=list)
     tactic_operation_records: List[Dict] = field(default_factory=list)
+    prediction_direction_snapshots: List[Dict] = field(default_factory=list)
 
     def add(self, item: Dict) -> None:
         self.output.append(item)
@@ -37,6 +38,9 @@ class ReplaySession:
 
     def add_tactic_operation_record(self, item: Dict) -> None:
         self.tactic_operation_records.append(item)
+
+    def add_prediction_direction_snapshot(self, item: Dict) -> None:
+        self.prediction_direction_snapshots.append(item)
 
     def summary(self) -> Dict:
         event_count = 0
@@ -66,4 +70,7 @@ class ReplaySession:
             "tactic_proposal_output_count": len(self.tactic_proposal_outputs),
             "tactic_review_record_count": len(self.tactic_review_records),
             "tactic_operation_record_count": len(self.tactic_operation_records),
+            "prediction_direction_snapshot_count": len(
+                self.prediction_direction_snapshots
+            ),
         }
