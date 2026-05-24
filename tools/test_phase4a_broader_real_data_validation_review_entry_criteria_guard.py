@@ -32,6 +32,7 @@ FUTURE_REVIEW_PROBE_PATH = "tools/probe_phase4a_broader_real_data_validation_rev
 COMPILE_TARGETS = [
     INVENTORY_PROBE_PATH,
     REPLAY_REPORT_PROBE_PATH,
+    FUTURE_REVIEW_PROBE_PATH,
     REAL_DATA_ENTRY_GUARD_PATH,
     REPLAY_REPORT_ENTRY_GUARD_PATH,
 ]
@@ -169,12 +170,58 @@ def _check_docs(failures: List[str]) -> Dict[str, Any]:
     return {"missing_count": len(missing), "missing": missing, "ordering_ok": bool(ordering_ok)}
 
 
-def _check_future_probe_not_opened(failures: List[str]) -> Dict[str, Any]:
+def _check_future_probe_implementation(failures: List[str]) -> Dict[str, Any]:
     path = REPO_ROOT / FUTURE_REVIEW_PROBE_PATH
-    exists = path.exists()
-    if exists:
-        failures.append(f"future broader real-data validation review probe must not be opened yet: {FUTURE_REVIEW_PROBE_PATH}")
-    return {"exists": bool(exists), "path": FUTURE_REVIEW_PROBE_PATH}
+    if not path.exists():
+        failures.append(f"broader real-data validation review probe must exist after implementation entry: {FUTURE_REVIEW_PROBE_PATH}")
+        return {"exists": False, "missing_count": 1, "missing": [FUTURE_REVIEW_PROBE_PATH], "forbidden_count": 0, "forbidden": []}
+
+    text = path.read_text(encoding="utf-8")
+    required = [
+        "phase4a_broader_real_data_validation_review_probe",
+        "read_only_existing_outputs",
+        "writes_only_to_tmp_work",
+        "does_not_write_to_data_root",
+        "does_not_write_to_d_drive_hot_runtime",
+        "does_not_mutate_collector_state",
+        "does_not_open_runtime_ui_market_engine_or_broker_order",
+        "does_not_open_inference_or_training",
+        "DEFAULT_INVENTORY",
+        "DEFAULT_REPLAY_REPORT",
+        "DEFAULT_OUT",
+    ]
+    forbidden = [
+        "btcts_next/src/btcts/apps/operator_ui",
+        "btcts_next/src/btcts/market_engine",
+        "btcts_next/src/btcts/collector_vnext",
+        "btcts_next/src/btcts/execution",
+        "btcts_next/src/btcts/broker",
+        "place_order",
+        "live_order_placement",
+        "auto_trade",
+        "model_training",
+        "inference_job",
+    ]
+    missing = []
+    forbidden_hits = []
+    for fragment in required:
+        if fragment not in text:
+            missing.append(fragment)
+            failures.append(f"broader review probe missing required boundary fragment: {fragment}")
+    for fragment in forbidden:
+        if fragment in text:
+            forbidden_hits.append(fragment)
+            failures.append(f"broader review probe contains forbidden fragment: {fragment}")
+
+    probe_run = _run_json_command(FUTURE_REVIEW_PROBE_PATH, failures)
+    return {
+        "exists": True,
+        "missing_count": len(missing),
+        "missing": missing,
+        "forbidden_count": len(forbidden_hits),
+        "forbidden": forbidden_hits,
+        "probe_run": probe_run,
+    }
 
 
 def _check_primary_connection_static(failures: List[str]) -> Dict[str, Any]:
@@ -214,7 +261,7 @@ def main() -> int:
     real_data_entry_guard = _run_json_command(REAL_DATA_ENTRY_GUARD_PATH, failures)
     replay_report_entry_guard = _run_json_command(REPLAY_REPORT_ENTRY_GUARD_PATH, failures)
     docs = _check_docs(failures)
-    future_probe_not_opened = _check_future_probe_not_opened(failures)
+    future_probe_implementation = _check_future_probe_implementation(failures)
     primary_connection_static = _check_primary_connection_static(failures)
     forbidden_path_opening = _check_forbidden_path_opening(failures)
 
@@ -226,7 +273,7 @@ def main() -> int:
             "real_data_entry_guard": real_data_entry_guard,
             "replay_report_entry_guard": replay_report_entry_guard,
             "docs": docs,
-            "future_probe_not_opened": future_probe_not_opened,
+            "future_probe_implementation": future_probe_implementation,
             "primary_connection_static": primary_connection_static,
             "forbidden_path_opening": forbidden_path_opening,
         },
