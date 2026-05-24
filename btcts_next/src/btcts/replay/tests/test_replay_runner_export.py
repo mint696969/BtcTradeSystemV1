@@ -7,7 +7,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-_SRC_ROOT = Path(__file__).resolve().parents[4]
+_SRC_ROOT = Path(__file__).resolve().parents[3]
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
