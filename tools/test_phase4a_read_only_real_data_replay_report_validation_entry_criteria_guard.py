@@ -174,7 +174,9 @@ def _check_replay_report_boundaries(failures: List[str]) -> Dict[str, Any]:
     }
     forbidden = [
         "place_order",
-        "broker_order",
+        "broker_order_placement",
+        "broker_order_writer",
+        "broker_order_submit",
         "live_order_placement",
         "auto_trade",
         "write_text(",
@@ -197,12 +199,49 @@ def _check_replay_report_boundaries(failures: List[str]) -> Dict[str, Any]:
     return {"missing_count": len(missing), "missing": missing, "forbidden_hit_count": len(hits), "forbidden_hits": hits}
 
 
-def _check_future_probe_not_opened(failures: List[str]) -> Dict[str, Any]:
+def _check_future_probe_implementation(failures: List[str]) -> Dict[str, Any]:
     path = REPO_ROOT / FUTURE_PROBE_PATH
-    exists = path.exists()
-    if exists:
-        failures.append(f"future replay/report validation probe must not be opened yet: {FUTURE_PROBE_PATH}")
-    return {"exists": bool(exists), "path": FUTURE_PROBE_PATH}
+    text = _read_text(FUTURE_PROBE_PATH)
+    missing: List[str] = []
+    forbidden: List[str] = []
+    required = [
+        "phase4a_read_only_real_data_replay_report_validation_probe",
+        "build_replay_report(",
+        "ReplaySession(",
+        "writes_only_to_tmp_work",
+        "does_not_write_to_data_root",
+        "does_not_write_to_d_drive_hot_runtime",
+        "does_not_mutate_collector_state",
+        "does_not_open_runtime_ui_market_engine_or_broker_order",
+        'OUT_DIR = REPO_ROOT / "tmp" / "work" / "phase4a_real_data_validation_probe"',
+        "allowed_root = OUT_DIR.resolve()",
+    ]
+    forbidden_fragments = [
+        "place_order",
+        "broker_order_placement",
+        "broker_order_writer",
+        "broker_order_submit",
+        "live_order_placement",
+        "auto_trade",
+        "btcts_next/src/btcts/apps/operator_ui",
+        "btcts_next/src/btcts/market_engine",
+        "btcts_next/src/btcts/execution",
+        "btcts_next/src/btcts/broker",
+        "btcts_next/src/btcts/collector",
+        "btcts_next/src/btcts/collector_vnext",
+    ]
+    if not path.exists() or not text:
+        failures.append(f"future replay/report validation probe must be opened by this implementation slice: {FUTURE_PROBE_PATH}")
+        return {"exists": False, "missing_count": 1, "missing": ["__file__"], "forbidden_count": 0, "forbidden": []}
+    for fragment in required:
+        if fragment not in text:
+            missing.append(fragment)
+            failures.append(f"replay/report validation probe fragment missing: {fragment}")
+    for fragment in forbidden_fragments:
+        if fragment in text:
+            forbidden.append(fragment)
+            failures.append(f"replay/report validation probe forbidden fragment: {fragment}")
+    return {"exists": True, "missing_count": len(missing), "missing": missing, "forbidden_count": len(forbidden), "forbidden": forbidden}
 
 
 def _check_forbidden_path_opening(failures: List[str]) -> Dict[str, Any]:
@@ -226,7 +265,7 @@ def main() -> int:
     inventory_entry_guard = _run_json_command(INVENTORY_ENTRY_GUARD_PATH, failures)
     docs = _check_docs(failures)
     replay_report_boundaries = _check_replay_report_boundaries(failures)
-    future_probe_not_opened = _check_future_probe_not_opened(failures)
+    future_probe_implementation = _check_future_probe_implementation(failures)
     forbidden_path_opening = _check_forbidden_path_opening(failures)
 
     summary = {
@@ -237,7 +276,7 @@ def main() -> int:
             "inventory_entry_guard": inventory_entry_guard,
             "docs": docs,
             "replay_report_boundaries": replay_report_boundaries,
-            "future_probe_not_opened": future_probe_not_opened,
+            "future_probe_implementation": future_probe_implementation,
             "forbidden_path_opening": forbidden_path_opening,
         },
         "failures": failures,
@@ -249,3 +288,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
