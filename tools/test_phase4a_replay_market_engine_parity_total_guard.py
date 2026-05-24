@@ -177,6 +177,11 @@ GUARD_SPECS = [
         "kind": "json_ok",
         "role": "read_only_real_data_replay_report_validation_entry_criteria_guard",
     },
+    {
+        "path": "tools/test_phase4a_broader_real_data_validation_review_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "broader_real_data_validation_review_entry_criteria_guard",
+    },
 ]
 
 
