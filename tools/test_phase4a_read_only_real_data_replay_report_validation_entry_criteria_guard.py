@@ -131,9 +131,10 @@ def _check_docs(failures: List[str]) -> Dict[str, Any]:
             "E-drive archive",
         ],
         FOCUS_PATH: [
-            "phase4a_read_only_real_data_replay_report_validation_entry_criteria",
-            "read_only_real_data_replay_report_validation_entry_criteria_only",
-            "keep_replay_report_validation_manual_bounded_tmp_output_only",
+            "read_only_real_data_replay_report_validation_entry_commit_checkpoint_793d784e_is_complete",
+            "read_only_real_data_replay_report_validation_probe_commit_checkpoint_03e3c4e6_is_complete",
+            "read_only_real_data_replay_report_validation_probe_shape_review_is_complete",
+            "keep_replay_report_validation_probe_e_drive_archive_read_only_and_tmp_work_output_only",
         ],
     }
     missing: List[Dict[str, str]] = []
