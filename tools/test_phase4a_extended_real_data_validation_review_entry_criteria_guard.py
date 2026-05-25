@@ -29,6 +29,7 @@ FUTURE_PROBE_PATH = "tools/probe_phase4a_extended_real_data_validation_review.py
 COMPILE_TARGETS = [
     BROADER_GUARD_PATH,
     BROADER_REVIEW_SCRIPT,
+    FUTURE_PROBE_PATH,
 ]
 
 FORBIDDEN_PATH_PREFIXES = [
@@ -107,8 +108,9 @@ def _check_docs(failures: List[str]) -> Dict[str, Any]:
             "collector state / runtime / UI / market_engine / collector writer/backfill / broker-order / inference / training は開いていない",
         ],
         FOCUS_PATH: [
-            "phase4a_broader_real_data_validation_review_slice_final_close_checkpoint",
-            "next_new_boundary_requires_entry_criteria_guard_first_after_broader_review_checkpoint",
+            "phase4a_extended_real_data_validation_review_entry_close_commit_checkpoint",
+            "next_open_extended_real_data_validation_review_probe_only_if_guarded",
+            "keep_collector_state_e_drive_archive_d_drive_hot_runtime_ui_market_engine_broker_order_inference_training_closed_after_extended_entry_checkpoint",
         ],
         HANDOFF_PATH: [
             "Phase 4-A broader real-data validation review slice handoff",
@@ -137,12 +139,58 @@ def _check_docs(failures: List[str]) -> Dict[str, Any]:
     return {"missing_count": len(missing), "missing": missing, "ordering_ok": bool(ordering_ok)}
 
 
-def _check_future_probe_not_opened(failures: List[str]) -> Dict[str, Any]:
+def _check_future_probe_implementation(failures: List[str]) -> Dict[str, Any]:
     path = REPO_ROOT / FUTURE_PROBE_PATH
-    exists = path.exists()
-    if exists:
-        failures.append(f"future extended real-data validation review probe must not be opened yet: {FUTURE_PROBE_PATH}")
-    return {"exists": bool(exists), "path": FUTURE_PROBE_PATH}
+    if not path.exists():
+        failures.append(f"extended real-data validation review probe must exist after implementation entry: {FUTURE_PROBE_PATH}")
+        return {"exists": False, "missing_count": 1, "missing": [FUTURE_PROBE_PATH], "forbidden_count": 0, "forbidden": []}
+
+    text = path.read_text(encoding="utf-8")
+    required = [
+        "phase4a_extended_real_data_validation_review_probe",
+        "max_dates",
+        "max_files_per_date",
+        "max_lines_per_file",
+        "writes_only_to_tmp_work",
+        "does_not_write_to_data_root",
+        "does_not_write_to_d_drive_hot_runtime",
+        "does_not_mutate_collector_state",
+        "does_not_open_runtime_ui_market_engine_or_broker_order",
+        "does_not_open_inference_or_training",
+        "BASELINE_BROADER",
+        "probe_phase4a_extended_real_data_validation_review.out.json",
+    ]
+    forbidden = [
+        "btcts_next/src/btcts/apps/operator_ui",
+        "btcts_next/src/btcts/market_engine",
+        "btcts_next/src/btcts/collector_vnext",
+        "btcts_next/src/btcts/execution",
+        "btcts_next/src/btcts/broker",
+        "place_order",
+        "live_order_placement",
+        "auto_trade",
+        "model_training",
+        "inference_job",
+    ]
+    missing = []
+    forbidden_hits = []
+    for fragment in required:
+        if fragment not in text:
+            missing.append(fragment)
+            failures.append(f"extended review probe missing required boundary fragment: {fragment}")
+    for fragment in forbidden:
+        if fragment in text:
+            forbidden_hits.append(fragment)
+            failures.append(f"extended review probe contains forbidden fragment: {fragment}")
+    probe_run = _run_json(FUTURE_PROBE_PATH, failures)
+    return {
+        "exists": True,
+        "missing_count": len(missing),
+        "missing": missing,
+        "forbidden_count": len(forbidden_hits),
+        "forbidden": forbidden_hits,
+        "probe_run": probe_run,
+    }
 
 
 def _check_forbidden_path_opening(failures: List[str]) -> Dict[str, Any]:
@@ -178,7 +226,7 @@ def main() -> int:
     broader_review = _run_json(BROADER_REVIEW_SCRIPT, failures)
     broader_guard = _run_json(BROADER_GUARD_PATH, failures)
     docs = _check_docs(failures)
-    future_probe_not_opened = _check_future_probe_not_opened(failures)
+    future_probe_implementation = _check_future_probe_implementation(failures)
     primary_connection_static = _check_primary_connection_static(failures)
     forbidden_path_opening = _check_forbidden_path_opening(failures)
     summary = {
@@ -188,7 +236,7 @@ def main() -> int:
             "broader_review": broader_review,
             "broader_guard": broader_guard,
             "docs": docs,
-            "future_probe_not_opened": future_probe_not_opened,
+            "future_probe_implementation": future_probe_implementation,
             "primary_connection_static": primary_connection_static,
             "forbidden_path_opening": forbidden_path_opening,
         },
