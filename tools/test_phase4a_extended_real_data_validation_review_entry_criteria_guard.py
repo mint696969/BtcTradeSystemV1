@@ -108,8 +108,9 @@ def _check_docs(failures: List[str]) -> Dict[str, Any]:
             "collector state / runtime / UI / market_engine / collector writer/backfill / broker-order / inference / training は開いていない",
         ],
         FOCUS_PATH: [
-            "phase4a_extended_real_data_validation_review_entry_close_commit_checkpoint",
-            "next_open_extended_real_data_validation_review_probe_only_if_guarded",
+            "extended_real_data_validation_review_entry_commit_checkpoint_12e307dc_is_complete",
+            "extended_real_data_validation_review_probe_commit_checkpoint_0b2777bf_is_complete",
+            "next_review_extended_real_data_validation_review_probe_output_shape",
             "keep_collector_state_e_drive_archive_d_drive_hot_runtime_ui_market_engine_broker_order_inference_training_closed_after_extended_entry_checkpoint",
         ],
         HANDOFF_PATH: [
