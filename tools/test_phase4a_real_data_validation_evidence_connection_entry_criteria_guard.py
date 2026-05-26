@@ -142,8 +142,10 @@ def _check_docs(failures: List[str]) -> Dict[str, Any]:
             "次に新しい境界を開く場合は、必ず別 entry criteria/spec と guard から開始する",
         ],
         FOCUS_PATH: [
-            "phase4a_extended_real_data_validation_review_slice_final_close_checkpoint",
-            "next_new_boundary_requires_entry_criteria_guard_first_after_extended_review_final_close",
+            "real_data_validation_evidence_connection_entry_commit_checkpoint_e15a5b59_is_complete",
+            "treat_real_data_validation_evidence_connection_entry_guard_as_closed_and_saved",
+            "next_connect_real_data_validation_evidence_connection_entry_guard_to_primary_or_open_contract_only_if_guarded",
+            "do_not_open_ui_runtime_market_engine_collector_writer_broker_order_inference_training_from_evidence_entry_checkpoint",
         ],
         HANDOFF_PATH: [
             "Phase 4-A extended real-data validation review slice handoff",
@@ -235,20 +237,84 @@ def _check_primary_connection_static(failures: List[str]) -> Dict[str, Any]:
     required = [
         "tools/test_phase4a_extended_real_data_validation_review_entry_criteria_guard.py",
         "extended_real_data_validation_review_entry_criteria_guard",
+        "tools/test_phase4a_real_data_validation_evidence_connection_entry_criteria_guard.py",
+        "real_data_validation_evidence_connection_entry_criteria_guard",
     ]
     missing = []
     for fragment in required:
         if fragment not in text:
             missing.append(fragment)
-            failures.append(f"primary guard missing existing extended entry connection: {fragment}")
+            failures.append(f"primary guard missing evidence/extended connection: {fragment}")
     return {"missing_count": len(missing), "missing": missing}
+
+
+def _check_extended_checkpoint_static(failures: List[str]) -> Dict[str, Any]:
+    """Do not execute the extended guard from this primary-connected guard.
+
+    The extended guard is itself primary-connected and runs broader/real-data child guards.
+    Running it from evidence guard creates expensive nested guard chains and can produce
+    order-dependent false failures. Verify durable checkpoint evidence and source presence instead.
+    """
+    required_by_file = {
+        EXTENDED_DOC_PATH: [
+            "## 14. Extended real-data validation review slice final close checkpoint",
+            "The extended real-data validation review slice is closed and handed off.",
+            "It does not open runtime, UI, market_engine, collector writer/backfill, broker-order, inference, training, or live trading behavior.",
+        ],
+        STATUS_PATH: [
+            "extended real-data validation review slice final close checkpoint",
+            "extended entry guard: failures [] / ok true",
+            "Primary guard: failures [] / ok true",
+        ],
+        FOCUS_PATH: [
+            "extended_real_data_validation_review_slice_final_cc_is_green",
+            "extended_real_data_validation_review_slice_final_close_checkpoint_is_complete",
+            "extended_real_data_validation_review_slice_final_commit_checkpoint_68a21e87_is_complete",
+            "treat_extended_real_data_validation_review_slice_as_closed_and_handed_off",
+        ],
+        HANDOFF_PATH: [
+            "Phase 4-A extended real-data validation review slice handoff",
+            "Responsibility boundaries preserved",
+        ],
+    }
+    missing = []
+    for rel_path, fragments in required_by_file.items():
+        text = _read_text(rel_path)
+        if not text:
+            failures.append(f"extended checkpoint file missing or empty: {rel_path}")
+            missing.append({"path": rel_path, "fragment": "__missing_or_empty__"})
+            continue
+        for fragment in fragments:
+            if fragment not in text:
+                failures.append(f"extended checkpoint fragment missing: {rel_path}: {fragment}")
+                missing.append({"path": rel_path, "fragment": fragment})
+
+    guard_text = _read_text(EXTENDED_GUARD_PATH)
+    source_missing = []
+    for fragment in [
+        "phase4a_extended_real_data_validation_review_entry_criteria_guard",
+        "tools/probe_phase4a_extended_real_data_validation_review.py",
+        "_check_future_probe_implementation",
+    ]:
+        if fragment not in guard_text:
+            source_missing.append(fragment)
+            failures.append(f"extended guard source missing fragment: {fragment}")
+
+    return {
+        "missing_count": len(missing),
+        "missing": missing,
+        "source_missing_count": len(source_missing),
+        "source_missing": source_missing,
+    }
 
 
 def main() -> int:
     failures: List[str] = []
     compile_result = _compile_targets(failures)
-    extended_guard = _run_json(EXTENDED_GUARD_PATH, failures)
-    primary_guard = _run_json(PRIMARY_GUARD_PATH, failures)
+    # Do not execute EXTENDED_GUARD_PATH or PRIMARY_GUARD_PATH here after this guard is connected to primary.
+    # Both are primary-connected guard chains and nested execution can create recursion/ordering failures.
+    # Verify durable checkpoints and primary connection statically instead.
+    extended_checkpoint_static = _check_extended_checkpoint_static(failures)
     docs = _check_docs(failures)
     outputs = _check_outputs(failures)
     future_contract_not_opened = _check_future_contract_not_opened(failures)
@@ -258,8 +324,7 @@ def main() -> int:
         "phase": "phase4a_real_data_validation_evidence_connection_entry_criteria_guard",
         "checks": {
             "compile": compile_result,
-            "extended_guard": extended_guard,
-            "primary_guard": primary_guard,
+            "extended_checkpoint_static": extended_checkpoint_static,
             "docs": docs,
             "outputs": outputs,
             "future_contract_not_opened": future_contract_not_opened,

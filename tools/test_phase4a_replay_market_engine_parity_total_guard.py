@@ -187,6 +187,11 @@ GUARD_SPECS = [
         "kind": "json_ok",
         "role": "extended_real_data_validation_review_entry_criteria_guard",
     },
+    {
+        "path": "tools/test_phase4a_real_data_validation_evidence_connection_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "real_data_validation_evidence_connection_entry_criteria_guard",
+    },
 ]
 
 
