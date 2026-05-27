@@ -213,10 +213,55 @@ def _check_outputs(failures: List[str]) -> Dict[str, Any]:
 
 def _check_future_contract_not_opened(failures: List[str]) -> Dict[str, Any]:
     path = REPO_ROOT / FUTURE_CONTRACT_PATH
-    exists = path.exists()
-    if exists:
-        failures.append(f"future evidence contract must not be opened yet: {FUTURE_CONTRACT_PATH}")
-    return {"exists": bool(exists), "path": FUTURE_CONTRACT_PATH}
+    if not path.exists():
+        failures.append(f"evidence contract skeleton must exist after guarded opening: {FUTURE_CONTRACT_PATH}")
+        return {"exists": False, "path": FUTURE_CONTRACT_PATH, "missing": [FUTURE_CONTRACT_PATH], "forbidden": []}
+    text = path.read_text(encoding="utf-8")
+    required = [
+        "class RealDataValidationEvidenceSummary",
+        "build_real_data_validation_evidence_summary",
+        "real_data_validation_evidence_summary_to_snapshot",
+        "read-only evidence summary contract",
+        "diagnostic evidence only",
+        "not runtime signal",
+        "not UI rendering",
+        "not market_engine input",
+        "not collector writer/backfill",
+        "not broker/order automation",
+        "not inference or training input",
+        "not_runtime_wiring",
+        "not_ui_rendering",
+        "not_market_engine_input",
+        "not_collector_writer",
+        "not_broker_or_order_automation",
+        "not_inference_or_training",
+    ]
+    forbidden = [
+        "runtime_state_path",
+        "ui_route",
+        "market_engine_signal",
+        "collector_write_path",
+        "order_size",
+        "order_price",
+        "broker_account",
+        "place_order",
+        "broker_order",
+        "live_order_placement",
+        "auto_trade",
+        "training_dataset",
+        "inference_job",
+    ]
+    missing = []
+    forbidden_hits = []
+    for fragment in required:
+        if fragment not in text:
+            missing.append(fragment)
+            failures.append(f"evidence contract skeleton missing required fragment: {fragment}")
+    for fragment in forbidden:
+        if fragment in text:
+            forbidden_hits.append(fragment)
+            failures.append(f"evidence contract skeleton contains forbidden fragment: {fragment}")
+    return {"exists": True, "path": FUTURE_CONTRACT_PATH, "missing": missing, "forbidden": forbidden_hits}
 
 
 def _check_forbidden_path_opening(failures: List[str]) -> Dict[str, Any]:

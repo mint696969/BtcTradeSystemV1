@@ -117,6 +117,9 @@ __all__ = [
     "build_prediction_calibration_hint",
     "PredictionReplayFeedbackBuildInput",
     "build_prediction_replay_feedback",
+    "RealDataValidationEvidenceSummary",
+    "build_real_data_validation_evidence_summary",
+    "real_data_validation_evidence_summary_to_snapshot",
 ]
 
 
@@ -125,4 +128,9 @@ from .prediction_direction_builder import (
     build_prediction_direction_input_from_scenario,
     build_prediction_direction_output,
     prediction_direction_output_to_snapshot,
+)
+from .real_data_validation_evidence import (
+    RealDataValidationEvidenceSummary,
+    build_real_data_validation_evidence_summary,
+    real_data_validation_evidence_summary_to_snapshot,
 )
