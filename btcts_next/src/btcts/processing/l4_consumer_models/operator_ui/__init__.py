@@ -26,6 +26,12 @@ from .prediction_summary_adapter import (
     prediction_summary_status_payload,
     prediction_summary_widget_model,
 )
+from .real_data_validation_evidence_consumption import (
+    HealthWarRoomEvidenceConsumptionModel,
+    build_health_warroom_evidence_consumption_model,
+    health_warroom_evidence_consumption_model_to_snapshot,
+    health_warroom_evidence_consumption_status_payload,
+)
 
 __all__ = [
     "HealthDigestWidgetModel",
@@ -37,4 +43,8 @@ __all__ = [
     "PredictionSummaryWidgetModel",
     "prediction_summary_status_payload",
     "prediction_summary_widget_model",
+    "HealthWarRoomEvidenceConsumptionModel",
+    "build_health_warroom_evidence_consumption_model",
+    "health_warroom_evidence_consumption_model_to_snapshot",
+    "health_warroom_evidence_consumption_status_payload",
 ]

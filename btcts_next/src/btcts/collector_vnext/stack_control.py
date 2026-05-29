@@ -223,14 +223,15 @@ def _build_child_env() -> dict[str, str]:
 
     _setdefault_env(env, "BTCTS_ARCHIVE_COLD_ROOT", r"E:\btc_ts")
     _setdefault_env(env, "BTCTS_ARCHIVE_SCAN_INTERVAL_SEC", "30")
-    _setdefault_env(env, "BTCTS_ARCHIVE_STABLE_AGE_SEC", "600")
+    _setdefault_env(env, "BTCTS_ARCHIVE_STABLE_AGE_SEC", "3600")
     _setdefault_env(env, "BTCTS_ARCHIVE_COPY_MIN_AGE_DAYS", "1")
-    _setdefault_env(env, "BTCTS_ARCHIVE_GC_MIN_AGE_DAYS", "2")
+    _setdefault_env(env, "BTCTS_ARCHIVE_GC_MIN_AGE_DAYS", "10")
     _setdefault_env(env, "BTCTS_ARCHIVE_MAX_FILES_PER_CYCLE", "64")
     _setdefault_env(env, "BTCTS_ARCHIVE_MAX_BYTES_PER_CYCLE", "268435456")
     _setdefault_env(env, "BTCTS_ARCHIVE_GC_ENABLED", "true")
     _setdefault_env(env, "BTCTS_ARCHIVE_GC_DRY_RUN", "true")
     _setdefault_env(env, "BTCTS_ARCHIVE_MAX_DELETE_FILES_PER_CYCLE", "32")
+    _setdefault_env(env, "BTCTS_ARCHIVE_MAX_DELETE_BYTES_PER_CYCLE", "26843545600")
 
     return env
 

@@ -46,14 +46,15 @@ class ArchiveConfig:
     copy_prefixes: list[str] = field(default_factory=list)
     gc_prefixes: list[str] = field(default_factory=list)
     scan_interval_sec: int = 30
-    stable_age_sec: int = 600
+    stable_age_sec: int = 3600
     copy_min_age_days: int = 1
-    gc_min_age_days: int = 2
+    gc_min_age_days: int = 10
     max_files_per_cycle: int = 64
     max_bytes_per_cycle: int = 256 * 1024 * 1024
     gc_enabled: bool = False
     gc_dry_run: bool = True
     max_delete_files_per_cycle: int = 32
+    max_delete_bytes_per_cycle: int = 25 * 1024 * 1024 * 1024
 
     def resolved_copy_prefixes(self) -> list[str]:
         if self.copy_prefixes:
@@ -84,12 +85,13 @@ def load_archive_config() -> ArchiveConfig:
         copy_prefixes=_env_list("BTCTS_ARCHIVE_COPY_PREFIXES", []),
         gc_prefixes=_env_list("BTCTS_ARCHIVE_GC_PREFIXES", []),
         scan_interval_sec=max(10, env_int("BTCTS_ARCHIVE_SCAN_INTERVAL_SEC", 30)),
-        stable_age_sec=max(60, env_int("BTCTS_ARCHIVE_STABLE_AGE_SEC", 600)),
+        stable_age_sec=max(1800, env_int("BTCTS_ARCHIVE_STABLE_AGE_SEC", 3600)),
         copy_min_age_days=max(1, env_int("BTCTS_ARCHIVE_COPY_MIN_AGE_DAYS", 1)),
-        gc_min_age_days=max(2, env_int("BTCTS_ARCHIVE_GC_MIN_AGE_DAYS", 2)),
+        gc_min_age_days=max(7, env_int("BTCTS_ARCHIVE_GC_MIN_AGE_DAYS", 10)),
         max_files_per_cycle=max(1, env_int("BTCTS_ARCHIVE_MAX_FILES_PER_CYCLE", 64)),
         max_bytes_per_cycle=max(1024 * 1024, env_int("BTCTS_ARCHIVE_MAX_BYTES_PER_CYCLE", 256 * 1024 * 1024)),
         gc_enabled=_env_bool("BTCTS_ARCHIVE_GC_ENABLED", False),
         gc_dry_run=_env_bool("BTCTS_ARCHIVE_GC_DRY_RUN", True),
         max_delete_files_per_cycle=max(1, env_int("BTCTS_ARCHIVE_MAX_DELETE_FILES_PER_CYCLE", 32)),
+        max_delete_bytes_per_cycle=max(1024 * 1024, env_int("BTCTS_ARCHIVE_MAX_DELETE_BYTES_PER_CYCLE", 25 * 1024 * 1024 * 1024)),
     )

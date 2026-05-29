@@ -176,6 +176,7 @@ def build_recent_api_ws_series(
     *,
     range_key: str = "1h",
     include_in_progress: bool = False,
+    audit_rows: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     cfg = range_config(range_key)
     window_minutes = int(cfg["window_minutes"])
@@ -183,8 +184,12 @@ def build_recent_api_ws_series(
 
     buckets = time_buckets(window_minutes, bucket_minutes)
     target_buckets = display_buckets(buckets, include_in_progress=include_in_progress)
-    rows = _read_recent_audit_rows(
-        max_lines=_audit_max_lines_for_range(range_key)
+    rows = (
+        list(audit_rows)
+        if audit_rows is not None
+        else _read_recent_audit_rows(
+            max_lines=_audit_max_lines_for_range(range_key)
+        )
     )
 
     per_bucket: dict[datetime, dict[str, float]] = defaultdict(
@@ -708,10 +713,14 @@ def _build_continuity_rail(
     *,
     range_key: str,
     row_specs: list[dict[str, Any]],
+    audit_rows: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    state = load_state()
-    rows = _read_recent_audit_rows(
-        max_lines=_audit_max_lines_for_range(range_key)
+    rows = (
+        list(audit_rows)
+        if audit_rows is not None
+        else _read_recent_audit_rows(
+            max_lines=_audit_max_lines_for_range(range_key)
+        )
     )
 
     cfg = range_config(range_key)
@@ -734,11 +743,6 @@ def _build_continuity_rail(
 
     bucket_set = set(buckets)
     oldest = buckets[0]
-
-    coverage_meta = _audit_coverage_meta(
-        rows=rows,
-        oldest_bucket=oldest,
-    )
 
     coverage_meta = _audit_coverage_meta(
         rows=rows,
@@ -857,9 +861,16 @@ def _build_continuity_rail(
     return out_rows
 
 
-def build_api_continuity_rail(*, range_key: str = "1h") -> list[dict[str, Any]]:
+def build_api_continuity_rail(
+    *,
+    range_key: str = "1h",
+    audit_rows: list[dict[str, Any]] | None = None,
+    state: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    resolved_state = dict(state or load_state())
     return _build_continuity_rail(
         range_key=range_key,
+        audit_rows=audit_rows,
         row_specs=[
             {
                 "venue": "bitflyer_api_market_data",
@@ -867,23 +878,29 @@ def build_api_continuity_rail(*, range_key: str = "1h") -> list[dict[str, Any]]:
                 "use_gap": False,
                 "use_resync": False,
                 "use_warn": True,
-                "current_truth": lambda: api_current_truth(load_state()),
+                "current_truth": lambda: api_current_truth(resolved_state),
             }
         ],
     )
 
 
-def build_ws_continuity_rail(*, range_key: str = "1h") -> list[dict[str, Any]]:
-    state = load_state()
-    status_payload = state.get("status") or {}
-    origin_payload = state.get("origin") or {}
-    executions_payload = state.get("executions") or {}
+def build_ws_continuity_rail(
+    *,
+    range_key: str = "1h",
+    audit_rows: list[dict[str, Any]] | None = None,
+    state: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    resolved_state = dict(state or load_state())
+    status_payload = resolved_state.get("status") or {}
+    origin_payload = resolved_state.get("origin") or {}
+    executions_payload = resolved_state.get("executions") or {}
 
     ws_board_lane = status_payload.get("ws_board_lane") or {}
     ws_executions_lane = status_payload.get("ws_executions_lane") or {}
 
     return _build_continuity_rail(
         range_key=range_key,
+        audit_rows=audit_rows,
         row_specs=[
             {
                 "venue": "bitflyer_ws_board",
@@ -911,8 +928,16 @@ def build_ws_continuity_rail(*, range_key: str = "1h") -> list[dict[str, Any]]:
     )
 
 
-def build_recent_anomaly_rows(*, max_items: int = 12) -> list[dict[str, Any]]:
-    rows = _read_recent_audit_rows(max_lines=1200)
+def build_recent_anomaly_rows(
+    *,
+    max_items: int = 12,
+    audit_rows: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    rows = (
+        list(audit_rows)
+        if audit_rows is not None
+        else _read_recent_audit_rows(max_lines=1200)
+    )
 
     out: list[dict[str, Any]] = []
     for row in reversed(rows):
@@ -1018,11 +1043,16 @@ def _build_health_current_state_bundle(
     }
 
 
-def _build_health_timeline_bundle(*, range_key: str) -> dict[str, Any]:
+def _build_health_timeline_bundle(
+    *,
+    range_key: str,
+    audit_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     return {
         "api_ws_series": build_recent_api_ws_series(
             range_key=range_key,
             include_in_progress=False,
+            audit_rows=audit_rows,
         ),
         "rate_overlay": build_rate_limit_overlay(
             range_key=range_key,
@@ -1035,15 +1065,85 @@ def _build_health_timeline_bundle(*, range_key: str) -> dict[str, Any]:
     }
 
 
-def _build_health_continuity_bundle(*, range_key: str) -> dict[str, Any]:
+def _build_health_continuity_bundle(
+    *,
+    range_key: str,
+    audit_rows: list[dict[str, Any]] | None = None,
+    state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    builders_are_patched = (
+        getattr(build_api_continuity_rail, "__module__", __name__) != __name__
+        or getattr(build_ws_continuity_rail, "__module__", __name__) != __name__
+    )
+    if (audit_rows is None and state is None) or builders_are_patched:
+        kwargs: dict[str, Any] = {"range_key": range_key}
+        if audit_rows is not None:
+            kwargs["audit_rows"] = audit_rows
+        if state is not None:
+            kwargs["state"] = state
+        return {
+            "api_continuity_rail": build_api_continuity_rail(**kwargs),
+            "ws_continuity_rail": build_ws_continuity_rail(**kwargs),
+        }
+
+    resolved_state = dict(state or load_state())
+    status_payload = resolved_state.get("status") or {}
+    origin_payload = resolved_state.get("origin") or {}
+    executions_payload = resolved_state.get("executions") or {}
+    ws_board_lane = status_payload.get("ws_board_lane") or {}
+    ws_executions_lane = status_payload.get("ws_executions_lane") or {}
+
+    combined_rails = _build_continuity_rail(
+        range_key=range_key,
+        audit_rows=audit_rows,
+        row_specs=[
+            {
+                "venue": "bitflyer_api_market_data",
+                "activity_key": "api_events",
+                "use_gap": False,
+                "use_resync": False,
+                "use_warn": True,
+                "current_truth": lambda: api_current_truth(resolved_state),
+            },
+            {
+                "venue": "bitflyer_ws_board",
+                "activity_key": "ws_events",
+                "use_gap": True,
+                "use_resync": True,
+                "use_warn": True,
+                "current_truth": lambda: ws_current_truth(
+                    lane_payload=ws_board_lane,
+                    fallback_payload=origin_payload,
+                ),
+            },
+            {
+                "venue": "bitflyer_ws_executions",
+                "activity_key": "ws_exec_events",
+                "use_gap": False,
+                "use_resync": False,
+                "use_warn": True,
+                "current_truth": lambda: ws_current_truth(
+                    lane_payload=ws_executions_lane,
+                    fallback_payload=executions_payload,
+                ),
+            },
+        ],
+    )
     return {
-        "api_continuity_rail": build_api_continuity_rail(range_key=range_key),
-        "ws_continuity_rail": build_ws_continuity_rail(range_key=range_key),
+        "api_continuity_rail": combined_rails[:1],
+        "ws_continuity_rail": combined_rails[1:],
     }
 
 
-def _build_health_anomaly_bundle(*, max_items: int = 12) -> dict[str, Any]:
-    items = build_recent_anomaly_rows(max_items=max_items)
+def _build_health_anomaly_bundle(
+    *,
+    max_items: int = 12,
+    audit_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    items = build_recent_anomaly_rows(
+        max_items=max_items,
+        audit_rows=audit_rows,
+    )
     return {
         "source_kind": "audit_recent_anomaly_feed",
         "feed_kind": "health_recent_anomalies",
@@ -1081,16 +1181,39 @@ def load_health_current_state_bundle(
     )
 
 
-def load_health_timeline_bundle(*, range_key: str = "1h") -> dict[str, Any]:
-    return _build_health_timeline_bundle(range_key=range_key)
+def load_health_timeline_bundle(
+    *,
+    range_key: str = "1h",
+    audit_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return _build_health_timeline_bundle(
+        range_key=range_key,
+        audit_rows=audit_rows,
+    )
 
 
-def load_health_continuity_bundle(*, range_key: str = "1h") -> dict[str, Any]:
-    return _build_health_continuity_bundle(range_key=range_key)
+def load_health_continuity_bundle(
+    *,
+    range_key: str = "1h",
+    audit_rows: list[dict[str, Any]] | None = None,
+    state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return _build_health_continuity_bundle(
+        range_key=range_key,
+        audit_rows=audit_rows,
+        state=state,
+    )
 
 
-def load_health_anomaly_bundle(*, max_items: int = 12) -> dict[str, Any]:
-    return _build_health_anomaly_bundle(max_items=max_items)
+def load_health_anomaly_bundle(
+    *,
+    max_items: int = 12,
+    audit_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return _build_health_anomaly_bundle(
+        max_items=max_items,
+        audit_rows=audit_rows,
+    )
 
 
 def load_health_page_meta_bundle(*, range_key: str = "1h") -> dict[str, Any]:
@@ -1098,10 +1221,24 @@ def load_health_page_meta_bundle(*, range_key: str = "1h") -> dict[str, Any]:
 
 
 def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
+    audit_rows = _read_recent_audit_rows(
+        max_lines=_audit_max_lines_for_range(range_key)
+    )
     current_state_bundle = load_health_current_state_bundle()
-    timeline_bundle = load_health_timeline_bundle(range_key=range_key)
-    continuity_bundle = load_health_continuity_bundle(range_key=range_key)
-    anomaly_bundle = load_health_anomaly_bundle(max_items=12)
+    collector_state = dict(current_state_bundle.get("collector_state") or {})
+    timeline_bundle = load_health_timeline_bundle(
+        range_key=range_key,
+        audit_rows=audit_rows,
+    )
+    continuity_bundle = load_health_continuity_bundle(
+        range_key=range_key,
+        audit_rows=audit_rows,
+        state=collector_state,
+    )
+    anomaly_bundle = load_health_anomaly_bundle(
+        max_items=12,
+        audit_rows=audit_rows,
+    )
     page_meta_bundle = load_health_page_meta_bundle(range_key=range_key)
 
     snapshot: dict[str, Any] = {}

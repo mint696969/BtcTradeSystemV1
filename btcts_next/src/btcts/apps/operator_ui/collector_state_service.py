@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import json
+import os
 from typing import Dict, Any
 from datetime import datetime
 
@@ -112,8 +113,28 @@ def _archive_recent_events(logs_root: Path) -> dict[str, list[dict[str, Any]]]:
     }
 
 
-def _hot_remaining_data_files(data_root: Path, *, limit: int = 50) -> list[dict[str, Any]]:
-    candidates: list[Path] = []
+def _hot_remaining_data_files(
+    data_root: Path,
+    *,
+    limit: int = 50,
+    scan_file_budget: int = 500,
+    scan_dir_budget: int = 200,
+) -> list[dict[str, Any]]:
+    """Return a small optional diagnostic sample of hot data files.
+
+    This function runs in the Collector page render path.  By default it must
+    not walk the data tree, because the configured data root may point at a
+    large archive.  Operators can opt in to a bounded diagnostic sample by
+    setting BTCTS_OPERATOR_UI_SCAN_HOT_REMAINING=1.
+    """
+    if str(os.getenv("BTCTS_OPERATOR_UI_SCAN_HOT_REMAINING") or "").strip() != "1":
+        return []
+
+    rows: list[dict[str, Any]] = []
+    scanned_files = 0
+    scanned_dirs = 0
+    truncated = False
+
     for rel in [
         Path("market_data"),
         Path("collector_raw"),
@@ -121,24 +142,60 @@ def _hot_remaining_data_files(data_root: Path, *, limit: int = 50) -> list[dict[
         base = data_root / rel
         if not base.exists():
             continue
-        candidates.extend([p for p in base.rglob("*") if p.is_file()])
 
-    rows: list[dict[str, Any]] = []
-    for path in sorted(candidates, key=lambda p: p.stat().st_mtime if p.exists() else 0, reverse=True)[:limit]:
-        try:
-            stat = path.stat()
-            rows.append(
-                {
-                    "file": str(path),
-                    "size_bytes": stat.st_size,
-                    "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
-                }
-            )
-        except Exception:
-            continue
-    return rows
+        stack = [base]
+        while stack:
+            if scanned_dirs >= scan_dir_budget or scanned_files >= scan_file_budget:
+                truncated = True
+                break
 
+            current = stack.pop()
+            scanned_dirs += 1
+            try:
+                entries = list(current.iterdir())
+            except Exception:
+                continue
 
+            for child in entries:
+                if scanned_files >= scan_file_budget:
+                    truncated = True
+                    break
+
+                try:
+                    if child.is_dir() and not child.is_symlink():
+                        stack.append(child)
+                        continue
+                    if not child.is_file():
+                        continue
+                    stat = child.stat()
+                except Exception:
+                    continue
+
+                scanned_files += 1
+                rows.append(
+                    {
+                        "file": str(child),
+                        "size_bytes": stat.st_size,
+                        "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+                        "scan_scope": "operator_ui_opt_in_bounded_sample",
+                    }
+                )
+
+        if truncated:
+            break
+
+    rows.sort(key=lambda row: str(row.get("mtime") or ""), reverse=True)
+    result = rows[:limit]
+    if truncated and result:
+        result[0] = {
+            **result[0],
+            "scan_truncated": True,
+            "scan_file_budget": scan_file_budget,
+            "scan_dir_budget": scan_dir_budget,
+            "scanned_files": scanned_files,
+            "scanned_dirs": scanned_dirs,
+        }
+    return result
 def load_state() -> Dict[str, Any]:
     state_dir = _state_dir()
     logs_root = core_paths.logs_dir(ensure=False)

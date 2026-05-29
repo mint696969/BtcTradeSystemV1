@@ -25,13 +25,13 @@ if (-not $env:BTCTS_ARCHIVE_SCAN_INTERVAL_SEC) {
     $env:BTCTS_ARCHIVE_SCAN_INTERVAL_SEC = "30"
 }
 if (-not $env:BTCTS_ARCHIVE_STABLE_AGE_SEC) {
-    $env:BTCTS_ARCHIVE_STABLE_AGE_SEC = "600"
+    $env:BTCTS_ARCHIVE_STABLE_AGE_SEC = "3600"
 }
 if (-not $env:BTCTS_ARCHIVE_COPY_MIN_AGE_DAYS) {
     $env:BTCTS_ARCHIVE_COPY_MIN_AGE_DAYS = "1"
 }
 if (-not $env:BTCTS_ARCHIVE_GC_MIN_AGE_DAYS) {
-    $env:BTCTS_ARCHIVE_GC_MIN_AGE_DAYS = "2"
+    $env:BTCTS_ARCHIVE_GC_MIN_AGE_DAYS = "10"
 }
 if (-not $env:BTCTS_ARCHIVE_MAX_FILES_PER_CYCLE) {
     $env:BTCTS_ARCHIVE_MAX_FILES_PER_CYCLE = "64"
@@ -48,6 +48,9 @@ if (-not $env:BTCTS_ARCHIVE_GC_DRY_RUN) {
 if (-not $env:BTCTS_ARCHIVE_MAX_DELETE_FILES_PER_CYCLE) {
     $env:BTCTS_ARCHIVE_MAX_DELETE_FILES_PER_CYCLE = "32"
 }
+if (-not $env:BTCTS_ARCHIVE_MAX_DELETE_BYTES_PER_CYCLE) {
+    $env:BTCTS_ARCHIVE_MAX_DELETE_BYTES_PER_CYCLE = "26843545600"
+}
 
 Write-Host "[archive-worker] repoRoot=$repoRoot"
 Write-Host "[archive-worker] python=$pythonExe"
@@ -63,6 +66,7 @@ Write-Host "[archive-worker] max_bytes_per_cycle=$env:BTCTS_ARCHIVE_MAX_BYTES_PE
 Write-Host "[archive-worker] gc_enabled=$env:BTCTS_ARCHIVE_GC_ENABLED"
 Write-Host "[archive-worker] gc_dry_run=$env:BTCTS_ARCHIVE_GC_DRY_RUN"
 Write-Host "[archive-worker] max_delete_files_per_cycle=$env:BTCTS_ARCHIVE_MAX_DELETE_FILES_PER_CYCLE"
+Write-Host "[archive-worker] max_delete_bytes_per_cycle=$env:BTCTS_ARCHIVE_MAX_DELETE_BYTES_PER_CYCLE"
 
 & $pythonExe -m btcts.collector_vnext.archive.worker
 exit $LASTEXITCODE

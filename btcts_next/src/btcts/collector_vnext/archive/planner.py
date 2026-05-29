@@ -11,6 +11,13 @@ from pathlib import Path
 from .config import ArchiveConfig
 
 
+def _same_resolved_path(left: Path, right: Path) -> bool:
+    try:
+        return left.resolve(strict=False) == right.resolve(strict=False)
+    except Exception:
+        return str(left.absolute()).casefold() == str(right.absolute()).casefold()
+
+
 @dataclass(frozen=True)
 class CopyItem:
     src: Path
@@ -60,7 +67,22 @@ def _iter_date_dirs(base: Path) -> list[Path]:
     return out
 
 
+def _maybe_add_copy_item(items: list[CopyItem], *, src_file: Path, dst_file: Path) -> None:
+    if _same_resolved_path(src_file, dst_file):
+        return
+
+    try:
+        src_size = src_file.stat().st_size
+    except Exception:
+        return
+
+    items.append(CopyItem(src=src_file, dst=dst_file, kind="file", size_bytes=src_size))
+
+
 def build_copy_plan(cfg: ArchiveConfig) -> list[CopyItem]:
+    if _same_resolved_path(cfg.hot_root, cfg.cold_root):
+        return []
+
     items: list[CopyItem] = []
     today_name = _today_date_dir_name()
     copy_cutoff = _copy_cutoff_name(cfg.copy_min_age_days)
@@ -76,42 +98,24 @@ def build_copy_plan(cfg: ArchiveConfig) -> list[CopyItem]:
                 rel = date_dir.relative_to(cfg.hot_root)
                 dst_dir = cfg.cold_root / rel
 
-                if not dst_dir.exists():
-                    for src_file in sorted([p for p in date_dir.rglob("*") if p.is_file()]):
-                        if not _is_stable_file(src_file, stable_age_sec=cfg.stable_age_sec):
-                            continue
-
-                        rel_file = src_file.relative_to(cfg.hot_root)
-                        dst_file = cfg.cold_root / rel_file
-
-                        try:
-                            src_size = src_file.stat().st_size
-                        except Exception:
-                            continue
-
-                        items.append(CopyItem(src=src_file, dst=dst_file, kind="file", size_bytes=src_size))
-                    continue
-
                 for src_file in sorted([p for p in date_dir.rglob("*") if p.is_file()]):
                     if not _is_stable_file(src_file, stable_age_sec=cfg.stable_age_sec):
                         continue
 
                     rel_file = src_file.relative_to(cfg.hot_root)
                     dst_file = cfg.cold_root / rel_file
+                    if _same_resolved_path(src_file, dst_file):
+                        continue
+
+                    if not dst_dir.exists() or not dst_file.exists():
+                        _maybe_add_copy_item(items, src_file=src_file, dst_file=dst_file)
+                        continue
 
                     try:
                         src_size = src_file.stat().st_size
-                    except Exception:
-                        continue
-
-                    if not dst_file.exists():
-                        items.append(CopyItem(src=src_file, dst=dst_file, kind="file", size_bytes=src_size))
-                        continue
-
-                    try:
                         dst_size = dst_file.stat().st_size
                     except Exception:
-                        dst_size = -1
+                        continue
 
                     if dst_size < src_size:
                         items.append(CopyItem(src=src_file, dst=dst_file, kind="file", size_bytes=src_size))
@@ -123,20 +127,18 @@ def build_copy_plan(cfg: ArchiveConfig) -> list[CopyItem]:
 
             rel_file = src_file.relative_to(cfg.hot_root)
             dst_file = cfg.cold_root / rel_file
-
-            try:
-                src_size = src_file.stat().st_size
-            except Exception:
+            if _same_resolved_path(src_file, dst_file):
                 continue
 
             if not dst_file.exists():
-                items.append(CopyItem(src=src_file, dst=dst_file, kind="file", size_bytes=src_size))
+                _maybe_add_copy_item(items, src_file=src_file, dst_file=dst_file)
                 continue
 
             try:
+                src_size = src_file.stat().st_size
                 dst_size = dst_file.stat().st_size
             except Exception:
-                dst_size = -1
+                continue
 
             if dst_size < src_size:
                 items.append(CopyItem(src=src_file, dst=dst_file, kind="file", size_bytes=src_size))
@@ -163,6 +165,17 @@ def execute_copy_plan(items: list[CopyItem]) -> dict[str, int | list[dict[str, s
 
     for item in items:
         try:
+            if _same_resolved_path(item.src, item.dst):
+                errors.append(
+                    {
+                        "src": str(item.src),
+                        "dst": str(item.dst),
+                        "kind": item.kind,
+                        "error": "copy_src_dst_same_resolved_path",
+                    }
+                )
+                continue
+
             item.dst.parent.mkdir(parents=True, exist_ok=True)
             if item.kind == "dir":
                 shutil.copytree(item.src, item.dst, dirs_exist_ok=True)
