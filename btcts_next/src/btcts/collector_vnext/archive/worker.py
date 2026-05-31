@@ -14,6 +14,10 @@ from btcts.collector_vnext.events import now_iso_utc
 from .audit import append_archive_audit
 from .config import load_archive_config
 from .gc_job import build_gc_plan, execute_gc_plan
+from .health_summary import (
+    build_archive_transfer_health_summary,
+    write_archive_transfer_health_summary,
+)
 from .planner import build_copy_plan, execute_copy_plan
 from .state import (
     acquire_archive_worker_lock,
@@ -260,6 +264,27 @@ def run_forever() -> int:
                 "errors_sample": [],
             }
 
+            transfer_health_summary = build_archive_transfer_health_summary(
+                cfg,
+                copy_items=plan,
+                copy_result=result,
+                gc_items=gc_plan,
+                gc_result=gc_result,
+            )
+            transfer_health_summary_path = write_archive_transfer_health_summary(cfg, transfer_health_summary)
+            append_archive_audit(
+                cfg,
+                "archive.transfer_health_summary.updated",
+                level="WARN" if transfer_health_summary.get("status") in {"warn", "crit"} else "INFO",
+                extra={
+                    "status": transfer_health_summary.get("status"),
+                    "severity": transfer_health_summary.get("severity"),
+                    "summary_path": str(transfer_health_summary_path),
+                    "bad_file_count": len(transfer_health_summary.get("bad_files") or []),
+                    "mismatch_count": (transfer_health_summary.get("integrity") or {}).get("mismatch_count"),
+                    "missing_count": (transfer_health_summary.get("integrity") or {}).get("missing_count"),
+                },
+            )
             if gc_result["error_count"]:
                 append_archive_audit(
                     cfg,
