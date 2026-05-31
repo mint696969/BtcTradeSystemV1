@@ -39,6 +39,8 @@ from .real_data_validation_evidence_presentation_upstream import (
     build_health_warroom_evidence_presentation_upstream_payload,
     health_snapshot_evidence_presentation_payload_fields,
     lower_health_warroom_evidence_presentation_payload,
+    lower_health_snapshot_evidence_presentation_fields,
+    lower_warroom_session_state_evidence_presentation_fields,
     warroom_session_state_evidence_presentation_payload_fields,
 )
 
@@ -62,5 +64,7 @@ __all__ = [
     "build_health_warroom_evidence_presentation_upstream_payload",
     "health_snapshot_evidence_presentation_payload_fields",
     "lower_health_warroom_evidence_presentation_payload",
+    "lower_health_snapshot_evidence_presentation_fields",
+    "lower_warroom_session_state_evidence_presentation_fields",
     "warroom_session_state_evidence_presentation_payload_fields",
 ]

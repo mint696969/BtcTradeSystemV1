@@ -14,6 +14,8 @@ from btcts.processing.l4_consumer_models.operator_ui.real_data_validation_eviden
     build_health_warroom_evidence_presentation_upstream_payload,
     health_snapshot_evidence_presentation_payload_fields,
     lower_health_warroom_evidence_presentation_payload,
+    lower_health_snapshot_evidence_presentation_fields,
+    lower_warroom_session_state_evidence_presentation_fields,
     warroom_session_state_evidence_presentation_payload_fields,
 )
 from btcts.processing.l4_consumer_models.shared.real_data_validation_evidence import (  # noqa: E402
@@ -77,6 +79,32 @@ def main() -> int:
     assert lowered["not_runtime_wiring"] is True
     assert lowered["not_market_engine_input"] is True
     assert lowered["not_collector_writer"] is True
+
+
+    existing_health_snapshot = {"existing": "preserved"}
+    health_snapshot = lower_health_snapshot_evidence_presentation_fields(existing_health_snapshot, payload)
+    assert existing_health_snapshot == {"existing": "preserved"}
+    assert health_snapshot["existing"] == "preserved"
+    assert health_snapshot["evidence_presentation_payload"]["status_key"] == "available"
+    assert health_snapshot["health_warroom_evidence_presentation_payload"]["status_key"] == "available"
+    assert health_snapshot["real_data_validation_evidence_presentation"]["status_key"] == "available"
+    assert health_snapshot["evidence_presentation_lowering_channel"] == "health_snapshot_fields"
+    assert health_snapshot["not_runtime_wiring"] is True
+    assert health_snapshot["not_market_engine_input"] is True
+    assert health_snapshot["not_collector_writer"] is True
+
+    existing_warroom_state = {"existing": "preserved"}
+    warroom_state = lower_warroom_session_state_evidence_presentation_fields(existing_warroom_state, payload)
+    assert existing_warroom_state == {"existing": "preserved"}
+    assert warroom_state["existing"] == "preserved"
+    assert warroom_state["warroom_evidence_presentation_payload"]["status_key"] == "available"
+    assert warroom_state["health_warroom_evidence_presentation_payload"]["status_key"] == "available"
+    assert warroom_state["real_data_validation_evidence_presentation"]["status_key"] == "available"
+    assert warroom_state["evidence_presentation_payload"]["status_key"] == "available"
+    assert warroom_state["evidence_presentation_lowering_channel"] == "warroom_session_state_fields"
+    assert warroom_state["not_runtime_wiring"] is True
+    assert warroom_state["not_market_engine_input"] is True
+    assert warroom_state["not_collector_writer"] is True
 
     missing = lower_health_warroom_evidence_presentation_payload(None)
     assert missing["payload"]["status_key"] == "missing"
