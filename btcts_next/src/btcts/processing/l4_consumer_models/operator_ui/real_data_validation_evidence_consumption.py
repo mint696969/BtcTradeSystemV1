@@ -218,3 +218,131 @@ def health_warroom_evidence_consumption_status_payload(
         "diagnostics": dict(model.diagnostics),
     }
 
+@dataclass(frozen=True)
+class HealthWarRoomEvidencePresentationModel:
+    """Render-free presentation model for Health / WarRoom evidence status."""
+
+    presentation_kind: str
+    presentation_version: str
+    title: str
+    status_key: str
+    severity_key: str
+    health_line: str
+    warroom_line: str
+    summary_lines: Sequence[str] = field(default_factory=tuple)
+    counts: Mapping[str, Any] = field(default_factory=dict)
+    evidence_trace_refs: Sequence[str] = field(default_factory=tuple)
+    boundary: Mapping[str, bool] = field(default_factory=dict)
+    diagnostics: Mapping[str, Any] = field(default_factory=dict)
+
+
+def _presentation_status_from_payload(payload: Mapping[str, Any]) -> tuple[str, str]:
+    evidence_presence = str(payload.get("evidence_presence") or "missing")
+    diagnostic_status = str(payload.get("diagnostic_status") or "unknown")
+    if evidence_presence != "present":
+        return "missing", "blocked"
+    if diagnostic_status == "clean":
+        return "available", "info"
+    if diagnostic_status == "has_diagnostic_notes":
+        return "available_with_notes", "warn"
+    return "unknown", "warn"
+
+
+def health_warroom_evidence_presentation_model(
+    model_or_evidence: HealthWarRoomEvidenceConsumptionModel | RealDataValidationEvidenceSummary | Mapping[str, Any] | None,
+) -> HealthWarRoomEvidencePresentationModel:
+    payload = health_warroom_evidence_consumption_status_payload(model_or_evidence)
+    status_key, severity_key = _presentation_status_from_payload(payload)
+    counts = dict(payload.get("counts") or {})
+    boundary = dict(payload.get("boundary") or {})
+
+    if not boundary:
+        boundary = {
+            "read_only_consumption": True,
+            "diagnostic_evidence_only": True,
+            "operator_support_only": True,
+            "not_runtime_signal": True,
+            "not_runtime_wiring": True,
+            "not_ui_rendering": True,
+            "not_market_engine_input": True,
+            "not_collector_writer": True,
+            "not_broker_or_order_automation": True,
+            "not_inference_or_training": True,
+        }
+
+    exchange = str(payload.get("exchange") or "unknown")
+    symbol = str(payload.get("symbol") or "unknown")
+    validation_phase = str(payload.get("validation_phase") or "unknown")
+    replay_rows = int(counts.get("replay_row_count") or 0)
+    board_rows = int(counts.get("board_row_count") or 0)
+    trade_rows = int(counts.get("trade_row_count") or 0)
+    notes = int(counts.get("diagnostic_note_count") or 0)
+
+    if status_key == "missing":
+        health_line = "Evidence summary is not available yet."
+        warroom_line = "Operator review evidence is missing; keep consumption informational only."
+    else:
+        health_line = f"Evidence summary available for {exchange}/{symbol} ({validation_phase})."
+        warroom_line = f"Review support: replay={replay_rows}, board={board_rows}, trade={trade_rows}, notes={notes}."
+
+    summary_lines = (
+        f"status={status_key}",
+        f"severity={severity_key}",
+        f"exchange={exchange}",
+        f"symbol={symbol}",
+        f"validation_phase={validation_phase}",
+        f"replay_rows={replay_rows}",
+        f"diagnostic_notes={notes}",
+    )
+
+    return HealthWarRoomEvidencePresentationModel(
+        presentation_kind="health_warroom_evidence_consumption_presentation",
+        presentation_version="phase4a.health_warroom_evidence_presentation.v1",
+        title="Real-data validation evidence",
+        status_key=status_key,
+        severity_key=severity_key,
+        health_line=health_line,
+        warroom_line=warroom_line,
+        summary_lines=summary_lines,
+        counts=counts,
+        evidence_trace_refs=tuple(payload.get("evidence_trace_refs") or ()),
+        boundary=boundary,
+        diagnostics={
+            "builder_type": "health_warroom_evidence_presentation_model",
+            "builder_stage": "render_free_presentation_model",
+            "source_payload_kind": payload.get("payload_kind"),
+            "not_ui_rendering": True,
+            "not_runtime_wiring": True,
+        },
+    )
+
+
+def health_warroom_evidence_presentation_payload(
+    model_or_evidence: HealthWarRoomEvidencePresentationModel | HealthWarRoomEvidenceConsumptionModel | RealDataValidationEvidenceSummary | Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if isinstance(model_or_evidence, HealthWarRoomEvidencePresentationModel):
+        model = model_or_evidence
+    else:
+        model = health_warroom_evidence_presentation_model(model_or_evidence)
+    return {
+        "presentation_kind": model.presentation_kind,
+        "presentation_version": model.presentation_version,
+        "title": model.title,
+        "status_key": model.status_key,
+        "severity_key": model.severity_key,
+        "health_line": model.health_line,
+        "warroom_line": model.warroom_line,
+        "summary_lines": list(model.summary_lines),
+        "counts": dict(model.counts),
+        "evidence_trace_refs": list(model.evidence_trace_refs),
+        "boundary": dict(model.boundary),
+        "diagnostics": dict(model.diagnostics),
+        "not_ui_rendering": True,
+        "not_runtime_wiring": True,
+        "not_runtime_signal": True,
+        "not_market_engine_input": True,
+        "not_collector_writer": True,
+        "not_broker_or_order_automation": True,
+        "not_inference_or_training": True,
+    }
+

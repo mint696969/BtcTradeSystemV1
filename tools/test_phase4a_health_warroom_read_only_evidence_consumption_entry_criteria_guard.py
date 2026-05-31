@@ -208,7 +208,7 @@ def _check_docs(failures: List[str]) -> Dict[str, Any]:
             "UI rendering / runtime wiring / market_engine / collector writer / broker-order / inference / training は開かない。",
         ],
         STATE_PATH: [
-            "health_warroom_read_only_evidence_consumption",
+            "health_warroom_evidence_consumption",
         ],
     }
     missing: list[dict[str, str]] = []
@@ -231,12 +231,23 @@ def _check_state_phase(failures: List[str]) -> Dict[str, Any]:
     allowed_fragments = [
         "operational_readiness_and_archive_retention_readiness_closed_ready_for_health_warroom_consumption_entry",
         "health_warroom_read_only_evidence_consumption_entry_and_skeleton_closed_ready_for_next_guarded_slice",
+        "health_warroom_evidence_consumption_adapter_connection_closed_primary_guard_green",
+        "health_warroom_evidence_consumption_presentation_entry_criteria",
+        "health_warroom_evidence_consumption_presentation_entry_closed_primary_guard_green",
+        "health_warroom_evidence_consumption_render_free_presentation_model",
+        "health_warroom_evidence_consumption_render_free_presentation_model_closed_primary_guard_green",
+        "health_warroom_evidence_consumption_ui_rendering_entry_criteria",
+        "health_warroom_evidence_consumption_ui_rendering_entry_closed_primary_guard_green",
+        "health_warroom_evidence_consumption_shared_ui_rendering_component",
+        "health_warroom_evidence_consumption_health_page_wiring",
+        "health_warroom_evidence_consumption_warroom_page_wiring",
+        "health_warroom_evidence_presentation_upstream_payload_production_entry_criteria",
+        "health_warroom_evidence_presentation_upstream_payload_producer",
     ]
     matched = [fragment for fragment in allowed_fragments if fragment in text]
     if not matched:
-        failures.append("state is neither entry-ready nor skeleton-close for Health/WarRoom evidence consumption")
+        failures.append("state is not on an allowed Health/WarRoom evidence consumption progression point")
     required_boundary_fragments = [
-        "Streamlit rendering",
         "route wiring",
         "runtime state writer",
         "market_engine integration",
@@ -311,6 +322,12 @@ def _check_no_premature_consumption_implementation(failures: List[str]) -> Dict[
         EVIDENCE_CONTRACT_TEST_PATH,
         CONSUMER_SKELETON_PATH,
         CONSUMER_SKELETON_TEST_PATH,
+        "btcts_next/src/btcts/apps/operator_ui/components/evidence_presentation_panel.py",
+        "btcts_next/src/btcts/apps/operator_ui/tests/test_evidence_presentation_panel.py",
+        "btcts_next/src/btcts/apps/operator_ui/views/health_page.py",
+        "btcts_next/src/btcts/apps/operator_ui/tests/test_health_page_evidence_presentation_wiring.py",
+        "btcts_next/src/btcts/apps/operator_ui/views/warroom_page.py",
+        "btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_page_evidence_presentation_wiring.py",
     }
     for rel_root in FORBIDDEN_IMPLEMENTATION_PATHS:
         root = REPO_ROOT / rel_root

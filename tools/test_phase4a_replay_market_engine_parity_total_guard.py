@@ -202,6 +202,46 @@ GUARD_SPECS = [
         "kind": "json_ok",
         "role": "health_warroom_evidence_consumption_adapter_connection_guard",
     },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_consumption_presentation_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_consumption_presentation_entry_criteria_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_consumption_render_free_presentation_model_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_consumption_render_free_presentation_model_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_consumption_ui_rendering_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_consumption_ui_rendering_entry_criteria_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_consumption_shared_ui_rendering_component_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_consumption_shared_ui_rendering_component_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_evidence_presentation_page_wiring_guard.py",
+        "kind": "json_ok",
+        "role": "health_evidence_presentation_page_wiring_guard",
+    },
+    {
+        "path": "tools/test_phase4a_warroom_evidence_presentation_page_wiring_guard.py",
+        "kind": "json_ok",
+        "role": "warroom_evidence_presentation_page_wiring_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_presentation_upstream_payload_production_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_presentation_upstream_payload_production_entry_criteria_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_presentation_upstream_payload_producer_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_presentation_upstream_payload_producer_guard",
+    },
 ]
 
 

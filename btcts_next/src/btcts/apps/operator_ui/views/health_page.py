@@ -45,6 +45,9 @@ from btcts.apps.operator_ui.components.market_summary_presenter import (
 from btcts.apps.operator_ui.components.health_digest_bridge import (
     build_health_digest_ui_bundle,
 )
+from btcts.apps.operator_ui.components.evidence_presentation_panel import (
+    render_evidence_presentation_panel,
+)
 
 from btcts.apps.operator_ui.health_data_service import load_health_snapshot
 from btcts.apps.operator_ui.ui_text import get_text
@@ -423,6 +426,25 @@ def _snapshot_health_digest_ui_bundle(snapshot: dict) -> dict:
     )
 
 
+def _snapshot_evidence_presentation_payload(snapshot: dict) -> dict | None:
+    """Return already-provided evidence presentation payload from the Health snapshot only."""
+    if not isinstance(snapshot, dict):
+        return None
+    direct_payload = snapshot.get("evidence_presentation_payload")
+    if isinstance(direct_payload, dict):
+        return direct_payload
+    current_state_bundle = _snapshot_current_state_bundle(snapshot)
+    for key in (
+        "evidence_presentation_payload",
+        "health_warroom_evidence_presentation_payload",
+        "real_data_validation_evidence_presentation",
+    ):
+        payload = current_state_bundle.get(key)
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
 def _render_health_fragment(*, refresh_mode: str, render_body) -> None:
     live_shell.render_fragment_block(
         render_body,
@@ -456,6 +478,7 @@ def render():
         lambda: _render_live_tick_caption(lang),
         enabled=bool(st.session_state.get("ui_auto_refresh", True)),
     )
+
 
     def _render_collector_summary_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)
@@ -546,6 +569,17 @@ def render():
             digest_caption=digest_caption,
             operational_reading_caption=operational_reading_caption,
         )
+
+    def _render_evidence_presentation_section() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+        evidence_payload = _snapshot_evidence_presentation_payload(snapshot)
+        render_evidence_presentation_panel(evidence_payload, expanded=False)
+
+    live_shell.render_fragment_slot(
+        health_widget_slot("evidence_presentation_panel"),
+        _render_evidence_presentation_section,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
 
     def _render_api_chart_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)

@@ -167,11 +167,72 @@ def test_health_warroom_evidence_consumption_status_payload_missing() -> None:
     assert payload["read_only_consumption"] is True
     assert payload["not_ui_rendering"] is True
 
+
+def test_health_warroom_evidence_presentation_model_render_free_shape() -> None:
+    from btcts.processing.l4_consumer_models.operator_ui.real_data_validation_evidence_consumption import (
+        HealthWarRoomEvidencePresentationModel,
+        health_warroom_evidence_presentation_model,
+        health_warroom_evidence_presentation_payload,
+    )
+
+    model = health_warroom_evidence_presentation_model(_summary())
+    payload = health_warroom_evidence_presentation_payload(model)
+
+    assert isinstance(model, HealthWarRoomEvidencePresentationModel)
+    assert model.presentation_kind == "health_warroom_evidence_consumption_presentation"
+    assert model.presentation_version == "phase4a.health_warroom_evidence_presentation.v1"
+    assert model.status_key == "available"
+    assert model.severity_key == "info"
+    assert "Evidence summary available" in model.health_line
+    assert "Review support" in model.warroom_line
+    assert payload["presentation_kind"] == model.presentation_kind
+    assert payload["status_key"] == "available"
+    assert payload["counts"]["replay_row_count"] == 36
+    assert payload["boundary"]["read_only_consumption"] is True
+    assert payload["boundary"]["diagnostic_evidence_only"] is True
+    assert payload["boundary"]["operator_support_only"] is True
+    assert payload["boundary"]["not_ui_rendering"] is True
+    assert payload["boundary"]["not_runtime_signal"] is True
+    assert payload["not_ui_rendering"] is True
+    assert payload["not_runtime_wiring"] is True
+
+    forbidden_keys = [
+        "streamlit",
+        "route",
+        "component",
+        "widget_id",
+        "runtime" + "_" + "state" + "_" + "path",
+        "market" + "_" + "engine" + "_" + "signal",
+        "collector" + "_" + "write" + "_" + "path",
+        "place" + "_" + "order",
+        "broker" + "_" + "order",
+        "training" + "_" + "dataset",
+        "inference" + "_" + "job",
+    ]
+    for key in forbidden_keys:
+        assert key not in payload
+
+
+def test_health_warroom_evidence_presentation_model_missing_shape() -> None:
+    from btcts.processing.l4_consumer_models.operator_ui.real_data_validation_evidence_consumption import (
+        health_warroom_evidence_presentation_payload,
+    )
+
+    payload = health_warroom_evidence_presentation_payload(None)
+
+    assert payload["status_key"] == "missing"
+    assert payload["severity_key"] == "blocked"
+    assert payload["boundary"]["read_only_consumption"] is True
+    assert payload["boundary"]["not_ui_rendering"] is True
+    assert payload["not_runtime_signal"] is True
+
 if __name__ == "__main__":
     test_health_warroom_evidence_consumption_model_minimal_shape()
     test_health_warroom_evidence_consumption_model_is_boundary_safe()
     test_health_warroom_evidence_consumption_model_accepts_snapshot_mapping()
     test_health_warroom_evidence_consumption_status_payload_from_model()
     test_health_warroom_evidence_consumption_status_payload_missing()
+    test_health_warroom_evidence_presentation_model_render_free_shape()
+    test_health_warroom_evidence_presentation_model_missing_shape()
     print("ok")
 

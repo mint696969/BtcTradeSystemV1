@@ -29,6 +29,9 @@ from btcts.apps.operator_ui.components.market_state_bridge import (
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     active_event_compact_reading_line,
 )
+from btcts.apps.operator_ui.components.evidence_presentation_panel import (
+    render_evidence_presentation_panel,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -91,6 +94,20 @@ def _warroom_reading_block_captions() -> dict[str, str]:
 def _warroom_active_event_reading_caption() -> str:
     summary_payload = load_market_summary_status_payload()
     return active_event_compact_reading_line(summary_payload)
+
+
+def _warroom_evidence_presentation_payload() -> dict | None:
+    """Return an already-provided evidence presentation payload from session_state only."""
+    for key in (
+        "warroom_evidence_presentation_payload",
+        "health_warroom_evidence_presentation_payload",
+        "real_data_validation_evidence_presentation",
+        "evidence_presentation_payload",
+    ):
+        payload = st.session_state.get(key)
+        if isinstance(payload, dict):
+            return payload
+    return None
 
 
 def _render_warroom_primary_reading_overview(
@@ -179,6 +196,11 @@ def _render_warroom_operator_support_review() -> None:
         warroom_widget_slot("warroom_timeline")
     ):
         warroom_timeline.render()
+
+
+def _render_warroom_evidence_presentation() -> None:
+    evidence_payload = _warroom_evidence_presentation_payload()
+    render_evidence_presentation_panel(evidence_payload, expanded=False)
 
 
 def _render_fragmentable_warroom_widget(
@@ -371,6 +393,10 @@ def render():
             + block_captions["operator_support_review_reading"]
         )
         _render_warroom_operator_support_review()
+        with live_shell.slot_widget_from_meta(
+            warroom_widget_slot("evidence_presentation_panel")
+        ):
+            _render_warroom_evidence_presentation()
 
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         slot_rows = get_registered_slots("warroom")

@@ -329,6 +329,12 @@ _WARROOM_WIDGET_SLOT_SPECS: dict[str, CommonWidgetSlotSpec] = {
         "refresh_mode": "poll_slow",
         "tone": "primary",
     },
+    "evidence_presentation_panel": {
+        "zone_id": "secondary",
+        "priority": 65,
+        "refresh_mode": "poll_slow",
+        "tone": "neutral",
+    },
     "ai_reasoning_panel": {
         "zone_id": "ai_diagnostics",
         "priority": 70,
@@ -643,6 +649,12 @@ _HEALTH_WIDGET_SLOT_SPECS: dict[str, CommonWidgetSlotSpec] = {
     "market_summary_caption": {
         "zone_id": "detail",
         "priority": 115,
+        "refresh_mode": "poll_normal",
+        "tone": "neutral",
+    },
+    "evidence_presentation_panel": {
+        "zone_id": "detail",
+        "priority": 117,
         "refresh_mode": "poll_normal",
         "tone": "neutral",
     },

@@ -64,7 +64,7 @@ def _run_json_guard(rel_path: str, failures: List[str]) -> Dict[str, Any]:
         cwd=str(REPO_ROOT),
         text=True,
         capture_output=True,
-        timeout=300,
+        timeout=900,
     )
 
     stdout = proc.stdout or ""
