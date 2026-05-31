@@ -328,6 +328,8 @@ def _check_no_premature_consumption_implementation(failures: List[str]) -> Dict[
         "btcts_next/src/btcts/apps/operator_ui/tests/test_health_page_evidence_presentation_wiring.py",
         "btcts_next/src/btcts/apps/operator_ui/views/warroom_page.py",
         "btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_page_evidence_presentation_wiring.py",
+        "btcts_next/src/btcts/apps/operator_ui/components/evidence_presentation_lowering_bridge.py",
+        "btcts_next/src/btcts/apps/operator_ui/tests/test_evidence_presentation_lowering_bridge.py",
     }
     for rel_root in FORBIDDEN_IMPLEMENTATION_PATHS:
         root = REPO_ROOT / rel_root
