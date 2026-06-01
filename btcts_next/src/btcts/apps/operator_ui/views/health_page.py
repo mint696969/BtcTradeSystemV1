@@ -48,6 +48,9 @@ from btcts.apps.operator_ui.components.health_digest_bridge import (
 from btcts.apps.operator_ui.components.evidence_presentation_panel import (
     render_evidence_presentation_panel,
 )
+from btcts.apps.operator_ui.components.evidence_presentation_lowering_bridge import (
+    lower_health_snapshot_evidence_presentation_for_ui,
+)
 
 from btcts.apps.operator_ui.health_data_service import load_health_snapshot
 from btcts.apps.operator_ui.ui_text import get_text
@@ -427,22 +430,27 @@ def _snapshot_health_digest_ui_bundle(snapshot: dict) -> dict:
 
 
 def _snapshot_evidence_presentation_payload(snapshot: dict) -> dict | None:
-    """Return already-provided evidence presentation payload from the Health snapshot only."""
+    """Return bridge-normalized evidence presentation payload from the Health snapshot only."""
     if not isinstance(snapshot, dict):
         return None
     direct_payload = snapshot.get("evidence_presentation_payload")
-    if isinstance(direct_payload, dict):
-        return direct_payload
+    payload = direct_payload if isinstance(direct_payload, dict) else None
     current_state_bundle = _snapshot_current_state_bundle(snapshot)
-    for key in (
-        "evidence_presentation_payload",
-        "health_warroom_evidence_presentation_payload",
-        "real_data_validation_evidence_presentation",
-    ):
-        payload = current_state_bundle.get(key)
-        if isinstance(payload, dict):
-            return payload
-    return None
+    if payload is None:
+        for key in (
+            "evidence_presentation_payload",
+            "health_warroom_evidence_presentation_payload",
+            "real_data_validation_evidence_presentation",
+        ):
+            candidate = current_state_bundle.get(key)
+            if isinstance(candidate, dict):
+                payload = candidate
+                break
+    if not isinstance(payload, dict):
+        return None
+    lowered = lower_health_snapshot_evidence_presentation_for_ui(snapshot, payload)
+    normalized_payload = lowered.get("evidence_presentation_payload")
+    return normalized_payload if isinstance(normalized_payload, dict) else payload
 
 
 def _render_health_fragment(*, refresh_mode: str, render_body) -> None:

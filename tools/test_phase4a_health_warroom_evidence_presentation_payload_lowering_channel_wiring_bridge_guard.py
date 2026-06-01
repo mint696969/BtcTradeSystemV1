@@ -23,6 +23,7 @@ BRIDGE_PATH = "btcts_next/src/btcts/apps/operator_ui/components/evidence_present
 TEST_PATH = "btcts_next/src/btcts/apps/operator_ui/tests/test_evidence_presentation_lowering_bridge.py"
 HEALTH_PAGE_PATH = "btcts_next/src/btcts/apps/operator_ui/views/health_page.py"
 WARROOM_PAGE_PATH = "btcts_next/src/btcts/apps/operator_ui/views/warroom_page.py"
+PAGE_LOCAL_IMPLEMENTATION_SPEC_PATH = "tmp/docs/architecture/PHASE4A_HEALTH_WARROOM_EVIDENCE_PAYLOAD_LOWERING_PAGE_LOCAL_WIRING_IMPLEMENTATION_2026-05-31.md"
 
 FORBIDDEN_RUNTIME_ROOTS = [
     "btcts_next/src/btcts/market_engine",
@@ -155,8 +156,9 @@ def _probe_bridge(failures: list[str]) -> dict[str, Any]:
 def _check_pages_still_not_call_bridge(failures: list[str]) -> dict[str, Any]:
     health = _read(HEALTH_PAGE_PATH)
     warroom = _read(WARROOM_PAGE_PATH)
-    health_hits = [name for name in BRIDGE_NAMES if name in health]
-    warroom_hits = [name for name in BRIDGE_NAMES if name in warroom]
+    page_local_open = (REPO_ROOT / PAGE_LOCAL_IMPLEMENTATION_SPEC_PATH).exists()
+    health_hits = [] if page_local_open else [name for name in BRIDGE_NAMES if name in health]
+    warroom_hits = [] if page_local_open else [name for name in BRIDGE_NAMES if name in warroom]
     for name in health_hits:
         failures.append(f"Health page must not call bridge in bridge-only slice: {name}")
     for name in warroom_hits:

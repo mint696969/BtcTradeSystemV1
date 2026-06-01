@@ -22,6 +22,7 @@ def main() -> int:
 
     assert "render_evidence_presentation_panel" in warroom_page
     assert "_warroom_evidence_presentation_payload" in warroom_page
+    assert "lower_warroom_session_state_evidence_presentation_for_ui" in warroom_page
     assert "warroom_evidence_presentation_payload" in warroom_page
     assert "health_warroom_evidence_presentation_payload" in warroom_page
     assert "real_data_validation_evidence_presentation" in warroom_page

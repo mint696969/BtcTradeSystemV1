@@ -22,6 +22,7 @@ def main() -> int:
 
     assert "render_evidence_presentation_panel" in health_page
     assert "_snapshot_evidence_presentation_payload" in health_page
+    assert "lower_health_snapshot_evidence_presentation_for_ui" in health_page
     assert "evidence_presentation_payload" in health_page
     assert "health_warroom_evidence_presentation_payload" in health_page
     assert "real_data_validation_evidence_presentation" in health_page

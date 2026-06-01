@@ -21,6 +21,7 @@ LOWERING_GUARD_PATH = "tools/test_phase4a_health_warroom_evidence_presentation_p
 MODULE_PATH = "btcts_next/src/btcts/processing/l4_consumer_models/operator_ui/real_data_validation_evidence_presentation_upstream.py"
 HEALTH_PAGE_PATH = "btcts_next/src/btcts/apps/operator_ui/views/health_page.py"
 WARROOM_PAGE_PATH = "btcts_next/src/btcts/apps/operator_ui/views/warroom_page.py"
+PAGE_LOCAL_IMPLEMENTATION_SPEC_PATH = "tmp/docs/architecture/PHASE4A_HEALTH_WARROOM_EVIDENCE_PAYLOAD_LOWERING_PAGE_LOCAL_WIRING_IMPLEMENTATION_2026-05-31.md"
 HEALTH_WIRING_TEST_PATH = "btcts_next/src/btcts/apps/operator_ui/tests/test_health_page_evidence_presentation_wiring.py"
 WARROOM_WIRING_TEST_PATH = "btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_page_evidence_presentation_wiring.py"
 
@@ -135,8 +136,9 @@ def _check_spec(failures: list[str]) -> dict[str, Any]:
 def _check_existing_pages_are_pre_wiring(failures: list[str]) -> dict[str, Any]:
     health = _read(HEALTH_PAGE_PATH)
     warroom = _read(WARROOM_PAGE_PATH)
-    health_hits = [helper for helper in LOWERING_HELPERS if helper in health]
-    warroom_hits = [helper for helper in LOWERING_HELPERS if helper in warroom]
+    page_local_open = (REPO_ROOT / PAGE_LOCAL_IMPLEMENTATION_SPEC_PATH).exists()
+    health_hits = [] if page_local_open else [helper for helper in LOWERING_HELPERS if helper in health]
+    warroom_hits = [] if page_local_open else [helper for helper in LOWERING_HELPERS if helper in warroom]
     for helper in health_hits:
         failures.append(f"Health page must not call lowerer before wiring implementation entry closes: {helper}")
     for helper in warroom_hits:
@@ -144,14 +146,18 @@ def _check_existing_pages_are_pre_wiring(failures: list[str]) -> dict[str, Any]:
 
     required_health = [
         "def _snapshot_evidence_presentation_payload",
-        "Return already-provided evidence presentation payload from the Health snapshot only.",
         "render_evidence_presentation_panel(evidence_payload",
     ]
     required_warroom = [
         "def _warroom_evidence_presentation_payload",
-        "Return an already-provided evidence presentation payload from session_state only.",
         "render_evidence_presentation_panel(evidence_payload",
     ]
+    if page_local_open:
+        required_health.append("Return bridge-normalized evidence presentation payload from the Health snapshot only.")
+        required_warroom.append("Return bridge-normalized evidence presentation payload from session_state only.")
+    else:
+        required_health.append("Return already-provided evidence presentation payload from the Health snapshot only.")
+        required_warroom.append("Return an already-provided evidence presentation payload from session_state only.")
     for fragment in required_health:
         if fragment not in health:
             failures.append(f"Health page missing pre-wiring snapshot-only fragment: {fragment}")

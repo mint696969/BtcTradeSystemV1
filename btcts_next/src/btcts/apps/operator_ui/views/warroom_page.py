@@ -32,6 +32,9 @@ from btcts.apps.operator_ui.components.market_summary_presenter import (
 from btcts.apps.operator_ui.components.evidence_presentation_panel import (
     render_evidence_presentation_panel,
 )
+from btcts.apps.operator_ui.components.evidence_presentation_lowering_bridge import (
+    lower_warroom_session_state_evidence_presentation_for_ui,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -97,7 +100,7 @@ def _warroom_active_event_reading_caption() -> str:
 
 
 def _warroom_evidence_presentation_payload() -> dict | None:
-    """Return an already-provided evidence presentation payload from session_state only."""
+    """Return bridge-normalized evidence presentation payload from session_state only."""
     for key in (
         "warroom_evidence_presentation_payload",
         "health_warroom_evidence_presentation_payload",
@@ -106,7 +109,9 @@ def _warroom_evidence_presentation_payload() -> dict | None:
     ):
         payload = st.session_state.get(key)
         if isinstance(payload, dict):
-            return payload
+            lowered = lower_warroom_session_state_evidence_presentation_for_ui(st.session_state, payload)
+            normalized_payload = lowered.get("warroom_evidence_presentation_payload")
+            return normalized_payload if isinstance(normalized_payload, dict) else payload
     return None
 
 
