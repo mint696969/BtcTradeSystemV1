@@ -200,7 +200,7 @@ def _check_payload_shape(failures: list[str]) -> dict[str, Any]:
         parsed.get("title") == "Hot/Cold retention safety"
         and parsed.get("hot_retention_days") == 10
         and float(parsed.get("min_delete_age_hours") or 0.0) == 240.0
-        and parsed.get("delete_readiness_key") in {"blocked_previous_plan_younger_than_10_days", "no_recent_preflight_summary", "blocked_rebuild_10day_plan"}
+        and parsed.get("delete_readiness_key") in {"blocked_previous_plan_younger_than_10_days", "no_recent_preflight_summary", "blocked_rebuild_10day_plan", "no_candidates_older_than_10_days", "requires_separate_plan_hash_guarded_delete_slice"}
         and (parsed.get("counts") or {}).get("candidate_files") == 0
         and (parsed.get("boundary") or {}).get("not_filesystem_scan") is True
         and (parsed.get("boundary") or {}).get("not_delete_executor") is True

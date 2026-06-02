@@ -12,6 +12,10 @@ HOT_RETENTION_DAYS = 10
 MIN_DELETE_AGE_HOURS = 240.0
 PREVIOUS_PLAN_HASH = "d70a1c26dc5195a202e5da0bd4531e86168fb5e8d8a5f63c3bfa193448c09755"
 PREVIOUS_CONFIRM_TOKEN = "DELETE_D_HOT_BATCH_d70a1c26dc5195a2"
+TEN_DAY_PLAN_REVIEW_OUTPUT_REL = Path(
+    "tmp/work/operator_operational_readiness/outputs/"
+    "hot_cold_10day_dry_run_plan_and_review_v1_20260602T140216.582610Z.json"
+)
 PRE_EXEC_VERIFY_OUTPUT_REL = Path(
     "tmp/work/operator_operational_readiness/outputs/"
     "hot_cold_first_batch_pre_execute_verification_v1_20260602T064046.474691Z.json"
@@ -32,6 +36,10 @@ def _read_json_file(path: Path) -> dict[str, Any] | None:
     except Exception:
         return None
     return parsed if isinstance(parsed, dict) else None
+
+
+def _read_10day_plan_review() -> dict[str, Any] | None:
+    return _read_json_file(_repo_root() / TEN_DAY_PLAN_REVIEW_OUTPUT_REL)
 
 
 def _read_pre_execute_verification() -> dict[str, Any] | None:
@@ -75,12 +83,105 @@ def _selected_age_summary(small_batch: Mapping[str, Any] | None) -> dict[str, An
     }
 
 
+def _build_from_10day_review(plan_review_summary: Mapping[str, Any]) -> dict[str, Any] | None:
+    summary = _as_mapping(plan_review_summary)
+    if summary.get("ok") is not True:
+        return None
+    if float(summary.get("min_age_hours") or 0.0) != MIN_DELETE_AGE_HOURS:
+        return None
+    counts = _as_mapping(summary.get("review_counts"))
+    exclusions = _as_mapping(summary.get("review_exclusions"))
+    too_new = _as_mapping(exclusions.get("too_new"))
+    candidate_files = int(summary.get("candidate_delete_files") or counts.get("candidate_delete_files") or 0)
+    candidate_gb = float(summary.get("candidate_delete_gb") or counts.get("candidate_delete_gb") or 0.0)
+    plan_hash = str(summary.get("plan_hash") or "")
+    plan_path = str(summary.get("plan_path") or "")
+    newest_age = summary.get("newest_candidate_age_hours")
+
+    if candidate_files == 0:
+        status_key = "safe_no_delete_candidates"
+        severity_key = "info"
+        delete_readiness_key = "no_candidates_older_than_10_days"
+        operator_next_step = "No D-hot files are currently eligible for 10-day retention delete. Keep monitoring."
+    else:
+        status_key = "review_required"
+        severity_key = "warning"
+        delete_readiness_key = "requires_separate_plan_hash_guarded_delete_slice"
+        operator_next_step = "Review 10-day plan and open a separate plan-hash guarded delete entry before any execute."
+
+    summary_lines = [
+        "hot retention policy is 10 days",
+        "delete candidates must be older than 240 hours",
+        "latest 10-day dry-run plan/review is available",
+        f"latest_10day_plan_hash={plan_hash}",
+        f"latest_10day_candidate_files={candidate_files}",
+        f"latest_10day_candidate_gb={candidate_gb:.6f}",
+        f"too_new_files={int(too_new.get('files') or 0)}",
+        f"too_new_gb={float(too_new.get('gb') or 0.0):.6f}",
+        "previous 48h-style execute path remains abandoned under 10-day policy",
+        "Health render path does not scan D/E and does not copy/delete",
+        "simulation/training must use a duplicate-safe logical dataset view",
+    ]
+
+    return {
+        "title": "Hot/Cold retention safety",
+        "status_key": status_key,
+        "severity_key": severity_key,
+        "hot_retention_days": HOT_RETENTION_DAYS,
+        "min_delete_age_hours": MIN_DELETE_AGE_HOURS,
+        "copy_verification_key": "reviewed_10day_dry_run_plan",
+        "delete_readiness_key": delete_readiness_key,
+        "counts": {
+            "candidate_files": candidate_files,
+            "candidate_gb": candidate_gb,
+            "newest_candidate_age_hours": newest_age,
+            "too_new_files": int(too_new.get("files") or 0),
+            "too_new_gb": float(too_new.get("gb") or 0.0),
+            "previous_deleted_files": 0,
+        },
+        "plan": {
+            "plan_hash": plan_hash,
+            "plan_path": plan_path,
+            "latest_10day_plan_review_output": str(TEN_DAY_PLAN_REVIEW_OUTPUT_REL).replace("\\", "/"),
+            "previous_plan_hash": PREVIOUS_PLAN_HASH,
+            "previous_confirm_token": PREVIOUS_CONFIRM_TOKEN,
+            "previous_plan_abandoned_for_execute": True,
+        },
+        "policy": {
+            "hot_retention_days": HOT_RETENTION_DAYS,
+            "min_delete_age_hours": MIN_DELETE_AGE_HOURS,
+            "delete_candidates_must_be_older_than_10_days": True,
+            "completed_files_only": True,
+            "no_double_count_hot_cold_for_simulation_training": True,
+        },
+        "operator_next_step": operator_next_step,
+        "summary_lines": summary_lines,
+        "boundary": {
+            "read_only_display": True,
+            "already_built_payload_only": True,
+            "not_filesystem_scan": True,
+            "not_copy_executor": True,
+            "not_delete_executor": True,
+            "not_runtime_state_writer": True,
+            "not_collector_state_mutation": True,
+            "not_market_engine_input": True,
+            "not_broker_or_order_automation": True,
+            "not_inference_or_training": True,
+        },
+    }
+
+
 def build_hot_cold_retention_safety_payload(
     *,
+    ten_day_plan_review_summary: Mapping[str, Any] | None = None,
     pre_execute_summary: Mapping[str, Any] | None = None,
     small_batch_summary: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build a display-only safety payload from already-created summaries. Does not scan hot/cold roots."""
+    ten_day_payload = _build_from_10day_review(_as_mapping(ten_day_plan_review_summary))
+    if ten_day_payload is not None:
+        return ten_day_payload
+
     pre = _as_mapping(pre_execute_summary)
     small = _as_mapping(small_batch_summary)
     counts = _as_mapping(pre.get("counts"))
@@ -177,10 +278,12 @@ def build_hot_cold_retention_safety_payload(
 
 
 def load_hot_cold_retention_safety_payload() -> dict[str, Any]:
-    """Load a bounded precomputed preflight summary and build a display payload. Does not scan D/E."""
+    """Load bounded precomputed summaries and build a display payload. Does not scan D/E."""
+    ten_day = _read_10day_plan_review()
     pre = _read_pre_execute_verification()
     small = _read_referenced_small_batch_output(pre or {}) if pre else None
     return build_hot_cold_retention_safety_payload(
+        ten_day_plan_review_summary=ten_day,
         pre_execute_summary=pre,
         small_batch_summary=small,
     )
