@@ -11,9 +11,14 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.collector_vnext.archive.copy_manifest import (  # noqa: E402
+    COPY_MANIFEST_JSONL_WRITER_SCHEMA_VERSION,
     COPY_MANIFEST_SCHEMA_VERSION,
     build_manifest_row,
+    build_manifest_writer_dry_run_payload,
+    manifest_row_to_jsonl,
+    manifest_rows_to_jsonl,
     normalize_rel_file,
+    parse_manifest_jsonl_text,
     validate_manifest_row,
 )
 
@@ -85,6 +90,30 @@ def main() -> int:
     failures = validate_manifest_row(forbidden)["failures"]
     assert "rel_prefix_not_allowed" in failures
     assert "rel_file_under_forbidden_prefix" in failures
+
+    line = manifest_row_to_jsonl(row)
+    assert line.endswith("\n")
+    assert "hot_cold_copy_manifest_v1" in line
+    jsonl_text = manifest_rows_to_jsonl([row, size_only])
+    parsed = parse_manifest_jsonl_text(jsonl_text)
+    assert len(parsed) == 2
+    payload = build_manifest_writer_dry_run_payload([row], target_manifest_path="state/collector_vnext/hot_cold_copy_manifest.jsonl")
+    assert payload["schema_version"] == COPY_MANIFEST_JSONL_WRITER_SCHEMA_VERSION
+    assert payload["dry_run"] is True
+    assert payload["append_only"] is True
+    assert payload["would_write"] is False
+    assert payload["row_count"] == 1
+    assert payload["total_hot_size_bytes"] == 123
+    assert payload["boundary"]["not_copy_executor"] is True
+    assert payload["boundary"]["not_delete_executor"] is True
+    assert payload["boundary"]["not_archive_gc_enablement"] is True
+
+    try:
+        manifest_row_to_jsonl(mismatch)
+    except ValueError as exc:
+        assert "hot_cold_hash_mismatch" in str(exc)
+    else:
+        raise AssertionError("expected invalid row serialization failure")
 
     print("ok")
     return 0

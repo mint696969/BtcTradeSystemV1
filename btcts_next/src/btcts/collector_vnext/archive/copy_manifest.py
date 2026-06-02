@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, dataclass
 from pathlib import PurePosixPath
 from typing import Any
 
 COPY_MANIFEST_SCHEMA_VERSION = "hot_cold_copy_manifest_v1"
+COPY_MANIFEST_JSONL_WRITER_SCHEMA_VERSION = "hot_cold_copy_manifest_jsonl_writer_v1"
 COPY_INTENT = "hot_to_cold_archive_copy"
 ALLOWED_REL_PREFIXES: tuple[str, ...] = ("data/market_data", "data/collector_raw")
 FORBIDDEN_REL_PREFIXES: tuple[str, ...] = ("state/collector_vnext", "logs/collector_vnext")
@@ -229,4 +231,68 @@ def validate_manifest_row(row: HotColdCopyManifestRow | dict[str, Any]) -> dict[
         "hash_algorithm": hash_algorithm,
         "size_bytes": hot_size,
         "copy_verified": not failures,
+    }
+
+
+
+def manifest_row_to_jsonl(row: HotColdCopyManifestRow | dict[str, Any]) -> str:
+    """Serialize one validated manifest row to one JSONL line. Does not copy/delete or touch roots."""
+    data = row.to_dict() if isinstance(row, HotColdCopyManifestRow) else dict(row)
+    result = validate_manifest_row(data)
+    if not result.get("ok"):
+        raise ValueError("manifest_row_invalid: " + ",".join(result.get("failures") or []))
+    return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
+
+
+def manifest_rows_to_jsonl(rows: list[HotColdCopyManifestRow | dict[str, Any]]) -> str:
+    """Serialize validated manifest rows to append-only JSONL text. Does not write files."""
+    return "".join(manifest_row_to_jsonl(row) for row in rows)
+
+
+def parse_manifest_jsonl_text(text: str) -> list[dict[str, Any]]:
+    """Parse and validate manifest JSONL text. Does not read files."""
+    rows: list[dict[str, Any]] = []
+    for line_number, line in enumerate(str(text or "").splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            row = json.loads(stripped)
+        except Exception as exc:
+            raise ValueError(f"manifest_jsonl_invalid_json_line_{line_number}: {type(exc).__name__}: {exc}") from exc
+        result = validate_manifest_row(row)
+        if not result.get("ok"):
+            raise ValueError(
+                f"manifest_jsonl_invalid_row_{line_number}: " + ",".join(result.get("failures") or [])
+            )
+        rows.append(row)
+    return rows
+
+
+def build_manifest_writer_dry_run_payload(
+    rows: list[HotColdCopyManifestRow | dict[str, Any]],
+    *,
+    target_manifest_path: str,
+) -> dict[str, Any]:
+    """Build a dry-run append payload for a future manifest writer. Does not write files."""
+    jsonl_text = manifest_rows_to_jsonl(rows)
+    parsed = parse_manifest_jsonl_text(jsonl_text)
+    total_bytes = sum(int(row.get("hot_size_bytes") or 0) for row in parsed)
+    return {
+        "schema_version": COPY_MANIFEST_JSONL_WRITER_SCHEMA_VERSION,
+        "dry_run": True,
+        "append_only": True,
+        "would_write": False,
+        "target_manifest_path": str(target_manifest_path),
+        "row_count": len(parsed),
+        "total_hot_size_bytes": total_bytes,
+        "jsonl_text": jsonl_text,
+        "boundary": {
+            "not_copy_executor": True,
+            "not_delete_executor": True,
+            "not_archive_gc_enablement": True,
+            "not_runtime_state_writer": True,
+            "not_collector_state_mutation": True,
+            "not_health_render_path_scan": True,
+        },
     }
