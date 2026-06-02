@@ -48,6 +48,9 @@ from btcts.apps.operator_ui.components.health_digest_bridge import (
 from btcts.apps.operator_ui.components.evidence_presentation_panel import (
     render_evidence_presentation_panel,
 )
+from btcts.apps.operator_ui.components.hot_cold_retention_safety_panel import (
+    render_hot_cold_retention_safety_panel,
+)
 from btcts.apps.operator_ui.components.evidence_presentation_lowering_bridge import (
     lower_health_snapshot_evidence_presentation_for_ui,
 )
@@ -429,6 +432,23 @@ def _snapshot_health_digest_ui_bundle(snapshot: dict) -> dict:
     )
 
 
+def _snapshot_hot_cold_retention_safety_payload(snapshot: dict) -> dict | None:
+    """Return already-provided Hot/Cold retention safety payload from the Health snapshot only."""
+    if not isinstance(snapshot, dict):
+        return None
+    current_state_bundle = _snapshot_current_state_bundle(snapshot)
+    for source in (snapshot, current_state_bundle):
+        for key in (
+            "hot_cold_retention_safety_payload",
+            "hot_cold_retention_safety",
+            "operational_readiness_hot_cold_retention_safety",
+        ):
+            payload = source.get(key)
+            if isinstance(payload, dict):
+                return payload
+    return None
+
+
 def _snapshot_evidence_presentation_payload(snapshot: dict) -> dict | None:
     """Return bridge-normalized evidence presentation payload from the Health snapshot only."""
     if not isinstance(snapshot, dict):
@@ -577,6 +597,18 @@ def render():
             digest_caption=digest_caption,
             operational_reading_caption=operational_reading_caption,
         )
+
+    def _render_hot_cold_retention_safety_section() -> None:
+        snapshot = _load_cached_health_snapshot(selected_range_key)
+        safety_payload = _snapshot_hot_cold_retention_safety_payload(snapshot)
+        if safety_payload is not None:
+            render_hot_cold_retention_safety_panel(safety_payload, expanded=False)
+
+    live_shell.render_fragment_slot(
+        health_widget_slot("hot_cold_retention_safety_panel"),
+        _render_hot_cold_retention_safety_section,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
 
     def _render_evidence_presentation_section() -> None:
         snapshot = _load_cached_health_snapshot(selected_range_key)

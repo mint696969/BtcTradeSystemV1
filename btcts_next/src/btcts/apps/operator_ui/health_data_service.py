@@ -27,6 +27,9 @@ from btcts.apps.operator_ui.market_state_service import (
     load_latest_market_state,
     market_state_diagnostics,
 )
+from btcts.apps.operator_ui.hot_cold_retention_safety_service import (
+    load_hot_cold_retention_safety_payload,
+)
 from btcts.core import io
 from btcts.core import paths as core_paths
 from btcts.processing.l3_market_semantics import (
@@ -996,6 +999,8 @@ def _build_health_current_state_bundle(
         market_latest=market_latest,
         market_diag=market_diag,
     )
+    hot_cold_retention_safety_payload = load_hot_cold_retention_safety_payload()
+
     health_digest = build_health_digest(
         HealthDigestBuildInput(
             collector_state=state,
@@ -1040,6 +1045,9 @@ def _build_health_current_state_bundle(
         "layer3_runtime_contract_summary": layer3_runtime_contract_summary,
         "layer3_orderbook_runtime_summary": layer3_orderbook_runtime_summary,
         "health_digest": health_digest,
+        "hot_cold_retention_safety_payload": hot_cold_retention_safety_payload,
+        "hot_cold_retention_safety": hot_cold_retention_safety_payload,
+        "operational_readiness_hot_cold_retention_safety": hot_cold_retention_safety_payload,
     }
 
 

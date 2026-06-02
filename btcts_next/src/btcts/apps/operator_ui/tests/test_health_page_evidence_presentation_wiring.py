@@ -21,17 +21,24 @@ def main() -> int:
     slot_defs = _read("btcts/apps/operator_ui/components/slot_definitions.py")
 
     assert "render_evidence_presentation_panel" in health_page
+    assert "render_hot_cold_retention_safety_panel" in health_page
     assert "_snapshot_evidence_presentation_payload" in health_page
+    assert "_snapshot_hot_cold_retention_safety_payload" in health_page
     assert "lower_health_snapshot_evidence_presentation_for_ui" in health_page
     assert "evidence_presentation_payload" in health_page
     assert "health_warroom_evidence_presentation_payload" in health_page
     assert "real_data_validation_evidence_presentation" in health_page
     assert 'health_widget_slot("evidence_presentation_panel")' in health_page
+    assert 'health_widget_slot("hot_cold_retention_safety_panel")' in health_page
     assert "render_evidence_presentation_panel(evidence_payload" in health_page
 
     slot_call = health_page.find('health_widget_slot("evidence_presentation_panel")')
     section_def = health_page.find("def _render_evidence_presentation_section()")
     assert section_def >= 0 and slot_call > section_def
+    safety_slot = health_page.find('health_widget_slot("hot_cold_retention_safety_panel")')
+    safety_section = health_page.find("def _render_hot_cold_retention_safety_section()")
+    assert safety_section >= 0 and safety_slot > safety_section
+    assert safety_slot < slot_call
 
     assert "evidence_presentation_panel" in slot_defs
     # WarRoom evidence presentation wiring is allowed after the Health wiring close.
