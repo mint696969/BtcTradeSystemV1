@@ -193,6 +193,11 @@ GUARD_SPECS = [
         "role": "real_data_validation_evidence_connection_entry_criteria_guard",
     },
     {
+        "path": "tools/test_phase4a_operator_ui_health_latency_snapshot_responsibility_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "operator_ui_health_latency_snapshot_responsibility_entry_criteria_guard",
+    },
+    {
         "path": "tools/test_phase4a_health_warroom_read_only_evidence_consumption_entry_criteria_guard.py",
         "kind": "json_ok",
         "role": "health_warroom_read_only_evidence_consumption_entry_criteria_guard",
