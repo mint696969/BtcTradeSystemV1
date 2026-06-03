@@ -71,6 +71,13 @@ def load_health_audit_input(*, range_key: str = "1h") -> HealthAuditInput:
     )
 
 
+def health_audit_input_metadata(audit_input: HealthAuditInput) -> dict[str, Any]:
+    metadata = dict(audit_input.as_dict())
+    metadata.pop("rows", None)
+    metadata["rows_omitted_from_metadata"] = True
+    return metadata
+
+
 def _audit_coverage_meta(
     *,
     rows: list[dict[str, Any]],
@@ -1171,7 +1178,23 @@ def _build_health_anomaly_bundle(
     }
 
 
-def _build_health_page_meta_bundle(*, range_key: str) -> dict[str, Any]:
+def _build_health_page_meta_bundle(
+    *,
+    range_key: str,
+    audit_input: HealthAuditInput | None = None,
+) -> dict[str, Any]:
+    if audit_input is None:
+        audit_metadata = {
+            "source_kind": "health_audit_read_model",
+            "range_key": range_key,
+            "max_lines": _audit_max_lines_for_range(range_key),
+            "row_count": None,
+            "bounded_input_only": True,
+            "rows_omitted_from_metadata": True,
+        }
+    else:
+        audit_metadata = health_audit_input_metadata(audit_input)
+
     return {
         "selected_range_key": range_key,
         "range_presets": HEALTH_RANGE_PRESETS,
@@ -1180,6 +1203,8 @@ def _build_health_page_meta_bundle(*, range_key: str) -> dict[str, Any]:
             "data_dir": str(core_paths.data_dir(ensure=False)),
             "config_dir": str(core_paths.config_dir(ensure=False)),
         },
+        "health_audit_input": audit_metadata,
+        "health_audit_budget": audit_metadata,
     }
 
 
@@ -1234,8 +1259,15 @@ def load_health_anomaly_bundle(
     )
 
 
-def load_health_page_meta_bundle(*, range_key: str = "1h") -> dict[str, Any]:
-    return _build_health_page_meta_bundle(range_key=range_key)
+def load_health_page_meta_bundle(
+    *,
+    range_key: str = "1h",
+    audit_input: HealthAuditInput | None = None,
+) -> dict[str, Any]:
+    return _build_health_page_meta_bundle(
+        range_key=range_key,
+        audit_input=audit_input,
+    )
 
 
 def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
@@ -1256,7 +1288,10 @@ def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
         max_items=12,
         audit_rows=audit_rows,
     )
-    page_meta_bundle = load_health_page_meta_bundle(range_key=range_key)
+    page_meta_bundle = load_health_page_meta_bundle(
+        range_key=range_key,
+        audit_input=audit_input,
+    )
 
     return build_health_snapshot_read_model(
         range_key=range_key,

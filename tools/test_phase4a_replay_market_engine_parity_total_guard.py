@@ -213,6 +213,11 @@ GUARD_SPECS = [
         "role": "operator_ui_health_audit_tail_latency_budget_guard",
     },
     {
+        "path": "tools/test_phase4a_operator_ui_health_latency_budget_metadata_observability_guard.py",
+        "kind": "json_ok",
+        "role": "operator_ui_health_latency_budget_metadata_observability_guard",
+    },
+    {
         "path": "tools/test_phase4a_health_warroom_read_only_evidence_consumption_entry_criteria_guard.py",
         "kind": "json_ok",
         "role": "health_warroom_read_only_evidence_consumption_entry_criteria_guard",

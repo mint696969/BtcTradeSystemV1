@@ -122,6 +122,7 @@ def main() -> int:
     svc.build_api_continuity_rail = lambda **kwargs: [{"rail": "api"}]
     svc.build_ws_continuity_rail = lambda **kwargs: [{"rail": "ws"}]
     svc.build_recent_anomaly_rows = lambda **kwargs: [{"event": "gap"}]
+    svc._read_recent_audit_rows = lambda *, max_lines=4000: []
 
     current_bundle = svc.load_health_current_state_bundle(
         state=collector_state,
@@ -193,6 +194,11 @@ def main() -> int:
     assert page_meta_bundle["selected_range_key"] == "1h"
     assert page_meta_bundle["range_presets"] is svc.HEALTH_RANGE_PRESETS
     assert "paths" in page_meta_bundle
+    assert page_meta_bundle["health_audit_budget"]["range_key"] == "1h"
+    assert page_meta_bundle["health_audit_budget"]["max_lines"] == 12000
+    assert page_meta_bundle["health_audit_budget"]["row_count"] is None
+    assert page_meta_bundle["health_audit_budget"]["rows_omitted_from_metadata"] is True
+    assert "rows" not in page_meta_bundle["health_audit_budget"]
     assert "health_digest" not in page_meta_bundle
     assert "api_ws_series" not in page_meta_bundle
 
@@ -200,12 +206,22 @@ def main() -> int:
     assert snapshot["api_ws_series"] == timeline_bundle["api_ws_series"]
     assert snapshot["recent_anomalies"] == anomaly_bundle["recent_anomalies"]
     assert snapshot["selected_range_key"] == page_meta_bundle["selected_range_key"]
+    assert snapshot["health_audit_input"]["range_key"] == "1h"
+    assert snapshot["health_audit_input"]["max_lines"] == 12000
+    assert snapshot["health_audit_input"]["row_count"] == 0
+    assert snapshot["health_audit_input"]["rows_omitted_from_metadata"] is True
+    assert "rows" not in snapshot["health_audit_input"]
+    assert snapshot["health_audit_budget"] == snapshot["health_audit_input"]
 
     assert snapshot["current_state_bundle"] == current_bundle
     assert snapshot["timeline_bundle"] == timeline_bundle
     assert snapshot["continuity_bundle"] == continuity_bundle
     assert snapshot["anomaly_bundle"] == anomaly_bundle
-    assert snapshot["page_meta_bundle"] == page_meta_bundle
+    assert snapshot["page_meta_bundle"]["selected_range_key"] == page_meta_bundle["selected_range_key"]
+    assert snapshot["page_meta_bundle"]["range_presets"] is page_meta_bundle["range_presets"]
+    assert snapshot["page_meta_bundle"]["paths"] == page_meta_bundle["paths"]
+    assert snapshot["page_meta_bundle"]["health_audit_input"] == snapshot["health_audit_input"]
+    assert snapshot["page_meta_bundle"]["health_audit_budget"] == snapshot["health_audit_budget"]
 
     assert snapshot["current_state_bundle"]["health_digest"] == snapshot["health_digest"]
     assert snapshot["timeline_bundle"]["api_ws_series"] == snapshot["api_ws_series"]
