@@ -30,6 +30,9 @@ from btcts.apps.operator_ui.market_state_service import (
 from btcts.apps.operator_ui.hot_cold_retention_safety_service import (
     load_hot_cold_retention_safety_payload,
 )
+from btcts.apps.operator_ui.health_snapshot_read_model import (
+    build_health_snapshot_read_model,
+)
 from btcts.core import io
 from btcts.core import paths as core_paths
 from btcts.processing.l3_market_semantics import (
@@ -1249,16 +1252,11 @@ def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
     )
     page_meta_bundle = load_health_page_meta_bundle(range_key=range_key)
 
-    snapshot: dict[str, Any] = {}
-    snapshot.update(current_state_bundle)
-    snapshot.update(timeline_bundle)
-    snapshot.update(continuity_bundle)
-    snapshot.update(anomaly_bundle)
-    snapshot.update(page_meta_bundle)
-
-    snapshot["current_state_bundle"] = current_state_bundle
-    snapshot["timeline_bundle"] = timeline_bundle
-    snapshot["continuity_bundle"] = continuity_bundle
-    snapshot["anomaly_bundle"] = anomaly_bundle
-    snapshot["page_meta_bundle"] = page_meta_bundle
-    return snapshot
+    return build_health_snapshot_read_model(
+        range_key=range_key,
+        current_state_bundle=current_state_bundle,
+        timeline_bundle=timeline_bundle,
+        continuity_bundle=continuity_bundle,
+        anomaly_bundle=anomaly_bundle,
+        page_meta_bundle=page_meta_bundle,
+    )
