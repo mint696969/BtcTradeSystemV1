@@ -203,6 +203,11 @@ GUARD_SPECS = [
         "role": "operator_ui_health_latency_snapshot_read_model_skeleton_guard",
     },
     {
+        "path": "tools/test_phase4a_operator_ui_health_audit_read_model_bounded_inputs_guard.py",
+        "kind": "json_ok",
+        "role": "operator_ui_health_audit_read_model_bounded_inputs_guard",
+    },
+    {
         "path": "tools/test_phase4a_health_warroom_read_only_evidence_consumption_entry_criteria_guard.py",
         "kind": "json_ok",
         "role": "health_warroom_read_only_evidence_consumption_entry_criteria_guard",

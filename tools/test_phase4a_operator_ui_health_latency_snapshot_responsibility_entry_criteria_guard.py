@@ -18,6 +18,7 @@ SPEC_PATH = "tmp/docs/architecture/PHASE4A_OPERATOR_UI_HEALTH_LATENCY_SNAPSHOT_R
 HEALTH_SERVICE_PATH = "btcts_next/src/btcts/apps/operator_ui/health_data_service.py"
 HEALTH_PAGE_PATH = "btcts_next/src/btcts/apps/operator_ui/views/health_page.py"
 COLLECTOR_STATE_SERVICE_PATH = "btcts_next/src/btcts/apps/operator_ui/collector_state_service.py"
+AUDIT_MODEL_PATH = "btcts_next/src/btcts/apps/operator_ui/health_audit_read_model.py"
 FOCUS_PATH = "tmp/gpt_room/09_FOCUS.json"
 LOCAL_TRUTH_NOTE_PATH = "tmp/gpt_room/memory/notes/2026-06-03_local_truth_reconciliation_and_next_task_alignment.md"
 
@@ -43,16 +44,32 @@ REQUIRED_SPEC_FRAGMENTS = [
 ]
 
 REQUIRED_HEALTH_SERVICE_FRAGMENTS = [
+    "from btcts.apps.operator_ui.health_audit_read_model import (",
+    "HealthAuditInput",
+    "audit_max_lines_for_range as _audit_max_lines_for_range_impl",
+    "build_health_audit_input",
     "def _audit_max_lines_for_range(range_key: str) -> int:",
-    "return 50000",
-    "return 120000",
-    "return 240000",
+    "return _audit_max_lines_for_range_impl(range_key)",
+    'def load_health_audit_input(*, range_key: str = "1h") -> HealthAuditInput:',
+    "audit_input = load_health_audit_input(range_key=range_key)",
+    "audit_rows = list(audit_input.rows)",
     "def load_health_snapshot(*, range_key: str = \"1h\") -> dict[str, Any]:",
     "current_state_bundle",
     "timeline_bundle",
     "continuity_bundle",
     "anomaly_bundle",
     "page_meta_bundle",
+]
+
+REQUIRED_AUDIT_MODEL_FRAGMENTS = [
+    'HEALTH_AUDIT_READ_MODEL_VERSION = "health_audit_read_model.v1"',
+    "class HealthAuditInput:",
+    "def audit_max_lines_for_range(range_key: str) -> int:",
+    "return 50000",
+    "return 120000",
+    "return 240000",
+    "def build_health_audit_input(",
+    "bounded_input_only",
 ]
 
 REQUIRED_COLLECTOR_SERVICE_FRAGMENTS = [
@@ -189,8 +206,10 @@ def main() -> int:
         "compile_health_service": _compile(HEALTH_SERVICE_PATH, failures),
         "compile_health_page": _compile(HEALTH_PAGE_PATH, failures),
         "compile_collector_state_service": _compile(COLLECTOR_STATE_SERVICE_PATH, failures),
+        "compile_audit_model": _compile(AUDIT_MODEL_PATH, failures),
         "spec": _check_fragments(SPEC_PATH, REQUIRED_SPEC_FRAGMENTS, failures, label="spec"),
         "health_service_current_facts": _check_fragments(HEALTH_SERVICE_PATH, REQUIRED_HEALTH_SERVICE_FRAGMENTS, failures, label="health service"),
+        "audit_model_current_facts": _check_fragments(AUDIT_MODEL_PATH, REQUIRED_AUDIT_MODEL_FRAGMENTS, failures, label="audit model"),
         "collector_service_current_facts": _check_fragments(COLLECTOR_STATE_SERVICE_PATH, REQUIRED_COLLECTOR_SERVICE_FRAGMENTS, failures, label="collector service"),
         "collector_scan_default_disabled": _check_collector_scan_default_disabled(failures),
         "health_page_render_only_for_entry": _check_health_page_is_render_only_for_entry(failures),

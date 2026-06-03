@@ -33,7 +33,13 @@ from btcts.apps.operator_ui.hot_cold_retention_safety_service import (
 from btcts.apps.operator_ui.health_snapshot_read_model import (
     build_health_snapshot_read_model,
 )
-from btcts.core import io
+from btcts.apps.operator_ui.health_audit_read_model import (
+    HealthAuditInput,
+    audit_log_path as _audit_log_path_impl,
+    audit_max_lines_for_range as _audit_max_lines_for_range_impl,
+    build_health_audit_input,
+    read_recent_audit_rows as _read_recent_audit_rows_impl,
+)
 from btcts.core import paths as core_paths
 from btcts.processing.l3_market_semantics import (
     build_event_usage_contract_rows,
@@ -46,22 +52,23 @@ from btcts.processing.l4_consumer_models.shared import (
 
 
 def _audit_log_path() -> Path:
-    return core_paths.logs_dir(ensure=False) / "audit.jsonl"
+    return _audit_log_path_impl()
 
 
 def _read_recent_audit_rows(*, max_lines: int = 4000) -> list[dict[str, Any]]:
-    path = _audit_log_path()
-    return io.read_jsonl_tail(path, max_lines=max_lines)
+    return _read_recent_audit_rows_impl(max_lines=max_lines)
 
 
 def _audit_max_lines_for_range(range_key: str) -> int:
-    if range_key == "1h":
-        return 50000
-    if range_key == "24h":
-        return 120000
-    if range_key == "1w":
-        return 240000
-    return 50000
+    return _audit_max_lines_for_range_impl(range_key)
+
+
+def load_health_audit_input(*, range_key: str = "1h") -> HealthAuditInput:
+    return build_health_audit_input(
+        range_key=range_key,
+        read_recent_rows=_read_recent_audit_rows,
+        max_lines_for_range=_audit_max_lines_for_range,
+    )
 
 
 def _audit_coverage_meta(
@@ -1232,9 +1239,8 @@ def load_health_page_meta_bundle(*, range_key: str = "1h") -> dict[str, Any]:
 
 
 def load_health_snapshot(*, range_key: str = "1h") -> dict[str, Any]:
-    audit_rows = _read_recent_audit_rows(
-        max_lines=_audit_max_lines_for_range(range_key)
-    )
+    audit_input = load_health_audit_input(range_key=range_key)
+    audit_rows = list(audit_input.rows)
     current_state_bundle = load_health_current_state_bundle()
     collector_state = dict(current_state_bundle.get("collector_state") or {})
     timeline_bundle = load_health_timeline_bundle(
