@@ -40,14 +40,21 @@ def audit_log_path() -> Path:
     return core_paths.logs_dir(ensure=False) / "audit.jsonl"
 
 
+HEALTH_AUDIT_MAX_LINES_BY_RANGE = {
+    "1h": 12000,
+    "24h": 36000,
+    "1w": 72000,
+}
+HEALTH_AUDIT_DEFAULT_MAX_LINES = HEALTH_AUDIT_MAX_LINES_BY_RANGE["1h"]
+
+
 def audit_max_lines_for_range(range_key: str) -> int:
-    if range_key == "1h":
-        return 50000
-    if range_key == "24h":
-        return 120000
-    if range_key == "1w":
-        return 240000
-    return 50000
+    return int(
+        HEALTH_AUDIT_MAX_LINES_BY_RANGE.get(
+            str(range_key or "").strip(),
+            HEALTH_AUDIT_DEFAULT_MAX_LINES,
+        )
+    )
 
 
 def read_recent_audit_rows(*, max_lines: int = 4000) -> list[dict[str, Any]]:

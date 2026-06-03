@@ -65,9 +65,10 @@ REQUIRED_AUDIT_MODEL_FRAGMENTS = [
     'HEALTH_AUDIT_READ_MODEL_VERSION = "health_audit_read_model.v1"',
     "class HealthAuditInput:",
     "def audit_max_lines_for_range(range_key: str) -> int:",
-    "return 50000",
-    "return 120000",
-    "return 240000",
+    "HEALTH_AUDIT_DEFAULT_MAX_LINES",
+    "HEALTH_AUDIT_MAX_LINES_BY_RANGE = {",
+    '"24h": 36000',
+    '"1w": 72000',
     "def build_health_audit_input(",
     "bounded_input_only",
 ]
