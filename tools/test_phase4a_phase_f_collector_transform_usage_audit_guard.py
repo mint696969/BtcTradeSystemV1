@@ -189,23 +189,11 @@ def _check_audit_payload(payload: dict[str, Any], failures: list[str]) -> dict[s
             bad.append(f"missing_symbol:{symbol}")
             failures.append(f"usage audit missing symbol: {symbol}")
             continue
-        if item.get("migration_allowed_now") is not False:
-            bad.append(f"migration_allowed_now_not_false:{symbol}")
-            failures.append(f"migration_allowed_now must be false: {symbol}")
-        if item.get("future_facade_candidate") is not True:
-            bad.append(f"future_facade_candidate_not_true:{symbol}")
-            failures.append(f"future_facade_candidate must be true: {symbol}")
+        # Historical usage audit was created before facade migration. After close, do not enforce
+        # pre-migration planning flags; current close guards own the migrated runtime import shape.
         callers = list(item.get("callers") or [])
-        for caller in expected_callers:
-            if caller not in callers:
-                bad.append(f"missing_caller:{symbol}:{caller}")
-                failures.append(f"usage audit missing expected caller: {symbol}: {caller}")
-        if item.get("missing_expected_callers") != []:
-            bad.append(f"missing_expected_callers_not_empty:{symbol}")
-            failures.append(f"missing_expected_callers must be []: {symbol}")
-        if item.get("unexpected_callers") != []:
-            bad.append(f"unexpected_callers_not_empty:{symbol}")
-            failures.append(f"unexpected_callers must be []: {symbol}")
+        # Caller mapping is allowed to become facade-mediated after Phase F migration close.
+        # The close audit guard verifies current runtime callers directly.
         if item.get("l2_public_boundary_builder") and item.get("definition_uses_l2_public_boundary_builder") is not True:
             bad.append(f"l2_builder_not_used:{symbol}")
             failures.append(f"definition must use L2 public boundary builder: {symbol}")

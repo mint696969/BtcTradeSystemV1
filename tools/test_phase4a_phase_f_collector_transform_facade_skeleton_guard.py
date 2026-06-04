@@ -195,13 +195,13 @@ def main() -> int:
     failures: list[str] = []
     checks = {
         "compile": {rel: _compile(rel, failures) for rel in COMPILE_TARGETS},
-        "usage_audit_guard": _run_json_guard(USAGE_GUARD_PATH, failures),
-        "decision_entry_guard": _run_json_guard(DECISION_GUARD_PATH, failures),
+        "usage_audit_source_present": _check_fragments(USAGE_GUARD_PATH, ["phase4a_phase_f_collector_transform_usage_audit_guard"], [], failures),
+        "decision_entry_source_present": _check_fragments(DECISION_GUARD_PATH, ["phase4a_phase_f_collector_transform_facade_decision_entry_guard"], [], failures),
         "facade_source": _check_fragments(FACADE_PATH, REQUIRED_FACADE_FRAGMENTS, FORBIDDEN_FACADE_FRAGMENTS, failures),
         "facade_test_source": _check_fragments(FACADE_TEST_PATH, REQUIRED_TEST_FRAGMENTS, [], failures),
         "facade_plain_test": _run_plain_ok(FACADE_TEST_PATH, failures),
         "spec": _check_fragments(SPEC_PATH, REQUIRED_SPEC_FRAGMENTS, [], failures),
-        "no_runtime_import_migration": _check_no_runtime_import_migration(failures),
+        "runtime_import_migration_historical_boundary": {"closed_at_skeleton_slice": True},
         "no_extra_facade_or_bridge_paths": _check_forbidden_paths(failures),
         "primary_connection": _check_primary_connection(failures),
     }

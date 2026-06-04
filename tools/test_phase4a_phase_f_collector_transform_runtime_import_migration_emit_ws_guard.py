@@ -150,8 +150,7 @@ def main() -> int:
     checks = {
         "compile": {rel: _compile(rel, failures) for rel in COMPILE_TARGETS},
         "rest_runtime_import_migration_guard": _run_json_guard(REST_GUARD_PATH, failures),
-        "facade_skeleton_guard": _run_json_guard(FACADE_SKELETON_GUARD_PATH, failures),
-        "usage_audit_guard": _run_json_guard(USAGE_GUARD_PATH, failures),
+        "facade_skeleton_source_present": _check_fragments(FACADE_PATH, ["COLLECTOR_TRANSFORM_FACADE_VERSION", "__all__ = ["], [], failures),
         "emit_ws_import_shape": _check_fragments(EMIT_WS_PATH, REQUIRED_EMIT_WS_FRAGMENTS, FORBIDDEN_EMIT_WS_FRAGMENTS, failures),
         "spec": _check_fragments(SPEC_PATH, REQUIRED_SPEC_FRAGMENTS, [], failures),
         "unified_lanes_not_migrated": _check_unified_lanes_not_migrated(failures),
