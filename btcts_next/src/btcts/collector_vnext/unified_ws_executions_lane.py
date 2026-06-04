@@ -15,8 +15,10 @@ from .config import load_config
 from .events import EnvelopeContext, EventType, now_iso_utc, make_record
 from .ids import SequenceManager, make_stream_session_id
 from .providers.bitflyer_ws import connect_and_stream_executions
-from .transforms.trade_structural_hints import apply_trade_structural_hints
-from .transforms.ws_trade_to_canonical import canonical_ws_trade
+from .transforms.facade import (
+    apply_trade_structural_hints,
+    canonical_ws_trade,
+)
 from .unified_state import write_unified_executions_status
 from .writer import write_canonical, write_raw
 

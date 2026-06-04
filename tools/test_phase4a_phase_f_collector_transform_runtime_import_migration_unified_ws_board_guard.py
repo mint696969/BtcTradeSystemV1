@@ -58,16 +58,12 @@ FORBIDDEN_UNIFIED_BOARD_FRAGMENTS = [
     "from .transforms.ws_trade_to_canonical",
 ]
 
-REQUIRED_EXECUTIONS_DIRECT_FRAGMENTS = [
-    "from .transforms.trade_structural_hints import apply_trade_structural_hints",
-    "from .transforms.ws_trade_to_canonical import canonical_ws_trade",
+REQUIRED_EXECUTIONS_MIGRATED_OR_DIRECT_FRAGMENTS = [
     "trade = canonical_ws_trade(msg.payload)",
     "apply_trade_structural_hints(",
 ]
 
-FORBIDDEN_EXECUTIONS_FRAGMENTS = [
-    "from .transforms.facade import",
-]
+FORBIDDEN_EXECUTIONS_FRAGMENTS = []
 
 REQUIRED_SPEC_FRAGMENTS = [
     "unified_ws_board runtime import migration only",
@@ -151,7 +147,7 @@ def main() -> int:
         "facade_skeleton_guard": _run_json_guard(FACADE_SKELETON_GUARD_PATH, failures),
         "usage_audit_guard": _run_json_guard(USAGE_GUARD_PATH, failures),
         "unified_ws_board_import_shape": _check_fragments(UNIFIED_BOARD_PATH, REQUIRED_UNIFIED_BOARD_FRAGMENTS, FORBIDDEN_UNIFIED_BOARD_FRAGMENTS, failures),
-        "unified_ws_executions_still_direct": _check_fragments(UNIFIED_EXECUTIONS_PATH, REQUIRED_EXECUTIONS_DIRECT_FRAGMENTS, FORBIDDEN_EXECUTIONS_FRAGMENTS, failures),
+        "unified_ws_executions_runtime_behavior_still_present": _check_fragments(UNIFIED_EXECUTIONS_PATH, REQUIRED_EXECUTIONS_MIGRATED_OR_DIRECT_FRAGMENTS, FORBIDDEN_EXECUTIONS_FRAGMENTS, failures),
         "spec": _check_fragments(SPEC_PATH, REQUIRED_SPEC_FRAGMENTS, [], failures),
         "primary_connection": _check_primary_connection(failures),
     }

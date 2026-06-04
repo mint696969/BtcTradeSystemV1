@@ -1,5 +1,5 @@
-# path: ./tools/test_phase4a_phase_f_collector_transform_runtime_import_migration_emit_ws_guard.py
-# desc: Phase 4-A Phase F emit_ws runtime import migration guard.
+# path: ./tools/test_phase4a_phase_f_collector_transform_runtime_import_migration_unified_ws_executions_guard.py
+# desc: Phase 4-A Phase F unified WS executions runtime import migration guard.
 
 from __future__ import annotations
 
@@ -15,58 +15,74 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-SELF_PATH = "tools/test_phase4a_phase_f_collector_transform_runtime_import_migration_emit_ws_guard.py"
+SELF_PATH = "tools/test_phase4a_phase_f_collector_transform_runtime_import_migration_unified_ws_executions_guard.py"
+UNIFIED_EXECUTIONS_PATH = "btcts_next/src/btcts/collector_vnext/unified_ws_executions_lane.py"
+UNIFIED_BOARD_PATH = "btcts_next/src/btcts/collector_vnext/unified_ws_board_lane.py"
 EMIT_WS_PATH = "btcts_next/src/btcts/collector_vnext/emit_ws.py"
+EMIT_REST_PATH = "btcts_next/src/btcts/collector_vnext/emit_rest.py"
 FACADE_PATH = "btcts_next/src/btcts/collector_vnext/transforms/facade.py"
 REST_GUARD_PATH = "tools/test_phase4a_phase_f_collector_transform_runtime_import_migration_rest_guard.py"
+EMIT_WS_GUARD_PATH = "tools/test_phase4a_phase_f_collector_transform_runtime_import_migration_emit_ws_guard.py"
+BOARD_GUARD_PATH = "tools/test_phase4a_phase_f_collector_transform_runtime_import_migration_unified_ws_board_guard.py"
 FACADE_SKELETON_GUARD_PATH = "tools/test_phase4a_phase_f_collector_transform_facade_skeleton_guard.py"
 USAGE_GUARD_PATH = "tools/test_phase4a_phase_f_collector_transform_usage_audit_guard.py"
-SPEC_PATH = "tmp/docs/architecture/PHASE4A_PHASE_F_COLLECTOR_TRANSFORM_RUNTIME_IMPORT_MIGRATION_EMIT_WS_2026-06-04.md"
+SPEC_PATH = "tmp/docs/architecture/PHASE4A_PHASE_F_COLLECTOR_TRANSFORM_RUNTIME_IMPORT_MIGRATION_UNIFIED_WS_EXECUTIONS_2026-06-04.md"
 PRIMARY_GUARD_PATH = "tools/test_phase4a_replay_market_engine_parity_total_guard.py"
 
 COMPILE_TARGETS = [
     SELF_PATH,
+    UNIFIED_EXECUTIONS_PATH,
+    UNIFIED_BOARD_PATH,
     EMIT_WS_PATH,
+    EMIT_REST_PATH,
     FACADE_PATH,
     REST_GUARD_PATH,
+    EMIT_WS_GUARD_PATH,
+    BOARD_GUARD_PATH,
     FACADE_SKELETON_GUARD_PATH,
     USAGE_GUARD_PATH,
 ]
 
-REQUIRED_EMIT_WS_FRAGMENTS = [
+REQUIRED_UNIFIED_EXECUTIONS_FRAGMENTS = [
     "from .transforms.facade import (",
-    "apply_board_structural_hints,",
     "apply_trade_structural_hints,",
-    "canonical_board_event,",
     "canonical_ws_trade,",
     "trade = canonical_ws_trade(msg.payload)",
-    "canonical_payload = canonical_board_event(",
     "apply_trade_structural_hints(",
-    "apply_board_structural_hints(",
     "write_raw(",
     "write_canonical(",
-    "write_origin_status(",
+    "write_unified_executions_status(",
+    "lane_snapshot = self.snapshot()",
 ]
 
-FORBIDDEN_EMIT_WS_FRAGMENTS = [
+FORBIDDEN_UNIFIED_EXECUTIONS_FRAGMENTS = [
+    "from .transforms.trade_structural_hints import apply_trade_structural_hints",
+    "from .transforms.ws_trade_to_canonical import canonical_ws_trade",
+    "from .transforms.board_structural_hints",
+    "from .transforms.ws_board_to_canonical",
+]
+
+RUNTIME_FILES = [
+    "btcts_next/src/btcts/collector_vnext/emit_rest.py",
+    "btcts_next/src/btcts/collector_vnext/emit_ws.py",
+    "btcts_next/src/btcts/collector_vnext/unified_ws_board_lane.py",
+    "btcts_next/src/btcts/collector_vnext/unified_ws_executions_lane.py",
+]
+
+FORBIDDEN_DIRECT_IMPORTS = [
     "from .transforms.board_structural_hints import apply_board_structural_hints",
     "from .transforms.trade_structural_hints import apply_trade_structural_hints",
+    "from .transforms.raw_to_canonical import canonical_board_snapshot",
+    "from .transforms.raw_to_canonical_trades import canonical_trades",
     "from .transforms.ws_board_to_canonical import canonical_board_event",
     "from .transforms.ws_trade_to_canonical import canonical_ws_trade",
-    "from .transforms.raw_to_canonical",
-    "from .transforms.raw_to_canonical_trades",
-]
-
-FORBIDDEN_UNIFIED_FACADE_IMPORT = "from .transforms.facade import"
-UNIFIED_RUNTIME_FILES = [
 ]
 
 REQUIRED_SPEC_FRAGMENTS = [
-    "emit_ws runtime import migration only",
-    "replace direct transform imports in emit_ws.py with imports from transforms.facade",
+    "unified_ws_executions runtime import migration only",
+    "replace direct trade transform imports in unified_ws_executions_lane.py with imports from transforms.facade",
     "keep all existing call sites and arguments unchanged",
-    "unified_ws_board_lane.py runtime import migration",
-    "unified_ws_executions_lane.py runtime import migration",
+    "all known collector runtime transform callers should use the facade import surface",
     "collector capture behavior changes",
     "collector writer/backfill behavior changes",
     "canonical payload field changes",
@@ -83,7 +99,7 @@ def _compile(rel_path: str, failures: list[str]) -> dict[str, Any]:
     if not path.exists():
         failures.append(f"missing compile target: {rel_path}")
         return {"ok": False, "missing": True}
-    cache = REPO_ROOT / "tmp" / "_guard_py_compile_cache" / "phase_f_emit_ws_runtime_import_migration"
+    cache = REPO_ROOT / "tmp" / "_guard_py_compile_cache" / "phase_f_unified_ws_executions_runtime_import_migration"
     cache.mkdir(parents=True, exist_ok=True)
     try:
         py_compile.compile(str(path), cfile=str(cache / (rel_path.replace("/", "__") + ".pyc")), doraise=True)
@@ -126,22 +142,26 @@ def _check_fragments(rel_path: str, required: list[str], forbidden: list[str], f
     return {"missing": missing, "forbidden_hits": forbidden_hits}
 
 
-def _check_unified_lanes_not_migrated(failures: list[str]) -> dict[str, Any]:
-    hits: list[dict[str, str]] = []
-    for rel_path in UNIFIED_RUNTIME_FILES:
-        if FORBIDDEN_UNIFIED_FACADE_IMPORT in _read(rel_path):
-            hits.append({"path": rel_path, "fragment": FORBIDDEN_UNIFIED_FACADE_IMPORT})
-    for hit in hits:
-        failures.append(f"unified WS lane runtime import migration is not allowed in emit_ws slice: {hit['path']}")
-    return {"hit_count": len(hits), "hits": hits}
+def _check_all_runtime_callers_use_facade(failures: list[str]) -> dict[str, Any]:
+    bad: list[dict[str, str]] = []
+    for rel_path in RUNTIME_FILES:
+        text = _read(rel_path)
+        if "from .transforms.facade import (" not in text:
+            bad.append({"path": rel_path, "fragment": "from .transforms.facade import ("})
+            failures.append(f"runtime transform caller must use facade import surface: {rel_path}")
+        for fragment in FORBIDDEN_DIRECT_IMPORTS:
+            if fragment in text:
+                bad.append({"path": rel_path, "fragment": fragment})
+                failures.append(f"runtime transform caller must not import direct transform after migration close: {rel_path}: {fragment}")
+    return {"bad_count": len(bad), "bad": bad}
 
 
 def _check_primary_connection(failures: list[str]) -> dict[str, Any]:
     text = _read(PRIMARY_GUARD_PATH)
-    required = [SELF_PATH, "phase_f_collector_transform_runtime_import_migration_emit_ws_guard"]
+    required = [SELF_PATH, "phase_f_collector_transform_runtime_import_migration_unified_ws_executions_guard"]
     missing = [fragment for fragment in required if fragment not in text]
     for fragment in missing:
-        failures.append(f"primary total guard missing emit_ws migration connection: {fragment}")
+        failures.append(f"primary total guard missing unified_ws_executions migration connection: {fragment}")
     return {"missing": missing}
 
 
@@ -150,16 +170,18 @@ def main() -> int:
     checks = {
         "compile": {rel: _compile(rel, failures) for rel in COMPILE_TARGETS},
         "rest_runtime_import_migration_guard": _run_json_guard(REST_GUARD_PATH, failures),
+        "emit_ws_runtime_import_migration_guard": _run_json_guard(EMIT_WS_GUARD_PATH, failures),
+        "unified_ws_board_runtime_import_migration_guard": _run_json_guard(BOARD_GUARD_PATH, failures),
         "facade_skeleton_guard": _run_json_guard(FACADE_SKELETON_GUARD_PATH, failures),
         "usage_audit_guard": _run_json_guard(USAGE_GUARD_PATH, failures),
-        "emit_ws_import_shape": _check_fragments(EMIT_WS_PATH, REQUIRED_EMIT_WS_FRAGMENTS, FORBIDDEN_EMIT_WS_FRAGMENTS, failures),
+        "unified_ws_executions_import_shape": _check_fragments(UNIFIED_EXECUTIONS_PATH, REQUIRED_UNIFIED_EXECUTIONS_FRAGMENTS, FORBIDDEN_UNIFIED_EXECUTIONS_FRAGMENTS, failures),
+        "all_runtime_callers_use_facade": _check_all_runtime_callers_use_facade(failures),
         "spec": _check_fragments(SPEC_PATH, REQUIRED_SPEC_FRAGMENTS, [], failures),
-        "unified_lanes_not_migrated": _check_unified_lanes_not_migrated(failures),
         "primary_connection": _check_primary_connection(failures),
     }
     payload = {
         "ok": not failures,
-        "phase": "phase4a_phase_f_collector_transform_runtime_import_migration_emit_ws_guard",
+        "phase": "phase4a_phase_f_collector_transform_runtime_import_migration_unified_ws_executions_guard",
         "failures": failures,
         "checks": checks,
     }

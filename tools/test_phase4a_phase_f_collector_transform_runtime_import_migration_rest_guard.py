@@ -56,7 +56,6 @@ FORBIDDEN_EMIT_REST_FRAGMENTS = [
 
 FORBIDDEN_UNIFIED_FACADE_IMPORT = "from .transforms.facade import"
 UNIFIED_RUNTIME_FILES = [
-    "btcts_next/src/btcts/collector_vnext/unified_ws_executions_lane.py",
 ]
 
 REQUIRED_SPEC_FRAGMENTS = [
