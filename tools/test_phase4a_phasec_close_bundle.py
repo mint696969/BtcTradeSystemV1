@@ -58,7 +58,10 @@ def _compile_targets(failures: List[str]) -> Dict[str, Any]:
             continue
 
         try:
-            py_compile.compile(str(path), doraise=True)
+            cache_root = REPO_ROOT / "tmp" / "_guard_py_compile_cache" / "phasec_close_bundle"
+            cache_root.mkdir(parents=True, exist_ok=True)
+            cfile = cache_root / (rel_path.replace("/", "__").replace("\\", "__") + ".pyc")
+            py_compile.compile(str(path), cfile=str(cfile), doraise=True)
             passed.append(rel_path)
         except Exception as exc:
             failed.append({"path": rel_path, "error": str(exc)})
