@@ -277,6 +277,11 @@ GUARD_SPECS = [
         "kind": "json_ok",
         "role": "phase_f_collector_transform_usage_audit_guard",
     },
+    {
+        "path": "tools/test_phase4a_phase_f_collector_transform_facade_decision_entry_guard.py",
+        "kind": "json_ok",
+        "role": "phase_f_collector_transform_facade_decision_entry_guard",
+    },
 ]
 
 

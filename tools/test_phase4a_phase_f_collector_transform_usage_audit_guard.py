@@ -19,6 +19,8 @@ SELF_PATH = "tools/test_phase4a_phase_f_collector_transform_usage_audit_guard.py
 AUDIT_PATH = "tools/audit_phase4a_phase_f_collector_transform_usage.py"
 ENTRY_GUARD_PATH = "tools/test_phase4a_phase_f_collector_transform_migration_prep_entry_criteria_guard.py"
 SPEC_PATH = "tmp/docs/architecture/PHASE4A_PHASE_F_COLLECTOR_TRANSFORM_USAGE_AUDIT_2026-06-03.md"
+STATE_PATH = "tmp/gpt_room/11_STATE.json"
+FOCUS_PATH = "tmp/gpt_room/09_FOCUS.json"
 PRIMARY_GUARD_PATH = "tools/test_phase4a_replay_market_engine_parity_total_guard.py"
 OUTPUT_PATH = "tmp/work/phase4a_phase_f_collector_transform_migration_prep/outputs/collector_transform_usage_audit_v1.json"
 
@@ -47,6 +49,13 @@ REQUIRED_SPEC_FRAGMENTS = [
     "runtime import migration",
     "collector capture behavior changes",
     "facade / bridge implementation",
+]
+
+ENTRY_CHECKPOINT_FRAGMENTS = [
+    "return_to_main_phase4a_roadmap_or_phase_f_prep",
+    "health_latency_budget_metadata_observability_guard_green_clean_commit_checkpoint_a35e7535",
+    "phase4a_phase_f_collector_transform_migration_prep_entry_criteria",
+    "phase4a_phase_f_collector_transform_usage_audit",
 ]
 
 REQUIRED_AUDIT_SYMBOLS = {
@@ -117,6 +126,21 @@ def _run_json_guard(rel_path: str, failures: list[str]) -> dict[str, Any]:
     if not ok:
         failures.append(f"{rel_path} must return ok true and failures []")
     return {"ok": ok, "returncode": proc.returncode, "phase": parsed.get("phase")}
+
+
+def _check_entry_checkpoint(failures: list[str]) -> dict[str, Any]:
+    """Keep the usage audit tied to the Phase F entry checkpoint without re-running
+    the historical entry guard after focus has advanced to later Phase F slices.
+    The primary total guard still runs the entry guard as its own top-level check.
+    """
+    checks: dict[str, Any] = {}
+    for rel_path in [STATE_PATH, FOCUS_PATH]:
+        text = _read(rel_path)
+        missing = [fragment for fragment in ENTRY_CHECKPOINT_FRAGMENTS if fragment not in text]
+        for fragment in missing:
+            failures.append(f"missing Phase F entry checkpoint fragment in {rel_path}: {fragment}")
+        checks[rel_path] = {"missing": missing}
+    return checks
 
 
 def _run_audit(failures: list[str]) -> dict[str, Any]:
@@ -233,7 +257,7 @@ def main() -> int:
     audit_payload = audit_result.get("json") if isinstance(audit_result.get("json"), dict) else {}
     checks = {
         "compile": {rel: _compile(rel, failures) for rel in COMPILE_TARGETS},
-        "entry_guard": _run_json_guard(ENTRY_GUARD_PATH, failures),
+        "entry_checkpoint": _check_entry_checkpoint(failures),
         "spec": _check_fragments(SPEC_PATH, REQUIRED_SPEC_FRAGMENTS, failures),
         "audit_run": audit_result,
         "audit_payload": _check_audit_payload(audit_payload, failures),
