@@ -218,6 +218,11 @@ GUARD_SPECS = [
         "role": "operator_ui_health_latency_budget_metadata_observability_guard",
     },
     {
+        "path": "tools/test_phase4a_de_archive_transfer_health_dashboard_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "de_archive_transfer_health_dashboard_entry_criteria_guard",
+    },
+    {
         "path": "tools/test_phase4a_health_warroom_read_only_evidence_consumption_entry_criteria_guard.py",
         "kind": "json_ok",
         "role": "health_warroom_read_only_evidence_consumption_entry_criteria_guard",
@@ -266,6 +271,36 @@ GUARD_SPECS = [
         "path": "tools/test_phase4a_health_warroom_evidence_presentation_upstream_payload_producer_guard.py",
         "kind": "json_ok",
         "role": "health_warroom_evidence_presentation_upstream_payload_producer_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_presentation_payload_lowering_channel_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_presentation_payload_lowering_channel_entry_criteria_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_presentation_payload_lowering_channel_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_presentation_payload_lowering_channel_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_presentation_payload_lowering_channel_wiring_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_presentation_payload_lowering_channel_wiring_entry_criteria_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_presentation_payload_lowering_channel_wiring_bridge_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_presentation_payload_lowering_channel_wiring_bridge_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_payload_lowering_page_local_wiring_entry_criteria_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_payload_lowering_page_local_wiring_entry_criteria_guard",
+    },
+    {
+        "path": "tools/test_phase4a_health_warroom_evidence_payload_lowering_page_local_wiring_guard.py",
+        "kind": "json_ok",
+        "role": "health_warroom_evidence_payload_lowering_page_local_wiring_guard",
     },
     {
         "path": "tools/test_phase4a_phase_f_collector_transform_migration_prep_entry_criteria_guard.py",
