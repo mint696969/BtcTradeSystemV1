@@ -74,10 +74,14 @@ RUNTIME_FILES = [
     "btcts_next/src/btcts/collector_vnext/unified_ws_executions_lane.py",
 ]
 
+IGNORED_USAGE_CALLER_PATHS = {
+    "btcts_next/src/btcts/collector_vnext/transforms/facade.py",
+    "btcts_next/src/btcts/collector_vnext/transforms/test_facade.py",
+}
+
 FORBIDDEN_RUNTIME_MIGRATION_PATHS = [
     "btcts_next/src/btcts/collector_vnext/canonical_facade.py",
     "btcts_next/src/btcts/collector_vnext/transform_facade.py",
-    "btcts_next/src/btcts/collector_vnext/transforms/facade.py",
     "btcts_next/src/btcts/collector_vnext/transforms/runtime_bridge.py",
 ]
 
@@ -110,7 +114,7 @@ def _caller_paths_for(symbol: str, definition: str) -> list[str]:
     for hit in _scan_symbol(symbol):
         path = str(hit["path"])
         text = str(hit["text"])
-        if path == definition:
+        if path == definition or path in IGNORED_USAGE_CALLER_PATHS:
             continue
         if text.startswith("from ") or text.startswith("import ") or f"{symbol}(" in text:
             if path not in callers:

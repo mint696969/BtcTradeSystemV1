@@ -75,7 +75,6 @@ REQUIRED_ROOM_FRAGMENTS = [
 FORBIDDEN_IMPLEMENTATION_PATHS = [
     "btcts_next/src/btcts/collector_vnext/canonical_facade.py",
     "btcts_next/src/btcts/collector_vnext/transform_facade.py",
-    "btcts_next/src/btcts/collector_vnext/transforms/facade.py",
     "btcts_next/src/btcts/collector_vnext/transforms/runtime_bridge.py",
 ]
 
@@ -138,7 +137,7 @@ def _check_fragments(rel_path: str, required: list[str], failures: list[str]) ->
 def _check_forbidden_paths(failures: list[str]) -> dict[str, Any]:
     existing = [rel for rel in FORBIDDEN_IMPLEMENTATION_PATHS if (REPO_ROOT / rel).exists()]
     for rel in existing:
-        failures.append(f"Phase F entry must not create runtime migration/facade implementation yet: {rel}")
+        failures.append(f"Phase F entry must not create unapproved runtime migration/bridge path: {rel}")
     return {"existing": existing}
 
 
@@ -159,7 +158,7 @@ def main() -> int:
         "roadmap": _check_fragments(ROADMAP_PATH, REQUIRED_ROADMAP_FRAGMENTS, failures),
         "focus": _check_fragments(FOCUS_PATH, REQUIRED_ROOM_FRAGMENTS, failures),
         "state": _check_fragments(STATE_PATH, REQUIRED_ROOM_FRAGMENTS, failures),
-        "no_runtime_migration_files_yet": _check_forbidden_paths(failures),
+        "no_unapproved_runtime_migration_or_bridge_paths": _check_forbidden_paths(failures),
         "primary_connection": _check_primary_connection(failures),
     }
     payload = {

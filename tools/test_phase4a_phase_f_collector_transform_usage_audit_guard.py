@@ -84,7 +84,6 @@ REQUIRED_AUDIT_SYMBOLS = {
 FORBIDDEN_RUNTIME_MIGRATION_PATHS = [
     "btcts_next/src/btcts/collector_vnext/canonical_facade.py",
     "btcts_next/src/btcts/collector_vnext/transform_facade.py",
-    "btcts_next/src/btcts/collector_vnext/transforms/facade.py",
     "btcts_next/src/btcts/collector_vnext/transforms/runtime_bridge.py",
 ]
 
