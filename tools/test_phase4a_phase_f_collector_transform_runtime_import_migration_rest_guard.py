@@ -56,7 +56,6 @@ FORBIDDEN_EMIT_REST_FRAGMENTS = [
 
 FORBIDDEN_UNIFIED_FACADE_IMPORT = "from .transforms.facade import"
 UNIFIED_RUNTIME_FILES = [
-    "btcts_next/src/btcts/collector_vnext/unified_ws_board_lane.py",
     "btcts_next/src/btcts/collector_vnext/unified_ws_executions_lane.py",
 ]
 
@@ -128,7 +127,7 @@ def _check_unified_lanes_not_migrated(failures: list[str]) -> dict[str, Any]:
     hits: list[dict[str, str]] = []
     for rel_path in UNIFIED_RUNTIME_FILES:
         if FORBIDDEN_UNIFIED_FACADE_IMPORT in _read(rel_path):
-            hits.append({"path": rel_path, "fragment": FORBIDDEN_WS_FACADE_IMPORT})
+            hits.append({"path": rel_path, "fragment": FORBIDDEN_UNIFIED_FACADE_IMPORT})
     for hit in hits:
         failures.append(f"unified WS lane runtime import migration is not allowed in REST slice: {hit['path']}")
     return {"hit_count": len(hits), "hits": hits}

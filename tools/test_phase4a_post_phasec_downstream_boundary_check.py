@@ -215,7 +215,7 @@ def _check_collector_structural_hint_helper_usage(failures: List[str]) -> Dict[s
             ["apply_trade_structural_hints("],
         ],
         "btcts_next/src/btcts/collector_vnext/unified_ws_board_lane.py": [
-            ["from .transforms.board_structural_hints import apply_board_structural_hints"],
+            ["from .transforms.board_structural_hints import apply_board_structural_hints", "from .transforms.facade import ("],
             ["apply_board_structural_hints("],
         ],
         "btcts_next/src/btcts/collector_vnext/unified_ws_executions_lane.py": [
