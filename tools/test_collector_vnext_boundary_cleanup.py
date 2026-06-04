@@ -139,7 +139,14 @@ def _check_unified_ws_board_lane_contract(failures: List[str]) -> None:
     emit_rest_text = emit_rest_path.read_text(encoding="utf-8") if emit_rest_path.exists() else ""
     helper_text = helper_path.read_text(encoding="utf-8") if helper_path.exists() else ""
     _assert("def apply_board_structural_hints" in helper_text, "board structural hint helper must expose apply_board_structural_hints", failures)
-    _assert("from .transforms.board_structural_hints import apply_board_structural_hints" in emit_rest_text, "emit_rest.py must import board structural hint helper", failures)
+    _assert(
+        (
+            "from .transforms.board_structural_hints import apply_board_structural_hints" in emit_rest_text
+            or "from .transforms.facade import (" in emit_rest_text
+        ),
+        "emit_rest.py must import board structural hint helper directly or through Phase F facade",
+        failures,
+    )
     _assert("apply_board_structural_hints(" in emit_rest_text, "emit_rest.py must use board structural hint helper for board payload", failures)
 
     required_fragments = [
@@ -395,7 +402,14 @@ def _check_trade_structural_hint_contract(failures: List[str]) -> None:
     emit_ws_text = emit_ws_path.read_text(encoding="utf-8") if emit_ws_path.exists() else ""
 
     _assert("def apply_trade_structural_hints" in helper_text, "trade structural hint helper must expose apply_trade_structural_hints", failures)
-    _assert("from .transforms.trade_structural_hints import apply_trade_structural_hints" in emit_rest_text, "emit_rest.py must import trade structural hint helper", failures)
+    _assert(
+        (
+            "from .transforms.trade_structural_hints import apply_trade_structural_hints" in emit_rest_text
+            or "from .transforms.facade import (" in emit_rest_text
+        ),
+        "emit_rest.py must import trade structural hint helper directly or through Phase F facade",
+        failures,
+    )
     _assert("from .transforms.trade_structural_hints import apply_trade_structural_hints" in emit_ws_text, "emit_ws.py must import trade structural hint helper", failures)
     _assert("apply_trade_structural_hints(" in emit_rest_text, "emit_rest.py must use trade structural hint helper", failures)
     _assert("apply_trade_structural_hints(" in emit_ws_text, "emit_ws.py must use trade structural hint helper", failures)

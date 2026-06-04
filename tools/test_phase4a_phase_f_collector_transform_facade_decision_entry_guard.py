@@ -42,16 +42,11 @@ REQUIRED_SPEC_FRAGMENTS = [
     "phase4a_phase_f_collector_transform_facade_skeleton",
 ]
 
-REQUIRED_ROOM_FRAGMENTS = [
+REQUIRED_DECISION_CHECKPOINT_FRAGMENTS = [
     "phase4a_phase_f_collector_transform_usage_audit_clean_commit_checkpoint_d01213bc",
     "phase4a_phase_f_collector_transform_facade_decision_entry_criteria",
-    "facade / bridge implementation",
-    "runtime import migration",
-    "collector capture behavior changes",
-    "collector writer/backfill behavior changes",
-    "market_engine integration",
-    "broker/order/execution",
-    "inference/training",
+    "phase4a_phase_f_collector_transform_facade_decision_entry_clean_commit_checkpoint_8505c443",
+    "phase4a_phase_f_collector_transform_facade_skeleton",
 ]
 
 FORBIDDEN_RUNTIME_MIGRATION_PATHS = [
@@ -166,8 +161,8 @@ def main() -> int:
         "compile": {rel: _compile(rel, failures) for rel in COMPILE_TARGETS},
         "usage_audit_guard": _run_json_guard(USAGE_GUARD_PATH, failures),
         "spec": _check_fragments(SPEC_PATH, REQUIRED_SPEC_FRAGMENTS, failures),
-        "state": _check_fragments(STATE_PATH, REQUIRED_ROOM_FRAGMENTS, failures),
-        "focus": _check_fragments(FOCUS_PATH, REQUIRED_ROOM_FRAGMENTS, failures),
+        "state_decision_checkpoint": _check_fragments(STATE_PATH, REQUIRED_DECISION_CHECKPOINT_FRAGMENTS, failures),
+        "focus_decision_checkpoint": _check_fragments(FOCUS_PATH, REQUIRED_DECISION_CHECKPOINT_FRAGMENTS, failures),
         "audit_output": _check_audit_output(failures),
         "no_facade_or_bridge_implementation_yet": _check_forbidden_paths(failures),
         "primary_connection": _check_primary_connection(failures),

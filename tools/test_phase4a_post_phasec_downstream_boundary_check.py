@@ -201,32 +201,32 @@ def _check_collector_canonical_shape_drift(failures: List[str]) -> Dict[str, Any
 
 
 def _check_collector_structural_hint_helper_usage(failures: List[str]) -> Dict[str, Any]:
-    required = {
+    required_any = {
         "btcts_next/src/btcts/collector_vnext/emit_rest.py": [
-            "from .transforms.board_structural_hints import apply_board_structural_hints",
-            "from .transforms.trade_structural_hints import apply_trade_structural_hints",
-            "apply_board_structural_hints(",
-            "apply_trade_structural_hints(",
+            ["from .transforms.board_structural_hints import apply_board_structural_hints", "from .transforms.facade import ("],
+            ["from .transforms.trade_structural_hints import apply_trade_structural_hints", "from .transforms.facade import ("],
+            ["apply_board_structural_hints("],
+            ["apply_trade_structural_hints("],
         ],
         "btcts_next/src/btcts/collector_vnext/emit_ws.py": [
-            "from .transforms.board_structural_hints import apply_board_structural_hints",
-            "from .transforms.trade_structural_hints import apply_trade_structural_hints",
-            "apply_board_structural_hints(",
-            "apply_trade_structural_hints(",
+            ["from .transforms.board_structural_hints import apply_board_structural_hints"],
+            ["from .transforms.trade_structural_hints import apply_trade_structural_hints"],
+            ["apply_board_structural_hints("],
+            ["apply_trade_structural_hints("],
         ],
         "btcts_next/src/btcts/collector_vnext/unified_ws_board_lane.py": [
-            "from .transforms.board_structural_hints import apply_board_structural_hints",
-            "apply_board_structural_hints(",
+            ["from .transforms.board_structural_hints import apply_board_structural_hints"],
+            ["apply_board_structural_hints("],
         ],
         "btcts_next/src/btcts/collector_vnext/unified_ws_executions_lane.py": [
-            "from .transforms.trade_structural_hints import apply_trade_structural_hints",
-            "apply_trade_structural_hints(",
+            ["from .transforms.trade_structural_hints import apply_trade_structural_hints"],
+            ["apply_trade_structural_hints("],
         ],
     }
 
     missing: List[Dict[str, str]] = []
 
-    for rel_path, fragments in required.items():
+    for rel_path, fragment_groups in required_any.items():
         path = REPO_ROOT / rel_path
         if not path.exists():
             failures.append(f"collector structural hint consumer missing: {rel_path}")
@@ -234,10 +234,11 @@ def _check_collector_structural_hint_helper_usage(failures: List[str]) -> Dict[s
             continue
 
         text = path.read_text(encoding="utf-8")
-        for fragment in fragments:
-            if fragment not in text:
-                failures.append(f"collector structural hint helper usage missing: {rel_path}: {fragment}")
-                missing.append({"path": rel_path, "fragment": fragment})
+        for fragments in fragment_groups:
+            if not any(fragment in text for fragment in fragments):
+                label = " OR ".join(fragments)
+                failures.append(f"collector structural hint helper usage missing: {rel_path}: {label}")
+                missing.append({"path": rel_path, "fragment": label})
 
     return {
         "missing_count": len(missing),
