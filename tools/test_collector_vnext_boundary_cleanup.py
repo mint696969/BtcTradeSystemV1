@@ -410,7 +410,7 @@ def _check_trade_structural_hint_contract(failures: List[str]) -> None:
         "emit_rest.py must import trade structural hint helper directly or through Phase F facade",
         failures,
     )
-    _assert("from .transforms.trade_structural_hints import apply_trade_structural_hints" in emit_ws_text, "emit_ws.py must import trade structural hint helper", failures)
+    _assert(("from .transforms.trade_structural_hints import apply_trade_structural_hints" in emit_ws_text or "from .transforms.facade import (" in emit_ws_text), "emit_ws.py must import trade structural hint helper directly or through Phase F facade", failures)
     _assert("apply_trade_structural_hints(" in emit_rest_text, "emit_rest.py must use trade structural hint helper", failures)
     _assert("apply_trade_structural_hints(" in emit_ws_text, "emit_ws.py must use trade structural hint helper", failures)
 

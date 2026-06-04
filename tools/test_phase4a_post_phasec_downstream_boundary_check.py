@@ -209,8 +209,8 @@ def _check_collector_structural_hint_helper_usage(failures: List[str]) -> Dict[s
             ["apply_trade_structural_hints("],
         ],
         "btcts_next/src/btcts/collector_vnext/emit_ws.py": [
-            ["from .transforms.board_structural_hints import apply_board_structural_hints"],
-            ["from .transforms.trade_structural_hints import apply_trade_structural_hints"],
+            ["from .transforms.board_structural_hints import apply_board_structural_hints", "from .transforms.facade import ("],
+            ["from .transforms.trade_structural_hints import apply_trade_structural_hints", "from .transforms.facade import ("],
             ["apply_board_structural_hints("],
             ["apply_trade_structural_hints("],
         ],

@@ -292,6 +292,11 @@ GUARD_SPECS = [
         "kind": "json_ok",
         "role": "phase_f_collector_transform_runtime_import_migration_rest_guard",
     },
+    {
+        "path": "tools/test_phase4a_phase_f_collector_transform_runtime_import_migration_emit_ws_guard.py",
+        "kind": "json_ok",
+        "role": "phase_f_collector_transform_runtime_import_migration_emit_ws_guard",
+    },
 ]
 
 
