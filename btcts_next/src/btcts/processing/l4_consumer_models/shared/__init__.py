@@ -129,6 +129,11 @@ from .prediction_direction_builder import (
     build_prediction_direction_output,
     prediction_direction_output_to_snapshot,
 )
+from .prediction_position_review_hint_builder import (
+    PositionReviewHintBuildInput,
+    make_position_review_hint,
+    position_review_hint_to_snapshot,
+)
 from .real_data_validation_evidence import (
     RealDataValidationEvidenceSummary,
     build_real_data_validation_evidence_summary,
