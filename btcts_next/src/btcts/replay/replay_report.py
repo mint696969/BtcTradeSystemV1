@@ -246,6 +246,66 @@ def _build_prediction_direction_summary(
     }
 
 
+def _summarize_position_review_hint_snapshot(
+    prediction_position_review_hint_snapshots: List[Dict] | None,
+) -> Dict | None:
+    if not prediction_position_review_hint_snapshots:
+        return None
+
+    latest_snapshot = dict(prediction_position_review_hint_snapshots[-1] or {})
+    diagnostics = dict(latest_snapshot.get("diagnostics", {}) or {})
+    return {
+        "snapshot_count": len(prediction_position_review_hint_snapshots),
+        "latest_prediction_type": latest_snapshot.get("prediction_type"),
+        "latest_source_kind": latest_snapshot.get("source_kind"),
+        "latest_market_uid": latest_snapshot.get("market_uid"),
+        "latest_event_ts": latest_snapshot.get("event_ts"),
+        "latest_scenario_ref": latest_snapshot.get("scenario_ref"),
+        "latest_direction_ref": latest_snapshot.get("direction_ref"),
+        "latest_position_context_ref": latest_snapshot.get("position_context_ref"),
+        "latest_position_state_reading": latest_snapshot.get("position_state_reading"),
+        "latest_management_hint": latest_snapshot.get("management_hint"),
+        "latest_exposure_risk_hint": latest_snapshot.get("exposure_risk_hint"),
+        "latest_evidence_trace_ref_count": len(latest_snapshot.get("evidence_trace_refs", []) or []),
+        "latest_artifact_only": diagnostics.get("artifact_only"),
+        "latest_read_only_contract": latest_snapshot.get("read_only_contract"),
+        "latest_not_runtime_wiring": latest_snapshot.get("not_runtime_wiring"),
+        "latest_not_ui_wiring": latest_snapshot.get("not_ui_wiring"),
+    }
+
+
+def _summarize_execution_review_hint_snapshot(
+    prediction_execution_review_hint_snapshots: List[Dict] | None,
+) -> Dict | None:
+    if not prediction_execution_review_hint_snapshots:
+        return None
+
+    latest_snapshot = dict(prediction_execution_review_hint_snapshots[-1] or {})
+    diagnostics = dict(latest_snapshot.get("diagnostics", {}) or {})
+    return {
+        "snapshot_count": len(prediction_execution_review_hint_snapshots),
+        "latest_prediction_type": latest_snapshot.get("prediction_type"),
+        "latest_source_kind": latest_snapshot.get("source_kind"),
+        "latest_market_uid": latest_snapshot.get("market_uid"),
+        "latest_event_ts": latest_snapshot.get("event_ts"),
+        "latest_scenario_ref": latest_snapshot.get("scenario_ref"),
+        "latest_direction_ref": latest_snapshot.get("direction_ref"),
+        "latest_position_ref": latest_snapshot.get("position_ref"),
+        "latest_execution_context_ref": latest_snapshot.get("execution_context_ref"),
+        "latest_timing_hint": latest_snapshot.get("timing_hint"),
+        "latest_urgency_hint": latest_snapshot.get("urgency_hint"),
+        "latest_feasibility_hint": latest_snapshot.get("feasibility_hint"),
+        "latest_evidence_trace_ref_count": len(latest_snapshot.get("evidence_trace_refs", []) or []),
+        "latest_artifact_only": diagnostics.get("artifact_only"),
+        "latest_read_only_contract": latest_snapshot.get("read_only_contract"),
+        "latest_execution_side_effect_free": latest_snapshot.get("execution_side_effect_free"),
+        "latest_broker_link_free": latest_snapshot.get("broker_link_free"),
+        "latest_account_side_effect_free": latest_snapshot.get("account_side_effect_free"),
+        "latest_not_runtime_wiring": latest_snapshot.get("not_runtime_wiring"),
+        "latest_not_ui_wiring": latest_snapshot.get("not_ui_wiring"),
+    }
+
+
 def _build_direction_replay_calibration_review_material(
     prediction_direction_summary: Dict | None,
 ) -> Dict | None:
@@ -381,6 +441,8 @@ def build_replay_report(
     tactic_review_records: List[Dict] | None = None,
     tactic_operation_records: List[Dict] | None = None,
     prediction_direction_snapshots: List[Dict] | None = None,
+    prediction_position_review_hint_snapshots: List[Dict] | None = None,
+    prediction_execution_review_hint_snapshots: List[Dict] | None = None,
 ) -> Dict:
     board_count = 0
     trade_count = 0
@@ -430,6 +492,16 @@ def build_replay_report(
     prediction_direction_summary = _build_prediction_direction_summary(
         prediction_direction_snapshots
     )
+    prediction_position_review_hint_summary = (
+        _summarize_position_review_hint_snapshot(
+            prediction_position_review_hint_snapshots
+        )
+    )
+    prediction_execution_review_hint_summary = (
+        _summarize_execution_review_hint_snapshot(
+            prediction_execution_review_hint_snapshots
+        )
+    )
 
     return {
         "name": name,
@@ -454,6 +526,12 @@ def build_replay_report(
             tactic_operation_records
         ),
         "prediction_direction_summary": prediction_direction_summary,
+        "prediction_position_review_hint_summary": (
+            prediction_position_review_hint_summary
+        ),
+        "prediction_execution_review_hint_summary": (
+            prediction_execution_review_hint_summary
+        ),
         "direction_replay_calibration_review_material": (
             _build_direction_replay_calibration_review_material(
                 prediction_direction_summary

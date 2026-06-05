@@ -103,6 +103,48 @@ def main() -> int:
                     },
                 }
             ],
+            prediction_position_review_hint_snapshots=[
+                {
+                    "prediction_type": "position_review_hint",
+                    "source_kind": "replay_artifact_only",
+                    "market_uid": "bitflyer.spot.BTC_JPY",
+                    "event_ts": "2026-05-23T00:00:00Z",
+                    "scenario_ref": "replay.scenario.test",
+                    "direction_ref": "direction_snapshot.test",
+                    "position_context_ref": "position_context.review_only.test",
+                    "position_state_reading": "review_only_no_live_claim",
+                    "management_hint": "review_only_wait",
+                    "exposure_risk_hint": "unknown",
+                    "evidence_trace_refs": ["direction_snapshot:test"],
+                    "diagnostics": {"artifact_only": True},
+                    "read_only_contract": True,
+                    "not_runtime_wiring": True,
+                    "not_ui_wiring": True,
+                }
+            ],
+            prediction_execution_review_hint_snapshots=[
+                {
+                    "prediction_type": "execution_review_hint",
+                    "source_kind": "replay_artifact_only",
+                    "market_uid": "bitflyer.spot.BTC_JPY",
+                    "event_ts": "2026-05-23T00:00:00Z",
+                    "scenario_ref": "replay.scenario.test",
+                    "direction_ref": "direction_snapshot.test",
+                    "position_ref": "position_review_hint_snapshot.test",
+                    "execution_context_ref": "execution_context.review_only.test",
+                    "timing_hint": "review_only_wait_for_confirmation",
+                    "urgency_hint": "low",
+                    "feasibility_hint": "feasible_for_review_only",
+                    "evidence_trace_refs": ["position_review_hint_snapshot:test"],
+                    "diagnostics": {"artifact_only": True},
+                    "read_only_contract": True,
+                    "execution_side_effect_free": True,
+                    "broker_link_free": True,
+                    "account_side_effect_free": True,
+                    "not_runtime_wiring": True,
+                    "not_ui_wiring": True,
+                }
+            ],
             prediction_direction_snapshots=[
                 {
                     "prediction_type": "direction",
@@ -172,6 +214,8 @@ def main() -> int:
         assert exported["prediction_evaluation_report_path"]
         assert exported["prediction_calibration_review_path"]
         assert exported["prediction_direction_snapshot_path"]
+        assert exported["prediction_position_review_hint_snapshot_path"]
+        assert exported["prediction_execution_review_hint_snapshot_path"]
         assert exported["tactic_proposal_output_path"]
         assert exported["tactic_review_record_path"]
         assert exported["tactic_operation_record_path"]
@@ -184,6 +228,10 @@ def main() -> int:
         assert manifest["prediction_calibration_review_count"] == 1
         assert manifest["prediction_direction_snapshot_count"] == 1
         assert manifest["prediction_direction_snapshot_path"]
+        assert manifest["prediction_position_review_hint_snapshot_count"] == 1
+        assert manifest["prediction_position_review_hint_snapshot_path"]
+        assert manifest["prediction_execution_review_hint_snapshot_count"] == 1
+        assert manifest["prediction_execution_review_hint_snapshot_path"]
         assert manifest["prediction_calibration_review_path"]
         assert manifest["tactic_proposal_output_count"] == 1
         assert manifest["tactic_proposal_output_path"]
@@ -223,6 +271,46 @@ def main() -> int:
             "latest_confidence_review": "lower_confidence_weight",
             "latest_caution_review": "raise_caution_weight",
             "latest_invalidation_review": "raise_invalidation_sensitivity",
+        }
+        assert replay_report["prediction_position_review_hint_summary"] == {
+            "snapshot_count": 1,
+            "latest_prediction_type": "position_review_hint",
+            "latest_source_kind": "replay_artifact_only",
+            "latest_market_uid": "bitflyer.spot.BTC_JPY",
+            "latest_event_ts": "2026-05-23T00:00:00Z",
+            "latest_scenario_ref": "replay.scenario.test",
+            "latest_direction_ref": "direction_snapshot.test",
+            "latest_position_context_ref": "position_context.review_only.test",
+            "latest_position_state_reading": "review_only_no_live_claim",
+            "latest_management_hint": "review_only_wait",
+            "latest_exposure_risk_hint": "unknown",
+            "latest_evidence_trace_ref_count": 1,
+            "latest_artifact_only": True,
+            "latest_read_only_contract": True,
+            "latest_not_runtime_wiring": True,
+            "latest_not_ui_wiring": True,
+        }
+        assert replay_report["prediction_execution_review_hint_summary"] == {
+            "snapshot_count": 1,
+            "latest_prediction_type": "execution_review_hint",
+            "latest_source_kind": "replay_artifact_only",
+            "latest_market_uid": "bitflyer.spot.BTC_JPY",
+            "latest_event_ts": "2026-05-23T00:00:00Z",
+            "latest_scenario_ref": "replay.scenario.test",
+            "latest_direction_ref": "direction_snapshot.test",
+            "latest_position_ref": "position_review_hint_snapshot.test",
+            "latest_execution_context_ref": "execution_context.review_only.test",
+            "latest_timing_hint": "review_only_wait_for_confirmation",
+            "latest_urgency_hint": "low",
+            "latest_feasibility_hint": "feasible_for_review_only",
+            "latest_evidence_trace_ref_count": 1,
+            "latest_artifact_only": True,
+            "latest_read_only_contract": True,
+            "latest_execution_side_effect_free": True,
+            "latest_broker_link_free": True,
+            "latest_account_side_effect_free": True,
+            "latest_not_runtime_wiring": True,
+            "latest_not_ui_wiring": True,
         }
         assert replay_report["prediction_direction_summary"] == {
             "snapshot_count": 1,
@@ -378,6 +466,8 @@ def main() -> int:
         assert replay_report["prediction_evaluation_summary"] is None
         assert replay_report["prediction_calibration_review_summary"] is None
         assert replay_report["prediction_direction_summary"] is None
+        assert replay_report["prediction_position_review_hint_summary"] is None
+        assert replay_report["prediction_execution_review_hint_summary"] is None
         assert replay_report["direction_replay_calibration_review_material"] is None
         assert replay_report["tactic_proposal_summary"] is None
         assert replay_report["tactic_review_record_summary"] is None

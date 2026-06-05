@@ -84,6 +84,22 @@ def run_replay(
                     prediction_direction_snapshot
                 )
 
+            prediction_position_review_hint_snapshot = prediction_artifacts[
+                "prediction_position_review_hint_snapshot"
+            ]
+            if prediction_position_review_hint_snapshot is not None:
+                session.add_prediction_position_review_hint_snapshot(
+                    prediction_position_review_hint_snapshot
+                )
+
+            prediction_execution_review_hint_snapshot = prediction_artifacts[
+                "prediction_execution_review_hint_snapshot"
+            ]
+            if prediction_execution_review_hint_snapshot is not None:
+                session.add_prediction_execution_review_hint_snapshot(
+                    prediction_execution_review_hint_snapshot
+                )
+
     return session
 
 

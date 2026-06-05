@@ -128,15 +128,25 @@ def main() -> int:
             assert summary["prediction_evaluation_entry_count"] == 1
             assert summary["prediction_calibration_review_count"] == 1
             assert summary["prediction_direction_snapshot_count"] == 1
+            assert summary["prediction_position_review_hint_snapshot_count"] == 1
+            assert summary["prediction_execution_review_hint_snapshot_count"] == 1
 
             assert artifacts["prediction_evaluation_report_path"]
             assert artifacts["prediction_calibration_review_path"]
             assert artifacts["prediction_direction_snapshot_path"]
+            assert artifacts["prediction_position_review_hint_snapshot_path"]
+            assert artifacts["prediction_execution_review_hint_snapshot_path"]
             manifest = _read_json(artifacts["manifest_path"])
             replay_report = _read_json(artifacts["report_path"])
             prediction_report = _read_json(artifacts["prediction_evaluation_report_path"])
             calibration_review = _read_json(artifacts["prediction_calibration_review_path"])
             direction_snapshot = _read_json(artifacts["prediction_direction_snapshot_path"])
+            position_snapshot = _read_json(
+                artifacts["prediction_position_review_hint_snapshot_path"]
+            )
+            execution_snapshot = _read_json(
+                artifacts["prediction_execution_review_hint_snapshot_path"]
+            )
 
             assert manifest["prediction_evaluation_entry_count"] == 1
             assert manifest["prediction_evaluation_report_path"]
@@ -144,6 +154,10 @@ def main() -> int:
             assert manifest["prediction_calibration_review_path"]
             assert manifest["prediction_direction_snapshot_count"] == 1
             assert manifest["prediction_direction_snapshot_path"]
+            assert manifest["prediction_position_review_hint_snapshot_count"] == 1
+            assert manifest["prediction_position_review_hint_snapshot_path"]
+            assert manifest["prediction_execution_review_hint_snapshot_count"] == 1
+            assert manifest["prediction_execution_review_hint_snapshot_path"]
 
             assert replay_report["signal_count"] == 2
             assert replay_report["event_name_counts"] == {
@@ -155,6 +169,10 @@ def main() -> int:
             assert replay_report["prediction_calibration_review_summary"] is not None
             assert replay_report["prediction_calibration_review_summary"]["review_count"] == 1
             assert replay_report["prediction_direction_summary"] is not None
+            assert replay_report["prediction_position_review_hint_summary"] is not None
+            assert replay_report["prediction_execution_review_hint_summary"] is not None
+            assert replay_report["prediction_position_review_hint_summary"]["snapshot_count"] == 1
+            assert replay_report["prediction_execution_review_hint_summary"]["snapshot_count"] == 1
             assert replay_report["prediction_direction_summary"]["snapshot_count"] == 1
             assert replay_report["prediction_direction_summary"]["latest_source_kind"] == (
                 "replay_artifact_only"
@@ -194,6 +212,19 @@ def main() -> int:
             assert direction_snapshot["not_runtime_wiring"] is True
             assert direction_snapshot["not_ui_wiring"] is True
             assert direction_snapshot["diagnostics"]["artifact_only"] is True
+            assert position_snapshot["prediction_type"] == "position_review_hint"
+            assert position_snapshot["source_kind"] == "replay_artifact_only"
+            assert position_snapshot["read_only_contract"] is True
+            assert position_snapshot["not_runtime_wiring"] is True
+            assert position_snapshot["not_ui_wiring"] is True
+            assert execution_snapshot["prediction_type"] == "execution_review_hint"
+            assert execution_snapshot["source_kind"] == "replay_artifact_only"
+            assert execution_snapshot["read_only_contract"] is True
+            assert execution_snapshot["execution_side_effect_free"] is True
+            assert execution_snapshot["broker_link_free"] is True
+            assert execution_snapshot["account_side_effect_free"] is True
+            assert execution_snapshot["not_runtime_wiring"] is True
+            assert execution_snapshot["not_ui_wiring"] is True
             assert direction_snapshot["diagnostics"]["diagnostic_quality"][
                 "quality_version"
             ] == "phase4a.direction_artifact_diagnostics.v1"
