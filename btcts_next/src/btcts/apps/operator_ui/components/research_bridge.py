@@ -153,3 +153,44 @@ def latest_regime_name(experiment_payload: Optional[dict]) -> str:
 
     regime_report = experiment_payload.get("regime_report") or {}
     return str(regime_report.get("regime") or "unknown")
+
+
+def replay_review_hint_summary_payload(replay_payload: Optional[dict]) -> dict:
+    """Return read-only Position/Execution review hint summaries from a replay payload."""
+    if not replay_payload:
+        return {
+            "context_type": "prediction_review_hint_summary_context",
+            "source_kind": "replay_report",
+            "available": False,
+            "position_summary": None,
+            "execution_summary": None,
+            "read_only_contract": True,
+            "not_runtime_wiring": True,
+            "not_ui_rendering": True,
+        }
+
+    report = replay_payload.get("report") or {}
+    if not isinstance(report, dict):
+        report = {}
+
+    position_summary = report.get("prediction_position_review_hint_summary")
+    execution_summary = report.get("prediction_execution_review_hint_summary")
+    if not isinstance(position_summary, dict):
+        position_summary = None
+    if not isinstance(execution_summary, dict):
+        execution_summary = None
+
+    return {
+        "context_type": "prediction_review_hint_summary_context",
+        "source_kind": "replay_report",
+        "available": position_summary is not None or execution_summary is not None,
+        "position_summary": position_summary,
+        "execution_summary": execution_summary,
+        "read_only_contract": True,
+        "not_runtime_wiring": True,
+        "not_ui_rendering": True,
+    }
+
+
+def load_latest_replay_review_hint_summary_payload() -> dict:
+    return replay_review_hint_summary_payload(load_latest_replay_payload())

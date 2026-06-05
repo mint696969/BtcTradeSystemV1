@@ -23,6 +23,9 @@ def main() -> int:
     original_load_prediction_tactic_proposal_payload = (
         display_sources.load_prediction_tactic_proposal_payload
     )
+    original_load_prediction_review_hint_summary_payload = (
+        display_sources.load_prediction_review_hint_summary_payload
+    )
 
     try:
         display_sources.load_market_summary_widget_model = lambda: {
@@ -35,6 +38,10 @@ def main() -> int:
             "proposal_type": "scenario_tactic_proposal_output",
             "primary_tactic_key": "observe_only",
         }
+        display_sources.load_prediction_review_hint_summary_payload = lambda: {
+            "context_type": "prediction_review_hint_summary_context",
+            "available": True,
+        }
 
         loaded = display_sources.load_operator_display_sources()
         assert loaded == {
@@ -43,6 +50,10 @@ def main() -> int:
             "tactic_context": {
                 "proposal_type": "scenario_tactic_proposal_output",
                 "primary_tactic_key": "observe_only",
+            },
+            "review_hint_context": {
+                "context_type": "prediction_review_hint_summary_context",
+                "available": True,
             },
         }
     finally:
@@ -54,6 +65,9 @@ def main() -> int:
         )
         display_sources.load_prediction_tactic_proposal_payload = (
             original_load_prediction_tactic_proposal_payload
+        )
+        display_sources.load_prediction_review_hint_summary_payload = (
+            original_load_prediction_review_hint_summary_payload
         )
 
     print("ok")

@@ -32,6 +32,9 @@ from btcts.processing.l4_consumer_models.shared import (
 from btcts.apps.operator_ui.components.prediction_summary_state import (
     load_prediction_summary_state,
 )
+from btcts.apps.operator_ui.components.research_bridge import (
+    load_latest_replay_review_hint_summary_payload,
+)
 
 
 def load_market_overview(
@@ -176,6 +179,18 @@ def load_prediction_summary_widget_model(
         include_health_caution=include_health_caution,
     )
     return prediction_summary_widget_model(summary)
+
+
+def load_prediction_review_hint_summary_payload() -> dict[str, Any]:
+    payload = load_latest_replay_review_hint_summary_payload()
+    out = dict(payload or {})
+    out.setdefault("context_type", "prediction_review_hint_summary_context")
+    out.setdefault("source_kind", "replay_report")
+    out.setdefault("read_only_contract", True)
+    out.setdefault("not_runtime_wiring", True)
+    out.setdefault("not_ui_rendering", True)
+    out["bridge_type"] = "operator_ui_prediction_review_hint_summary_context"
+    return out
 
 
 def load_prediction_tactic_proposal_payload(
