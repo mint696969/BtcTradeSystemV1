@@ -25,8 +25,11 @@ from btcts.processing.l4_consumer_models.shared import (
 from btcts.processing.l4_consumer_models.shared._value_utils import safe_float
 
 from btcts.processing.l4_consumer_models.shared import (
+    PositionReviewHintBuildInput,
     build_prediction_direction_input_from_scenario,
     build_prediction_direction_output,
+    make_position_review_hint,
+    position_review_hint_to_snapshot,
     prediction_direction_output_to_snapshot,
 )
 from .prediction_calibration_review import (
@@ -300,6 +303,36 @@ def build_prediction_state_from_replay_result(
     )
     direction_output = build_prediction_direction_output(direction_input)
     prediction_direction_snapshot = prediction_direction_output_to_snapshot(direction_output)
+    position_review_hint = make_position_review_hint(
+        PositionReviewHintBuildInput(
+            scenario_ref=direction_input.scenario_ref,
+            direction_ref=f"direction_snapshot.{result.get('record_id') or 'unknown'}",
+            source_kind="replay_artifact_only",
+            market_uid=scenario_output.market_uid,
+            event_ts=scenario_output.event_ts,
+            position_context_ref=f"position_context.review_only.{result.get('record_id') or 'unknown'}",
+            position_state_reading="review_only_no_live_claim",
+            management_hint="review_only_wait",
+            exposure_risk_hint="unknown",
+            evidence_trace_refs=(
+                f"direction_snapshot:{result.get('record_id') or 'unknown'}",
+            ),
+            diagnostics={
+                "builder_type": "replay_prediction_artifact_builder",
+                "artifact_entry": "position_review_hint_read_only_snapshot",
+                "artifact_only": True,
+                "read_only_contract": True,
+                "not_runtime_wiring": True,
+                "not_ui_wiring": True,
+                "not_market_engine_wiring": True,
+                "record_id": result.get("record_id"),
+                "record_type": result.get("record_type"),
+            },
+        )
+    )
+    prediction_position_review_hint_snapshot = position_review_hint_to_snapshot(
+        position_review_hint
+    )
 
     calibration_hint = build_prediction_calibration_hint(
         PredictionCalibrationBuildInput(
@@ -319,6 +352,7 @@ def build_prediction_state_from_replay_result(
         "scenario_output": scenario_output,
         "tactic_proposal_output": tactic_proposal_output,
         "prediction_direction_snapshot": prediction_direction_snapshot,
+        "prediction_position_review_hint_snapshot": prediction_position_review_hint_snapshot,
         "calibration_hint": calibration_hint,
         "mid_price": _resolve_mid_price(result),
         "best_bid": safe_float(result.get("best_bid")),
@@ -422,6 +456,7 @@ class ReplayPredictionArtifactBuilder:
         tactic_review_record = None
         tactic_operation_record = None
         prediction_direction_snapshot = None
+        prediction_position_review_hint_snapshot = None
 
         if self._pending_prediction_state is not None:
             realized_outcome = _build_proxy_realized_outcome(
@@ -481,6 +516,11 @@ class ReplayPredictionArtifactBuilder:
             prediction_direction_snapshot = dict(
                 self._pending_prediction_state["prediction_direction_snapshot"]
             )
+            prediction_position_review_hint_snapshot = dict(
+                self._pending_prediction_state[
+                    "prediction_position_review_hint_snapshot"
+                ]
+            )
 
         self._pending_prediction_state = current_prediction_state
         return {
@@ -490,6 +530,7 @@ class ReplayPredictionArtifactBuilder:
             "tactic_review_record": tactic_review_record,
             "tactic_operation_record": tactic_operation_record,
             "prediction_direction_snapshot": prediction_direction_snapshot,
+            "prediction_position_review_hint_snapshot": prediction_position_review_hint_snapshot,
         }
 
     def consume_result(self, result: dict[str, Any]) -> dict[str, Any] | None:
