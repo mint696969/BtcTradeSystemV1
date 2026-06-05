@@ -25,9 +25,12 @@ from btcts.processing.l4_consumer_models.shared import (
 from btcts.processing.l4_consumer_models.shared._value_utils import safe_float
 
 from btcts.processing.l4_consumer_models.shared import (
+    ExecutionReviewHintBuildInput,
     PositionReviewHintBuildInput,
     build_prediction_direction_input_from_scenario,
     build_prediction_direction_output,
+    execution_review_hint_to_snapshot,
+    make_execution_review_hint,
     make_position_review_hint,
     position_review_hint_to_snapshot,
     prediction_direction_output_to_snapshot,
@@ -333,6 +336,41 @@ def build_prediction_state_from_replay_result(
     prediction_position_review_hint_snapshot = position_review_hint_to_snapshot(
         position_review_hint
     )
+    execution_review_hint = make_execution_review_hint(
+        ExecutionReviewHintBuildInput(
+            scenario_ref=direction_input.scenario_ref,
+            direction_ref=f"direction_snapshot.{result.get('record_id') or 'unknown'}",
+            position_ref=f"position_review_hint_snapshot.{result.get('record_id') or 'unknown'}",
+            source_kind="replay_artifact_only",
+            market_uid=scenario_output.market_uid,
+            event_ts=scenario_output.event_ts,
+            execution_context_ref=f"execution_context.review_only.{result.get('record_id') or 'unknown'}",
+            timing_hint="review_only_wait_for_confirmation",
+            urgency_hint="low",
+            passive_aggressive_hint="passive_review_only",
+            feasibility_hint="feasible_for_review_only",
+            evidence_trace_refs=(
+                f"position_review_hint_snapshot:{result.get('record_id') or 'unknown'}",
+            ),
+            diagnostics={
+                "builder_type": "replay_prediction_artifact_builder",
+                "artifact_entry": "execution_review_hint_read_only_snapshot",
+                "artifact_only": True,
+                "read_only_contract": True,
+                "execution_side_effect_free": True,
+                "broker_link_free": True,
+                "account_side_effect_free": True,
+                "not_runtime_wiring": True,
+                "not_ui_wiring": True,
+                "not_market_engine_wiring": True,
+                "record_id": result.get("record_id"),
+                "record_type": result.get("record_type"),
+            },
+        )
+    )
+    prediction_execution_review_hint_snapshot = execution_review_hint_to_snapshot(
+        execution_review_hint
+    )
 
     calibration_hint = build_prediction_calibration_hint(
         PredictionCalibrationBuildInput(
@@ -353,6 +391,7 @@ def build_prediction_state_from_replay_result(
         "tactic_proposal_output": tactic_proposal_output,
         "prediction_direction_snapshot": prediction_direction_snapshot,
         "prediction_position_review_hint_snapshot": prediction_position_review_hint_snapshot,
+        "prediction_execution_review_hint_snapshot": prediction_execution_review_hint_snapshot,
         "calibration_hint": calibration_hint,
         "mid_price": _resolve_mid_price(result),
         "best_bid": safe_float(result.get("best_bid")),
@@ -457,6 +496,7 @@ class ReplayPredictionArtifactBuilder:
         tactic_operation_record = None
         prediction_direction_snapshot = None
         prediction_position_review_hint_snapshot = None
+        prediction_execution_review_hint_snapshot = None
 
         if self._pending_prediction_state is not None:
             realized_outcome = _build_proxy_realized_outcome(
@@ -521,6 +561,11 @@ class ReplayPredictionArtifactBuilder:
                     "prediction_position_review_hint_snapshot"
                 ]
             )
+            prediction_execution_review_hint_snapshot = dict(
+                self._pending_prediction_state[
+                    "prediction_execution_review_hint_snapshot"
+                ]
+            )
 
         self._pending_prediction_state = current_prediction_state
         return {
@@ -531,6 +576,7 @@ class ReplayPredictionArtifactBuilder:
             "tactic_operation_record": tactic_operation_record,
             "prediction_direction_snapshot": prediction_direction_snapshot,
             "prediction_position_review_hint_snapshot": prediction_position_review_hint_snapshot,
+            "prediction_execution_review_hint_snapshot": prediction_execution_review_hint_snapshot,
         }
 
     def consume_result(self, result: dict[str, Any]) -> dict[str, Any] | None:

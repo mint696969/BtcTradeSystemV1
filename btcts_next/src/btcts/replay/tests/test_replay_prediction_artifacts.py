@@ -47,6 +47,7 @@ def main() -> int:
     assert first_artifacts["tactic_operation_record"] is None
     assert first_artifacts["prediction_direction_snapshot"] is None
     assert first_artifacts["prediction_position_review_hint_snapshot"] is None
+    assert first_artifacts["prediction_execution_review_hint_snapshot"] is None
 
     artifacts = builder.consume_result_artifacts(second)
 
@@ -122,6 +123,22 @@ def main() -> int:
     assert position_snapshot["not_runtime_wiring"] is True
     assert position_snapshot["not_ui_wiring"] is True
     assert position_snapshot["diagnostics"]["artifact_only"] is True
+
+    execution_snapshot = artifacts["prediction_execution_review_hint_snapshot"]
+    assert execution_snapshot is not None
+    assert execution_snapshot["prediction_type"] == "execution_review_hint"
+    assert execution_snapshot["source_kind"] == "replay_artifact_only"
+    assert execution_snapshot["scenario_ref"] == direction_snapshot["scenario_ref"]
+    assert execution_snapshot["direction_ref"] == "direction_snapshot.row_1"
+    assert execution_snapshot["position_ref"] == "position_review_hint_snapshot.row_1"
+    assert execution_snapshot["execution_context_ref"] == "execution_context.review_only.row_1"
+    assert execution_snapshot["read_only_contract"] is True
+    assert execution_snapshot["execution_side_effect_free"] is True
+    assert execution_snapshot["broker_link_free"] is True
+    assert execution_snapshot["account_side_effect_free"] is True
+    assert execution_snapshot["not_runtime_wiring"] is True
+    assert execution_snapshot["not_ui_wiring"] is True
+    assert execution_snapshot["diagnostics"]["artifact_only"] is True
 
     tactic_operation = artifacts["tactic_operation_record"]
     assert tactic_operation is not None
