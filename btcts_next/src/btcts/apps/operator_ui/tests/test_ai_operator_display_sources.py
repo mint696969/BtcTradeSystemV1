@@ -70,7 +70,20 @@ def main() -> int:
                 "context_available": True,
                 "widget_reusable": True,
             },
+            "source_catalog": display_sources.load_operator_display_source_catalog(),
         }
+        catalog = loaded["source_catalog"]
+        assert isinstance(catalog, tuple)
+        assert {item["source_key"] for item in catalog} == {
+            "summary_widget",
+            "prediction_widget",
+            "tactic_context",
+            "review_hint_context",
+            "review_hint_display",
+        }
+        assert all(item["read_only_contract"] is True for item in catalog)
+        assert all(item["widget_reusable"] is True for item in catalog)
+        assert all(item["layout_decision_free"] is True for item in catalog)
     finally:
         display_sources.load_market_summary_widget_model = (
             original_load_market_summary_widget_model
