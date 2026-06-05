@@ -26,6 +26,9 @@ def main() -> int:
     original_load_prediction_review_hint_summary_payload = (
         display_sources.load_prediction_review_hint_summary_payload
     )
+    original_review_hint_display_sections = (
+        display_sources.review_hint_display_sections
+    )
 
     try:
         display_sources.load_market_summary_widget_model = lambda: {
@@ -42,6 +45,12 @@ def main() -> int:
             "context_type": "prediction_review_hint_summary_context",
             "available": True,
         }
+        display_sources.review_hint_display_sections = lambda context: {
+            "section_type": "prediction_review_hint_display_context",
+            "compact_line": "review_hint_reading=test",
+            "context_available": context["available"],
+            "widget_reusable": True,
+        }
 
         loaded = display_sources.load_operator_display_sources()
         assert loaded == {
@@ -54,6 +63,12 @@ def main() -> int:
             "review_hint_context": {
                 "context_type": "prediction_review_hint_summary_context",
                 "available": True,
+            },
+            "review_hint_display": {
+                "section_type": "prediction_review_hint_display_context",
+                "compact_line": "review_hint_reading=test",
+                "context_available": True,
+                "widget_reusable": True,
             },
         }
     finally:
@@ -68,6 +83,9 @@ def main() -> int:
         )
         display_sources.load_prediction_review_hint_summary_payload = (
             original_load_prediction_review_hint_summary_payload
+        )
+        display_sources.review_hint_display_sections = (
+            original_review_hint_display_sections
         )
 
     print("ok")
