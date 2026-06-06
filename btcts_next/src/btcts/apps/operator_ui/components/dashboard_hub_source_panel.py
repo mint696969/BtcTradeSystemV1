@@ -1,0 +1,82 @@
+# path: ./btcts_next/src/btcts/apps/operator_ui/components/dashboard_hub_source_panel.py
+# desc: Minimal Streamlit component renderer for dashboard hub display source presenter. No app.py/page routing/runtime wiring.
+
+from __future__ import annotations
+
+import streamlit as st
+
+from btcts.apps.operator_ui.components import live_shell
+from btcts.apps.operator_ui.hub.display_source_presenter import (
+    dashboard_hub_display_source_presenter,
+)
+
+DASHBOARD_HUB_SOURCE_PANEL_CONTRACT = {
+    "panel_type": "dashboard_hub_display_source_panel",
+    "dashboard_role": "hub",
+    "read_only_contract": True,
+    "streamlit_rendering": True,
+    "component_only_rendering": True,
+    "not_app_py_wiring": True,
+    "not_page_routing": True,
+    "not_runtime_wiring": True,
+    "not_broker_or_order_wiring": True,
+}
+
+
+def _rows_for_table(rows: tuple[dict, ...] | list[dict]) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for row in rows or ():
+        if not isinstance(row, dict):
+            continue
+        normalized.append(
+            {
+                "label": str(row.get("label") or ""),
+                "value": str(row.get("value") or ""),
+            }
+        )
+    return normalized
+
+
+def _status_tone(status_label: str) -> str:
+    if status_label == "ready":
+        return "primary"
+    return "danger"
+
+
+def render_dashboard_hub_display_source_panel(presenter: dict | None = None) -> dict:
+    payload = presenter or dashboard_hub_display_source_presenter()
+    title = str(payload.get("title") or "Dashboard hub display source diagnostics")
+    subtitle = str(payload.get("subtitle") or "Read-only source readiness for future dashboard panels")
+    status_label = str(payload.get("status_label") or "blocked")
+    summary_rows = _rows_for_table(payload.get("summary_rows") or ())
+    detail_rows = _rows_for_table(payload.get("detail_rows") or ())
+
+    with live_shell.panel_container(
+        label=title,
+        tone=_status_tone(status_label),
+        help_text=subtitle,
+    ):
+        st.caption(f"status: {status_label}")
+        if summary_rows:
+            st.table(summary_rows)
+        if detail_rows:
+            with st.expander("details", expanded=False):
+                st.table(detail_rows)
+        if not summary_rows and not detail_rows:
+            st.caption("No dashboard hub display source diagnostics are available.")
+
+    return {
+        **DASHBOARD_HUB_SOURCE_PANEL_CONTRACT,
+        "presenter_type": payload.get("presenter_type"),
+        "status_label": status_label,
+        "summary_row_count": len(summary_rows),
+        "detail_row_count": len(detail_rows),
+        "rendered": True,
+        "app_py_wired": False,
+        "page_routing_wired": False,
+        "runtime_wired": False,
+        "compact_line": (
+            "dashboard_hub_source_panel="
+            f"status:{status_label};summary_rows:{len(summary_rows)};detail_rows:{len(detail_rows)}"
+        ),
+    }
