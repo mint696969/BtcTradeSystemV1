@@ -54,7 +54,7 @@ def dashboard_hub_display_source_ui_entry_criteria(diagnostics: dict | None = No
         "streamlit_rendering_allowed": streamlit_rendering_allowed,
         "layout_decision_allowed": layout_decision_allowed,
         "next_required_step": (
-            "create_separate_render_free_presenter_entry" if ui_entry_ready else "fix_diagnostics_before_ui_entry"
+            "manual_streamlit_smoke_passed_health_page_panel_visible" if ui_entry_ready else "fix_diagnostics_before_ui_entry"
         ),
         "compact_line": (
             "dashboard_hub_source_ui_entry="

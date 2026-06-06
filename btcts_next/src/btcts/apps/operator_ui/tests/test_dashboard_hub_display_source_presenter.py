@@ -55,7 +55,7 @@ def main() -> int:
         "missing_references": (),
         "empty_page_keys": (),
         "orphan_source_keys": (),
-        "next_required_step": "create_separate_render_free_presenter_entry",
+        "next_required_step": "manual_streamlit_smoke_passed_health_page_panel_visible",
     })
     assert ready["status_label"] == "ready"
     assert ready["ui_entry_ready"] is True
