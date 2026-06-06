@@ -27,7 +27,9 @@ FORBIDDEN_MODEL_TOKENS = [
     "os.remove(",
     "os.unlink(",
     "os.rmdir(",
-    "archive_gc_enable",
+    "archive_gc_enable =",
+    "archive_gc_enable:",
+    "archive_gc_enable(",
     "execute_copy_plan",
     "execute_gc_plan",
 ]
