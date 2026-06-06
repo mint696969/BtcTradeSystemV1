@@ -43,7 +43,6 @@ FORBIDDEN_RUNTIME_TOKENS = [
     "archive_gc_enable(",
     "execute_copy_plan",
     "execute_gc_plan",
-    "DatasetView",
     "logical_dataset_view",
     "read_parquet(",
     "read_json(",

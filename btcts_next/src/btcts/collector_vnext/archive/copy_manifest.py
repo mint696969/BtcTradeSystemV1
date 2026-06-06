@@ -296,3 +296,116 @@ def build_manifest_writer_dry_run_payload(
             "not_health_render_path_scan": True,
         },
     }
+
+
+@dataclass(frozen=True)
+class HotColdLogicalDatasetViewRow:
+    """Duplicate-safe logical dataset row built from manifest metadata only."""
+
+    logical_file_id: str
+    exchange: str
+    symbol: str
+    rel_file: str
+    storage_tier_selected: str
+    hot_present: bool
+    cold_present: bool
+    cold_verified_by_manifest: bool
+    selected_size_bytes: int
+    selected_hash_algorithm: str
+    selected_hash: str | None
+    selection_reason: str
+    not_physical_path_identity: bool = True
+    not_dataset_reader: bool = True
+    not_copy_executor: bool = True
+    not_delete_executor: bool = True
+    not_archive_gc_enablement: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def build_logical_file_id(*, exchange: str, symbol: str, rel_file: str) -> str:
+    """Build the duplicate-safe logical identity. Physical roots are intentionally excluded."""
+    normalized = normalize_rel_file(rel_file)
+    return f"{str(exchange)}:{str(symbol)}:{normalized}"
+
+
+def build_duplicate_safe_dataset_view_rows(
+    rows: list[HotColdCopyManifestRow | dict[str, Any]],
+    *,
+    hot_retention_days: int = 10,
+) -> list[HotColdLogicalDatasetViewRow]:
+    """Build duplicate-safe logical dataset rows from manifest rows only.
+
+    This function does not read D/E data files, scan directories, connect to
+    simulation/training, copy files, delete files, or enable archive GC.
+    """
+    selected_by_id: dict[str, HotColdLogicalDatasetViewRow] = {}
+
+    for row in rows:
+        data = row.to_dict() if isinstance(row, HotColdCopyManifestRow) else dict(row)
+        validation = validate_manifest_row(data)
+        if not validation.get("ok"):
+            raise ValueError("manifest_row_invalid_for_duplicate_safe_view: " + ",".join(validation.get("failures") or []))
+
+        exchange = str(data.get("exchange") or "")
+        symbol = str(data.get("symbol") or "")
+        rel_file = normalize_rel_file(str(data.get("rel_file") or ""))
+        logical_file_id = build_logical_file_id(exchange=exchange, symbol=symbol, rel_file=rel_file)
+        hot_present = int(data.get("hot_size_bytes") or 0) > 0
+        cold_present = int(data.get("cold_size_bytes") or 0) > 0
+        cold_verified = bool(validation.get("copy_verified")) and cold_present
+
+        # Manifest rows represent verified cold copies. Until a future catalog provides
+        # partition age, select cold when verified; otherwise keep hot. This keeps the
+        # skeleton deterministic without opening file reads or retention-date parsing.
+        storage_tier_selected = "cold" if cold_verified else "hot"
+        selected_size_bytes = int(data.get("cold_size_bytes") if storage_tier_selected == "cold" else data.get("hot_size_bytes"))
+        selected_hash = data.get("cold_hash") if storage_tier_selected == "cold" else data.get("hot_hash")
+        view_row = HotColdLogicalDatasetViewRow(
+            logical_file_id=logical_file_id,
+            exchange=exchange,
+            symbol=symbol,
+            rel_file=rel_file,
+            storage_tier_selected=storage_tier_selected,
+            hot_present=hot_present,
+            cold_present=cold_present,
+            cold_verified_by_manifest=cold_verified,
+            selected_size_bytes=selected_size_bytes,
+            selected_hash_algorithm=str(data.get("hash_algorithm") or ""),
+            selected_hash=selected_hash,
+            selection_reason=(
+                f"cold_verified_by_manifest_hot_retention_days_{int(hot_retention_days)}"
+                if cold_verified
+                else f"hot_preferred_until_cold_verified_hot_retention_days_{int(hot_retention_days)}"
+            ),
+        )
+
+        existing = selected_by_id.get(logical_file_id)
+        if existing is None:
+            selected_by_id[logical_file_id] = view_row
+            continue
+        if existing.storage_tier_selected != "cold" and view_row.storage_tier_selected == "cold":
+            selected_by_id[logical_file_id] = view_row
+
+    return [selected_by_id[key] for key in sorted(selected_by_id)]
+
+
+def summarize_duplicate_safe_dataset_view(rows: list[HotColdLogicalDatasetViewRow]) -> dict[str, Any]:
+    """Summarize duplicate-safe view rows without reading dataset files."""
+    logical_ids = [row.logical_file_id for row in rows]
+    duplicate_count = len(logical_ids) - len(set(logical_ids))
+    return {
+        "schema_version": "hot_cold_duplicate_safe_dataset_view_v1",
+        "row_count": len(rows),
+        "duplicate_logical_file_id_count": duplicate_count,
+        "cold_selected_count": sum(1 for row in rows if row.storage_tier_selected == "cold"),
+        "hot_selected_count": sum(1 for row in rows if row.storage_tier_selected == "hot"),
+        "not_dataset_reader": True,
+        "not_simulation_connector": True,
+        "not_training_connector": True,
+        "not_copy_executor": True,
+        "not_delete_executor": True,
+        "not_archive_gc_enablement": True,
+    }
+

@@ -13,12 +13,15 @@ if str(_SRC_ROOT) not in sys.path:
 from btcts.collector_vnext.archive.copy_manifest import (  # noqa: E402
     COPY_MANIFEST_JSONL_WRITER_SCHEMA_VERSION,
     COPY_MANIFEST_SCHEMA_VERSION,
+    build_duplicate_safe_dataset_view_rows,
+    build_logical_file_id,
     build_manifest_row,
     build_manifest_writer_dry_run_payload,
     manifest_row_to_jsonl,
     manifest_rows_to_jsonl,
     normalize_rel_file,
     parse_manifest_jsonl_text,
+    summarize_duplicate_safe_dataset_view,
     validate_manifest_row,
 )
 
@@ -107,6 +110,29 @@ def main() -> int:
     assert payload["boundary"]["not_copy_executor"] is True
     assert payload["boundary"]["not_delete_executor"] is True
     assert payload["boundary"]["not_archive_gc_enablement"] is True
+
+
+    view_rows = build_duplicate_safe_dataset_view_rows([row, row.to_dict()])
+    assert len(view_rows) == 1
+    view_row = view_rows[0]
+    assert view_row.logical_file_id == (
+        "bitflyer:BTC_JPY:data/collector_raw/exchange=bitflyer/symbol=BTC_JPY/"
+        "channel=executions/date=2026-06-01/part-00001.jsonl"
+    )
+    assert view_row.storage_tier_selected == "cold"
+    assert view_row.hot_present is True
+    assert view_row.cold_present is True
+    assert view_row.cold_verified_by_manifest is True
+    assert view_row.not_dataset_reader is True
+    assert view_row.not_copy_executor is True
+    assert view_row.not_delete_executor is True
+    summary = summarize_duplicate_safe_dataset_view(view_rows)
+    assert summary["schema_version"] == "hot_cold_duplicate_safe_dataset_view_v1"
+    assert summary["row_count"] == 1
+    assert summary["duplicate_logical_file_id_count"] == 0
+    assert summary["cold_selected_count"] == 1
+    assert summary["not_dataset_reader"] is True
+    assert build_logical_file_id(exchange="bitflyer", symbol="BTC_JPY", rel_file=row.rel_file) == view_row.logical_file_id
 
     try:
         manifest_row_to_jsonl(mismatch)

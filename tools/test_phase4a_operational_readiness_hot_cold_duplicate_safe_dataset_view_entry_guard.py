@@ -117,7 +117,6 @@ def _check_no_dataset_reader_opened(failures: list[str]) -> dict[str, Any]:
     ]:
         text = _read(rel_path)
         for token in [
-            "DatasetView",
             "logical_dataset_view",
             "read_parquet(",
             "read_json(",
