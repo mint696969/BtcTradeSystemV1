@@ -658,6 +658,12 @@ _HEALTH_WIDGET_SLOT_SPECS: dict[str, CommonWidgetSlotSpec] = {
         "refresh_mode": "poll_normal",
         "tone": "neutral",
     },
+    "dashboard_hub_source_panel": {
+        "zone_id": "detail",
+        "priority": 118,
+        "refresh_mode": "poll_normal",
+        "tone": "neutral",
+    },
     "api_chart_panel": {
         "zone_id": "primary_live",
         "priority": 50,

@@ -51,6 +51,9 @@ from btcts.apps.operator_ui.components.evidence_presentation_panel import (
 from btcts.apps.operator_ui.components.hot_cold_retention_safety_panel import (
     render_hot_cold_retention_safety_panel,
 )
+from btcts.apps.operator_ui.components.dashboard_hub_source_panel import (
+    render_dashboard_hub_display_source_panel,
+)
 from btcts.apps.operator_ui.components.evidence_presentation_lowering_bridge import (
     lower_health_snapshot_evidence_presentation_for_ui,
 )
@@ -618,6 +621,15 @@ def render():
     live_shell.render_fragment_slot(
         health_widget_slot("evidence_presentation_panel"),
         _render_evidence_presentation_section,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
+
+    def _render_dashboard_hub_source_panel_section() -> None:
+        render_dashboard_hub_display_source_panel()
+
+    live_shell.render_fragment_slot(
+        health_widget_slot("dashboard_hub_source_panel"),
+        _render_dashboard_hub_source_panel_section,
         enabled=bool(st.session_state.get("ui_auto_refresh", True)),
     )
 
