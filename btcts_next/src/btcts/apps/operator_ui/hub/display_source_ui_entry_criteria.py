@@ -21,6 +21,19 @@ DASHBOARD_HUB_SOURCE_UI_ENTRY_CRITERIA_CONTRACT = {
 REQUIRED_DIAGNOSTIC_LEVELS = ("healthy", "coverage_gap", "review")
 
 
+def _hot_cold_entry_summary(diagnostics: dict) -> dict:
+    summary = diagnostics.get("hot_cold_summary") if isinstance(diagnostics.get("hot_cold_summary"), dict) else {}
+    return {
+        "source_key": summary.get("source_key") or "hot_cold_duplicate_safe_dataset_view_model",
+        "status_label": diagnostics.get("hot_cold_status_label") or summary.get("status_label") or "unknown",
+        "metadata_detail_status": diagnostics.get("hot_cold_metadata_detail_status") or summary.get("metadata_detail_status") or "unknown",
+        "payload_loader_status": str(summary.get("payload_loader_status") or "unknown"),
+        "dataset_reader_status": str(summary.get("dataset_reader_status") or "unknown"),
+        "dashboard_rendering_status": str(summary.get("dashboard_rendering_status") or "unknown"),
+        "entry_note": "metadata_only_ui_entry_no_payload_reader_rendering_or_executor_opened",
+    }
+
+
 def dashboard_hub_display_source_ui_entry_criteria(diagnostics: dict | None = None) -> dict:
     payload = diagnostics or dashboard_hub_display_source_diagnostics()
     guardrail_failures = tuple(str(item) for item in (payload.get("guardrail_failures") or ()) if item)
@@ -37,6 +50,7 @@ def dashboard_hub_display_source_ui_entry_criteria(diagnostics: dict | None = No
     if diagnostic_level not in REQUIRED_DIAGNOSTIC_LEVELS:
         reasons.append("diagnostic_level_must_be_entry_safe")
     ui_entry_ready = not reasons
+    hot_cold_summary = _hot_cold_entry_summary(payload)
     return {
         **DASHBOARD_HUB_SOURCE_UI_ENTRY_CRITERIA_CONTRACT,
         "diagnostics_type": payload.get("diagnostics_type"),
@@ -54,6 +68,9 @@ def dashboard_hub_display_source_ui_entry_criteria(diagnostics: dict | None = No
         "streamlit_rendering_allowed": streamlit_rendering_allowed,
         "layout_decision_allowed": layout_decision_allowed,
         "presenter_entry_policy": "create_separate_render_free_presenter_entry",
+        "hot_cold_summary": hot_cold_summary,
+        "hot_cold_status_label": hot_cold_summary.get("status_label"),
+        "hot_cold_metadata_detail_status": hot_cold_summary.get("metadata_detail_status"),
         "next_required_step": (
             "manual_streamlit_smoke_passed_health_page_panel_visible" if ui_entry_ready else "fix_diagnostics_before_ui_entry"
         ),
@@ -61,6 +78,7 @@ def dashboard_hub_display_source_ui_entry_criteria(diagnostics: dict | None = No
             "dashboard_hub_source_ui_entry="
             f"ready:{ui_entry_ready};"
             f"level:{diagnostic_level};"
-            f"blocked:{','.join(reasons) or 'none'}"
+            f"blocked:{','.join(reasons) or 'none'};"
+            f"hot_cold_status:{hot_cold_summary.get('status_label')}"
         ),
     }

@@ -36,6 +36,16 @@ def main() -> int:
             "orphan_source_keys": ("future_only",),
             "page_count": 2,
             "source_count": 2,
+            "hot_cold_summary": {
+                "source_key": "hot_cold_duplicate_safe_dataset_view_model",
+                "status_label": "catalog_ready_payload_not_opened",
+                "metadata_detail_status": "ready_for_dashboard_hub_display_source_overview",
+                "payload_loader_status": "not_opened",
+                "dataset_reader_status": "not_opened",
+                "dashboard_rendering_status": "not_opened",
+            },
+            "hot_cold_status_label": "catalog_ready_payload_not_opened",
+            "hot_cold_metadata_detail_status": "ready_for_dashboard_hub_display_source_overview",
         }
     )
     assert blocked["ui_entry_ready"] is False
@@ -44,6 +54,10 @@ def main() -> int:
     assert blocked["streamlit_rendering_allowed"] is False
     assert blocked["layout_decision_allowed"] is False
     assert blocked["next_required_step"] == "fix_diagnostics_before_ui_entry"
+    assert blocked["hot_cold_status_label"] == "catalog_ready_payload_not_opened"
+    assert blocked["hot_cold_metadata_detail_status"] == "ready_for_dashboard_hub_display_source_overview"
+    assert blocked["hot_cold_summary"]["payload_loader_status"] == "not_opened"
+    assert blocked["hot_cold_summary"]["entry_note"] == "metadata_only_ui_entry_no_payload_reader_rendering_or_executor_opened"
     assert blocked["blocked_reasons"] == (
         "guardrail_failures_must_be_empty",
         "missing_references_must_be_empty",
@@ -60,6 +74,16 @@ def main() -> int:
             "orphan_source_keys": (),
             "page_count": 7,
             "source_count": 5,
+            "hot_cold_summary": {
+                "source_key": "hot_cold_duplicate_safe_dataset_view_model",
+                "status_label": "catalog_ready_payload_not_opened",
+                "metadata_detail_status": "ready_for_dashboard_hub_display_source_overview",
+                "payload_loader_status": "not_opened",
+                "dataset_reader_status": "not_opened",
+                "dashboard_rendering_status": "not_opened",
+            },
+            "hot_cold_status_label": "catalog_ready_payload_not_opened",
+            "hot_cold_metadata_detail_status": "ready_for_dashboard_hub_display_source_overview",
         }
     )
     assert ready["ui_entry_ready"] is True
@@ -67,6 +91,9 @@ def main() -> int:
     assert ready["blocked_reasons"] == ()
     assert ready["next_required_step"] == "manual_streamlit_smoke_passed_health_page_panel_visible"
     assert ready["presenter_entry_policy"] == "create_separate_render_free_presenter_entry"
+    assert ready["hot_cold_status_label"] == "catalog_ready_payload_not_opened"
+    assert ready["hot_cold_metadata_detail_status"] == "ready_for_dashboard_hub_display_source_overview"
+    assert ready["hot_cold_summary"]["dataset_reader_status"] == "not_opened"
     assert ready["app_py_wiring_allowed"] is False
     assert ready["streamlit_rendering_allowed"] is False
     assert ready["layout_decision_allowed"] is False
@@ -87,6 +114,10 @@ def main() -> int:
     assert real_entry["app_py_wiring_allowed"] is False
     assert real_entry["streamlit_rendering_allowed"] is False
     assert real_entry["layout_decision_allowed"] is False
+    assert real_entry["hot_cold_status_label"] == "catalog_ready_payload_not_opened"
+    assert real_entry["hot_cold_metadata_detail_status"] == "ready_for_dashboard_hub_display_source_overview"
+    assert real_entry["hot_cold_summary"]["dashboard_rendering_status"] == "not_opened"
+    assert "hot_cold_status:catalog_ready_payload_not_opened" in real_entry["compact_line"]
 
     print("ok")
     return 0
