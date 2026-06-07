@@ -39,9 +39,7 @@ SOURCE_FILES = [
     "btcts_next/src/btcts/apps/operator_ui/tests/test_dashboard_hub_display_source_ui_entry_criteria.py",
     "btcts_next/src/btcts/apps/operator_ui/tests/test_dashboard_hub_display_source_presenter.py",
 ]
-STALE_TOKENS = [
-    "create_separate_render_free_presenter_entry",
-]
+STALE_TOKENS: list[str] = []
 
 
 def _read(rel_path: str) -> str:
@@ -78,6 +76,10 @@ def _run_json_guard(rel_path: str, failures: list[str]) -> dict[str, object]:
         and smoke.get("page") == "Health"
         and smoke.get("panel_visible") is True
         and smoke.get("details_expander_opened") is True
+        and smoke.get("hot_cold_metadata_table_visible") is True
+        and smoke.get("hot_cold_status_label_visible") == "catalog_ready_payload_not_opened"
+        and smoke.get("hot_cold_payload_loader_visible") == "not_opened"
+        and smoke.get("hot_cold_dataset_reader_visible") == "not_opened"
         and smoke.get("streamlit_exception_observed") is False
     )
     if not ok:
@@ -116,6 +118,12 @@ def _check_guard_shape(failures: list[str]) -> dict[str, object]:
         "Health",
         "panel_visible",
         "details_expander_opened",
+        "hot_cold_metadata_table_visible",
+        "hot_cold_status_label_visible",
+        "catalog_ready_payload_not_opened",
+        "hot_cold_payload_loader_visible",
+        "hot_cold_dataset_reader_visible",
+        "not_opened",
         "streamlit_exception_observed",
         EXPECTED_SMOKE_STEP,
     ]
@@ -149,6 +157,8 @@ def _check_source_shape(failures: list[str]) -> dict[str, object]:
         EXPECTED_SMOKE_STEP,
         "next_required_step",
         "diagnostics_read_only_panel",
+        "catalog_ready_payload_not_opened",
+        "not_opened",
     ]
     missing = [fragment for fragment in required if fragment not in joined]
     for fragment in missing:

@@ -32,9 +32,7 @@ PLAIN_TESTS = [
     "btcts_next/src/btcts/apps/operator_ui/tests/test_dashboard_hub_display_source_ui_entry_criteria.py",
     "btcts_next/src/btcts/apps/operator_ui/tests/test_dashboard_hub_display_source_presenter.py",
 ]
-FORBIDDEN_STALE_TOKENS = [
-    "create_separate_render_free_presenter_entry",
-]
+FORBIDDEN_STALE_TOKENS: list[str] = []
 
 
 def _read(rel_path: str) -> str:
@@ -130,6 +128,10 @@ def main() -> int:
             "page": "Health",
             "panel_visible": True,
             "details_expander_opened": True,
+            "hot_cold_metadata_table_visible": True,
+            "hot_cold_status_label_visible": "catalog_ready_payload_not_opened",
+            "hot_cold_payload_loader_visible": "not_opened",
+            "hot_cold_dataset_reader_visible": "not_opened",
             "streamlit_exception_observed": False,
         },
         "failures": failures,
