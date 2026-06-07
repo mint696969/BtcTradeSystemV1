@@ -53,6 +53,7 @@ def dashboard_hub_display_source_ui_entry_criteria(diagnostics: dict | None = No
         "app_py_wiring_allowed": app_py_wiring_allowed,
         "streamlit_rendering_allowed": streamlit_rendering_allowed,
         "layout_decision_allowed": layout_decision_allowed,
+        "presenter_entry_policy": "create_separate_render_free_presenter_entry",
         "next_required_step": (
             "manual_streamlit_smoke_passed_health_page_panel_visible" if ui_entry_ready else "fix_diagnostics_before_ui_entry"
         ),

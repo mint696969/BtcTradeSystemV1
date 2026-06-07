@@ -41,7 +41,7 @@ def main() -> int:
     assert blocked["ui_entry_ready"] is False
     assert blocked["blocked_reasons"] == ("guardrail_failures_must_be_empty",)
     assert blocked["summary_rows"][0] == {"label": "status", "value": "blocked"}
-    assert blocked["detail_rows"][-1] == {"label": "next_required_step", "value": "fix_diagnostics_before_ui_entry"}
+    assert {"label": "next_required_step", "value": "fix_diagnostics_before_ui_entry"} in blocked["detail_rows"]
 
     ready = dashboard_hub_display_source_presenter({
         "entry_type": "dashboard_hub_display_source_ui_entry_criteria",
@@ -56,10 +56,33 @@ def main() -> int:
         "empty_page_keys": (),
         "orphan_source_keys": (),
         "next_required_step": "manual_streamlit_smoke_passed_health_page_panel_visible",
+        "hot_cold_status": {
+            "status_label": "catalog_ready_payload_not_opened",
+            "metadata_detail_status": "ready_for_dashboard_hub_display_source_overview",
+            "unopened_boundary_statuses": {
+                "payload_loader": "not_opened",
+                "dataset_reader": "not_opened",
+                "dashboard_rendering": "not_opened",
+                "copy_executor": "not_opened",
+            },
+            "next_opening_gate": {"gate_type": "explicit_entry_criteria_required"},
+        },
     })
     assert ready["status_label"] == "ready"
     assert ready["ui_entry_ready"] is True
     assert ready["summary_rows"][5] == {"label": "allowed_initial_surface", "value": "diagnostics_read_only_panel"}
+    assert ready["hot_cold_status_label"] == "catalog_ready_payload_not_opened"
+    assert ready["hot_cold_metadata_detail_status"] == "ready_for_dashboard_hub_display_source_overview"
+    assert ready["hot_cold_detail_rows"] == (
+        {"label": "hot_cold_status", "value": "catalog_ready_payload_not_opened"},
+        {"label": "hot_cold_metadata", "value": "ready_for_dashboard_hub_display_source_overview"},
+        {"label": "hot_cold_payload_loader", "value": "not_opened"},
+        {"label": "hot_cold_dataset_reader", "value": "not_opened"},
+        {"label": "hot_cold_dashboard_rendering", "value": "not_opened"},
+        {"label": "hot_cold_copy_executor", "value": "not_opened"},
+        {"label": "hot_cold_next_gate", "value": "explicit_entry_criteria_required"},
+    )
+    assert ready["detail_rows"][-7:] == ready["hot_cold_detail_rows"]
     assert ready["compact_line"].startswith("dashboard_hub_source_presenter=")
 
     real_presenter = dashboard_hub_display_source_presenter()
@@ -72,6 +95,8 @@ def main() -> int:
     assert real_presenter["not_ui_rendering"] is True
     assert real_presenter["not_app_py_wiring"] is True
     assert real_presenter["render_free"] is True
+    assert len(real_presenter["hot_cold_detail_rows"]) == 7
+    assert real_presenter["hot_cold_status_label"] in {"unknown", "catalog_ready_payload_not_opened"}
 
     print("ok")
     return 0

@@ -66,6 +66,7 @@ def main() -> int:
     assert ready["allowed_initial_surface"] == "diagnostics_read_only_panel"
     assert ready["blocked_reasons"] == ()
     assert ready["next_required_step"] == "manual_streamlit_smoke_passed_health_page_panel_visible"
+    assert ready["presenter_entry_policy"] == "create_separate_render_free_presenter_entry"
     assert ready["app_py_wiring_allowed"] is False
     assert ready["streamlit_rendering_allowed"] is False
     assert ready["layout_decision_allowed"] is False
