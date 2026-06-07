@@ -50,6 +50,9 @@ def render_dashboard_hub_display_source_panel(presenter: dict | None = None) -> 
     status_label = str(payload.get("status_label") or "blocked")
     summary_rows = _rows_for_table(payload.get("summary_rows") or ())
     detail_rows = _rows_for_table(payload.get("detail_rows") or ())
+    hot_cold_rows = _rows_for_table(payload.get("hot_cold_detail_rows") or ())
+    hot_cold_status_label = str(payload.get("hot_cold_status_label") or "unknown")
+    hot_cold_metadata_detail_status = str(payload.get("hot_cold_metadata_detail_status") or "unknown")
 
     with live_shell.panel_container(
         label=title,
@@ -71,12 +74,17 @@ def render_dashboard_hub_display_source_panel(presenter: dict | None = None) -> 
         "status_label": status_label,
         "summary_row_count": len(summary_rows),
         "detail_row_count": len(detail_rows),
+        "hot_cold_row_count": len(hot_cold_rows),
+        "hot_cold_status_label": hot_cold_status_label,
+        "hot_cold_metadata_detail_status": hot_cold_metadata_detail_status,
+        "hot_cold_rows_present": bool(hot_cold_rows),
         "rendered": True,
         "app_py_wired": False,
         "page_routing_wired": False,
         "runtime_wired": False,
         "compact_line": (
             "dashboard_hub_source_panel="
-            f"status:{status_label};summary_rows:{len(summary_rows)};detail_rows:{len(detail_rows)}"
+            f"status:{status_label};summary_rows:{len(summary_rows)};detail_rows:{len(detail_rows)};"
+            f"hot_cold_status:{hot_cold_status_label};hot_cold_rows:{len(hot_cold_rows)}"
         ),
     }

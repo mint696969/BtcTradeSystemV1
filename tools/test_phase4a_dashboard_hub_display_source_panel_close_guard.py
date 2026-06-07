@@ -1,5 +1,5 @@
 # path: ./tools/test_phase4a_dashboard_hub_display_source_panel_close_guard.py
-# desc: Close guard for component-only Streamlit dashboard hub display source panel. No app.py/page routing/runtime/broker wiring.
+# desc: Close guard for component-only Streamlit dashboard hub display source panel. No app.py/non-health page routing/runtime/broker wiring.
 
 from __future__ import annotations
 
@@ -88,6 +88,12 @@ def _check_source_shape(failures: list[str]) -> dict[str, object]:
         "dashboard_hub_display_source_panel",
         "DASHBOARD_HUB_SOURCE_PANEL_CONTRACT",
         "dashboard_hub_source_panel=",
+        "hot_cold_row_count",
+        "hot_cold_status_label",
+        "hot_cold_metadata_detail_status",
+        "hot_cold_rows_present",
+        "hot_cold_status:",
+        "catalog_ready_payload_not_opened",
         "render_dashboard_hub_display_source_panel",
         "import streamlit as st",
         "live_shell.panel_container",
@@ -121,11 +127,21 @@ def _check_app_py_untouched_boundary(failures: list[str]) -> dict[str, object]:
     return {"hits": hits}
 
 
-def _check_view_routing_untouched_boundary(failures: list[str]) -> dict[str, object]:
+def _check_view_routing_boundary(failures: list[str]) -> dict[str, object]:
+    """Allow the existing Health page component slot; ban app/page spread elsewhere."""
+    health_rel = "btcts_next/src/btcts/apps/operator_ui/views/health_page.py"
+    health_text = _read(health_rel)
+    required_health_tokens = [
+        "render_dashboard_hub_display_source_panel",
+        'health_widget_slot("dashboard_hub_source_panel")',
+    ]
+    missing_health_tokens = [token for token in required_health_tokens if token not in health_text]
+    for token in missing_health_tokens:
+        failures.append(f"health page must retain dashboard hub source panel slot wiring: {token}")
+
     paths = [
         "btcts_next/src/btcts/apps/operator_ui/views/__init__.py",
         "btcts_next/src/btcts/apps/operator_ui/views/collector_page.py",
-        "btcts_next/src/btcts/apps/operator_ui/views/health_page.py",
         "btcts_next/src/btcts/apps/operator_ui/views/research_page.py",
         "btcts_next/src/btcts/apps/operator_ui/views/warroom_page.py",
     ]
@@ -143,8 +159,8 @@ def _check_view_routing_untouched_boundary(failures: list[str]) -> dict[str, obj
         for token in forbidden:
             if token in text:
                 hits.append({"path": rel, "token": token})
-                failures.append(f"view/page routing must not be wired to dashboard hub source panel in this slice: {rel}: {token}")
-    return {"hits": hits}
+                failures.append(f"non-health view/page routing must not be wired to dashboard hub source panel: {rel}: {token}")
+    return {"missing_health_tokens": missing_health_tokens, "non_health_hits": hits}
 
 
 def main() -> int:
@@ -156,7 +172,7 @@ def main() -> int:
         "plain_tests": {rel: _run_plain_ok(rel, failures) for rel in PLAIN_TESTS},
         "source_shape": _check_source_shape(failures),
         "app_py_untouched_boundary": _check_app_py_untouched_boundary(failures),
-        "view_routing_untouched_boundary": _check_view_routing_untouched_boundary(failures),
+        "view_routing_boundary": _check_view_routing_boundary(failures),
     }
     payload = {
         "ok": not failures,
