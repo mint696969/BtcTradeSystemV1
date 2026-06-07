@@ -42,8 +42,40 @@ def main() -> int:
     assert status["simulation_connector_status"] == "not_opened"
     assert status["training_connector_status"] == "not_opened"
     assert status["copy_delete_gc_status"] == "not_opened"
+    assert status["metadata_detail_status"] == "ready_for_dashboard_hub_display_source_overview"
     assert status["status_label"] == "catalog_ready_payload_not_opened"
     assert status["compact_line"].startswith("hot_cold_source_status=")
+
+    unopened = status["unopened_boundary_statuses"]
+    assert unopened["payload_loader"] == "not_opened"
+    assert unopened["dataset_reader"] == "not_opened"
+    assert unopened["dashboard_rendering"] == "not_opened"
+    assert unopened["copy_executor"] == "not_opened"
+    assert unopened["delete_executor"] == "not_opened"
+    assert unopened["archive_gc_enablement"] == "not_opened"
+
+    detail_rows = status["readiness_detail_rows"]
+    assert len(detail_rows) == 11
+    assert all(row["ok"] is True for row in detail_rows)
+    assert {row["boundary"] for row in detail_rows} >= {
+        "catalog",
+        "schema",
+        "identity",
+        "payload_loader",
+        "dataset_reader",
+        "dashboard_rendering",
+        "copy_executor",
+        "delete_executor",
+        "archive_gc_enablement",
+    }
+
+    gate = status["next_opening_gate"]
+    assert gate["gate_type"] == "explicit_entry_criteria_required"
+    assert gate["payload_loader_allowed"] is False
+    assert gate["dataset_reader_allowed"] is False
+    assert gate["dashboard_rendering_allowed"] is False
+    assert gate["copy_delete_gc_allowed"] is False
+    assert gate["app_py_wiring_allowed"] is False
 
     flags = status["readiness_flags"]
     assert flags["catalog_present"] is True

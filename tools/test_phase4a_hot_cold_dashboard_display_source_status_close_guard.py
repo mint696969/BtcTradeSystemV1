@@ -109,6 +109,10 @@ def _check_source_shape(failures: list[str]) -> dict[str, Any]:
         "simulation_connector_status",
         "training_connector_status",
         "copy_delete_gc_status",
+        "unopened_boundary_statuses",
+        "readiness_detail_rows",
+        "next_opening_gate",
+        "metadata_detail_status",
         "payload_loader_opened",
         "dashboard_rendering_opened",
         "dataset_reader_opened",
@@ -154,6 +158,13 @@ print(json.dumps(status, sort_keys=True))
         and status.get("simulation_connector_status") == "not_opened"
         and status.get("training_connector_status") == "not_opened"
         and status.get("copy_delete_gc_status") == "not_opened"
+        and status.get("metadata_detail_status") == "ready_for_dashboard_hub_display_source_overview"
+        and (status.get("unopened_boundary_statuses") or {}).get("payload_loader") == "not_opened"
+        and (status.get("unopened_boundary_statuses") or {}).get("dataset_reader") == "not_opened"
+        and (status.get("unopened_boundary_statuses") or {}).get("dashboard_rendering") == "not_opened"
+        and (status.get("next_opening_gate") or {}).get("gate_type") == "explicit_entry_criteria_required"
+        and (status.get("next_opening_gate") or {}).get("payload_loader_allowed") is False
+        and len(status.get("readiness_detail_rows") or ()) == 11
         and flags.get("catalog_present") is True
         and flags.get("schema_version_known") is True
         and flags.get("logical_identity_known") is True

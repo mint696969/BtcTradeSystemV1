@@ -32,6 +32,57 @@ def _find_source(source_key: str) -> dict:
     return {}
 
 
+def _readiness_detail_rows(readiness_flags: dict) -> tuple[dict, ...]:
+    ordered = (
+        ("catalog_present", "catalog", "ready", "catalog metadata is registered"),
+        ("schema_version_known", "schema", "ready", "schema version is known"),
+        ("logical_identity_known", "identity", "ready", "logical identity is known"),
+        ("payload_loader_opened", "payload_loader", "not_opened", "payload loader remains unopened"),
+        ("dataset_reader_opened", "dataset_reader", "not_opened", "dataset reader remains unopened"),
+        ("dashboard_rendering_opened", "dashboard_rendering", "not_opened", "dashboard rendering remains unopened"),
+        ("simulation_connector_opened", "simulation_connector", "not_opened", "simulation connector remains unopened"),
+        ("training_connector_opened", "training_connector", "not_opened", "training connector remains unopened"),
+        ("copy_executor_opened", "copy_executor", "not_opened", "copy executor remains unopened"),
+        ("delete_executor_opened", "delete_executor", "not_opened", "delete executor remains unopened"),
+        ("archive_gc_enablement_opened", "archive_gc_enablement", "not_opened", "archive GC enablement remains unopened"),
+    )
+    rows: list[dict] = []
+    for flag_key, boundary, expected_state, note in ordered:
+        value = bool(readiness_flags.get(flag_key))
+        if expected_state == "ready":
+            actual_state = "ready" if value else "missing"
+        else:
+            actual_state = "opened" if value else "not_opened"
+        rows.append(
+            {
+                "flag_key": flag_key,
+                "boundary": boundary,
+                "expected_state": expected_state,
+                "actual_state": actual_state,
+                "ok": actual_state == expected_state,
+                "note": note,
+            }
+        )
+    return tuple(rows)
+
+
+def _unopened_boundary_statuses(readiness_flags: dict) -> dict:
+    boundary_keys = {
+        "payload_loader": "payload_loader_opened",
+        "dataset_reader": "dataset_reader_opened",
+        "dashboard_rendering": "dashboard_rendering_opened",
+        "simulation_connector": "simulation_connector_opened",
+        "training_connector": "training_connector_opened",
+        "copy_executor": "copy_executor_opened",
+        "delete_executor": "delete_executor_opened",
+        "archive_gc_enablement": "archive_gc_enablement_opened",
+    }
+    return {
+        boundary: ("opened" if bool(readiness_flags.get(flag_key)) else "not_opened")
+        for boundary, flag_key in boundary_keys.items()
+    }
+
+
 def hot_cold_duplicate_safe_dataset_view_source_status() -> dict:
     """Return catalog/status metadata only; does not load dataset payloads or render UI."""
     source_key = "hot_cold_duplicate_safe_dataset_view_model"
@@ -54,6 +105,17 @@ def hot_cold_duplicate_safe_dataset_view_source_status() -> dict:
     status_label = "catalog_ready_payload_not_opened" if all(
         value is True for key, value in readiness_flags.items() if key in ("catalog_present", "schema_version_known", "logical_identity_known")
     ) else "catalog_review"
+    readiness_detail_rows = _readiness_detail_rows(readiness_flags)
+    unopened_boundary_statuses = _unopened_boundary_statuses(readiness_flags)
+    next_opening_gate = {
+        "gate_type": "explicit_entry_criteria_required",
+        "payload_loader_allowed": False,
+        "dataset_reader_allowed": False,
+        "dashboard_rendering_allowed": False,
+        "copy_delete_gc_allowed": False,
+        "app_py_wiring_allowed": False,
+        "reason": "status model is metadata-only and must not open payload/reader/rendering/executor boundaries",
+    }
     return {
         **HOT_COLD_DISPLAY_SOURCE_STATUS_CONTRACT,
         "source_key": source_key,
@@ -71,7 +133,11 @@ def hot_cold_duplicate_safe_dataset_view_source_status() -> dict:
         "simulation_connector_status": "not_opened",
         "training_connector_status": "not_opened",
         "copy_delete_gc_status": "not_opened",
+        "unopened_boundary_statuses": unopened_boundary_statuses,
         "readiness_flags": readiness_flags,
+        "readiness_detail_rows": readiness_detail_rows,
+        "next_opening_gate": next_opening_gate,
+        "metadata_detail_status": "ready_for_dashboard_hub_display_source_overview",
         "status_label": status_label,
         "compact_line": (
             "hot_cold_source_status="
