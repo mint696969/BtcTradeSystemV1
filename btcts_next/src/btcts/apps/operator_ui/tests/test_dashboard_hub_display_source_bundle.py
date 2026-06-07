@@ -32,8 +32,17 @@ def main() -> int:
     assert "collector" in bundle["page_keys"]
     assert "summary_widget" in bundle["source_keys"]
     assert "review_hint_display" in bundle["source_keys"]
+    assert "hot_cold_duplicate_safe_dataset_view_model" in bundle["source_keys"]
     assert bundle["missing_references"] == ()
+    assert bundle["hot_cold_status_label"] == "catalog_ready_payload_not_opened"
+    assert bundle["hot_cold_metadata_detail_status"] == "ready_for_dashboard_hub_display_source_overview"
+    assert bundle["hot_cold_summary"]["source_key"] == "hot_cold_duplicate_safe_dataset_view_model"
+    assert bundle["hot_cold_summary"]["payload_loader_status"] == "not_opened"
+    assert bundle["hot_cold_summary"]["dataset_reader_status"] == "not_opened"
+    assert bundle["hot_cold_summary"]["dashboard_rendering_status"] == "not_opened"
+    assert bundle["hot_cold_summary"]["copy_executor_status"] == "not_opened"
     assert bundle["compact_line"].startswith("dashboard_hub_source_bundle=")
+    assert "hot_cold_bundle_summary=" in bundle["compact_line"]
 
     assert bundle["registry"]["registry_type"] == "dashboard_hub_display_source_registry"
     assert bundle["overview"]["overview_type"] == "dashboard_hub_display_source_overview"
