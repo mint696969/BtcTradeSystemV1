@@ -21,21 +21,27 @@ DASHBOARD_HUB_SOURCE_PRESENTER_CONTRACT = {
 
 
 def _hot_cold_detail_rows(entry: dict) -> tuple[dict, ...]:
+    summary = entry.get("hot_cold_summary") if isinstance(entry.get("hot_cold_summary"), dict) else {}
     status = entry.get("hot_cold_status") if isinstance(entry.get("hot_cold_status"), dict) else {}
     unopened = entry.get("hot_cold_unopened_boundary_statuses")
     if not isinstance(unopened, dict):
         unopened = status.get("unopened_boundary_statuses") if isinstance(status.get("unopened_boundary_statuses"), dict) else {}
-    status_label = entry.get("hot_cold_status_label") or status.get("status_label") or "unknown"
-    metadata_detail_status = entry.get("hot_cold_metadata_detail_status") or status.get("metadata_detail_status") or "unknown"
+    status_label = entry.get("hot_cold_status_label") or summary.get("status_label") or status.get("status_label") or "unknown"
+    metadata_detail_status = (
+        entry.get("hot_cold_metadata_detail_status")
+        or summary.get("metadata_detail_status")
+        or status.get("metadata_detail_status")
+        or "unknown"
+    )
     next_gate = status.get("next_opening_gate") if isinstance(status.get("next_opening_gate"), dict) else {}
     return (
         {"label": "hot_cold_status", "value": str(status_label)},
         {"label": "hot_cold_metadata", "value": str(metadata_detail_status)},
-        {"label": "hot_cold_payload_loader", "value": str(unopened.get("payload_loader") or "unknown")},
-        {"label": "hot_cold_dataset_reader", "value": str(unopened.get("dataset_reader") or "unknown")},
-        {"label": "hot_cold_dashboard_rendering", "value": str(unopened.get("dashboard_rendering") or "unknown")},
-        {"label": "hot_cold_copy_executor", "value": str(unopened.get("copy_executor") or "unknown")},
-        {"label": "hot_cold_next_gate", "value": str(next_gate.get("gate_type") or "unknown")},
+        {"label": "hot_cold_payload_loader", "value": str(summary.get("payload_loader_status") or unopened.get("payload_loader") or "unknown")},
+        {"label": "hot_cold_dataset_reader", "value": str(summary.get("dataset_reader_status") or unopened.get("dataset_reader") or "unknown")},
+        {"label": "hot_cold_dashboard_rendering", "value": str(summary.get("dashboard_rendering_status") or unopened.get("dashboard_rendering") or "unknown")},
+        {"label": "hot_cold_copy_executor", "value": str(summary.get("copy_executor_status") or unopened.get("copy_executor") or "unknown")},
+        {"label": "hot_cold_next_gate", "value": str(summary.get("entry_note") or next_gate.get("gate_type") or "unknown")},
     )
 
 

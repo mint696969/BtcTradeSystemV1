@@ -97,6 +97,8 @@ def _check_source_shape(failures: list[str]) -> dict[str, object]:
         "hot_cold_detail_rows",
         "hot_cold_status_label",
         "hot_cold_metadata_detail_status",
+        "metadata_only_ui_entry_no_payload_reader_rendering_or_executor_opened",
+        "catalog_ready_payload_not_opened",
         "render_free",
         "not_app_py_wiring",
         "not_ui_rendering",

@@ -96,7 +96,15 @@ def main() -> int:
     assert real_presenter["not_app_py_wiring"] is True
     assert real_presenter["render_free"] is True
     assert len(real_presenter["hot_cold_detail_rows"]) == 7
-    assert real_presenter["hot_cold_status_label"] in {"unknown", "catalog_ready_payload_not_opened"}
+    assert real_presenter["hot_cold_status_label"] == "catalog_ready_payload_not_opened"
+    assert real_presenter["hot_cold_metadata_detail_status"] == "ready_for_dashboard_hub_display_source_overview"
+    assert real_presenter["hot_cold_detail_rows"][2] == {"label": "hot_cold_payload_loader", "value": "not_opened"}
+    assert real_presenter["hot_cold_detail_rows"][3] == {"label": "hot_cold_dataset_reader", "value": "not_opened"}
+    assert real_presenter["hot_cold_detail_rows"][4] == {"label": "hot_cold_dashboard_rendering", "value": "not_opened"}
+    assert real_presenter["hot_cold_detail_rows"][6] == {
+        "label": "hot_cold_next_gate",
+        "value": "metadata_only_ui_entry_no_payload_reader_rendering_or_executor_opened",
+    }
 
     print("ok")
     return 0

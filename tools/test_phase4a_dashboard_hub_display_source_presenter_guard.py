@@ -66,7 +66,8 @@ def _check_source(failures: list[str]) -> dict[str, object]:
     required = [
         "dashboard_hub_display_source_presenter", "DASHBOARD_HUB_SOURCE_PRESENTER_CONTRACT",
         "dashboard_hub_source_presenter=", "summary_rows", "detail_rows", "hot_cold_detail_rows",
-        "hot_cold_status_label", "hot_cold_metadata_detail_status", "hot_cold_next_gate", "render_free",
+        "hot_cold_status_label", "hot_cold_metadata_detail_status", "hot_cold_next_gate",
+        "metadata_only_ui_entry_no_payload_reader_rendering_or_executor_opened", "catalog_ready_payload_not_opened", "render_free",
         "not_app_py_wiring", "not_ui_rendering", "layout_decision_free", "read_only_contract",
     ]
     missing = [fragment for fragment in required if fragment not in joined]
