@@ -8,6 +8,9 @@ from typing import Iterable
 from btcts.apps.operator_ui.components.ai_operator_display_sources import (
     load_operator_display_source_catalog as load_ai_operator_display_source_catalog,
 )
+from btcts.apps.operator_ui.components.hot_cold_display_sources import (
+    load_hot_cold_display_source_catalog,
+)
 
 OPERATOR_DASHBOARD_HUB_CONTRACT = {
     "catalog_type": "operator_dashboard_display_source_catalog",
@@ -36,10 +39,15 @@ def _with_origin(items: Iterable[dict], origin: str) -> tuple[dict, ...]:
 
 
 def load_operator_dashboard_display_source_catalog() -> dict:
-    sources = _with_origin(
+    ai_sources = _with_origin(
         load_ai_operator_display_source_catalog(),
         "ai_operator_display_sources",
     )
+    hot_cold_sources = _with_origin(
+        load_hot_cold_display_source_catalog(),
+        "hot_cold_display_sources",
+    )
+    sources = ai_sources + hot_cold_sources
     return {
         **OPERATOR_DASHBOARD_HUB_CONTRACT,
         "sources": sources,
