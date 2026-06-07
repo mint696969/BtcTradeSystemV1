@@ -63,6 +63,11 @@ def main() -> int:
     assert "hot_cold_status_label" in source
     assert "hot_cold_metadata_detail_status" in source
     assert "hot_cold_rows_present" in source
+    assert "hot_cold_table_rendered" in source
+    assert "hot_cold_table_caption" in source
+    assert "Hot/Cold metadata" in source
+    assert "if detail_rows or hot_cold_rows" in source
+    assert "not summary_rows and not detail_rows and not hot_cold_rows" in source
     assert "hot_cold_status:" in source
 
     print("ok")

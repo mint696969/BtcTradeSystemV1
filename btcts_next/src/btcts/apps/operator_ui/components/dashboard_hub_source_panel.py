@@ -62,10 +62,14 @@ def render_dashboard_hub_display_source_panel(presenter: dict | None = None) -> 
         st.caption(f"status: {status_label}")
         if summary_rows:
             st.table(summary_rows)
-        if detail_rows:
+        if detail_rows or hot_cold_rows:
             with st.expander("details", expanded=False):
-                st.table(detail_rows)
-        if not summary_rows and not detail_rows:
+                if detail_rows:
+                    st.table(detail_rows)
+                if hot_cold_rows:
+                    st.caption("Hot/Cold metadata")
+                    st.table(hot_cold_rows)
+        if not summary_rows and not detail_rows and not hot_cold_rows:
             st.caption("No dashboard hub display source diagnostics are available.")
 
     return {
@@ -78,6 +82,8 @@ def render_dashboard_hub_display_source_panel(presenter: dict | None = None) -> 
         "hot_cold_status_label": hot_cold_status_label,
         "hot_cold_metadata_detail_status": hot_cold_metadata_detail_status,
         "hot_cold_rows_present": bool(hot_cold_rows),
+        "hot_cold_table_rendered": bool(hot_cold_rows),
+        "hot_cold_table_caption": "Hot/Cold metadata" if hot_cold_rows else "",
         "rendered": True,
         "app_py_wired": False,
         "page_routing_wired": False,
