@@ -102,6 +102,8 @@ def _check_source_shape(failures: list[str]) -> dict[str, object]:
         "health_tab",
         "future_widget",
         "review_hint_display",
+        "hot_cold_display_sources",
+        "hot_cold_duplicate_safe_dataset_view_model",
         "widget_reusable",
         "layout_decision_free",
         "read_only_contract",

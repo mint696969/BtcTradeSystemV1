@@ -53,8 +53,17 @@ def main() -> int:
         "collector:collector_tab:1:summary_widget",
         "research:future_widget:2:summary_widget,review_hint_display",
     )
+    assert overview["hot_cold_status_label"] == "catalog_ready_payload_not_opened"
+    assert overview["hot_cold_metadata_detail_status"] == "ready_for_dashboard_hub_display_source_overview"
+    assert overview["hot_cold_status"]["readiness_detail_row_count"] == 11
+    assert overview["hot_cold_unopened_boundary_statuses"]["payload_loader"] == "not_opened"
+    assert overview["hot_cold_unopened_boundary_statuses"]["dataset_reader"] == "not_opened"
+    assert overview["hot_cold_unopened_boundary_statuses"]["dashboard_rendering"] == "not_opened"
+    assert overview["hot_cold_unopened_boundary_statuses"]["copy_executor"] == "not_opened"
+    assert overview["hot_cold_status"]["next_opening_gate"]["gate_type"] == "explicit_entry_criteria_required"
     assert overview["compact_line"].startswith("dashboard_hub_sources=")
     assert "review_hint_display" in overview["compact_line"]
+    assert "hot_cold_overview_status=" in overview["compact_line"]
     assert overview["read_only_contract"] is True
     assert overview["widget_reusable"] is True
     assert overview["layout_decision_free"] is True
@@ -66,6 +75,10 @@ def main() -> int:
     assert "collector" in real_overview["page_keys"]
     assert "summary_widget" in real_overview["source_keys"]
     assert "review_hint_display" in real_overview["source_keys"]
+    assert "hot_cold_duplicate_safe_dataset_view_model" in real_overview["source_keys"]
+    assert real_overview["hot_cold_status_label"] == "catalog_ready_payload_not_opened"
+    assert real_overview["hot_cold_metadata_detail_status"] == "ready_for_dashboard_hub_display_source_overview"
+    assert real_overview["hot_cold_unopened_boundary_statuses"]["payload_loader"] == "not_opened"
 
     print("ok")
     return 0

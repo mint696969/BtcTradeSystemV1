@@ -84,6 +84,8 @@ def _check_source(failures: list[str]) -> dict[str, object]:
         "load_operator_dashboard_display_source_catalog",
         "select_display_sources_for_consumer",
         "review_hint_display",
+        "hot_cold_display_sources",
+        "hot_cold_duplicate_safe_dataset_view_model",
         "future_widget",
         "widget_reusable",
         "layout_decision_free",

@@ -32,8 +32,15 @@ def main() -> int:
     assert catalog["source_count"] == len(catalog["sources"])
     assert catalog["source_keys"] == tuple(item["source_key"] for item in catalog["sources"])
     assert "review_hint_display" in catalog["source_keys"]
+    assert "hot_cold_duplicate_safe_dataset_view_model" in catalog["source_keys"]
     assert "source_catalog" not in catalog["source_keys"]
-    assert all(item["source_origin"] == "ai_operator_display_sources" for item in catalog["sources"])
+    origins = {item["source_origin"] for item in catalog["sources"]}
+    assert "ai_operator_display_sources" in origins
+    assert "hot_cold_display_sources" in origins
+    assert all(
+        item["source_origin"] in {"ai_operator_display_sources", "hot_cold_display_sources"}
+        for item in catalog["sources"]
+    )
     assert all(item["read_only_contract"] is True for item in catalog["sources"])
     assert all(item["widget_reusable"] is True for item in catalog["sources"])
     assert all(item["layout_decision_free"] is True for item in catalog["sources"])
@@ -48,6 +55,9 @@ def main() -> int:
         "review_hint_context",
         "review_hint_display",
     }
+
+    health_sources = select_display_sources_for_consumer("health_tab", catalog)
+    assert any(item["source_key"] == "hot_cold_duplicate_safe_dataset_view_model" for item in health_sources)
 
     future_sources = select_display_sources_for_consumer("some_future_tab", catalog)
     assert future_sources
