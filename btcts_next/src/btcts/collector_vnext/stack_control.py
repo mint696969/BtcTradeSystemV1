@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import json
+import shutil
+import socket
 import os
 import subprocess
 import sys
@@ -119,16 +121,212 @@ def _supervisor_lock_path(cfg) -> Path:
     return cfg.roots()["state"] / "unified_supervisor.lock.json"
 
 
-def _supervisor_lock_alive(cfg) -> bool:
-    payload = _safe_read(_supervisor_lock_path(cfg))
-    if not payload:
-        return False
-    return is_pid_alive(payload.get("pid"))
+def _now_iso_utc() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _write_json_file(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _backup_stale_control_files(state_dir: Path) -> str | None:
+    names = [
+        "unified_supervisor.lock.json",
+        "unified_daemon.lock.json",
+        "archive_worker.lock.json",
+        "stack_start.lock.json",
+        "unified_supervisor_request.json",
+        "archive_stop_request.json",
+        "unified_daemon_stop_request.json",
+        "unified_supervisor_status.json",
+        "archive_copy_state.json",
+        "archive_gc_state.json",
+    ]
+    existing = [state_dir / name for name in names if (state_dir / name).exists()]
+    if not existing:
+        return None
+
+    backup_dir = state_dir / f"_recovery_auto_stale_control_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    for path in existing:
+        shutil.copy2(path, backup_dir / path.name)
+    return str(backup_dir)
+
+
+def _unlink_state_file(state_dir: Path, name: str) -> None:
+    try:
+        (state_dir / name).unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def _actual_stack_process_alive(
+    *,
+    supervisor_status: dict[str, Any],
+    daemon_lock: dict[str, Any],
+    archive_lock: dict[str, Any],
+    supervisor_lock: dict[str, Any],
+) -> bool:
+    pids = [
+        supervisor_lock.get("pid"),
+        daemon_lock.get("pid"),
+        archive_lock.get("pid"),
+        supervisor_status.get("supervisor_pid"),
+        supervisor_status.get("daemon_pid"),
+    ]
+    return any(is_pid_alive(pid) for pid in pids)
+
+
+def _has_active_or_pending_control_state(
+    *,
+    supervisor_status: dict[str, Any],
+    supervisor_request: dict[str, Any],
+    archive_copy_state: dict[str, Any],
+    archive_gc_state: dict[str, Any],
+    supervisor_lock: dict[str, Any],
+    daemon_lock: dict[str, Any],
+    archive_lock: dict[str, Any],
+) -> bool:
+    supervisor_mode = _safe_mode(supervisor_status)
+    archive_copy_mode = _safe_mode(archive_copy_state)
+    archive_gc_mode = _safe_mode(archive_gc_state)
+    pending_action = str(supervisor_request.get("action") or "").strip().lower()
+    return bool(
+        supervisor_lock
+        or daemon_lock
+        or archive_lock
+        or pending_action in {"restart", "stop_stack"}
+        or supervisor_mode in _ACTIVE_SUPERVISOR_MODES
+        or archive_copy_mode in _ACTIVE_ARCHIVE_MODES
+        or archive_gc_mode in _ACTIVE_ARCHIVE_MODES
+    )
+
+
+def _write_recovered_stopped_state(state_dir: Path, *, backup_dir: str | None) -> None:
+    now = _now_iso_utc()
+    note = "auto stale control state recovery; no collector_vnext control process was alive"
+    if backup_dir:
+        note = f"{note}; backup={backup_dir}"
+
+    _write_json_file(
+        state_dir / "unified_supervisor_status.json",
+        {
+            "ts": now,
+            "mode": "STOPPED",
+            "last_action": "auto_stale_control_state_recovery",
+            "last_requested_at": None,
+            "last_completed_at": now,
+            "last_error": None,
+            "daemon_pid": None,
+            "request_ack_ts": None,
+            "acked_request_id": None,
+            "started_at": None,
+            "last_seen_ts": now,
+            "uptime_sec": None,
+            "runtime_family": "unified",
+            "supervisor_pid": None,
+            "host_name": os.environ.get("COMPUTERNAME") or socket.gethostname(),
+            "recovery_note": note,
+        },
+    )
+    _write_json_file(
+        state_dir / "archive_copy_state.json",
+        {
+            "ts": now,
+            "mode": "STOPPED",
+            "current_phase": "stopped",
+            "started_at": None,
+            "last_error": None,
+            "last_scan_ts": now,
+            "last_plan_count": 0,
+            "last_copied_files": 0,
+            "last_copied_dirs": 0,
+            "last_copied_bytes": 0,
+            "error_count": 0,
+            "plan_sample": [],
+            "recovery_note": note,
+        },
+    )
+    _write_json_file(
+        state_dir / "archive_gc_state.json",
+        {
+            "ts": now,
+            "mode": "STOPPED",
+            "current_phase": "stopped",
+            "started_at": None,
+            "dry_run": True,
+            "enabled": True,
+            "last_error": None,
+            "last_scan_ts": now,
+            "last_plan_count": 0,
+            "last_deleted_files": 0,
+            "last_deleted_bytes": 0,
+            "error_count": 0,
+            "plan_sample": [],
+            "recovery_note": note,
+        },
+    )
+
+
+def _reconcile_stale_control_state_if_safe(
+    *,
+    state_dir: Path,
+    supervisor_status: dict[str, Any],
+    supervisor_request: dict[str, Any],
+    archive_copy_state: dict[str, Any],
+    archive_gc_state: dict[str, Any],
+    supervisor_lock: dict[str, Any],
+    daemon_lock: dict[str, Any],
+    archive_lock: dict[str, Any],
+) -> dict[str, Any]:
+    actual_alive = _actual_stack_process_alive(
+        supervisor_status=supervisor_status,
+        daemon_lock=daemon_lock,
+        archive_lock=archive_lock,
+        supervisor_lock=supervisor_lock,
+    )
+    has_artifacts = _has_active_or_pending_control_state(
+        supervisor_status=supervisor_status,
+        supervisor_request=supervisor_request,
+        archive_copy_state=archive_copy_state,
+        archive_gc_state=archive_gc_state,
+        supervisor_lock=supervisor_lock,
+        daemon_lock=daemon_lock,
+        archive_lock=archive_lock,
+    )
+
+    if actual_alive or not has_artifacts:
+        return {
+            "stale_control_state_recovered": False,
+            "stale_control_state_detected": bool(has_artifacts and not actual_alive),
+            "stale_control_state_backup_dir": None,
+        }
+
+    backup_dir = _backup_stale_control_files(state_dir)
+    for name in [
+        "unified_supervisor.lock.json",
+        "unified_daemon.lock.json",
+        "archive_worker.lock.json",
+        "stack_start.lock.json",
+        "unified_supervisor_request.json",
+        "archive_stop_request.json",
+        "unified_daemon_stop_request.json",
+    ]:
+        _unlink_state_file(state_dir, name)
+    _write_recovered_stopped_state(state_dir, backup_dir=backup_dir)
+    return {
+        "stale_control_state_recovered": True,
+        "stale_control_state_detected": True,
+        "stale_control_state_backup_dir": backup_dir,
+        "stale_control_state_reason": "no_collector_vnext_control_process_alive",
+    }
 
 
 def stack_runtime_snapshot() -> dict[str, Any]:
     collector_cfg = load_config()
     archive_cfg = load_archive_config()
+    state_dir = collector_cfg.roots()["state"]
 
     supervisor_status = read_unified_supervisor_status(collector_cfg)
     supervisor_request = read_unified_supervisor_request(collector_cfg)
@@ -137,12 +335,32 @@ def stack_runtime_snapshot() -> dict[str, Any]:
 
     daemon_lock = read_lock_info(collector_cfg, runtime_family="unified") or {}
     archive_lock = read_archive_worker_lock(archive_cfg) or {}
+    supervisor_lock = _safe_read(_supervisor_lock_path(collector_cfg))
+
+    recovery = _reconcile_stale_control_state_if_safe(
+        state_dir=state_dir,
+        supervisor_status=supervisor_status,
+        supervisor_request=supervisor_request,
+        archive_copy_state=archive_copy_state,
+        archive_gc_state=archive_gc_state,
+        supervisor_lock=supervisor_lock,
+        daemon_lock=daemon_lock,
+        archive_lock=archive_lock,
+    )
+    if recovery.get("stale_control_state_recovered"):
+        supervisor_status = read_unified_supervisor_status(collector_cfg)
+        supervisor_request = read_unified_supervisor_request(collector_cfg)
+        archive_copy_state = read_archive_copy_state(archive_cfg)
+        archive_gc_state = read_archive_gc_state(archive_cfg)
+        daemon_lock = read_lock_info(collector_cfg, runtime_family="unified") or {}
+        archive_lock = read_archive_worker_lock(archive_cfg) or {}
+        supervisor_lock = _safe_read(_supervisor_lock_path(collector_cfg))
 
     pending_action_raw = str(supervisor_request.get("action") or "").strip().lower()
     pending_request_fresh = _request_is_fresh(supervisor_request, stale_sec=_REQUEST_STALE_SEC)
     pending_action = pending_action_raw if pending_request_fresh else ""
 
-    supervisor_lock_alive = _supervisor_lock_alive(collector_cfg)
+    supervisor_lock_alive = is_pid_alive(supervisor_lock.get("pid"))
     daemon_lock_alive = is_pid_alive(daemon_lock.get("pid"))
     archive_lock_alive = is_pid_alive(archive_lock.get("pid"))
 
@@ -182,6 +400,7 @@ def stack_runtime_snapshot() -> dict[str, Any]:
         "archive_gc_state": archive_gc_state,
         "supervisor_active": supervisor_active,
         "archive_active": archive_active,
+        **recovery,
     }
 
     snapshot["stack_active"] = (
