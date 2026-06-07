@@ -18,6 +18,7 @@ from btcts.apps.operator_ui.hub.display_source_page_connection_entry import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FOCUSED_GUARDS = [
+    "tools/test_phase4a_dashboard_hub_display_source_panel_close_guard.py",
     "tools/test_phase4a_dashboard_hub_display_source_health_page_insertion_guard.py",
 ]
 COMPILE_FILES = [

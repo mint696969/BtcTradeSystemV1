@@ -17,6 +17,7 @@ from btcts.apps.operator_ui.hub.display_source_page_connection_entry import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PANEL_CLOSE_GUARD = "tools/test_phase4a_dashboard_hub_display_source_panel_close_guard.py"
 COMPILE_FILES = [
     "btcts_next/src/btcts/apps/operator_ui/views/health_page.py",
     "btcts_next/src/btcts/apps/operator_ui/components/slot_definitions.py",
@@ -66,6 +67,19 @@ def _run_plain_ok(rel_path: str, failures: list[str]) -> dict[str, object]:
     if not ok:
         failures.append(f"{rel_path} must emit plain ok")
     return {"ok": ok, "returncode": proc.returncode, "stdout_tail": (proc.stdout or "")[-1000:], "stderr_tail": (proc.stderr or "")[-1000:]}
+
+
+def _run_json_guard(rel_path: str, failures: list[str]) -> dict[str, object]:
+    proc = subprocess.run([sys.executable, str(REPO_ROOT / rel_path)], cwd=str(REPO_ROOT), text=True, capture_output=True, timeout=900)
+    try:
+        parsed = json.loads(proc.stdout)
+    except Exception as exc:
+        failures.append(f"{rel_path} did not emit JSON: {exc}")
+        return {"ok": False, "returncode": proc.returncode, "stdout_tail": (proc.stdout or "")[-1600:], "stderr_tail": (proc.stderr or "")[-1600:]}
+    ok = proc.returncode == 0 and parsed.get("ok") is True and parsed.get("failures") == []
+    if not ok:
+        failures.append(f"{rel_path} must return ok true and failures []")
+    return {"ok": ok, "returncode": proc.returncode, "phase": parsed.get("phase"), "stdout_tail": (proc.stdout or "")[-1000:], "stderr_tail": (proc.stderr or "")[-1000:]}
 
 
 def _check_page_connection_entry(failures: list[str]) -> dict[str, object]:
@@ -138,6 +152,7 @@ def main() -> int:
     checks = {
         "compile_self": _compile("tools/test_phase4a_dashboard_hub_display_source_health_page_insertion_guard.py", failures),
         "compile_files": {rel: _compile(rel, failures) for rel in COMPILE_FILES},
+        "panel_close_guard": _run_json_guard(PANEL_CLOSE_GUARD, failures),
         "page_connection_entry": _check_page_connection_entry(failures),
         "plain_test": _run_plain_ok("btcts_next/src/btcts/apps/operator_ui/tests/test_dashboard_hub_display_source_health_page_insertion.py", failures),
         "source_shape": _check_source_shape(failures),

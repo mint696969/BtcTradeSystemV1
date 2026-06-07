@@ -14,6 +14,7 @@ if str(_SRC_ROOT) not in sys.path:
 from btcts.apps.operator_ui.components.slot_definitions import (  # noqa: E402
     health_widget_ids,
     health_widget_slot,
+    health_widget_zone_ids,
 )
 from btcts.apps.operator_ui.hub.display_source_page_connection_entry import (  # noqa: E402
     dashboard_hub_display_source_page_connection_entry,
@@ -40,6 +41,7 @@ def main() -> int:
     assert "render_dashboard_hub_display_source_panel" not in app_text
 
     assert "dashboard_hub_source_panel" in health_widget_ids()
+    assert "detail" in health_widget_zone_ids()
     slot = health_widget_slot("dashboard_hub_source_panel")
     assert slot["page_id"] == "health"
     assert slot["zone_id"] == "detail"
