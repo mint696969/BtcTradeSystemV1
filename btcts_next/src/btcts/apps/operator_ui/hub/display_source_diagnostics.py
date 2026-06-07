@@ -18,6 +18,20 @@ DASHBOARD_HUB_SOURCE_DIAGNOSTICS_CONTRACT = {
 }
 
 
+def _hot_cold_diagnostic_summary(bundle: dict) -> dict:
+    summary = bundle.get("hot_cold_summary") if isinstance(bundle.get("hot_cold_summary"), dict) else {}
+    return {
+        "source_key": summary.get("source_key") or "hot_cold_duplicate_safe_dataset_view_model",
+        "status_label": bundle.get("hot_cold_status_label") or summary.get("status_label") or "unknown",
+        "metadata_detail_status": bundle.get("hot_cold_metadata_detail_status") or summary.get("metadata_detail_status") or "unknown",
+        "payload_loader_status": str(summary.get("payload_loader_status") or "unknown"),
+        "dataset_reader_status": str(summary.get("dataset_reader_status") or "unknown"),
+        "dashboard_rendering_status": str(summary.get("dashboard_rendering_status") or "unknown"),
+        "copy_executor_status": str(summary.get("copy_executor_status") or "unknown"),
+        "diagnostic_note": "metadata_only_no_payload_reader_rendering_or_executor_opened",
+    }
+
+
 def _guardrail_failures(flags: dict) -> tuple[str, ...]:
     return tuple(str(key) for key, value in flags.items() if value is not True)
 
@@ -44,6 +58,7 @@ def dashboard_hub_display_source_diagnostics(bundle: dict | None = None) -> dict
     orphan_source_keys = tuple(str(item) for item in (payload.get("orphan_source_keys") or ()) if item)
     page_keys = tuple(str(item) for item in (payload.get("page_keys") or ()) if item)
     source_keys = tuple(str(item) for item in (payload.get("source_keys") or ()) if item)
+    hot_cold_summary = _hot_cold_diagnostic_summary(payload)
     summary_items = (
         f"level={level}",
         f"pages={len(page_keys)}",
@@ -53,6 +68,8 @@ def dashboard_hub_display_source_diagnostics(bundle: dict | None = None) -> dict
         f"empty_pages={','.join(empty_page_keys) or 'none'}",
         f"orphan_sources={','.join(orphan_source_keys) or 'none'}",
         f"guardrail_failures={','.join(failures) or 'none'}",
+        f"hot_cold_status={hot_cold_summary.get('status_label')}",
+        f"hot_cold_metadata={hot_cold_summary.get('metadata_detail_status')}",
     )
     return {
         **DASHBOARD_HUB_SOURCE_DIAGNOSTICS_CONTRACT,
@@ -67,6 +84,9 @@ def dashboard_hub_display_source_diagnostics(bundle: dict | None = None) -> dict
         "empty_page_keys": empty_page_keys,
         "orphan_source_keys": orphan_source_keys,
         "guardrail_failures": failures,
+        "hot_cold_summary": hot_cold_summary,
+        "hot_cold_status_label": hot_cold_summary.get("status_label"),
+        "hot_cold_metadata_detail_status": hot_cold_summary.get("metadata_detail_status"),
         "summary_items": summary_items,
         "compact_line": "dashboard_hub_source_diagnostics=" + ";".join(summary_items),
     }
