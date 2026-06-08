@@ -101,6 +101,7 @@ def main() -> int:
     assert real_presenter["hot_cold_detail_rows"][2] == {"label": "hot_cold_payload_loader", "value": "not_opened"}
     assert real_presenter["hot_cold_detail_rows"][3] == {"label": "hot_cold_dataset_reader", "value": "not_opened"}
     assert real_presenter["hot_cold_detail_rows"][4] == {"label": "hot_cold_dashboard_rendering", "value": "not_opened"}
+    assert real_presenter["hot_cold_detail_rows"][5] == {"label": "hot_cold_copy_executor", "value": "not_opened"}
     assert real_presenter["hot_cold_detail_rows"][6] == {
         "label": "hot_cold_next_gate",
         "value": "metadata_only_ui_entry_no_payload_reader_rendering_or_executor_opened",

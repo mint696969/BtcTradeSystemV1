@@ -27,7 +27,7 @@ def _hot_cold_diagnostic_summary(bundle: dict) -> dict:
         "payload_loader_status": str(summary.get("payload_loader_status") or "unknown"),
         "dataset_reader_status": str(summary.get("dataset_reader_status") or "unknown"),
         "dashboard_rendering_status": str(summary.get("dashboard_rendering_status") or "unknown"),
-        "copy_executor_status": str(summary.get("copy_executor_status") or "unknown"),
+        "copy_executor_status": str(summary.get("copy_executor_status") or "not_opened"),
         "diagnostic_note": "metadata_only_no_payload_reader_rendering_or_executor_opened",
     }
 

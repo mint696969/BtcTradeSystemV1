@@ -43,6 +43,7 @@ def main() -> int:
                 "payload_loader_status": "not_opened",
                 "dataset_reader_status": "not_opened",
                 "dashboard_rendering_status": "not_opened",
+                "copy_executor_status": "not_opened",
             },
             "hot_cold_status_label": "catalog_ready_payload_not_opened",
             "hot_cold_metadata_detail_status": "ready_for_dashboard_hub_display_source_overview",
@@ -81,6 +82,7 @@ def main() -> int:
                 "payload_loader_status": "not_opened",
                 "dataset_reader_status": "not_opened",
                 "dashboard_rendering_status": "not_opened",
+                "copy_executor_status": "not_opened",
             },
             "hot_cold_status_label": "catalog_ready_payload_not_opened",
             "hot_cold_metadata_detail_status": "ready_for_dashboard_hub_display_source_overview",
@@ -117,6 +119,7 @@ def main() -> int:
     assert real_entry["hot_cold_status_label"] == "catalog_ready_payload_not_opened"
     assert real_entry["hot_cold_metadata_detail_status"] == "ready_for_dashboard_hub_display_source_overview"
     assert real_entry["hot_cold_summary"]["dashboard_rendering_status"] == "not_opened"
+    assert real_entry["hot_cold_summary"]["copy_executor_status"] == "not_opened"
     assert "hot_cold_status:catalog_ready_payload_not_opened" in real_entry["compact_line"]
 
     print("ok")
