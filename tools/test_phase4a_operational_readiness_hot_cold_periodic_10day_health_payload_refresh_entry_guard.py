@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import py_compile
 import subprocess
 import sys
@@ -42,8 +43,18 @@ def _compile(rel_path: str, failures: list[str]) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
-def _run_json_guard(rel_path: str, failures: list[str]) -> dict[str, Any]:
-    proc = subprocess.run([sys.executable, str(REPO_ROOT / rel_path)], cwd=str(REPO_ROOT), text=True, capture_output=True, timeout=1200)
+def _run_json_guard(rel_path: str, failures: list[str], *, skip_duplicate_entry_guard: bool = False) -> dict[str, Any]:
+    env = os.environ.copy()
+    if skip_duplicate_entry_guard:
+        env["BTCTS_HOT_COLD_SKIP_DUPLICATE_SAFE_DATASET_ENTRY_GUARD"] = "1"
+    proc = subprocess.run(
+        [sys.executable, str(REPO_ROOT / rel_path)],
+        cwd=str(REPO_ROOT),
+        text=True,
+        capture_output=True,
+        timeout=1200,
+        env=env,
+    )
     try:
         parsed = json.loads(proc.stdout)
     except Exception as exc:
@@ -151,7 +162,7 @@ def main() -> int:
     checks = {
         "compile_self": _compile(SELF_PATH, failures),
         "duplicate_safe_dataset_view_entry_guard": _run_json_guard(DUP_DATASET_ENTRY_GUARD_PATH, failures),
-        "low_load_copy_scheduler_entry_guard": _run_json_guard(LOW_LOAD_ENTRY_GUARD_PATH, failures),
+        "low_load_copy_scheduler_entry_guard": _run_json_guard(LOW_LOAD_ENTRY_GUARD_PATH, failures, skip_duplicate_entry_guard=True),
         "health_payload_guard": _run_json_guard(HEALTH_PAYLOAD_GUARD_PATH, failures),
         "spec": _check_spec(failures),
         "health_service_current_anchor": _check_health_service_current_anchor(failures),

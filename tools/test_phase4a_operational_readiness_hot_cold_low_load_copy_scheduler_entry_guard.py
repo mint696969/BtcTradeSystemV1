@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import py_compile
 import subprocess
 import sys
@@ -152,9 +153,21 @@ def _check_no_scheduler_runtime_opened(failures: list[str]) -> dict[str, Any]:
 
 def main() -> int:
     failures: list[str] = []
+    skip_duplicate_entry_guard = os.environ.get("BTCTS_HOT_COLD_SKIP_DUPLICATE_SAFE_DATASET_ENTRY_GUARD") == "1"
+    duplicate_entry_check: dict[str, Any]
+    if skip_duplicate_entry_guard:
+        duplicate_entry_check = {
+            "ok": True,
+            "skipped": True,
+            "reason": "verified_by_parent_periodic_10day_health_payload_refresh_entry_guard",
+            "path": DUP_DATASET_ENTRY_GUARD_PATH,
+        }
+    else:
+        duplicate_entry_check = _run_json_guard(DUP_DATASET_ENTRY_GUARD_PATH, failures)
+
     checks = {
         "compile_self": _compile(SELF_PATH, failures),
-        "duplicate_safe_dataset_view_entry_guard": _run_json_guard(DUP_DATASET_ENTRY_GUARD_PATH, failures),
+        "duplicate_safe_dataset_view_entry_guard": duplicate_entry_check,
         "copy_manifest_close_guard": _run_json_guard(COPY_MANIFEST_CLOSE_GUARD_PATH, failures),
         "spec": _check_spec(failures),
         "archive_config_anchors": _check_archive_config_anchors(failures),
