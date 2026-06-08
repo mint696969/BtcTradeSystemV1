@@ -80,6 +80,7 @@ def _run_json_guard(rel_path: str, failures: list[str]) -> dict[str, object]:
         and smoke.get("hot_cold_status_label_visible") == "catalog_ready_payload_not_opened"
         and smoke.get("hot_cold_payload_loader_visible") == "not_opened"
         and smoke.get("hot_cold_dataset_reader_visible") == "not_opened"
+        and smoke.get("hot_cold_copy_executor_visible") == "not_opened"
         and smoke.get("streamlit_exception_observed") is False
     )
     if not ok:
@@ -123,6 +124,7 @@ def _check_guard_shape(failures: list[str]) -> dict[str, object]:
         "catalog_ready_payload_not_opened",
         "hot_cold_payload_loader_visible",
         "hot_cold_dataset_reader_visible",
+        "hot_cold_copy_executor_visible",
         "not_opened",
         "streamlit_exception_observed",
         EXPECTED_SMOKE_STEP,

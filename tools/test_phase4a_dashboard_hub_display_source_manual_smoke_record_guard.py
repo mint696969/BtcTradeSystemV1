@@ -132,6 +132,7 @@ def main() -> int:
             "hot_cold_status_label_visible": "catalog_ready_payload_not_opened",
             "hot_cold_payload_loader_visible": "not_opened",
             "hot_cold_dataset_reader_visible": "not_opened",
+            "hot_cold_copy_executor_visible": "not_opened",
             "streamlit_exception_observed": False,
         },
         "failures": failures,
