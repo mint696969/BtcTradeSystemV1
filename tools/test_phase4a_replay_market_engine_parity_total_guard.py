@@ -223,6 +223,11 @@ GUARD_SPECS = [
         "role": "de_archive_transfer_health_dashboard_entry_criteria_guard",
     },
     {
+        "path": "tools/test_phase4a_operational_readiness_hot_cold_low_load_copy_scheduler_entry_close_guard.py",
+        "kind": "json_ok",
+        "role": "operational_readiness_hot_cold_low_load_copy_scheduler_entry_close_guard",
+    },
+    {
         "path": "tools/test_phase4a_operational_readiness_hot_cold_periodic_10day_health_payload_refresh_entry_close_guard.py",
         "kind": "json_ok",
         "role": "operational_readiness_hot_cold_periodic_10day_health_payload_refresh_entry_close_guard",
