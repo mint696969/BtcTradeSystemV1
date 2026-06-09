@@ -80,27 +80,70 @@ def _check_spec(failures: list[str]) -> dict[str, Any]:
     return {"missing": missing}
 
 
-def _check_current_health_is_not_safety_display(failures: list[str]) -> dict[str, Any]:
-    text = _read(HEALTH_PAGE_PATH)
-    # Current Health page may show Real-data validation evidence, but it must not pretend that this is copy/delete safety.
-    required_existing = [
-        "render_evidence_presentation_panel",
-        "Real-data validation evidence",
+def _check_current_health_safety_display_boundary(failures: list[str]) -> dict[str, Any]:
+    health = _read(HEALTH_PAGE_PATH)
+    health_service = _read("btcts_next/src/btcts/apps/operator_ui/health_data_service.py")
+    safety_service = _read("btcts_next/src/btcts/apps/operator_ui/hot_cold_retention_safety_service.py")
+    panel = _read("btcts_next/src/btcts/apps/operator_ui/components/hot_cold_retention_safety_panel.py")
+    required = {
+        HEALTH_PAGE_PATH: [
+            "render_hot_cold_retention_safety_panel",
+            "_snapshot_hot_cold_retention_safety_payload",
+            'health_widget_slot("hot_cold_retention_safety_panel")',
+        ],
+        "btcts_next/src/btcts/apps/operator_ui/health_data_service.py": [
+            "load_hot_cold_retention_safety_payload",
+            '"operational_readiness_hot_cold_retention_safety"',
+        ],
+        "btcts_next/src/btcts/apps/operator_ui/hot_cold_retention_safety_service.py": [
+            "HOT_RETENTION_DAYS = 10",
+            "MIN_DELETE_AGE_HOURS = 240.0",
+            "not_filesystem_scan",
+            "not_copy_executor",
+            "not_delete_executor",
+        ],
+        "btcts_next/src/btcts/apps/operator_ui/components/hot_cold_retention_safety_panel.py": [
+            "render_hot_cold_retention_safety_panel",
+            "not_filesystem_scan",
+            "not_copy_executor",
+            "not_delete_executor",
+        ],
+    }
+    text_by_path = {
+        HEALTH_PAGE_PATH: health,
+        "btcts_next/src/btcts/apps/operator_ui/health_data_service.py": health_service,
+        "btcts_next/src/btcts/apps/operator_ui/hot_cold_retention_safety_service.py": safety_service,
+        "btcts_next/src/btcts/apps/operator_ui/components/hot_cold_retention_safety_panel.py": panel,
+    }
+    forbidden = [
+        "rglob(",
+        "glob(",
+        "os.scandir(",
+        "build_explicit_hot_cold_delete_plan",
+        "shutil.rmtree(",
+        ".unlink(",
+        ".rmdir(",
+        "os.remove(",
+        "os.unlink(",
+        "os.rmdir(",
+        "archive_gc_enable",
+        "run_explicit_hot_cold_small_batch_delete",
+        "D:" + "\\",
+        "E:" + "\\",
     ]
-    existing_missing = [fragment for fragment in required_existing if fragment not in text]
-    # The new safety panel should not already be implemented by this entry-only slice.
-    forbidden_preimplementation = [
-        "Hot/Cold retention safety",
-        "hot_cold_retention_safety",
-        "copy verification",
-        "delete readiness",
-    ]
-    forbidden_hits = [fragment for fragment in forbidden_preimplementation if fragment in text]
-    for fragment in existing_missing:
-        failures.append(f"Health page missing expected current evidence fragment: {fragment}")
-    for fragment in forbidden_hits:
-        failures.append(f"Health safety display must not be implemented in entry-only slice: {fragment}")
-    return {"existing_missing": existing_missing, "forbidden_hits": forbidden_hits}
+    missing: list[dict[str, str]] = []
+    forbidden_hits: list[dict[str, str]] = []
+    for rel_path, fragments in required.items():
+        text = text_by_path[rel_path]
+        for fragment in fragments:
+            if fragment not in text:
+                missing.append({"path": rel_path, "fragment": fragment})
+                failures.append(f"Health safety display boundary missing fragment: {rel_path}: {fragment}")
+        for token in forbidden:
+            if token in text:
+                forbidden_hits.append({"path": rel_path, "token": token})
+                failures.append(f"Health safety display boundary contains forbidden runtime token: {rel_path}: {token}")
+    return {"missing": missing, "forbidden_hits": forbidden_hits}
 
 
 def _check_previous_pre_execute_is_blocked_by_10day_policy(failures: list[str]) -> dict[str, Any]:
@@ -159,7 +202,7 @@ def main() -> int:
         "dry_run_entry_guard": _run_json_guard(DRY_RUN_ENTRY_GUARD_PATH, failures),
         "small_batch_entry_guard": _run_json_guard(SMALL_BATCH_ENTRY_GUARD_PATH, failures),
         "spec": _check_spec(failures),
-        "current_health_is_not_safety_display": _check_current_health_is_not_safety_display(failures),
+        "current_health_safety_display_boundary": _check_current_health_safety_display_boundary(failures),
         "previous_pre_execute_blocked_by_10day_policy": _check_previous_pre_execute_is_blocked_by_10day_policy(failures),
     }
     payload = {

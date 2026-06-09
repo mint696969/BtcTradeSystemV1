@@ -89,7 +89,7 @@ def main() -> int:
     repo_root = Path(__file__).resolve().parents[5]
     tmp_root = repo_root / "tmp" / "_market_state_flow_test"
     if tmp_root.exists():
-        shutil.rmtree(tmp_root)
+        shutil.rmtree(tmp_root, ignore_errors=True)
     tmp_root.mkdir(parents=True, exist_ok=True)
 
     profile = BitflyerProfile()
