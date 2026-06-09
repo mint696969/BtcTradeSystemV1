@@ -42,8 +42,18 @@ def _compile(rel_path: str, failures: list[str]) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
-def _run_json_guard(rel_path: str, failures: list[str]) -> dict[str, Any]:
-    proc = subprocess.run([sys.executable, str(REPO_ROOT / rel_path)], cwd=str(REPO_ROOT), text=True, capture_output=True, timeout=1200)
+def _run_json_guard(rel_path: str, failures: list[str], *, skip_primary_compact_guard: bool = False) -> dict[str, Any]:
+    env = os.environ.copy()
+    if skip_primary_compact_guard:
+        env["BTCTS_HOT_COLD_SKIP_PRIMARY_COMPACT_GUARD"] = "1"
+    proc = subprocess.run(
+        [sys.executable, str(REPO_ROOT / rel_path)],
+        cwd=str(REPO_ROOT),
+        text=True,
+        capture_output=True,
+        timeout=1200,
+        env=env,
+    )
     try:
         parsed = json.loads(proc.stdout)
     except Exception as exc:
@@ -154,6 +164,7 @@ def _check_no_scheduler_runtime_opened(failures: list[str]) -> dict[str, Any]:
 def main() -> int:
     failures: list[str] = []
     skip_duplicate_entry_guard = os.environ.get("BTCTS_HOT_COLD_SKIP_DUPLICATE_SAFE_DATASET_ENTRY_GUARD") == "1"
+    skip_primary_compact_guard = os.environ.get("BTCTS_HOT_COLD_SKIP_PRIMARY_COMPACT_GUARD") == "1"
     duplicate_entry_check: dict[str, Any]
     if skip_duplicate_entry_guard:
         duplicate_entry_check = {
@@ -168,7 +179,7 @@ def main() -> int:
     checks = {
         "compile_self": _compile(SELF_PATH, failures),
         "duplicate_safe_dataset_view_entry_guard": duplicate_entry_check,
-        "copy_manifest_close_guard": _run_json_guard(COPY_MANIFEST_CLOSE_GUARD_PATH, failures),
+        "copy_manifest_close_guard": _run_json_guard(COPY_MANIFEST_CLOSE_GUARD_PATH, failures, skip_primary_compact_guard=skip_primary_compact_guard),
         "spec": _check_spec(failures),
         "archive_config_anchors": _check_archive_config_anchors(failures),
         "latest_10day_plan": _check_latest_10day_plan(failures),

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 import py_compile
 import subprocess
 import sys
@@ -82,6 +83,13 @@ def _run_plain_ok(rel_path: str, failures: list[str]) -> dict[str, Any]:
 
 
 def _run_primary_compact(failures: list[str]) -> dict[str, Any]:
+    if os.environ.get("BTCTS_HOT_COLD_SKIP_PRIMARY_COMPACT_GUARD") == "1":
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "verified_by_direct_parent_or_primary_total_guard",
+            "path": PRIMARY_COMPACT_PATH,
+        }
     proc = subprocess.run([sys.executable, str(REPO_ROOT / PRIMARY_COMPACT_PATH)], cwd=str(REPO_ROOT), text=True, capture_output=True, timeout=3600)
     try:
         parsed = json.loads(proc.stdout)
