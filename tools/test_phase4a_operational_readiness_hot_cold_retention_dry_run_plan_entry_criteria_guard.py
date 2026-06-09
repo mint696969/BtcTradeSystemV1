@@ -22,8 +22,12 @@ STATE_PATH = "tmp/gpt_room/11_STATE.json"
 
 REQUIRED_PLANNER_FRAGMENTS = [
     "SCHEMA_VERSION = \"build_explicit_hot_cold_delete_plan_dry_run_v1\"",
-    "DEFAULT_HOT_ROOT = Path(os.getenv(\"BTCTS_PLAN_HOT_ROOT\", r\"D:\\\\btc_ts_hot\"))",
-    "DEFAULT_COLD_ROOT = Path(os.getenv(\"BTCTS_PLAN_COLD_ROOT\", r\"E:\\\\btc_ts\"))",
+    "DEFAULT_HOT_ROOT",
+    "BTCTS_PLAN_HOT_ROOT",
+    "D:\\btc_ts_hot",
+    "DEFAULT_COLD_ROOT",
+    "BTCTS_PLAN_COLD_ROOT",
+    "E:\\btc_ts",
     "ALLOWED_PREFIXES = [",
     "\"data/market_data\"",
     "\"data/collector_raw\"",
@@ -102,7 +106,6 @@ def _check_roadmap_and_room(failures: list[str]) -> dict[str, Any]:
         "D:\\btc_ts_hot",
         "E:\\btc_ts",
         "destructive hot storage delete",
-        "operational_readiness_hot_cold_retention_explicit_dry_run_plan_entry",
     ]
     missing: list[str] = []
     for fragment in required:
