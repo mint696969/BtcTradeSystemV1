@@ -293,6 +293,11 @@ GUARD_SPECS = [
         "role": "hot_cold_dashboard_display_source_catalog_close_guard",
     },
     {
+        "path": "tools/test_phase4a_hot_cold_dashboard_display_source_status_close_guard.py",
+        "kind": "json_ok",
+        "role": "hot_cold_dashboard_display_source_status_close_guard",
+    },
+    {
         "path": "tools/test_phase4a_health_warroom_read_only_evidence_consumption_entry_criteria_guard.py",
         "kind": "json_ok",
         "role": "health_warroom_read_only_evidence_consumption_entry_criteria_guard",
