@@ -318,6 +318,11 @@ GUARD_SPECS = [
         "role": "dashboard_hub_display_source_matrix_close_guard",
     },
     {
+        "path": "tools/test_phase4a_dashboard_hub_display_source_coverage_close_guard.py",
+        "kind": "json_ok",
+        "role": "dashboard_hub_display_source_coverage_close_guard",
+    },
+    {
         "path": "tools/test_phase4a_health_warroom_read_only_evidence_consumption_entry_criteria_guard.py",
         "kind": "json_ok",
         "role": "health_warroom_read_only_evidence_consumption_entry_criteria_guard",
