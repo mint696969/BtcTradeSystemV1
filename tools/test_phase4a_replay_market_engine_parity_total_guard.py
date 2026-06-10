@@ -256,6 +256,11 @@ GUARD_SPECS = [
         "role": "operational_readiness_hot_cold_duplicate_safe_dataset_view_entry_close_guard",
     },
     {
+        "path": "tools/test_phase4a_operational_readiness_hot_cold_duplicate_safe_dataset_view_model_close_guard.py",
+        "kind": "json_ok",
+        "role": "operational_readiness_hot_cold_duplicate_safe_dataset_view_model_close_guard",
+    },
+    {
         "path": "tools/test_phase4a_operational_readiness_hot_cold_copy_correctness_manifest_entry_close_guard.py",
         "kind": "json_ok",
         "role": "operational_readiness_hot_cold_copy_correctness_manifest_entry_close_guard",
