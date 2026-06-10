@@ -288,6 +288,11 @@ GUARD_SPECS = [
         "env": {"BTCTS_HOT_COLD_SKIP_PRIMARY_COMPACT_GUARD": "1"},
     },
     {
+        "path": "tools/test_phase4a_hot_cold_dashboard_display_source_catalog_close_guard.py",
+        "kind": "json_ok",
+        "role": "hot_cold_dashboard_display_source_catalog_close_guard",
+    },
+    {
         "path": "tools/test_phase4a_health_warroom_read_only_evidence_consumption_entry_criteria_guard.py",
         "kind": "json_ok",
         "role": "health_warroom_read_only_evidence_consumption_entry_criteria_guard",
