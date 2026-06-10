@@ -30,6 +30,7 @@ def main() -> int:
     assert "real_data_validation_evidence_presentation" in health_page
     assert 'health_widget_slot("evidence_presentation_panel")' in health_page
     assert 'health_widget_slot("hot_cold_retention_safety_panel")' in health_page
+    assert "operational_readiness_hot_cold_retention_safety" in health_page
     assert "render_evidence_presentation_panel(evidence_payload" in health_page
 
     slot_call = health_page.find('health_widget_slot("evidence_presentation_panel")')
