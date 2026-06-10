@@ -239,6 +239,12 @@ GUARD_SPECS = [
         "role": "operational_readiness_hot_cold_retention_dry_run_plan_entry_close_guard",
     },
     {
+        "path": "tools/test_phase4a_operational_readiness_hot_cold_copy_manifest_model_close_guard.py",
+        "kind": "json_ok",
+        "role": "operational_readiness_hot_cold_copy_manifest_model_close_guard",
+        "env": {"BTCTS_HOT_COLD_SKIP_PRIMARY_COMPACT_GUARD": "1"},
+    },
+    {
         "path": "tools/test_phase4a_operational_readiness_hot_cold_copy_manifest_writer_dry_run_close_guard.py",
         "kind": "json_ok",
         "role": "operational_readiness_hot_cold_copy_manifest_writer_dry_run_close_guard",
