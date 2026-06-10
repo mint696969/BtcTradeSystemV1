@@ -7,6 +7,7 @@ from _btcts_bootstrap import ensure_btcts_on_syspath
 ensure_btcts_on_syspath()
 
 import json
+import os
 import py_compile
 import subprocess
 import sys
@@ -236,6 +237,12 @@ GUARD_SPECS = [
         "path": "tools/test_phase4a_operational_readiness_hot_cold_retention_dry_run_plan_entry_close_guard.py",
         "kind": "json_ok",
         "role": "operational_readiness_hot_cold_retention_dry_run_plan_entry_close_guard",
+    },
+    {
+        "path": "tools/test_phase4a_operational_readiness_hot_cold_copy_manifest_writer_dry_run_close_guard.py",
+        "kind": "json_ok",
+        "role": "operational_readiness_hot_cold_copy_manifest_writer_dry_run_close_guard",
+        "env": {"BTCTS_HOT_COLD_SKIP_PRIMARY_COMPACT_GUARD": "1"},
     },
     {
         "path": "tools/test_phase4a_operational_readiness_hot_cold_copy_correctness_manifest_entry_close_guard.py",
@@ -508,12 +515,19 @@ def _run_guard(spec: Dict[str, Any], failures: List[str]) -> Dict[str, Any]:
             "stderr_tail": "",
         }
 
+    env = None
+    spec_env = spec.get("env")
+    if isinstance(spec_env, dict) and spec_env:
+        env = os.environ.copy()
+        env.update({str(key): str(value) for key, value in spec_env.items()})
+
     proc = subprocess.run(
         [sys.executable, str(path)],
         cwd=str(REPO_ROOT),
         text=True,
         capture_output=True,
         timeout=900,
+        env=env,
     )
 
     return _validate_result(
