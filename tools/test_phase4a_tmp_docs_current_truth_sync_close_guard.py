@@ -58,7 +58,7 @@ FINAL_REQUIRED_ADDENDUM_FRAGMENTS = [
 
 ROOM_REQUIRED_FRAGMENTS = [
     "phase4a_dashboard_hub_display_source_final_bundle_closed_next_thread_ready",
-    "dashboard_hub_display_source_final_bundle_sync_closed_pending_commit",
+    "dashboard_hub_display_source_final_bundle_sync_closed",
     "ac08a855",
     "dashboard_hub_display_source_final_bundle_closed",
     "next_thread_start_with_project_bootstrap_and_choose_new_guarded_workstream",
