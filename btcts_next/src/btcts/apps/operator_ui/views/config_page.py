@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
 )
@@ -23,10 +24,11 @@ def render():
         ["binance", "bybit"]
     )
 
-    st.write("Selected:", exchange)
+    with live_shell.panel_container(label="Configuration selection", tone="neutral"):
+        st.write("Selected:", exchange)
 
-    if st.button("Save"):
-        st.success("Configuration saved")
+        if st.button("Save"):
+            st.success("Configuration saved")
 
     if summary_widget:
         st.caption(summary_widget_caption(summary_widget))

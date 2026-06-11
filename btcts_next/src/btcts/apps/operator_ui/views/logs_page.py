@@ -9,6 +9,7 @@ from btcts.core import paths as core_paths
 import pandas as pd
 import streamlit as st
 
+from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
 )
@@ -80,6 +81,15 @@ def _latest_experiment_payload():
     return load_experiment_session(Path(str(sessions[0]["session_dir"])))
 
 
+
+def _render_logs_scrollable_json_block(payload: object, *, max_height_px: int = 260) -> None:
+    """Render existing Logs-page payload as presentation-only scrollable JSON."""
+    live_shell.render_scrollable_text_block(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+        max_height_px=max_height_px,
+        monospace=True,
+    )
+
 def render():
     st.header("System Logs")
     summary_widget = load_market_summary_widget_model()
@@ -138,7 +148,7 @@ def render():
             c3.metric("Strategy Count", int(summary.get("strategy_count") or 0))
 
             st.markdown("#### Best Strategy")
-            st.json(best_strategy)
+            _render_logs_scrollable_json_block(best_strategy, max_height_px=260)
 
             if strategy_reports:
                 st.markdown("#### Strategy Reports")

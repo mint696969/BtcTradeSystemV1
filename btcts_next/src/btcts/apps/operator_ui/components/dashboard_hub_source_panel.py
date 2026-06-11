@@ -9,6 +9,7 @@ from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.hub.display_source_presenter import (
     dashboard_hub_display_source_presenter,
 )
+from btcts.apps.operator_ui.ui_text import get_text
 
 DASHBOARD_HUB_SOURCE_PANEL_CONTRACT = {
     "panel_type": "dashboard_hub_display_source_panel",
@@ -44,9 +45,10 @@ def _status_tone(status_label: str) -> str:
 
 
 def render_dashboard_hub_display_source_panel(presenter: dict | None = None) -> dict:
+    lang = str(st.session_state.get("ui_lang", "en"))
     payload = presenter or dashboard_hub_display_source_presenter()
-    title = str(payload.get("title") or "Dashboard hub display source diagnostics")
-    subtitle = str(payload.get("subtitle") or "Read-only source readiness for future dashboard panels")
+    title = get_text(lang, "health_widget_dashboard_source_title")
+    subtitle = get_text(lang, "health_widget_dashboard_source_subtitle")
     status_label = str(payload.get("status_label") or "blocked")
     summary_rows = _rows_for_table(payload.get("summary_rows") or ())
     detail_rows = _rows_for_table(payload.get("detail_rows") or ())
@@ -59,18 +61,18 @@ def render_dashboard_hub_display_source_panel(presenter: dict | None = None) -> 
         tone=_status_tone(status_label),
         help_text=subtitle,
     ):
-        st.caption(f"status: {status_label}")
+        st.caption(f"{get_text(lang, 'health_widget_status_label')}: {status_label}")
         if summary_rows:
-            st.table(summary_rows)
+            live_shell.render_scrollable_key_value_rows(summary_rows, max_height_px=180)
         if detail_rows or hot_cold_rows:
-            with st.expander("details", expanded=False):
+            with st.expander(get_text(lang, "health_widget_details_label"), expanded=False):
                 if detail_rows:
-                    st.table(detail_rows)
+                    live_shell.render_scrollable_key_value_rows(detail_rows, max_height_px=260)
                 if hot_cold_rows:
-                    st.caption("Hot/Cold metadata")
-                    st.table(hot_cold_rows)
+                    st.caption(get_text(lang, "health_widget_hot_cold_metadata_title"))
+                    live_shell.render_scrollable_key_value_rows(hot_cold_rows, max_height_px=220)
         if not summary_rows and not detail_rows and not hot_cold_rows:
-            st.caption("No dashboard hub display source diagnostics are available.")
+            st.caption(get_text(lang, "health_widget_no_dashboard_source_diagnostics"))
 
     return {
         **DASHBOARD_HUB_SOURCE_PANEL_CONTRACT,

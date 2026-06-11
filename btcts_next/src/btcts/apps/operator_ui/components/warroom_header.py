@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_status_payload,
     load_market_summary_widget_model,
@@ -202,16 +203,20 @@ def render():
             wall_ratio=wall_ratio,
         )
     )
-    st.caption(
+    live_shell.render_scrollable_text_block(
         build_warroom_market_reading_caption(
             state=state,
-        )
+        ),
+        max_height_px=120,
+        monospace=True,
     )
-    st.caption(
+    live_shell.render_scrollable_text_block(
         build_warroom_operational_reading_caption(
             state=state,
             summary_payload=summary_payload,
-        )
+        ),
+        max_height_px=140,
+        monospace=True,
     )
     st.caption(
         get_text(lang, "warroom_generic_source_caption").format(

@@ -43,7 +43,7 @@ def render_collector_summary_metric(
         collector_summary_label(status_payload, health_payload, lang),
     )
     if digest_caption:
-        st.caption(digest_caption)
+        live_shell.render_scrollable_text_block(digest_caption, max_height_px=110, monospace=True)
 
 
 def render_api_summary_metric(
@@ -59,7 +59,7 @@ def render_api_summary_metric(
         api_summary_label(bitflyer_rate, lang),
     )
     if digest_caption:
-        st.caption(digest_caption)
+        live_shell.render_scrollable_text_block(digest_caption, max_height_px=110, monospace=True)
 
 
 def render_ws_summary_metric(
@@ -75,7 +75,7 @@ def render_ws_summary_metric(
         ws_summary_label(origin_payload, lang),
     )
     if digest_caption:
-        st.caption(digest_caption)
+        live_shell.render_scrollable_text_block(digest_caption, max_height_px=110, monospace=True)
 
 
 def build_health_digest_layer3_summary_caption(
@@ -332,9 +332,9 @@ def render_layer3_summary_metric(
         layer3_summary_label(market_latest, market_diag, lang),
     )
     if digest_caption:
-        st.caption(digest_caption)
+        live_shell.render_scrollable_text_block(digest_caption, max_height_px=110, monospace=True)
     if operational_reading_caption:
-        st.caption(operational_reading_caption)
+        live_shell.render_scrollable_text_block(operational_reading_caption, max_height_px=130, monospace=True)
 
 
 def render_overview_summary_panel(

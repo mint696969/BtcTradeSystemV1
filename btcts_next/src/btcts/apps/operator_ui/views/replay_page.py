@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 
 import pandas as pd
 import streamlit as st
 
+from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.components.ai_operator_action_payloads import (
     build_research_context_base,
 )
@@ -112,6 +114,24 @@ def _sandbox_trades_df(trades: list) -> pd.DataFrame:
     return df
 
 
+
+def _render_replay_scrollable_json_block(payload: object, *, max_height_px: int = 280) -> None:
+    """Render existing Replay-page payload as presentation-only scrollable JSON."""
+    live_shell.render_scrollable_text_block(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+        max_height_px=max_height_px,
+        monospace=True,
+    )
+
+
+def _render_replay_scrollable_text(value: object, *, max_height_px: int = 120) -> None:
+    """Render existing Replay-page long text with local scroll/wrap."""
+    live_shell.render_scrollable_text_block(
+        value,
+        max_height_px=max_height_px,
+        monospace=True,
+    )
+
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
@@ -193,7 +213,7 @@ def render():
                 )
                 st.dataframe(counts_df, width="stretch")
 
-            st.json(report)
+            _render_replay_scrollable_json_block(report, max_height_px=300)
 
         st.divider()
         st.subheader("Tail Market Regime")
@@ -219,7 +239,7 @@ def render():
                 None if price_change_pct is None else round(float(price_change_pct) * 100.0, 4),
             )
 
-            st.json(regime_report)
+            _render_replay_scrollable_json_block(regime_report, max_height_px=260)
 
         st.divider()
         st.subheader("Tail Strategy Sandbox Report")
@@ -238,7 +258,7 @@ def render():
             avg_pnl = sandbox_report.get("avg_pnl")
             c6.metric("Avg PnL", None if avg_pnl is None else round(float(avg_pnl), 2))
 
-            st.json(sandbox_report)
+            _render_replay_scrollable_json_block(sandbox_report, max_height_px=260)
 
     with tab3:
         st.subheader("Replay Results")
@@ -362,11 +382,12 @@ def render():
 
             results_df = results_df.tail(limit_rows).reset_index(drop=True)
 
-            st.caption(
+            _render_replay_scrollable_text(
                 f"filtered_rows={len(results_df)} / "
                 f"kind={kind_filter} / "
                 f"event_filter={'-' if not event_filter else event_filter} / "
-                f"max_rows={limit_rows}"
+                f"max_rows={limit_rows}",
+                max_height_px=90,
             )
 
             if results_df.empty:

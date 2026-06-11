@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from typing import Callable
+import json
 
 import streamlit as st
 
@@ -114,6 +115,24 @@ def _warroom_evidence_presentation_payload() -> dict | None:
             return normalized_payload if isinstance(normalized_payload, dict) else payload
     return None
 
+
+
+def _render_warroom_scrollable_json_block(payload: object, *, max_height_px: int = 280) -> None:
+    """Render existing WarRoom diagnostics payload as read-only presentation JSON."""
+    live_shell.render_scrollable_text_block(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+        max_height_px=max_height_px,
+        monospace=True,
+    )
+
+
+def _render_warroom_reading_caption(text: str, *, max_height_px: int = 120) -> None:
+    """Render WarRoom reading captions as wrapped, local-scroll, operator review text."""
+    live_shell.render_scrollable_text_block(
+        text,
+        max_height_px=max_height_px,
+        monospace=True,
+    )
 
 def _render_warroom_primary_reading_overview(
     *,
@@ -352,13 +371,15 @@ def render():
         zone_kind="overview",
     ):
         block_captions = _warroom_reading_block_captions()
-        st.caption(
+        _render_warroom_reading_caption(
             "warroom_reading_blocks="
-            + " > ".join(_warroom_reading_block_order())
+            + " > ".join(_warroom_reading_block_order()),
+            max_height_px=90,
         )
-        st.caption(
+        _render_warroom_reading_caption(
             "current_market_summary_reading: "
-            + block_captions["current_market_summary_reading"]
+            + block_captions["current_market_summary_reading"],
+            max_height_px=90,
         )
         _render_warroom_primary_reading_overview(
             fragment_enabled=fragment_enabled,
@@ -369,20 +390,23 @@ def render():
         zone_kind="primary_live",
     ):
         block_captions = _warroom_reading_block_captions()
-        st.caption(
+        _render_warroom_reading_caption(
             "current_active_event_reading: "
-            + block_captions["current_active_event_reading"]
+            + block_captions["current_active_event_reading"],
+            max_height_px=90,
         )
-        st.caption(
+        _render_warroom_reading_caption(
             "active_event_compact: "
-            + _warroom_active_event_reading_caption()
+            + _warroom_active_event_reading_caption(),
+            max_height_px=120,
         )
         _render_warroom_active_event_and_graph_reading(
             fragment_enabled=fragment_enabled,
         )
-        st.caption(
+        _render_warroom_reading_caption(
             "current_tactic_prediction_reading: "
-            + block_captions["current_tactic_prediction_reading"]
+            + block_captions["current_tactic_prediction_reading"],
+            max_height_px=90,
         )
         _render_warroom_tactic_prediction_reading(
             fragment_enabled=fragment_enabled,
@@ -393,9 +417,10 @@ def render():
         zone_kind="secondary",
     ):
         block_captions = _warroom_reading_block_captions()
-        st.caption(
+        _render_warroom_reading_caption(
             "operator_support_review_reading: "
-            + block_captions["operator_support_review_reading"]
+            + block_captions["operator_support_review_reading"],
+            max_height_px=90,
         )
         _render_warroom_operator_support_review()
         with live_shell.slot_widget_from_meta(
@@ -465,7 +490,7 @@ def render():
             }
             for widget_id in warroom_overlay_widget_ids()
         }
-        st.json(overlay_diag)
+        _render_warroom_scrollable_json_block(overlay_diag, max_height_px=320)
         st.caption(
             get_text(
                 lang,

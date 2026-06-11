@@ -4,6 +4,12 @@
 HEALTH_TEXTS = {
     "en": {
         "health_title": "System Health",
+        "health_widget_dashboard_source_title": "Dashboard hub source diagnostics",
+        "health_widget_dashboard_source_subtitle": "Read-only display-source readiness for dashboard widgets",
+        "health_widget_status_label": "Status",
+        "health_widget_details_label": "Details",
+        "health_widget_hot_cold_metadata_title": "Hot/Cold metadata",
+        "health_widget_no_dashboard_source_diagnostics": "No dashboard hub display source diagnostics are available.",
         "health_summary_collector": "Collector",
         "health_summary_api": "API Rate",
         "health_summary_ws": "WS",
@@ -200,6 +206,12 @@ HEALTH_TEXTS = {
     },
     "ja": {
         "health_title": "System Health",
+        "health_widget_dashboard_source_title": "ダッシュボード表示元診断",
+        "health_widget_dashboard_source_subtitle": "ダッシュボードwidget向け表示元のread-only準備状態",
+        "health_widget_status_label": "状態",
+        "health_widget_details_label": "詳細",
+        "health_widget_hot_cold_metadata_title": "Hot/Coldメタデータ",
+        "health_widget_no_dashboard_source_diagnostics": "ダッシュボード表示元診断はまだ利用できません。",
         "health_summary_collector": "Collector",
         "health_summary_api": "APIレート",
         "health_summary_ws": "WS",

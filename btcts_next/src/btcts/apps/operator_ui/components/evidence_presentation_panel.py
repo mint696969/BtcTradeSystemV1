@@ -8,6 +8,7 @@ from typing import Any
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components import live_shell
 
 _BOUNDARY_KEYS: tuple[str, ...] = (
     "read_only_consumption",
@@ -93,13 +94,13 @@ def render_evidence_presentation_panel(payload: Mapping[str, Any] | None, *, exp
     warroom_line = _text(data.get("warroom_line"), fallback="-")
 
     st.markdown(f"### {title}")
-    st.caption(build_evidence_presentation_caption(data))
+    live_shell.render_scrollable_text_block(build_evidence_presentation_caption(data), max_height_px=120, monospace=True)
 
     c1, c2 = st.columns(2)
     c1.metric("Evidence status", status)
     c2.metric("Evidence severity", severity)
-    st.caption(health_line)
-    st.caption(warroom_line)
+    live_shell.render_scrollable_text_block(health_line, max_height_px=90, monospace=True)
+    live_shell.render_scrollable_text_block(warroom_line, max_height_px=90, monospace=True)
 
     if expanded:
-        st.json({"evidence_presentation_lines": list(build_evidence_presentation_lines(data))})
+        live_shell.render_scrollable_text_block("\n".join(build_evidence_presentation_lines(data)), max_height_px=260, monospace=True)

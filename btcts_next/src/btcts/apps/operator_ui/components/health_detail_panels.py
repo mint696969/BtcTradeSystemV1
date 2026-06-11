@@ -303,11 +303,13 @@ def render_current_state_section(
         def bool_flag_label(flag: bool) -> str:
             return get_text(lang, "health_value_on") if flag else get_text(lang, "health_value_off")
 
-        st.caption(
+        live_shell.render_scrollable_text_block(
             build_health_digest_current_state_caption(
                 widget=health_digest_widget,
                 payload=health_digest_payload,
-            )
+            ),
+            max_height_px=150,
+            monospace=True,
         )
 
         digest_block_captions = build_health_digest_block_captions(

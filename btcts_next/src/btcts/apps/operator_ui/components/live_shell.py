@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from typing import Callable, Literal, TypedDict
+import html
 import json
 
 import streamlit as st
@@ -91,7 +92,7 @@ def _inject_live_shell_styles() -> None:
         }
 
         .live-shell-widget-label-neutral {
-            color: rgba(250,250,250,0.74);
+            color: inherit;
         }
 
         .live-shell-widget-label-primary {
@@ -104,6 +105,33 @@ def _inject_live_shell_styles() -> None:
 
         .live-shell-widget-label-danger {
             color: #fca5a5;
+        }
+
+
+        .live-shell-scrollable-text-block {
+            box-sizing: border-box;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            line-height: 1.35;
+            padding: 0.45rem 0.55rem;
+            border-radius: 0.45rem;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(148, 163, 184, 0.10);
+            color: inherit;
+        }
+
+        .live-shell-scrollable-text-block-monospace {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 0.82em;
+        }
+
+        .live-shell-scrollable-text-block-muted {
+            color: inherit;
         }
         </style>
         """,
@@ -284,6 +312,60 @@ def widget_container(
 
     return container
 
+
+
+def render_scrollable_text_block(
+    text: object,
+    *,
+    max_height_px: int = 180,
+    monospace: bool = False,
+    muted: bool = True,
+) -> None:
+    """Render long diagnostic text with local vertical scroll and safe wrapping.
+
+    This is a presentation-only helper. It must not read data, mutate runtime state,
+    or become a source of market meaning.
+    """
+    _inject_live_shell_styles()
+    safe_text = html.escape("" if text is None else str(text))
+    classes = ["live-shell-scrollable-text-block"]
+    if monospace:
+        classes.append("live-shell-scrollable-text-block-monospace")
+    if muted:
+        classes.append("live-shell-scrollable-text-block-muted")
+    class_attr = " ".join(classes)
+    height = max(48, int(max_height_px))
+    st.markdown(
+        (
+            f"<div class='{class_attr}' style='max-height:{height}px;'>"
+            f"{safe_text}"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+
+def render_scrollable_key_value_rows(
+    rows: object,
+    *,
+    max_height_px: int = 220,
+    label_key: str = "label",
+    value_key: str = "value",
+) -> None:
+    """Render label/value rows as wrapped diagnostic text inside a local scroll area."""
+    normalized: list[str] = []
+    if isinstance(rows, (list, tuple)):
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            label = str(row.get(label_key) or "").strip()
+            value = str(row.get(value_key) or "").strip()
+            normalized.append(f"{label}: {value}" if label else value)
+    render_scrollable_text_block(
+        "\n".join(normalized),
+        max_height_px=max_height_px,
+        monospace=True,
+    )
 
 def responsive_columns(
     count: int,

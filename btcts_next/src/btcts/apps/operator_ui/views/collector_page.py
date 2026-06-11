@@ -332,6 +332,15 @@ def _audit_rows_for_ui(events: list[dict]) -> list[dict]:
     return rows
 
 
+
+def _render_scrollable_json_block(payload: object, *, max_height_px: int = 260) -> None:
+    """Render existing Collector diagnostics payload as presentation-only scrollable JSON."""
+    live_shell.render_scrollable_text_block(
+        json.dumps(payload, ensure_ascii=False, indent=2, default=str),
+        max_height_px=max_height_px,
+        monospace=True,
+    )
+
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
@@ -369,14 +378,16 @@ def render():
         exchange_status_label=_exchange_status_label,
     )
 
-    st.caption(
+    live_shell.render_scrollable_text_block(
         get_text(lang, "collector_caption_reason_line").format(
             reason=live_summary["overall_reason"],
             live_mode=runtime["mode"],
             health=runtime["health_status"],
             daemon=live_summary["daemon_status"],
             sequence_id=runtime.get("last_sequence_id"),
-        )
+        ),
+        max_height_px=90,
+        monospace=True,
     )
 
     if supervisor_status:
@@ -428,7 +439,7 @@ def render():
     )
 
     with live_shell.render_folded_section("UI / MarketState Root Diagnostics", expanded=False):
-        st.json(market_state_info)
+        _render_scrollable_json_block(market_state_info, max_height_px=260)
 
     render_supervisor_control_section(
         lang=lang,
@@ -445,12 +456,13 @@ def render():
     )
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_collector_runtime_state"), expanded=False):
-        st.json(
+        _render_scrollable_json_block(
             {
                 "live_summary": live_summary,
                 "runtime": runtime,
                 "collector_state_keys": sorted(list(collector_state.keys())),
-            }
+            },
+            max_height_px=280,
         )
 
     render_rate_control_section(
@@ -486,26 +498,27 @@ def render():
 
             if origin_state:
                 with live_shell.render_folded_section(get_text(lang, "ui_label_raw_origin_status_json"), expanded=False):
-                    st.json(origin_state)
+                    _render_scrollable_json_block(origin_state, max_height_px=260)
             else:
                 st.info(get_text(lang, "collector_msg_origin_status_unavailable"))
 
         with col_r2:
             st.caption(get_text(lang, "ui_label_daemon_supervisor_health"))
             if daemon_state or supervisor_status or supervisor_request:
-                st.json(
+                _render_scrollable_json_block(
                     {
                         "daemon_health": daemon_state,
                         "supervisor_status": supervisor_status,
                         "supervisor_request": supervisor_request,
-                    }
+                    },
+                    max_height_px=260,
                 )
             else:
                 st.info(get_text(lang, "collector_msg_daemon_health_unavailable"))
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_raw_rate_state_json"), expanded=False):
         if rate_state:
-            st.json(rate_state)
+            _render_scrollable_json_block(rate_state, max_height_px=260)
         else:
             st.info(get_text(lang, "collector_msg_rate_state_unavailable"))
 

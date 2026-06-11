@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.ai_memory_store import memory_jsonl_path
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_market_summary_widget_model,
@@ -221,6 +222,15 @@ def _replay_context_tactic_primary_summary_line(
     ).strip()
 
 
+
+def _render_research_scrollable_text(value: object, *, max_height_px: int = 140) -> None:
+    """Render existing Research-page long presentation text with local scroll/wrap."""
+    live_shell.render_scrollable_text_block(
+        value,
+        max_height_px=max_height_px,
+        monospace=True,
+    )
+
 def render():
 
     lang = st.session_state.get("ui_lang", "en")
@@ -244,8 +254,9 @@ def render():
         c5.metric("End", replay_ctx.get("end_ts") or "-")
         c6.metric("Jump", replay_ctx.get("jump_ts") or "-")
 
-        st.caption(
-            f"event_filter={replay_ctx.get('event_filter') or '-'}"
+        _render_research_scrollable_text(
+            f"event_filter={replay_ctx.get('event_filter') or '-'}",
+            max_height_px=90,
         )
 
         tactic_summary_lines = _replay_context_tactic_summary_lines(replay_ctx)
@@ -282,7 +293,7 @@ def render():
                 tactic_interpretation_lines,
                 lang,
             ):
-                st.caption(line)
+                _render_research_scrollable_text(line, max_height_px=90)
 
         a1, a2, a3 = st.columns(3)
 

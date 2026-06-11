@@ -108,6 +108,46 @@ def apply_ui_scale(scale: str):
     )
 
 
+
+def render_dashboard_hub_status_strip(
+    *,
+    lang: str,
+    selected_page_label: str,
+    selected_page_key: str,
+    refresh_plan: dict,
+) -> None:
+    """Render a display-only dashboard hub status strip after page render.
+
+    This does not decide market meaning, load data, or change routing. It only
+    summarizes current UI navigation/refresh state and registered widget count.
+    """
+    slot_rows = live_shell.get_registered_slots(selected_page_key)
+    registered_widget_count = len(slot_rows)
+    refresh_visible = bool(refresh_plan.get("refresh_status_visible"))
+    refresh_interval = int(refresh_plan.get("effective_refresh_interval_sec") or 0)
+    alert_key = (
+        "dashboard_hub_alert_normal"
+        if registered_widget_count > 0
+        else "dashboard_hub_alert_attention"
+    )
+
+    with live_shell.panel_container(
+        label=get_text(lang, "dashboard_hub_status_title"),
+        tone="neutral",
+        help_text=get_text(lang, "dashboard_hub_status_caption"),
+    ):
+        c1, c2, c3 = st.columns(3)
+        c1.metric(get_text(lang, "dashboard_hub_selected_page"), selected_page_label)
+        c2.metric(
+            get_text(lang, "dashboard_hub_refresh"),
+            f"{refresh_interval}s" if refresh_visible else get_text(lang, "refresh_status_off"),
+        )
+        c3.metric(
+            get_text(lang, "dashboard_hub_registered_widgets"),
+            registered_widget_count,
+        )
+        st.caption(get_text(lang, alert_key))
+
 st.set_page_config(
     page_title="BTC-TS Operator",
     layout="wide",
@@ -232,6 +272,13 @@ if refresh_plan["refresh_status_visible"]:
     )
 else:
     st.sidebar.caption(get_text(lang, "refresh_status_off"))
+
+render_dashboard_hub_status_strip(
+    lang=lang,
+    selected_page_label=selected_page_label,
+    selected_page_key=selected_page_key,
+    refresh_plan=refresh_plan,
+)
 
 # Auto refresh は live / monitor 系ページに限定する
 live_shell.render_page_auto_refresh(
