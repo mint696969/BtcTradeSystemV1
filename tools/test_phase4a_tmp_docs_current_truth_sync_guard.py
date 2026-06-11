@@ -13,14 +13,35 @@ DOC_ROOT = REPO_ROOT / "tmp" / "docs" / "architecture"
 SELF_PATH = "tools/test_phase4a_tmp_docs_current_truth_sync_guard.py"
 
 ADDENDUM = DOC_ROOT / "PHASE4A_CURRENT_TRUTH_HOT_COLD_L4_DASHBOARD_DOCS_SYNC_2026-06-07.md"
+FINAL_ADDENDUM = DOC_ROOT / "PHASE4A_DASHBOARD_HUB_DISPLAY_SOURCE_FINAL_BUNDLE_SYNC_2026-06-11.md"
 SMALL_BATCH = DOC_ROOT / "PHASE4A_OPERATIONAL_READINESS_HOT_COLD_SMALL_BATCH_GUARDED_DELETE_ENTRY_CRITERIA_2026-06-01.md"
 SAFETY_CLOSE = DOC_ROOT / "PHASE4A_OPERATIONAL_READINESS_HOT_COLD_SAFETY_THREAD_CLOSE_2026-06-02.md"
 DUP_ENTRY = DOC_ROOT / "PHASE4A_OPERATIONAL_READINESS_HOT_COLD_DUPLICATE_SAFE_DATASET_VIEW_ENTRY_2026-06-02.md"
 L4_SPEC = DOC_ROOT / "03_L4_SHARED_CONSUMER_MODELS_SPEC_2026-04-09.md"
 UI_SPEC = DOC_ROOT / "04_UI_HUB_OPERATOR_UI_SPEC_2026-04-09.md"
 DE_DASHBOARD = DOC_ROOT / "PHASE4A_DE_ARCHIVE_TRANSFER_HEALTH_DASHBOARD_ENTRY_CRITERIA_2026-05-31.md"
+FOCUS_JSON = REPO_ROOT / "tmp" / "gpt_room" / "09_FOCUS.json"
+STATE_JSON = REPO_ROOT / "tmp" / "gpt_room" / "11_STATE.json"
 
 REQUIRED_BY_FILE = {
+    FINAL_ADDENDUM: [
+        "HEAD = ac08a855",
+        "primary_total_guard_ok = true",
+        "compile.passed_count = 94",
+        "next_thread_ready = true",
+        "dashboard_hub_display_source_manual_smoke_record_close_guard",
+        "dashboard_hub_display_source_health_page_insertion_close_guard",
+        "dashboard_hub_display_source_operator_ui_integration_close_guard",
+        "catalog_ready_payload_not_opened",
+        "panel_visible = true",
+        "details_expander_opened = true",
+        "payload loader",
+        "dataset reader",
+        "inference/training",
+        "UI actual growth",
+        "L4 shared bundle expansion",
+        "prediction / inference-adjacent read-only entry",
+    ],
     ADDENDUM: [
         "HEAD = 657ca595",
         "primary_total_guard_ok = true",
@@ -78,6 +99,23 @@ REQUIRED_BY_FILE = {
     ],
 }
 
+ROOM_REQUIRED_BY_FILE = {
+    FOCUS_JSON: [
+        "phase4a_dashboard_hub_display_source_final_bundle_closed_next_thread_ready",
+        "dashboard_hub_display_source_final_bundle_sync_closed_pending_commit",
+        "ac08a855",
+        "dashboard_hub_display_source_final_bundle_closed",
+        "next_thread_start_with_project_bootstrap_and_choose_new_guarded_workstream",
+    ],
+    STATE_JSON: [
+        "phase4a_dashboard_hub_display_source_final_bundle_closed_next_thread_ready",
+        "dashboard_hub_display_source_final_bundle_sync_closed_pending_commit",
+        "ac08a855",
+        "dashboard_hub_display_source_final_bundle_closed",
+        "next_thread_start_with_project_bootstrap_and_choose_new_guarded_workstream",
+    ],
+}
+
 FORBIDDEN_ADDENDUM_CLAIMS = [
     "payload_loader_status = opened",
     "dataset_reader_status = opened",
@@ -115,8 +153,16 @@ def _check_required(failures: list[str]) -> dict[str, Any]:
         for fragment in fragments:
             if fragment not in text:
                 missing.append({"path": str(path.relative_to(REPO_ROOT)), "fragment": fragment})
+    for path, fragments in ROOM_REQUIRED_BY_FILE.items():
+        text = _read(path)
+        if not path.exists():
+            missing.append({"path": str(path.relative_to(REPO_ROOT)), "fragment": "<file exists>"})
+            continue
+        for fragment in fragments:
+            if fragment not in text:
+                missing.append({"path": str(path.relative_to(REPO_ROOT)), "fragment": fragment})
     for item in missing:
-        failures.append(f"docs current-truth sync missing fragment: {item['path']}::{item['fragment']}")
+        failures.append(f"docs/room current-truth sync missing fragment: {item['path']}::{item['fragment']}")
     return {"missing": missing}
 
 
