@@ -339,6 +339,12 @@ GUARD_SPECS = [
         "env": {"BTCTS_DASHBOARD_HUB_SKIP_NESTED_CLOSE_GUARD": "1"},
     },
     {
+        "path": "tools/test_phase4a_dashboard_hub_display_source_ui_entry_criteria_close_guard.py",
+        "kind": "json_ok",
+        "role": "dashboard_hub_display_source_ui_entry_criteria_close_guard",
+        "env": {"BTCTS_DASHBOARD_HUB_SKIP_NESTED_CLOSE_GUARD": "1"},
+    },
+    {
         "path": "tools/test_phase4a_health_warroom_read_only_evidence_consumption_entry_criteria_guard.py",
         "kind": "json_ok",
         "role": "health_warroom_read_only_evidence_consumption_entry_criteria_guard",
