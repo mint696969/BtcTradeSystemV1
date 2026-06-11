@@ -7,6 +7,7 @@ from _btcts_bootstrap import ensure_btcts_on_syspath
 ensure_btcts_on_syspath()
 
 import json
+import os
 import py_compile
 import subprocess
 import sys
@@ -122,12 +123,23 @@ def _check_app_py_untouched_boundary(failures: list[str]) -> dict[str, object]:
     return {"hits": hits}
 
 
+def _run_bundle_close_guard(failures: list[str]) -> dict[str, object]:
+    if os.environ.get("BTCTS_DASHBOARD_HUB_SKIP_NESTED_CLOSE_GUARD") == "1":
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "verified_by_separate_primary_total_guard",
+            "path": BUNDLE_CLOSE_GUARD,
+        }
+    return _run_json_guard(BUNDLE_CLOSE_GUARD, failures)
+
+
 def main() -> int:
     failures: list[str] = []
     checks = {
         "compile_self": _compile("tools/test_phase4a_dashboard_hub_display_source_diagnostics_guard.py", failures),
         "compile_files": {rel: _compile(rel, failures) for rel in FILES},
-        "bundle_close_guard": _run_json_guard(BUNDLE_CLOSE_GUARD, failures),
+        "bundle_close_guard": _run_bundle_close_guard(failures),
         "plain_test": _run_plain_ok("btcts_next/src/btcts/apps/operator_ui/tests/test_dashboard_hub_display_source_diagnostics.py", failures),
         "source": _check_source(failures),
         "app_py_untouched_boundary": _check_app_py_untouched_boundary(failures),

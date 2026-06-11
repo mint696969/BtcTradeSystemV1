@@ -7,6 +7,7 @@ from _btcts_bootstrap import ensure_btcts_on_syspath
 ensure_btcts_on_syspath()
 
 import json
+import os
 import py_compile
 import subprocess
 import sys
@@ -140,12 +141,22 @@ def _check_app_py_untouched_boundary(failures: list[str]) -> dict[str, object]:
     return {"hits": hits}
 
 
+def _run_focused_guard(rel_path: str, failures: list[str]) -> dict[str, object]:
+    if os.environ.get("BTCTS_DASHBOARD_HUB_SKIP_NESTED_CLOSE_GUARD") == "1" and rel_path == "tools/test_phase4a_dashboard_hub_display_source_registry_close_guard.py":
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "verified_by_separate_primary_total_guard",
+            "path": rel_path,
+        }
+    return _run_json_guard(rel_path, failures)
+
 def main() -> int:
     failures: list[str] = []
     checks = {
         "compile_self": _compile("tools/test_phase4a_dashboard_hub_display_source_overview_close_guard.py", failures),
         "compile_files": {rel: _compile(rel, failures) for rel in FILES},
-        "focused_guards": {rel: _run_json_guard(rel, failures) for rel in FOCUSED_GUARDS},
+        "focused_guards": {rel: _run_focused_guard(rel, failures) for rel in FOCUSED_GUARDS},
         "plain_tests": {rel: _run_plain_ok(rel, failures) for rel in PLAIN_TESTS},
         "source_shape": _check_source_shape(failures),
         "app_py_untouched_boundary": _check_app_py_untouched_boundary(failures),
