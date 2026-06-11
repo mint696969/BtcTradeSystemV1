@@ -114,11 +114,11 @@ def _check_source_shape(failures: list[str]) -> dict[str, object]:
 
 
 def _check_existing_ui_untouched_boundary(failures: list[str]) -> dict[str, object]:
+    """Current truth: Health page insertion is closed; app.py and non-selected views stay untouched."""
     paths = [
         "btcts_next/src/btcts/apps/operator_ui/app.py",
         "btcts_next/src/btcts/apps/operator_ui/views/__init__.py",
         "btcts_next/src/btcts/apps/operator_ui/views/collector_page.py",
-        "btcts_next/src/btcts/apps/operator_ui/views/health_page.py",
         "btcts_next/src/btcts/apps/operator_ui/views/research_page.py",
         "btcts_next/src/btcts/apps/operator_ui/views/warroom_page.py",
     ]
@@ -137,8 +137,18 @@ def _check_existing_ui_untouched_boundary(failures: list[str]) -> dict[str, obje
         for token in forbidden:
             if token in text:
                 hits.append({"path": rel, "token": token})
-                failures.append(f"existing UI must not be wired in page connection entry close slice: {rel}: {token}")
-    return {"hits": hits}
+                failures.append(f"app.py and non-selected UI must not be wired in page connection entry close slice: {rel}: {token}")
+
+    health_text = _read("btcts_next/src/btcts/apps/operator_ui/views/health_page.py")
+    allowed_health_tokens = [
+        "render_dashboard_hub_display_source_panel",
+        'health_widget_slot("dashboard_hub_source_panel")',
+    ]
+    missing_allowed_health_tokens = [token for token in allowed_health_tokens if token not in health_text]
+    for token in missing_allowed_health_tokens:
+        failures.append(f"closed health page insertion must retain dashboard hub source panel token: {token}")
+
+    return {"hits": hits, "missing_allowed_health_tokens": missing_allowed_health_tokens}
 
 
 def main() -> int:
