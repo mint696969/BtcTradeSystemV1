@@ -175,6 +175,15 @@ def _classify_row(row: dict[str, Any]) -> dict[str, bool]:
         or "executions_ws" in text
         or event.startswith("collector_vnext.unified.ws_executions.")
     )
+    is_ws_board = (
+        not is_ws_exec
+        and (
+            "ws_board" in text
+            or "board_ws" in text
+            or event.startswith("collector_vnext.unified.ws_board.")
+            or provider in {"bitflyer_ws_board", "bitflyer_ws_board_snapshot"}
+        )
+    )
     is_rate_mode = (is_exploration or is_unified) and (
         event.endswith(".mode.changed")
         or any(word in text for word in ["crit", "recovery", "throttle", "utilization"])
@@ -184,6 +193,7 @@ def _classify_row(row: dict[str, Any]) -> dict[str, bool]:
         "is_rest": is_rest,
         "is_ws": is_ws,
         "is_ws_exec": is_ws_exec,
+        "is_ws_board": is_ws_board,
         "is_429": is_429,
         "is_gap": is_gap,
         "is_resync": is_resync,
@@ -216,6 +226,7 @@ def build_recent_api_ws_series(
         lambda: {
             "api_events": 0.0,
             "ws_events": 0.0,
+            "ws_board_events": 0.0,
             "ws_exec_events": 0.0,
             "events_429": 0.0,
             "gap_events": 0.0,
@@ -253,6 +264,8 @@ def build_recent_api_ws_series(
             per_bucket[bucket]["api_events"] += 1.0
         if flags["is_ws"]:
             per_bucket[bucket]["ws_events"] += 1.0
+        if flags["is_ws_board"]:
+            per_bucket[bucket]["ws_board_events"] += 1.0
         if flags["is_ws_exec"]:
             per_bucket[bucket]["ws_exec_events"] += 1.0
         if flags["is_429"]:
@@ -307,6 +320,7 @@ def build_recent_api_ws_series(
                 "events_429": item["events_429"],
                 "events_429_marker": 500.0 if item["events_429"] > 0 else None,
                 "ws_events": item["ws_events"],
+                "ws_board_events": item["ws_board_events"],
                 "ws_exec_events": item["ws_exec_events"],
                 "gap_events": item["gap_events"],
                 "resync_events": item["resync_events"],
@@ -330,9 +344,10 @@ def build_rate_limit_overlay(
     state = load_state()
     rate_items = (state.get("rate") or {}).get("items") or {}
     bitflyer = rate_items.get("bitflyer") or {}
-    rate_domains = (bitflyer.get("domains") or {}) if isinstance(bitflyer, dict) else {}
-    market_data_rate = (rate_domains.get("market_data") or {}) if isinstance(rate_domains, dict) else {}
-    rate_view = market_data_rate or bitflyer
+    # Health is an exchange/system pressure view.  Use the top-level bitFlyer
+    # aggregate as the overlay source, not only the market_data domain, because
+    # private/account/order-state reads share the same operational pressure view.
+    rate_view = bitflyer
 
     budget = rate_view.get("budget") or {}
     budget_60s = budget.get("budget_60s")
@@ -372,6 +387,7 @@ def build_rate_limit_overlay(
                 "active_target_ratio": active_target_ratio,
                 "target_utilization": target_utilization,
                 "hard_cap_utilization": hard_cap_utilization,
+                "overlay_scope": "bitflyer_aggregate",
             }
         )
 
@@ -754,6 +770,7 @@ def _build_continuity_rail(
         lambda: {
             "api_events": 0.0,
             "ws_events": 0.0,
+            "ws_board_events": 0.0,
             "ws_exec_events": 0.0,
             "gap_events": 0.0,
             "resync_events": 0.0,
@@ -787,6 +804,8 @@ def _build_continuity_rail(
             per_bucket[bucket]["api_events"] += 1.0
         if flags["is_ws"]:
             per_bucket[bucket]["ws_events"] += 1.0
+        if flags["is_ws_board"]:
+            per_bucket[bucket]["ws_board_events"] += 1.0
         if flags["is_ws_exec"]:
             per_bucket[bucket]["ws_exec_events"] += 1.0
         if flags["is_gap"]:
@@ -924,7 +943,7 @@ def build_ws_continuity_rail(
         row_specs=[
             {
                 "venue": "bitflyer_ws_board",
-                "activity_key": "ws_events",
+                "activity_key": "ws_board_events",
                 "use_gap": True,
                 "use_resync": True,
                 "use_warn": True,
@@ -1132,7 +1151,7 @@ def _build_health_continuity_bundle(
             },
             {
                 "venue": "bitflyer_ws_board",
-                "activity_key": "ws_events",
+                "activity_key": "ws_board_events",
                 "use_gap": True,
                 "use_resync": True,
                 "use_warn": True,

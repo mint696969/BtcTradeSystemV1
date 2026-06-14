@@ -102,8 +102,8 @@ def main() -> int:
                 }
             ],
             bitflyer_rate={"requests_60s": 10, "requests_300s": 50},
-            bitflyer_rate_snapshot={"requests_60s": 5},
-            bitflyer_rate_trades={"requests_60s": 3},
+            bitflyer_rate_public={"requests_60s": 8},
+            bitflyer_rate_private={"requests_60s": 2},
             get_text=lambda lang, key: key,
             section_title_with_range=lambda title, range_key: f"{title} ({range_key})",
             format_metric_number=lambda value, **kwargs: str(value),

@@ -17,8 +17,8 @@ def render_api_chart_panel(
     api_ws_series: list[dict],
     rate_overlay: list[dict],
     bitflyer_rate: dict,
-    bitflyer_rate_snapshot: dict,
-    bitflyer_rate_trades: dict,
+    bitflyer_rate_public: dict,
+    bitflyer_rate_private: dict,
     get_text: Callable[[str, str], str],
     section_title_with_range: Callable[[str, str], str],
     format_metric_number: Callable[..., str],
@@ -60,12 +60,12 @@ def render_api_chart_panel(
                 "-" if not bitflyer_rate else format_metric_number(bitflyer_rate.get("requests_300s")),
             )
             a3.metric(
-                get_text(lang, "health_metric_req_snapshot_1m"),
-                "-" if not bitflyer_rate_snapshot else format_metric_number(bitflyer_rate_snapshot.get("requests_60s")),
+                get_text(lang, "health_metric_public_rest_1m"),
+                "-" if not bitflyer_rate_public else format_metric_number(bitflyer_rate_public.get("requests_60s")),
             )
             a4.metric(
-                get_text(lang, "health_metric_req_trades_1m"),
-                "-" if not bitflyer_rate_trades else format_metric_number(bitflyer_rate_trades.get("requests_60s")),
+                get_text(lang, "health_metric_private_rest_1m"),
+                "-" if not bitflyer_rate_private else format_metric_number(bitflyer_rate_private.get("requests_60s")),
             )
         else:
             a1.metric(
@@ -187,6 +187,7 @@ def render_ws_chart_panel(
         ws_chart_df = ws_df.set_index("ts")[
             [
                 "ws_events",
+                "ws_board_events",
                 "ws_exec_events",
                 "gap_events",
                 "resync_events",
@@ -194,6 +195,7 @@ def render_ws_chart_panel(
         ].rename(
             columns={
                 "ws_events": get_text(lang, "health_chart_ws_events"),
+                "ws_board_events": get_text(lang, "health_chart_ws_board_events"),
                 "ws_exec_events": get_text(lang, "health_chart_ws_exec_events"),
                 "gap_events": get_text(lang, "health_chart_gap_events"),
                 "resync_events": get_text(lang, "health_chart_resync_events"),

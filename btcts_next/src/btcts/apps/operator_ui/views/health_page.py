@@ -327,6 +327,22 @@ def _section_title_with_range(title: str, range_key: str, lang: str) -> str:
     return f"{title}（{_range_label(range_key, lang)}）"
 
 
+def _sum_request_classes(rate_classes: dict, names: tuple[str, ...]) -> dict:
+    total_60s = 0
+    total_300s = 0
+    for name in names:
+        item = rate_classes.get(name) or {}
+        try:
+            total_60s += int(item.get("requests_60s") or 0)
+        except Exception:
+            pass
+        try:
+            total_300s += int(item.get("requests_300s") or 0)
+        except Exception:
+            pass
+    return {"requests_60s": total_60s, "requests_300s": total_300s}
+
+
 def _api_chart_columns_and_labels(api_df: pd.DataFrame, lang: str) -> tuple[list[str], dict[str, str]]:
     if api_df.empty:
         return [], {}
@@ -643,8 +659,18 @@ def render():
         rate_items = rate_payload.get("items") or {}
         bitflyer_rate = rate_items.get("bitflyer") or {}
         bitflyer_rate_classes = bitflyer_rate.get("request_classes") or {}
-        bitflyer_rate_snapshot = bitflyer_rate_classes.get("board_snapshot") or {}
-        bitflyer_rate_trades = bitflyer_rate_classes.get("rest_trades") or {}
+        bitflyer_rate_public = _sum_request_classes(
+            bitflyer_rate_classes,
+            ("board_snapshot", "rest_trades", "public_rest_market_data"),
+        )
+        bitflyer_rate_private = _sum_request_classes(
+            bitflyer_rate_classes,
+            (
+                "private_rest_account_state",
+                "private_rest_order_state",
+                "private_rest_own_fills",
+            ),
+        )
 
         render_api_chart_panel(
             lang=lang,
@@ -652,8 +678,8 @@ def render():
             api_ws_series=timeline_bundle.get("api_ws_series") or [],
             rate_overlay=timeline_bundle.get("rate_overlay") or [],
             bitflyer_rate=bitflyer_rate,
-            bitflyer_rate_snapshot=bitflyer_rate_snapshot,
-            bitflyer_rate_trades=bitflyer_rate_trades,
+            bitflyer_rate_public=bitflyer_rate_public,
+            bitflyer_rate_private=bitflyer_rate_private,
             get_text=get_text,
             section_title_with_range=section_title_with_range_local,
             format_metric_number=format_metric_number_local,
