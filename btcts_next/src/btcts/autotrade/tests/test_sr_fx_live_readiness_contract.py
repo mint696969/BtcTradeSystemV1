@@ -253,3 +253,54 @@ def test_live_contract_blocks_active_paper_orders_from_ledger_reconciliation() -
     assert result.paper_order_ledger_path == "D:/btc_ts_hot/autotrade/decisions/paper_orders.jsonl"
     assert result.would_send_to_broker is False
     assert result.read_only is True
+
+
+
+def test_live_contract_blocks_open_paper_position() -> None:
+    readiness = _readiness(clear=True)
+    reconciliation, preview = _parts(readiness)
+    reconciliation = type(reconciliation)(
+        ok=reconciliation.ok,
+        product_code=reconciliation.product_code,
+        market_uid=reconciliation.market_uid,
+        private_state_known_and_fresh=reconciliation.private_state_known_and_fresh,
+        account_clear_for_new_auto_entry=reconciliation.account_clear_for_new_auto_entry,
+        position_item_count=reconciliation.position_item_count,
+        open_order_item_count=reconciliation.open_order_item_count,
+        own_execution_item_count=reconciliation.own_execution_item_count,
+        active_paper_order_count=0,
+        terminal_paper_order_count=1,
+        paper_order_ledger_path="D:/btc_ts_hot/autotrade/decisions/paper_orders.jsonl",
+        paper_order_ledger_skipped_rows=0,
+        paper_position_size=0.001,
+        paper_position_side="long",
+        paper_average_entry_price=101.0,
+        paper_realized_pnl=0.0,
+        paper_realized_pnl_currency="JPY",
+        paper_position_fill_event_count=1,
+        paper_position_ledger_skipped_rows=0,
+        blocked_by=reconciliation.blocked_by,
+        warnings=reconciliation.warnings,
+        would_send_to_broker=False,
+        read_only=True,
+    )
+
+    result = evaluate_fx_live_readiness_contract(
+        private_readiness=readiness,
+        reconciliation=reconciliation,
+        order_preview=preview,
+        public_market_readiness=_public_market(ok=True),
+        bitflyer_order_send_enabled=True,
+        autotrade_live_order_enabled=True,
+        order_sender_implemented=True,
+    )
+
+    assert result.ready is False
+    assert "paper_position_open" in result.blocked_by
+    assert result.paper_position_size == 0.001
+    assert result.paper_position_side == "long"
+    assert result.paper_average_entry_price == 101.0
+    assert result.paper_realized_pnl == 0.0
+    assert result.paper_position_fill_event_count == 1
+    assert result.would_send_to_broker is False
+    assert result.read_only is True

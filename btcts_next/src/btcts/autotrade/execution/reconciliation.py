@@ -9,6 +9,7 @@ from typing import Any, Dict, Iterable, Mapping, Tuple
 
 from btcts.autotrade.execution.order_state import PaperOrder, PaperOrderStatus
 from btcts.autotrade.execution.paper_ledger import PaperOrderLedgerSummary, summarize_paper_order_ledger
+from btcts.autotrade.execution.paper_position import PaperPositionSummary, summarize_paper_position_from_lifecycle
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,13 @@ class FxReconciliationResult:
     terminal_paper_order_count: int
     paper_order_ledger_path: str | None = None
     paper_order_ledger_skipped_rows: int = 0
+    paper_position_size: float = 0.0
+    paper_position_side: str = "flat"
+    paper_average_entry_price: float | None = None
+    paper_realized_pnl: float = 0.0
+    paper_realized_pnl_currency: str = "JPY"
+    paper_position_fill_event_count: int = 0
+    paper_position_ledger_skipped_rows: int = 0
     blocked_by: Tuple[str, ...] = ()
     warnings: Tuple[str, ...] = ()
     would_send_to_broker: bool = False
@@ -120,6 +128,13 @@ def reconcile_fx_private_state_with_paper(
         terminal_paper_order_count=paper_counts["terminal_paper_order_count"],
         paper_order_ledger_path=None,
         paper_order_ledger_skipped_rows=0,
+        paper_position_size=0.0,
+        paper_position_side="flat",
+        paper_average_entry_price=None,
+        paper_realized_pnl=0.0,
+        paper_realized_pnl_currency="JPY",
+        paper_position_fill_event_count=0,
+        paper_position_ledger_skipped_rows=0,
         blocked_by=tuple(dict.fromkeys(blocked)),
         warnings=tuple(dict.fromkeys(warnings)),
         would_send_to_broker=False,
@@ -142,6 +157,7 @@ def reconcile_fx_private_state_with_paper_ledger(
     readiness surfaces.
     """
     summary: PaperOrderLedgerSummary = summarize_paper_order_ledger(paper_order_ledger_path, max_lines=max_lines)
+    position_summary: PaperPositionSummary = summarize_paper_position_from_lifecycle(summary.path, max_lines=max_lines)
     blocked: list[str] = []
     warnings: list[str] = []
 
@@ -173,6 +189,12 @@ def reconcile_fx_private_state_with_paper_ledger(
         warnings.append("exchange_open_orders_without_active_paper_orders")
     if summary.skipped_rows > 0:
         warnings.append("paper_order_ledger_has_skipped_rows")
+    if position_summary.skipped_rows > 0:
+        warnings.append("paper_position_summary_has_skipped_rows")
+    if abs(float(position_summary.net_position_size or 0.0)) > 0.0 and counts["position_item_count"] == 0:
+        warnings.append("paper_position_without_exchange_position")
+    if abs(float(position_summary.net_position_size or 0.0)) == 0.0 and counts["position_item_count"] > 0:
+        warnings.append("exchange_position_without_paper_position")
 
     return FxReconciliationResult(
         ok=not blocked,
@@ -187,6 +209,13 @@ def reconcile_fx_private_state_with_paper_ledger(
         terminal_paper_order_count=terminal_paper,
         paper_order_ledger_path=str(summary.path),
         paper_order_ledger_skipped_rows=int(summary.skipped_rows or 0),
+        paper_position_size=float(position_summary.net_position_size or 0.0),
+        paper_position_side=str(position_summary.position_side or "flat"),
+        paper_average_entry_price=position_summary.average_entry_price,
+        paper_realized_pnl=float(position_summary.realized_pnl or 0.0),
+        paper_realized_pnl_currency=str(position_summary.realized_pnl_currency or "JPY"),
+        paper_position_fill_event_count=int(position_summary.fill_event_count or 0),
+        paper_position_ledger_skipped_rows=int(position_summary.skipped_rows or 0),
         blocked_by=tuple(dict.fromkeys(blocked)),
         warnings=tuple(dict.fromkeys(warnings)),
         would_send_to_broker=False,

@@ -26,6 +26,13 @@ class FxLiveReadinessContractResult:
     terminal_paper_order_count: int
     paper_order_ledger_path: str | None
     paper_order_ledger_skipped_rows: int
+    paper_position_size: float
+    paper_position_side: str
+    paper_average_entry_price: float | None
+    paper_realized_pnl: float
+    paper_realized_pnl_currency: str
+    paper_position_fill_event_count: int
+    paper_position_ledger_skipped_rows: int
     preview_ok: bool
     bitflyer_order_send_enabled: bool
     autotrade_live_order_enabled: bool
@@ -112,6 +119,10 @@ def evaluate_fx_live_readiness_contract(
         blocked.append("active_paper_orders_present")
     if int(reconciliation.paper_order_ledger_skipped_rows or 0) > 0:
         warnings.append("paper_order_ledger_has_skipped_rows")
+    if abs(float(reconciliation.paper_position_size or 0.0)) > 0.0:
+        blocked.append("paper_position_open")
+    if int(reconciliation.paper_position_ledger_skipped_rows or 0) > 0:
+        warnings.append("paper_position_summary_has_skipped_rows")
     if not order_preview.ok:
         blocked.append("order_preview_not_ok")
         blocked.extend(order_preview.blocked_by)
@@ -141,6 +152,13 @@ def evaluate_fx_live_readiness_contract(
         terminal_paper_order_count=int(reconciliation.terminal_paper_order_count or 0),
         paper_order_ledger_path=reconciliation.paper_order_ledger_path,
         paper_order_ledger_skipped_rows=int(reconciliation.paper_order_ledger_skipped_rows or 0),
+        paper_position_size=float(reconciliation.paper_position_size or 0.0),
+        paper_position_side=str(reconciliation.paper_position_side or "flat"),
+        paper_average_entry_price=reconciliation.paper_average_entry_price,
+        paper_realized_pnl=float(reconciliation.paper_realized_pnl or 0.0),
+        paper_realized_pnl_currency=str(reconciliation.paper_realized_pnl_currency or "JPY"),
+        paper_position_fill_event_count=int(reconciliation.paper_position_fill_event_count or 0),
+        paper_position_ledger_skipped_rows=int(reconciliation.paper_position_ledger_skipped_rows or 0),
         preview_ok=bool(order_preview.ok),
         bitflyer_order_send_enabled=bool(bitflyer_order_send_enabled),
         autotrade_live_order_enabled=bool(autotrade_live_order_enabled),

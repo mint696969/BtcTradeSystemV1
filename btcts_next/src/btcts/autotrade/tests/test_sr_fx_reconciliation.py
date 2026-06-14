@@ -11,7 +11,7 @@ from btcts.autotrade.execution.reconciliation import (
     reconcile_fx_private_state_with_paper_ledger,
 )
 from btcts.autotrade.execution.paper_intent import build_fx_paper_order_intent_from_service_input
-from btcts.autotrade.execution.paper_ledger import default_paper_order_ledger_path, record_paper_order
+from btcts.autotrade.execution.paper_ledger import default_paper_order_ledger_path, record_paper_order, record_paper_order_transition
 from btcts.autotrade.replay.paper_engine import PaperExecutionEngine
 
 
@@ -165,5 +165,47 @@ def test_reconciliation_ledger_summary_failsoft_malformed_rows(monkeypatch, tmp_
     assert result.ok is True
     assert result.paper_order_ledger_skipped_rows == 1
     assert "paper_order_ledger_has_skipped_rows" in result.warnings
+    assert result.read_only is True
+    assert result.would_send_to_broker is False
+
+
+
+def test_reconciliation_reads_paper_position_from_lifecycle_ledger(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("BTC_TS_AUTOTRADE_RUNTIME_ROOT", str(tmp_path / "btc_ts_hot"))
+    intent_build = build_fx_paper_order_intent_from_service_input(
+        _service_input(),
+        decision_id="decision_recon_position_001",
+        snapshot_id="snapshot_recon_position_001",
+        forecast_id=None,
+        parameter_set_id="params_001",
+        logic_version="logic_test",
+        side="buy",
+        size=0.001,
+        price=100.0,
+        risk_gate_allowed=True,
+        mode="PAPER_OR_REPLAY",
+    )
+    assert intent_build.intent is not None
+    engine = PaperExecutionEngine()
+    accepted = engine.submit_fx_execution_intent(intent_build.intent, ts="2026-06-14T00:00:00Z")
+    filled = engine.fill(intent_build.intent.decision_id, ts="2026-06-14T00:00:01Z", fill_price=101.0)
+    assert filled is not None
+    record_paper_order_transition(
+        previous_order=accepted,
+        order=filled,
+        recorded_at="2026-06-14T00:00:01Z",
+        fill_size=0.001,
+        fill_price=101.0,
+    )
+
+    result = reconcile_fx_private_state_with_paper_ledger(private_readiness=_readiness(clear=True))
+
+    assert result.ok is True
+    assert result.paper_position_size == 0.001
+    assert result.paper_position_side == "long"
+    assert result.paper_average_entry_price == 101.0
+    assert result.paper_realized_pnl == 0.0
+    assert result.paper_position_fill_event_count == 1
+    assert "paper_position_without_exchange_position" in result.warnings
     assert result.read_only is True
     assert result.would_send_to_broker is False
