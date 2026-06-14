@@ -44,6 +44,7 @@ from .mode_state import (
 )
 from .order_state import PaperOrder, PaperOrderStatus, create_paper_order, paper_order_id_for_intent
 from .order_preview import BitflyerFxOrderRequestPreview, OrderPreviewResult, build_bitflyer_fx_manual_order_preview, build_bitflyer_fx_order_request_preview
+from .paper_intent import PaperOrderIntentBuildResult, build_fx_paper_order_intent_from_service_input, validate_execution_market_service_input_for_paper
 from .reconciliation import FxReconciliationResult, reconcile_fx_private_state_with_paper
 from .live_readiness_contract import FxLiveReadinessContractResult, evaluate_fx_live_readiness_contract
 
@@ -76,6 +77,7 @@ __all__ = [
     "OrderType",
     "PaperOrder",
     "PaperOrderStatus",
+    "PaperOrderIntentBuildResult",
     "DEFAULT_MODE_STATE",
     "append_command_ledger_record",
     "apply_latest_mode_change_command_once",
@@ -87,6 +89,7 @@ __all__ = [
     "build_mode_change_command_request_record",
     "build_mode_state_record_from_command",
     "build_order_intent_from_decision",
+    "build_fx_paper_order_intent_from_service_input",
     "create_paper_order",
     "current_mode_state",
     "default_command_ledger_path",
@@ -101,4 +104,5 @@ __all__ = [
     "summarize_mode_state",
     "validate_and_append_command",
     "validate_command_request",
+    "validate_execution_market_service_input_for_paper",
 ]
