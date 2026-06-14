@@ -17,6 +17,10 @@ from .active_event_reading import (
 )
 from .health_digest import HealthDigest, HealthDigestBuildInput, build_health_digest
 from .market_summary import MarketSummary, MarketSummaryBuildInput, build_market_summary
+from .execution_market_service_input import (
+    ExecutionMarketServiceInput,
+    build_execution_market_service_input,
+)
 from .prediction_summary import (
     PredictionSummary,
     PredictionSummaryBuildInput,
@@ -85,6 +89,8 @@ __all__ = [
     "MarketSummary",
     "MarketSummaryBuildInput",
     "build_market_summary",
+    "ExecutionMarketServiceInput",
+    "build_execution_market_service_input",
     "PredictionSummary",
     "PredictionSummaryBuildInput",
     "build_prediction_summary",

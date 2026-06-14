@@ -6,10 +6,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import os
 
+from btcts.processing.l4_consumer_models.shared import build_execution_market_service_input
 from btcts.apps.operator_ui.components.market_state_bridge import (
     execution_market_context,
     load_execution_market_overview,
     load_execution_market_prediction_summary_status_payload,
+    load_execution_market_summary_bundle,
     load_execution_market_summary_status_payload,
 )
 from btcts.market_engine.config import MarketEngineConfig
@@ -148,6 +150,8 @@ def test_operator_ui_execution_market_bridge_reads_configured_sr_fx_market(monke
     ctx = execution_market_context()
     overview = load_execution_market_overview()
     summary_payload = load_execution_market_summary_status_payload()
+    summary_bundle = load_execution_market_summary_bundle()
+    service_input = build_execution_market_service_input(summary_bundle)
     prediction_payload = load_execution_market_prediction_summary_status_payload(include_health_caution=False)
 
     assert ctx["symbol_raw"] == "FX_BTC_JPY"
@@ -168,6 +172,12 @@ def test_operator_ui_execution_market_bridge_reads_configured_sr_fx_market(monke
     assert summary_payload["execution_market_uid"] == "bitflyer.fx.FX_BTC_JPY"
     assert summary_payload["read_only"] is True
     assert summary_payload["would_send_to_broker"] is False
+
+    assert service_input.service_input_role == "execution_market"
+    assert service_input.market_uid == "bitflyer.fx.FX_BTC_JPY"
+    assert service_input.read_only is True
+    assert service_input.would_send_to_broker is False
+    assert "workroom" in service_input.consumer_allowed
 
     assert prediction_payload["market_uid"] == "bitflyer.fx.FX_BTC_JPY"
     assert prediction_payload["service_input_role"] == "execution_market"
