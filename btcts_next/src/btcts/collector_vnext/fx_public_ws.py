@@ -388,6 +388,35 @@ def _path_exists(raw: Any) -> bool:
         return False
 
 
+def _candidate_ca_bundle_paths() -> Dict[str, Dict[str, object]]:
+    candidates: Dict[str, Any] = {}
+    try:
+        import certifi  # type: ignore
+
+        candidates["certifi.where"] = certifi.where()
+    except Exception:
+        candidates["certifi.where"] = None
+
+    try:
+        import pip._vendor.certifi as pip_certifi  # type: ignore
+
+        candidates["pip._vendor.certifi.where"] = pip_certifi.where()
+    except Exception:
+        candidates["pip._vendor.certifi.where"] = None
+
+    return {
+        key: {"value": str(value) if value else None, "exists": _path_exists(value)}
+        for key, value in candidates.items()
+    }
+
+
+def _first_existing_candidate(candidates: Mapping[str, Mapping[str, object]]) -> str | None:
+    for item in candidates.values():
+        if bool(item.get("exists")) and item.get("value"):
+            return str(item.get("value"))
+    return None
+
+
 def _tls_error_classes(preflight: Mapping[str, Any] | None) -> tuple[str, ...]:
     if not isinstance(preflight, Mapping):
         return ()
@@ -425,6 +454,8 @@ def diagnose_fx_ws_tls_environment(*, preflight: Mapping[str, Any] | None = None
     }
     env_path_status = {k: {"value": v, "exists": _path_exists(v)} for k, v in env_paths.items()}
     default_path_status = {k: {"value": v, "exists": _path_exists(v)} for k, v in default_paths.items()}
+    candidate_ca_bundle_paths = _candidate_ca_bundle_paths()
+    first_candidate = _first_existing_candidate(candidate_ca_bundle_paths)
     error_classes = _tls_error_classes(preflight)
     tls_error_detected = any("SSL" in cls or "Certificate" in cls or "CERT" in cls.upper() for cls in error_classes)
 
@@ -453,12 +484,15 @@ def diagnose_fx_ws_tls_environment(*, preflight: Mapping[str, Any] | None = None
         "error_classes": list(error_classes),
         "env_paths": env_path_status,
         "default_verify_paths": default_path_status,
+        "candidate_ca_bundle_paths": candidate_ca_bundle_paths,
+        "suggested_btcts_ws_ca_file": first_candidate,
         "blocked_by": list(dict.fromkeys(blocked_by)),
         "warnings": list(dict.fromkeys(warnings)),
         "recommended_operator_actions": [
             "keep_BTCTS_WS_SSL_VERIFY_enabled_for_live_readiness",
             "inspect_corporate_proxy_or_antivirus_tls_interception",
             "install_or_point_python_to_trusted_ca_bundle_if_environment_requires_it",
+            "set_BTCTS_WS_CA_FILE_to_existing_trusted_bundle_when_required",
             "rerun_bitflyer_fx_public_ws_preflight_once_after_trust_store_fix",
         ],
         "read_only": True,

@@ -239,3 +239,27 @@ def test_fx_ws_tls_diagnostics_blocks_missing_explicit_ca_file(monkeypatch, tmp_
     assert "ws_ca_file_not_found" in out["blocked_by"]
     assert out["would_send_to_broker"] is False
     assert out["read_only"] is True
+
+
+
+def test_fx_ws_tls_diagnostics_reports_candidate_ca_bundle(monkeypatch, tmp_path) -> None:
+    from btcts.collector_vnext import fx_public_ws
+    from btcts.collector_vnext.fx_public_ws import diagnose_fx_ws_tls_environment
+
+    _runtime_paths(monkeypatch, tmp_path)
+    ca_file = tmp_path / "certifi-ca.pem"
+    ca_file.write_text("-----BEGIN CERTIFICATE-----\nunit\n-----END CERTIFICATE-----\n", encoding="utf-8")
+    monkeypatch.setattr(
+        fx_public_ws,
+        "_candidate_ca_bundle_paths",
+        lambda: {"certifi.where": {"value": str(ca_file), "exists": True}},
+    )
+
+    out = diagnose_fx_ws_tls_environment(preflight={"ok": False, "attempts": {"board": {"ok": False, "error_class": "SSLCertVerificationError"}}})
+
+    assert out["ok"] is False
+    assert out["suggested_btcts_ws_ca_file"] == str(ca_file)
+    assert out["candidate_ca_bundle_paths"]["certifi.where"]["exists"] is True
+    assert "ws_tls_certificate_verification_failed" in out["blocked_by"]
+    assert out["read_only"] is True
+    assert out["would_send_to_broker"] is False
