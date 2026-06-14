@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict
 
 from btcts.collector_vnext.config import load_config
 from btcts.collector_vnext.fx_public_rest import _note_rate_result, _rate_acquire, execution_market_config
-from btcts.collector_vnext.providers.bitflyer_rest import RestFetchResult, fetch_board
+from btcts.collector_vnext.providers.bitflyer_rest import RestFetchResult, fetch_board, fetch_executions
 from btcts.collector_vnext.rate_runtime import VNextRateRuntime
 from btcts.market_engine.config import MarketEngineConfig
 from btcts.market_engine.market_state.schema import MarketStateRecord
@@ -79,6 +79,33 @@ def _notional_total(levels: list[dict[str, float]]) -> float:
     return sum(float(item.get("price") or 0.0) * float(item.get("size") or 0.0) for item in levels)
 
 
+def _trade_delta_from_executions_payload(payload: Dict[str, Any] | None) -> float | None:
+    if not isinstance(payload, dict):
+        return None
+    items = payload.get("items")
+    if not isinstance(items, list):
+        return None
+    total = 0.0
+    seen = False
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        side = str(item.get("side") or "").strip().upper()
+        try:
+            size = float(item.get("size"))
+        except Exception:
+            continue
+        if size < 0:
+            continue
+        if side == "BUY":
+            total += size
+            seen = True
+        elif side == "SELL":
+            total -= size
+            seen = True
+    return total if seen else None
+
+
 def build_fx_market_state_record_from_rest_board(
     *,
     payload: Dict[str, Any],
@@ -88,6 +115,7 @@ def build_fx_market_state_record_from_rest_board(
     received_ts: str | None,
     stream_session_id: str,
     near_zone_levels: int = 50,
+    trade_delta: float | None = None,
 ) -> MarketStateRecord:
     collector_ts = received_ts or _utc_now()
     bids = sorted(_levels(payload.get("bids")), key=lambda item: item["price"], reverse=True)
@@ -160,6 +188,9 @@ def build_fx_market_state_record_from_rest_board(
         best_ask=best_ask,
         spread=spread,
         mid_price=mid_price,
+        price=mid_price,
+        imbalance=imbalance,
+        trade_delta=trade_delta,
         near_zone_bids=near_bids,
         near_zone_asks=near_asks,
         top_book_summary={
@@ -194,6 +225,7 @@ def build_fx_market_state_record_from_rest_board(
 def write_fx_market_state_from_public_rest_board(
     *,
     fetch_board_func: Callable[..., RestFetchResult] = fetch_board,
+    fetch_executions_func: Callable[..., RestFetchResult] = fetch_executions,
     rate_runtime: VNextRateRuntime | None = None,
 ) -> FxMarketStateRestSnapshotResult:
     base_cfg = load_config()
@@ -204,6 +236,11 @@ def write_fx_market_state_from_public_rest_board(
     _rate_acquire(rate_runtime, exchange)
     res = fetch_board_func(product_code=exe.product_code, timeout_sec=10.0)
     _note_rate_result(rate_runtime, exchange=exchange, request_class=REQUEST_CLASS, result=res)
+
+    _rate_acquire(rate_runtime, exchange)
+    executions_res = fetch_executions_func(product_code=exe.product_code, count=50, timeout_sec=10.0)
+    _note_rate_result(rate_runtime, exchange=exchange, request_class=REQUEST_CLASS, result=executions_res)
+    trade_delta = _trade_delta_from_executions_payload(executions_res.payload) if executions_res.ok else None
 
     if not res.ok or not isinstance(res.payload, dict):
         return FxMarketStateRestSnapshotResult(
@@ -231,6 +268,7 @@ def write_fx_market_state_from_public_rest_board(
         received_ts=res.received_ts,
         stream_session_id=stream_session_id,
         near_zone_levels=50,
+        trade_delta=trade_delta,
     )
     market_cfg = MarketEngineConfig(
         exchange=exchange,
@@ -260,7 +298,14 @@ def write_fx_market_state_from_public_rest_board(
         market_state_path=out,
         status_code=res.status_code,
         blocked_by=(),
-        warnings=("rest_board_baseline_not_continuous_ws_series",),
+        warnings=tuple(
+            item
+            for item in (
+                "rest_board_baseline_not_continuous_ws_series",
+                None if trade_delta is not None else "fx_public_rest_executions_trade_delta_missing",
+            )
+            if item is not None
+        ),
         row=record.to_dict(),
         read_only=False,
         would_send_to_broker=False,

@@ -19,6 +19,7 @@ def test_build_fx_market_state_record_from_rest_board_uses_execution_identity() 
         received_ts="2026-06-14T08:00:00Z",
         stream_session_id="unit-session",
         near_zone_levels=1,
+        trade_delta=0.25,
     )
 
     data = row.to_dict()
@@ -32,6 +33,9 @@ def test_build_fx_market_state_record_from_rest_board_uses_execution_identity() 
     assert data["best_ask"] == 101.0
     assert data["spread"] == 1.0
     assert data["mid_price"] == 100.5
+    assert data["price"] == 100.5
+    assert data["imbalance"] == -0.2
+    assert data["trade_delta"] == 0.25
     assert data["near_zone_liquidity_summary"]["bid_size_total"] == 1.0
     assert data["near_zone_liquidity_summary"]["ask_size_total"] == 1.5
     assert data["source_stream_session_id"] == "unit-session"
@@ -52,3 +56,21 @@ def test_build_fx_market_state_record_from_incomplete_board_is_provisional() -> 
     assert data["interpretation_bucket"] == "observe_only"
     assert data["best_bid"] is None
     assert data["best_ask"] is None
+
+
+
+def test_trade_delta_from_executions_payload_uses_signed_size() -> None:
+    from btcts.autotrade.read_model.fx_market_state_rest_snapshot import _trade_delta_from_executions_payload
+
+    delta = _trade_delta_from_executions_payload(
+        {
+            "items": [
+                {"side": "BUY", "size": 0.30},
+                {"side": "SELL", "size": 0.10},
+                {"side": "BUY", "size": 0.05},
+                {"side": "UNKNOWN", "size": 9.99},
+            ]
+        }
+    )
+
+    assert round(delta or 0.0, 8) == 0.25

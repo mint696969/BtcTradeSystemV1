@@ -32,6 +32,11 @@ class MarketStateRecord:
     best_ask: float | None = None
     spread: float | None = None
     mid_price: float | None = None
+    price: float | None = None
+    imbalance: float | None = None
+    wall_ratio: float | None = None
+    wall_side: str | None = None
+    trade_delta: float | None = None
     near_zone_bids: list[dict[str, Any]] = field(default_factory=list)
     near_zone_asks: list[dict[str, Any]] = field(default_factory=list)
     top_book_summary: dict[str, Any] = field(default_factory=dict)
@@ -64,6 +69,11 @@ class MarketStateRecord:
             "best_ask": self.best_ask,
             "spread": self.spread,
             "mid_price": self.mid_price,
+            "price": self.price,
+            "imbalance": self.imbalance,
+            "wall_ratio": self.wall_ratio,
+            "wall_side": self.wall_side,
+            "trade_delta": self.trade_delta,
             "near_zone_bids": self.near_zone_bids,
             "near_zone_asks": self.near_zone_asks,
             "top_book_summary": self.top_book_summary,
