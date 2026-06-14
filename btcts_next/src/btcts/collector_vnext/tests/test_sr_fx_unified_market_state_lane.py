@@ -6,8 +6,13 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 import tempfile
 from pathlib import Path
+
+_SRC_ROOT = Path(__file__).resolve().parents[3]
+if str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
 
 
 def _set_env(root: Path, *, enabled: bool) -> None:
