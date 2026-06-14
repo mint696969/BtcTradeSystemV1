@@ -15,6 +15,19 @@ from .config import CollectorConfig
 from .state import write_json_state
 
 
+SR_FX_KNOWN_REQUEST_CLASSES = (
+    "board_snapshot",
+    "rest_trades",
+    "public_rest_market_data",
+    "public_ws_connect_subscribe",
+    "private_rest_account_state",
+    "private_rest_order_state",
+    "private_rest_own_fills",
+    "order_send",
+    "order_cancel",
+)
+
+
 def _safe_float(value, default: float) -> float:
     try:
         return float(value)
@@ -191,6 +204,17 @@ class VNextRateRuntime:
 
         return "steady"
 
+    def _request_class_visibility(self, exchange: str) -> dict:
+        observed = set(self.requests_sent_by_class.get(exchange, {}).keys())
+        classes = sorted(set(SR_FX_KNOWN_REQUEST_CLASSES) | observed)
+        return {
+            request_class: {
+                "requests_60s": self._count_requests_in_window_by_class(exchange, request_class, 60.0),
+                "requests_300s": self._count_requests_in_window_by_class(exchange, request_class, 300.0),
+            }
+            for request_class in classes
+        }
+
     def _visibility_item(self, exchange: str, item: dict) -> dict:
         """
         Convert RateController snapshot item to visibility contract required by P0.
@@ -245,16 +269,7 @@ class VNextRateRuntime:
             "requests_10s": requests_10s,
             "requests_60s": requests_60s,
             "requests_300s": requests_300s,
-            "request_classes": {
-                "board_snapshot": {
-                    "requests_60s": self._count_requests_in_window_by_class(exchange, "board_snapshot", 60.0),
-                    "requests_300s": self._count_requests_in_window_by_class(exchange, "board_snapshot", 300.0),
-                },
-                "rest_trades": {
-                    "requests_60s": self._count_requests_in_window_by_class(exchange, "rest_trades", 60.0),
-                    "requests_300s": self._count_requests_in_window_by_class(exchange, "rest_trades", 300.0),
-                },
-            },
+            "request_classes": self._request_class_visibility(exchange),
             "ts": _safe_iso_from_unix(item.get("ts")) or _safe_iso_from_unix(time.time()),
         }
 

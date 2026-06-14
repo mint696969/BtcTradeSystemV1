@@ -38,10 +38,90 @@ def _env_list(name: str, default: List[str]) -> List[str]:
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 
+class ConfigValidationError(ValueError):
+    pass
+
+
 @dataclass(frozen=True)
 class RotationPolicy:
     max_bytes: int = 128 * 1024 * 1024
     max_lines: int = 200_000
+
+
+@dataclass(frozen=True)
+class MarketIdentity:
+    role: str
+    exchange: str
+    market_type: str
+    product_code: str
+    market_uid: str
+    enabled: bool = True
+
+    def normalized(self) -> "MarketIdentity":
+        return MarketIdentity(
+            role=self.role.strip().lower(),
+            exchange=self.exchange.strip().lower(),
+            market_type=self.market_type.strip().lower(),
+            product_code=self.product_code.strip(),
+            market_uid=self.market_uid.strip(),
+            enabled=bool(self.enabled),
+        )
+
+    def as_dict(self) -> Dict[str, object]:
+        x = self.normalized()
+        return {
+            "role": x.role,
+            "exchange": x.exchange,
+            "market_type": x.market_type,
+            "product_code": x.product_code,
+            "market_uid": x.market_uid,
+            "enabled": x.enabled,
+        }
+
+
+def validate_market_identities(
+    reference_market: MarketIdentity,
+    execution_market: MarketIdentity,
+) -> None:
+    ref = reference_market.normalized()
+    exe = execution_market.normalized()
+
+    errors: List[str] = []
+
+    if ref.enabled:
+        if ref.role != "reference_signal":
+            errors.append("reference_market.role must be reference_signal")
+        if not ref.exchange:
+            errors.append("reference_market.exchange is required")
+        if not ref.market_type:
+            errors.append("reference_market.market_type is required")
+        if not ref.product_code:
+            errors.append("reference_market.product_code is required")
+        if not ref.market_uid:
+            errors.append("reference_market.market_uid is required")
+
+    if exe.enabled:
+        if exe.role != "execution":
+            errors.append("execution_market.role must be execution")
+        if not exe.exchange:
+            errors.append("execution_market.exchange is required")
+        if not exe.market_type:
+            errors.append("execution_market.market_type is required")
+        if not exe.product_code:
+            errors.append("execution_market.product_code is required")
+        if not exe.market_uid:
+            errors.append("execution_market.market_uid is required")
+        if exe.market_type == "spot":
+            errors.append("execution_market.market_type must not be spot")
+        if ".spot." in exe.market_uid.lower() or exe.market_uid.lower().endswith(".spot"):
+            errors.append("execution_market.market_uid must not be a spot market uid")
+        if ref.enabled and exe.market_uid == ref.market_uid:
+            errors.append("execution_market.market_uid must differ from reference_market.market_uid")
+        if ref.enabled and exe.product_code == ref.product_code and exe.market_type == ref.market_type:
+            errors.append("execution_market must not duplicate reference market identity")
+
+    if errors:
+        raise ConfigValidationError("; ".join(errors))
 
 
 @dataclass(frozen=True)
@@ -57,6 +137,26 @@ class CollectorConfig:
     market: str = "spot"
     symbol: str = "BTC_JPY"
     instrument_id: str = "bitflyer.spot.BTC_JPY"
+    reference_market: MarketIdentity = field(
+        default_factory=lambda: MarketIdentity(
+            role="reference_signal",
+            exchange="bitflyer",
+            market_type="spot",
+            product_code="BTC_JPY",
+            market_uid="bitflyer.spot.BTC_JPY",
+            enabled=True,
+        )
+    )
+    execution_market: MarketIdentity = field(
+        default_factory=lambda: MarketIdentity(
+            role="execution",
+            exchange="bitflyer",
+            market_type="fx",
+            product_code="FX_BTC_JPY",
+            market_uid="bitflyer.fx.FX_BTC_JPY",
+            enabled=True,
+        )
+    )
     ws_ssl_verify: bool = True
     rotation: RotationPolicy = field(default_factory=RotationPolicy)
 
@@ -68,24 +168,62 @@ class CollectorConfig:
             "state": self.state_root / "collector_vnext",
         }
 
+    def market_identity_summary(self) -> Dict[str, object]:
+        return {
+            "legacy": {
+                "market": self.market,
+                "symbol": self.symbol,
+                "instrument_id": self.instrument_id,
+            },
+            "reference_market": self.reference_market.as_dict(),
+            "execution_market": self.execution_market.as_dict(),
+        }
+
+
+def _load_reference_market() -> MarketIdentity:
+    return MarketIdentity(
+        role="reference_signal",
+        exchange=_env_str("BTCTS_REFERENCE_EXCHANGE", "bitflyer"),
+        market_type=_env_str("BTCTS_REFERENCE_MARKET_TYPE", "spot"),
+        product_code=_env_str("BTCTS_REFERENCE_PRODUCT_CODE", "BTC_JPY"),
+        market_uid=_env_str("BTCTS_REFERENCE_MARKET_UID", "bitflyer.spot.BTC_JPY"),
+        enabled=_env_bool("BTCTS_REFERENCE_MARKET_ENABLED", True),
+    ).normalized()
+
+
+def _load_execution_market() -> MarketIdentity:
+    product_code = _env_str_fallback(
+        ["BTCTS_EXECUTION_PRODUCT_CODE", "BTCTS_BITFLYER_EXECUTION_PRODUCT_CODE"],
+        "FX_BTC_JPY",
+    )
+    default_uid = f"bitflyer.fx.{product_code}"
+    return MarketIdentity(
+        role="execution",
+        exchange=_env_str("BTCTS_EXECUTION_EXCHANGE", "bitflyer"),
+        market_type=_env_str("BTCTS_EXECUTION_MARKET_TYPE", "fx"),
+        product_code=product_code,
+        market_uid=_env_str("BTCTS_EXECUTION_MARKET_UID", default_uid),
+        enabled=_env_bool("BTCTS_EXECUTION_MARKET_ENABLED", True),
+    ).normalized()
+
 
 def load_config() -> CollectorConfig:
     data_root = Path(
         _env_str_fallback(
             ["BTC_TS_DATA_DIR", "BTCTS_DATA_ROOT"],
-            r"E:\\btc_ts\\data",
+            r"E:\btc_ts\data",
         )
     )
     logs_root = Path(
         _env_str_fallback(
             ["BTC_TS_LOGS_DIR", "BTCTS_LOGS_ROOT"],
-            r"E:\\btc_ts\\logs",
+            r"E:\btc_ts\logs",
         )
     )
     state_root = Path(
         _env_str_fallback(
             ["BTCTS_STATE_ROOT"],
-            r"E:\\btc_ts\\state",
+            r"E:\btc_ts\state",
         )
     )
 
@@ -99,6 +237,10 @@ def load_config() -> CollectorConfig:
     market = _env_str("BTCTS_MARKET", "spot")
     symbol = _env_str("BTCTS_SYMBOL", "BTC_JPY")
     instrument_id = _env_str("BTCTS_INSTRUMENT_ID", "bitflyer.spot.BTC_JPY")
+
+    reference_market = _load_reference_market()
+    execution_market = _load_execution_market()
+    validate_market_identities(reference_market, execution_market)
 
     ws_ssl_verify = _env_bool("BTCTS_WS_SSL_VERIFY", True)
 
@@ -119,6 +261,8 @@ def load_config() -> CollectorConfig:
         market=market,
         symbol=symbol,
         instrument_id=instrument_id,
+        reference_market=reference_market,
+        execution_market=execution_market,
         ws_ssl_verify=ws_ssl_verify,
         rotation=rotation,
     )
