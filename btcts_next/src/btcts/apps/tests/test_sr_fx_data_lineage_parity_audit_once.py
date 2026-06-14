@@ -157,6 +157,34 @@ def test_audit_can_mark_continuous_ws_and_orderbook_context_as_review_eligible()
     assert payload["decision"] == "eligible_for_final_human_review_before_autotrade_resume"
 
 
+def test_audit_does_not_accept_stale_continuous_ws_as_lineage_present() -> None:
+    payload = app.build_sr_fx_data_lineage_parity_audit_payload(
+        context=_ctx(),
+        overview=_overview(continuity_state="continuous"),
+        summary_payload=_summary(
+            continuity_state="continuous",
+            orderbook_wiring_status="partial",
+            orderbook_active_event_count=1,
+            orderbook_summary_slots_count=1,
+        ),
+        service_input_payload=_service(
+            continuity_state="continuous",
+            orderbook_wiring_status="partial",
+            is_stale=True,
+            blocked_by=["market_summary_stale"],
+            warnings=[],
+        ),
+    )
+
+    assert payload["ok"] is False
+    assert payload["summary"]["continuous_ws_l3_lineage_present"] is False
+    assert payload["summary"]["service_stale"] is True
+    assert "sr_fx_l4_service_input_blocked" in payload["blocked_by"]
+    rows = {row["stage_id"]: row for row in payload["stages"]}
+    assert rows["l1_public_ws_board"]["blockers"] == ["continuous_ws_board_stale"]
+    assert rows["l1_public_ws_executions"]["blockers"] == ["continuous_ws_executions_stale"]
+
+
 def test_main_writes_read_only_audit_json(monkeypatch, tmp_path) -> None:
     class DummyConfig:
         def roots(self):

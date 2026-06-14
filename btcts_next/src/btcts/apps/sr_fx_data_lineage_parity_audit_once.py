@@ -115,6 +115,7 @@ def build_sr_fx_data_lineage_parity_audit_payload(
     )
     service_warnings = _as_list(service_input.get("warnings"))
     service_blockers = _as_list(service_input.get("blocked_by"))
+    service_stale = bool(service_input.get("is_stale")) or "market_summary_stale" in service_blockers
     if service_blockers:
         blocked.append("sr_fx_l4_service_input_blocked")
     if "execution_market_rest_baseline_not_continuous_ws_series" in service_warnings:
@@ -126,7 +127,11 @@ def build_sr_fx_data_lineage_parity_audit_payload(
 
     trade_delta_present = ov.get("trade_delta") is not None or summary.get("trade_delta") is not None
     rest_baseline = continuity_state == "rest_baseline_snapshot"
-    continuous_ws = continuity_state == "continuous" and "execution_market_rest_baseline_not_continuous_ws_series" not in service_warnings
+    continuous_ws = (
+        continuity_state == "continuous"
+        and "execution_market_rest_baseline_not_continuous_ws_series" not in service_warnings
+        and not service_stale
+    )
     orderbook_context_available = str(service_input.get("orderbook_wiring_status") or summary.get("orderbook_wiring_status") or "") in {
         "partial",
         "wired",
@@ -167,8 +172,11 @@ def build_sr_fx_data_lineage_parity_audit_payload(
             evidence={
                 "expected_role": "continuous_ws_series",
                 "current_continuity_state": continuity_state,
+                "service_stale": service_stale,
             },
-            blockers=[] if continuous_ws else ["continuous_ws_board_not_bound_to_l3_market_state"],
+            blockers=[] if continuous_ws else [
+                "continuous_ws_board_stale" if service_stale else "continuous_ws_board_not_bound_to_l3_market_state"
+            ],
         ),
         _stage_row(
             stage_id="l1_public_ws_executions",
@@ -178,8 +186,11 @@ def build_sr_fx_data_lineage_parity_audit_payload(
             evidence={
                 "expected_role": "realtime_primary_trade_stream",
                 "current_continuity_state": continuity_state,
+                "service_stale": service_stale,
             },
-            blockers=[] if continuous_ws else ["continuous_ws_executions_not_bound_to_l3_market_state"],
+            blockers=[] if continuous_ws else [
+                "continuous_ws_executions_stale" if service_stale else "continuous_ws_executions_not_bound_to_l3_market_state"
+            ],
         ),
         _stage_row(
             stage_id="l2_canonical_identity",
@@ -268,6 +279,7 @@ def build_sr_fx_data_lineage_parity_audit_payload(
             "semantic_context_available": semantic_context_available,
             "orderbook_context_available": orderbook_context_available,
             "l4_service_input_blocked": bool(service_blockers),
+            "service_stale": service_stale,
         },
         "context": ctx,
         "stages": stages,
