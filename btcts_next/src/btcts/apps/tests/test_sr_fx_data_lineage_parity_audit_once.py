@@ -110,6 +110,7 @@ def test_audit_marks_rest_baseline_usable_but_not_parity_complete() -> None:
     assert payload["parity_complete"] is False
     assert payload["summary"]["execution_market_identity_ok"] is True
     assert payload["summary"]["rest_baseline_usable"] is True
+    assert payload["summary"]["primary_lineage"] == "rest_baseline"
     assert payload["summary"]["continuous_ws_l3_lineage_present"] is False
     assert payload["summary"]["orderbook_context_available"] is False
     assert "sr_fx_continuous_ws_l3_lineage_missing" in payload["blocked_by"]
@@ -153,8 +154,12 @@ def test_audit_can_mark_continuous_ws_and_orderbook_context_as_review_eligible()
     assert payload["ok"] is True
     assert payload["parity_complete"] is True
     assert payload["summary"]["continuous_ws_l3_lineage_present"] is True
+    assert payload["summary"]["primary_lineage"] == "continuous_ws"
     assert payload["summary"]["orderbook_context_available"] is True
     assert payload["decision"] == "eligible_for_final_human_review_before_autotrade_resume"
+    rows = {row["stage_id"]: row for row in payload["stages"]}
+    assert rows["l1_public_rest_board"]["status"] == "not_current_primary"
+    assert rows["l1_public_rest_board"]["warnings"] == ["rest_board_not_current_primary_lineage"]
 
 
 def test_audit_does_not_accept_stale_continuous_ws_as_lineage_present() -> None:
@@ -179,8 +184,11 @@ def test_audit_does_not_accept_stale_continuous_ws_as_lineage_present() -> None:
     assert payload["ok"] is False
     assert payload["summary"]["continuous_ws_l3_lineage_present"] is False
     assert payload["summary"]["service_stale"] is True
+    assert payload["summary"]["primary_lineage"] == "continuous_ws_stale"
     assert "sr_fx_l4_service_input_blocked" in payload["blocked_by"]
     rows = {row["stage_id"]: row for row in payload["stages"]}
+    assert rows["l1_public_rest_board"]["status"] == "not_current_primary"
+    assert rows["l1_public_rest_board"]["warnings"] == ["rest_board_not_current_primary_lineage"]
     assert rows["l1_public_ws_board"]["blockers"] == ["continuous_ws_board_stale"]
     assert rows["l1_public_ws_executions"]["blockers"] == ["continuous_ws_executions_stale"]
 

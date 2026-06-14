@@ -141,28 +141,57 @@ def build_sr_fx_data_lineage_parity_audit_payload(
         "wired",
     }
     trusted_structural = trust_state == "trusted" and interpretation_bucket == "allow_structural_use"
+    continuous_state_observed = continuity_state == "continuous"
+    primary_lineage = (
+        "continuous_ws"
+        if continuous_ws
+        else "continuous_ws_stale"
+        if continuous_state_observed and service_stale
+        else "rest_baseline"
+        if rest_baseline
+        else "unknown"
+    )
+    rest_board_status = (
+        "partial"
+        if identity_ok and market_state_present and rest_baseline
+        else "not_current_primary"
+        if continuous_state_observed
+        else "missing_or_blocked"
+    )
+    rest_board_warnings = (
+        ["rest_baseline_snapshot_not_continuous_ws_series"]
+        if rest_baseline
+        else ["rest_board_not_current_primary_lineage"]
+        if continuous_state_observed
+        else []
+    )
 
     stages = [
         _stage_row(
             stage_id="l1_public_rest_board",
             layer="L1 raw acquisition",
-            name="FX public REST board snapshot",
-            status=_status(identity_ok and market_state_present and rest_baseline, partial=True),
+            name="FX public REST board baseline / fallback",
+            status=rest_board_status,
             evidence={
                 "product_code": ctx.get("product_code") or ctx.get("symbol_raw"),
                 "market_uid": ctx.get("market_uid"),
                 "continuity_state": continuity_state,
+                "primary_lineage": primary_lineage,
                 "source_series_id": ov.get("source_series_id") or summary.get("source_series_id"),
             },
-            warnings=["rest_baseline_snapshot_not_continuous_ws_series"] if rest_baseline else [],
+            warnings=rest_board_warnings,
         ),
         _stage_row(
             stage_id="l1_public_rest_executions",
             layer="L1 raw acquisition",
-            name="FX public REST executions/trade delta",
+            name="FX public REST executions/backfill or trade delta",
             status=_status(identity_ok and trade_delta_present, partial=True),
-            evidence={"trade_delta": ov.get("trade_delta"), "source_series_id": ov.get("source_series_id")},
-            warnings=["rest_executions_backfill_or_reconcile_not_realtime_primary"],
+            evidence={
+                "trade_delta": ov.get("trade_delta"),
+                "source_series_id": ov.get("source_series_id"),
+                "primary_lineage": primary_lineage,
+            },
+            warnings=["rest_executions_backfill_or_reconcile_not_realtime_primary"] if not continuous_ws else ["rest_executions_not_current_primary_lineage"],
         ),
         _stage_row(
             stage_id="l1_public_ws_board",
@@ -280,6 +309,7 @@ def build_sr_fx_data_lineage_parity_audit_payload(
             "orderbook_context_available": orderbook_context_available,
             "l4_service_input_blocked": bool(service_blockers),
             "service_stale": service_stale,
+            "primary_lineage": primary_lineage,
         },
         "context": ctx,
         "stages": stages,
