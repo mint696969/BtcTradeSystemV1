@@ -89,13 +89,17 @@ def _preferred_market_state_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
     for row in rows:
         if str(row.get("trust_state") or "") != "trusted":
             continue
-        if str(row.get("continuity_state") or "") != "continuous":
-            continue
         if str(row.get("interpretation_bucket") or "") != "allow_structural_use":
+            continue
+        continuity = str(row.get("continuity_state") or "")
+        if continuity not in {"continuous", "rest_baseline_snapshot"}:
             continue
         preferred.append(row)
 
     if preferred:
+        # Preserve append order as the time ordering contract for part files.  This
+        # prevents an older continuous row from masking a newer FX REST baseline
+        # service input in the same part file.
         return preferred[-1]
 
     return rows[-1]

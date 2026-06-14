@@ -7,6 +7,7 @@ from dataclasses import asdict, is_dataclass
 from datetime import datetime, timezone
 from typing import Any, TypedDict
 
+from btcts.collector_vnext.config import load_config
 from btcts.apps.operator_ui.market_state_service import (
     load_latest_market_state,
     load_latest_market_summary,
@@ -119,6 +120,101 @@ def load_market_summary_widget_model(
         symbol_raw=symbol_raw,
     )
     return market_summary_widget_model(summary)
+
+
+def execution_market_context() -> dict[str, Any]:
+    """Return the configured execution market identity for UI/WorkRoom service input selection.
+
+    This intentionally does not change the legacy BTC_JPY defaults. Callers that want the
+    SR-FX execution-market view should use the explicit load_execution_market_* helpers.
+    """
+
+    cfg = load_config()
+    exe = cfg.execution_market.normalized()
+    return {
+        "exchange": exe.exchange,
+        "symbol_raw": exe.product_code,
+        "product_code": exe.product_code,
+        "market_uid": exe.market_uid,
+        "market_type": exe.market_type,
+        "market_role": exe.role,
+        "state_type": "market.overview",
+        "source": "collector_vnext.execution_market",
+        "read_only": True,
+        "would_send_to_broker": False,
+    }
+
+
+def load_execution_market_overview() -> dict[str, Any]:
+    ctx = execution_market_context()
+    row = load_market_overview(
+        exchange=str(ctx["exchange"]),
+        symbol_raw=str(ctx["symbol_raw"]),
+    )
+    if row:
+        row = dict(row)
+        row.setdefault("service_input_role", "execution_market")
+    return row
+
+
+def load_execution_market_summary_bundle() -> MarketSummary:
+    ctx = execution_market_context()
+    return load_market_summary_bundle(
+        exchange=str(ctx["exchange"]),
+        symbol_raw=str(ctx["symbol_raw"]),
+    )
+
+
+def load_execution_market_summary_status_payload() -> dict[str, Any]:
+    ctx = execution_market_context()
+    payload = load_market_summary_status_payload(
+        exchange=str(ctx["exchange"]),
+        symbol_raw=str(ctx["symbol_raw"]),
+    )
+    payload["service_input_role"] = "execution_market"
+    payload["execution_market_uid"] = ctx["market_uid"]
+    payload["execution_product_code"] = ctx["product_code"]
+    payload["read_only"] = True
+    payload["would_send_to_broker"] = False
+    return payload
+
+
+def load_execution_market_summary_ui_bundle() -> MarketSummaryUiBundle:
+    ctx = execution_market_context()
+    return load_market_summary_ui_bundle(
+        exchange=str(ctx["exchange"]),
+        symbol_raw=str(ctx["symbol_raw"]),
+    )
+
+
+def load_execution_market_prediction_summary_bundle(
+    *,
+    include_health_caution: bool = True,
+) -> PredictionSummary:
+    ctx = execution_market_context()
+    return load_prediction_summary_bundle(
+        exchange=str(ctx["exchange"]),
+        symbol_raw=str(ctx["symbol_raw"]),
+        include_health_caution=include_health_caution,
+    )
+
+
+def load_execution_market_prediction_summary_status_payload(
+    *,
+    include_health_caution: bool = True,
+) -> dict[str, Any]:
+    ctx = execution_market_context()
+    payload = load_prediction_summary_status_payload(
+        exchange=str(ctx["exchange"]),
+        symbol_raw=str(ctx["symbol_raw"]),
+        include_health_caution=include_health_caution,
+    )
+    payload["service_input_role"] = "execution_market"
+    payload["execution_market_uid"] = ctx["market_uid"]
+    payload["execution_product_code"] = ctx["product_code"]
+    payload["read_only"] = True
+    payload["would_send_to_broker"] = False
+    return payload
 
 
 def load_prediction_summary_bundle(
