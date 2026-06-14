@@ -63,10 +63,16 @@ def refresh_fx_ws_board_snapshot_until_seen(
     seq: SequenceManager,
     session_id: str,
     *,
-    max_messages: int = 20,
+    max_messages: int = 200,
     stream_factory: Callable[..., Iterable[BoardMessage]] = connect_and_stream_board,
 ) -> dict[str, Any]:
-    """Write FX board WS canonical events until at least one snapshot is seen."""
+    """Write FX board WS canonical events until at least one snapshot is seen.
+
+    The bitFlyer board stream can emit multiple delta messages before the
+    snapshot subscription message is observed locally.  Keep the refresh bounded
+    but allow enough messages to avoid treating a fast delta burst as a stale
+    board source.
+    """
 
     cfg = execution_market_config(load_config())
     exe = cfg.execution_market.normalized()
@@ -214,6 +220,7 @@ def refresh_fx_ws_board_snapshot_until_seen(
         "canonical_path": canonical_path,
         "snapshot_canonical_path": snapshot_canonical_path,
         "message_count": message_count,
+        "max_messages": max_messages,
         "snapshot_count": snapshot_count,
         "delta_count": delta_count,
         "last_event_type": last_event_type,

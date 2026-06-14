@@ -57,6 +57,36 @@ def _board_stream_delta_then_snapshot(symbol: str, *, ssl_verify: bool, ca_file:
     )
 
 
+
+def _board_stream_many_deltas_then_snapshot(symbol: str, *, ssl_verify: bool, ca_file: str | None = None):
+    ts = _iso_now()
+    for i in range(25):
+        yield BoardMessage(
+            provider="bitflyer_ws_board",
+            exchange="bitflyer",
+            transport="websocket",
+            channel=f"lightning_board_{symbol}",
+            payload={"bids": [{"price": 98.0 + i, "size": 0.5}], "asks": []},
+            received_ts=ts,
+            subscription_id=None,
+            message_id=None,
+            source_sequence=None,
+            raw_message_meta={"subscription_channel": f"lightning_board_{symbol}", "ssl_verify": ssl_verify, "ca_file": ca_file},
+        )
+    yield BoardMessage(
+        provider="bitflyer_ws_board_snapshot",
+        exchange="bitflyer",
+        transport="websocket",
+        channel=f"lightning_board_snapshot_{symbol}",
+        payload={"bids": [{"price": 100.0, "size": 3.0}], "asks": [{"price": 101.0, "size": 1.0}]},
+        received_ts=ts,
+        subscription_id=None,
+        message_id=None,
+        source_sequence=None,
+        raw_message_meta={"subscription_channel": f"lightning_board_snapshot_{symbol}", "ssl_verify": ssl_verify, "ca_file": ca_file},
+    )
+
+
 def _execution_stream(symbol: str, *, ssl_verify: bool, recv_timeout_sec: float, ca_file: str | None = None):
     ts = _iso_now()
     yield WSMessage(
@@ -111,6 +141,26 @@ def test_refresh_executions_writes_fx_trade(monkeypatch, tmp_path) -> None:
     assert "symbol=FX_BTC_JPY" in str(out["canonical_path"])
     assert out["read_only"] is True
     assert out["would_send_to_broker"] is False
+
+
+
+
+def test_refresh_app_default_wait_budget_survives_delta_burst_before_snapshot(monkeypatch, tmp_path) -> None:
+    _runtime_paths(monkeypatch, tmp_path)
+
+    payload = app.build_sr_fx_ws_canonical_refresh_payload(
+        board_stream_factory=_board_stream_many_deltas_then_snapshot,
+        executions_stream_factory=_execution_stream,
+    )
+
+    assert payload["ok"] is True
+    assert payload["board_refresh"]["message_count"] == 26
+    assert payload["board_refresh"]["max_messages"] == 200
+    assert payload["board_refresh"]["delta_count"] == 25
+    assert payload["board_refresh"]["snapshot_count"] == 1
+    assert payload["l3_market_state"]["ok"] is True
+    assert payload["read_only"] is True
+    assert payload["would_send_to_broker"] is False
 
 
 def test_refresh_app_writes_fresh_canonical_then_l3_market_state(monkeypatch, tmp_path) -> None:

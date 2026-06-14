@@ -24,7 +24,7 @@ def build_sr_fx_ws_canonical_refresh_payload(
     *,
     board_stream_factory: Callable[..., Iterable[BoardMessage]] = connect_and_stream_board,
     executions_stream_factory: Callable[..., Iterable[WSMessage]] = connect_and_stream_executions,
-    max_board_messages: int = 20,
+    max_board_messages: int = 200,
     max_execution_messages: int = 20,
 ) -> dict[str, Any]:
     cfg = load_config()
