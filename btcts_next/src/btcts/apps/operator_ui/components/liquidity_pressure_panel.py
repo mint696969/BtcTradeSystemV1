@@ -9,7 +9,7 @@ from btcts.apps.operator_ui.components.liquidity_pressure_state import (
     build_liquidity_pressure_state,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -61,7 +61,7 @@ def render(
     top_ask_wall = board.get("ask_wall_size")
     wall_ratio = board.get("wall_ratio")
     wall_side = board.get("wall_side")
-    summary_widget = load_market_summary_widget_model()
+    summary_widget = load_execution_market_summary_widget_model()
 
     wall_bias = get_text(lang, "liquidity_pressure_value_neutral")
     if wall_side == "bid":

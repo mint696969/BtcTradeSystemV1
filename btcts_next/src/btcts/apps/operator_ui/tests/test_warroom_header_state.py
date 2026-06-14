@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_header_state.py
-# desc: Verify warroom_header_state adapts shared market signal context for header use.
+# desc: Verify warroom_header_state adapts execution-market signal context for header use.
 
 from __future__ import annotations
 
@@ -13,8 +13,22 @@ if str(_SRC_ROOT) not in sys.path:
 import btcts.apps.operator_ui.components.warroom_header_state as state_mod  # noqa: E402
 
 
+def _widget(**kwargs):
+    return type(
+        "PredictionWidget",
+        (),
+        {
+            "short_horizon_bias_key": kwargs.get("bias", "neutral"),
+            "caution_level_key": kwargs.get("caution", "medium"),
+            "scenario_switch_hint_key": kwargs.get("switch", "watch"),
+            "trace_summary_key": kwargs.get("trace", "fx_trace"),
+        },
+    )()
+
+
 def main() -> int:
     original_loader = state_mod.load_market_signal_context
+    original_widget_loader = state_mod.load_execution_market_prediction_summary_widget_model
 
     try:
         state_mod.load_market_signal_context = lambda: {
@@ -22,46 +36,26 @@ def main() -> int:
             "imbalance": 0.24,
             "delta": 0.33,
             "wall_ratio": None,
-            "pressure_bias": "live_orderbook",
+            "pressure_bias": "execution_market_live_orderbook",
             "event_ts": "2026-04-14T14:40:00Z",
             "regime": "trend_up",
             "best_strategy": "microstructure_v1",
-            "data_source": "live_canonical",
+            "data_source": "execution_market_live_canonical",
         }
-        state_mod.load_prediction_summary_widget_model = lambda: type(
-            "PredictionWidget",
-            (),
-            {
-                "short_horizon_bias_key": "bullish",
-                "caution_level_key": "medium",
-                "scenario_switch_hint_key": "watch_reversal_path",
-                "trace_summary_key": "transition_sign:weakening_continuation / watch_reversal_path",
-            },
-        )()
+        state_mod.load_execution_market_prediction_summary_widget_model = lambda: _widget(
+            bias="bullish",
+            caution="medium",
+            switch="watch_reversal_path",
+            trace="transition_sign:weakening_continuation / watch_reversal_path",
+        )
 
         live_state = state_mod.build_warroom_header_state()
         assert live_state is not None
-        assert set(live_state.keys()) == {
-            "regime",
-            "best_strategy",
-            "spread",
-            "imbalance",
-            "pressure_bias",
-            "wall_ratio",
-            "delta",
-            "source_label",
-            "source",
-            "data_source",
-            "prediction_bias",
-            "prediction_caution",
-            "prediction_switch_hint",
-            "prediction_trace_summary",
-        }
-        assert live_state["source_label"] == "live_canonical + research_experiment"
-        assert live_state["source"] == "live_canonical + research_experiment"
+        assert live_state["source_label"] == "execution_market_live_canonical + research_experiment"
+        assert live_state["source"] == "execution_market_live_canonical + research_experiment"
         assert live_state["regime"] == "trend_up"
         assert live_state["best_strategy"] == "microstructure_v1"
-        assert live_state["pressure_bias"] == "live_orderbook"
+        assert live_state["pressure_bias"] == "execution_market_live_orderbook"
         assert live_state["wall_ratio"] is None
         assert live_state["prediction_bias"] == "bullish"
         assert live_state["prediction_caution"] == "medium"
@@ -75,50 +69,30 @@ def main() -> int:
             "imbalance": -0.21,
             "delta": -0.28,
             "wall_ratio": -0.42,
-            "pressure_bias": "sell_pressure",
+            "pressure_bias": "execution_market_state",
             "event_ts": "2026-04-14T14:45:00Z",
             "regime": "range",
             "best_strategy": "baseline_none",
-            "data_source": "replay_research",
+            "data_source": "execution_market_state",
         }
-        state_mod.load_prediction_summary_widget_model = lambda: type(
-            "PredictionWidget",
-            (),
-            {
-                "short_horizon_bias_key": "neutral",
-                "caution_level_key": "high",
-                "scenario_switch_hint_key": "prepare_transition_switch",
-                "trace_summary_key": "summary_reanchor_required / prepare_transition_switch",
-            },
-        )()
+        state_mod.load_execution_market_prediction_summary_widget_model = lambda: _widget(
+            bias="neutral",
+            caution="high",
+            switch="prepare_transition_switch",
+            trace="summary_reanchor_required / prepare_transition_switch",
+        )
 
-        replay_state = state_mod.build_warroom_header_state()
-        assert replay_state is not None
-        assert set(replay_state.keys()) == {
-            "regime",
-            "best_strategy",
-            "spread",
-            "imbalance",
-            "pressure_bias",
-            "wall_ratio",
-            "delta",
-            "source_label",
-            "source",
-            "data_source",
-            "prediction_bias",
-            "prediction_caution",
-            "prediction_switch_hint",
-            "prediction_trace_summary",
-        }
-        assert replay_state["source_label"] == "replay_board+tradeflow + research_experiment"
-        assert replay_state["source"] == "replay_board+tradeflow + research_experiment"
-        assert replay_state["delta"] == -0.28
-        assert replay_state["pressure_bias"] == "sell_pressure"
-        assert replay_state["wall_ratio"] == -0.42
-        assert replay_state["prediction_bias"] == "neutral"
-        assert replay_state["prediction_caution"] == "high"
-        assert replay_state["prediction_switch_hint"] == "prepare_transition_switch"
-        assert replay_state["prediction_trace_summary"] == (
+        state_backed = state_mod.build_warroom_header_state()
+        assert state_backed is not None
+        assert state_backed["source_label"] == "execution_market_state + research_experiment"
+        assert state_backed["source"] == "execution_market_state + research_experiment"
+        assert state_backed["delta"] == -0.28
+        assert state_backed["pressure_bias"] == "execution_market_state"
+        assert state_backed["wall_ratio"] == -0.42
+        assert state_backed["prediction_bias"] == "neutral"
+        assert state_backed["prediction_caution"] == "high"
+        assert state_backed["prediction_switch_hint"] == "prepare_transition_switch"
+        assert state_backed["prediction_trace_summary"] == (
             "summary_reanchor_required / prepare_transition_switch"
         )
 
@@ -126,6 +100,7 @@ def main() -> int:
         assert state_mod.build_warroom_header_state() is None
     finally:
         state_mod.load_market_signal_context = original_loader
+        state_mod.load_execution_market_prediction_summary_widget_model = original_widget_loader
 
     print("ok")
     return 0

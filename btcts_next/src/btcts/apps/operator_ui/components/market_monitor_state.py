@@ -7,8 +7,9 @@ from btcts.apps.operator_ui.components.live_bridge import (
     latest_live_board_metrics,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_overview,
-    load_market_summary_ui_bundle,
+    execution_market_context,
+    load_execution_market_overview,
+    load_execution_market_summary_ui_bundle,
     market_monitor_metrics,
 )
 from btcts.apps.operator_ui.market_state_service import market_state_diagnostics
@@ -20,12 +21,19 @@ from btcts.apps.operator_ui.components.research_bridge import (
 
 
 def analyze_market_monitor_state() -> dict | None:
-    live_board = latest_live_board_metrics()
-    state = load_market_overview()
-    summary_bundle = load_market_summary_ui_bundle()
+    ctx = execution_market_context()
+    live_board = latest_live_board_metrics(
+        exchange=str(ctx["exchange"]),
+        symbol=str(ctx["symbol_raw"]),
+    )
+    state = load_execution_market_overview()
+    summary_bundle = load_execution_market_summary_ui_bundle()
     summary = summary_bundle["status_payload"]
     summary_widget = summary_bundle["widget_model"]
-    state_diag = market_state_diagnostics()
+    state_diag = market_state_diagnostics(
+        exchange=str(ctx["exchange"]),
+        symbol_raw=str(ctx["symbol_raw"]),
+    )
     board = {}
     source_label = "unknown"
 
@@ -61,17 +69,14 @@ def analyze_market_monitor_state() -> dict | None:
             "interpretation_bucket": None,
             "interpretation_reason": None,
         }
-        source_label = "live_canonical"
+        source_label = "execution_market_live_canonical"
 
     if not board:
         board = market_monitor_metrics(state)
-        source_label = "market_state_live"
+        source_label = "execution_market_state"
 
-    if not board:
-        replay_payload = load_latest_replay_payload()
-        board = board_signal_metrics(latest_board_row(replay_payload))
-        source_label = "replay_board_fallback"
-
+    # Current WarRoom decision material must not silently fall back to replay/spot.
+    # If execution-market live/state material is missing, return no data.
     if not board:
         return None
 

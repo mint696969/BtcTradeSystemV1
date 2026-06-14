@@ -6,7 +6,7 @@ from __future__ import annotations
 import streamlit as st
 
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -53,7 +53,7 @@ def render(
     sell_vol = flow.get("sell_volume")
     delta = flow.get("trade_delta")
     trade_count = flow.get("trade_count")
-    summary_widget = load_market_summary_widget_model()
+    summary_widget = load_execution_market_summary_widget_model()
 
     c1, c2, c3 = st.columns(3)
 

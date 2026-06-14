@@ -10,7 +10,7 @@ from btcts.apps.operator_ui.components.market_signal_state import (
     load_market_signal_context,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_prediction_summary_widget_model,
+    load_execution_market_prediction_summary_widget_model,
 )
 
 
@@ -36,13 +36,13 @@ def build_warroom_header_state() -> WarroomHeaderState | None:
     if not signal_state:
         return None
 
-    prediction_widget = load_prediction_summary_widget_model()
+    prediction_widget = load_execution_market_prediction_summary_widget_model()
 
     data_source = str(signal_state.get("data_source") or "unknown")
     source_label = (
-        "live_canonical + research_experiment"
-        if data_source == "live_canonical"
-        else "replay_board+tradeflow + research_experiment"
+        "execution_market_live_canonical + research_experiment"
+        if data_source == "execution_market_live_canonical"
+        else "execution_market_state + research_experiment"
     )
 
     return {

@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_market_monitor_state_summary_bundle.py
-# desc: Verify market_monitor_state keeps market_summary ui bundle and flat aliases together.
+# desc: Verify market_monitor_state keeps execution-market summary ui bundle and flat aliases together.
 
 from __future__ import annotations
 
@@ -14,18 +14,18 @@ import btcts.apps.operator_ui.components.market_monitor_state as state_mod  # no
 
 
 def main() -> int:
+    original_execution_market_context = state_mod.execution_market_context
     original_latest_live_board_metrics = state_mod.latest_live_board_metrics
-    original_load_market_overview = state_mod.load_market_overview
-    original_load_market_summary_ui_bundle = state_mod.load_market_summary_ui_bundle
+    original_load_execution_market_overview = state_mod.load_execution_market_overview
+    original_load_execution_market_summary_ui_bundle = state_mod.load_execution_market_summary_ui_bundle
     original_market_monitor_metrics = state_mod.market_monitor_metrics
     original_market_state_diagnostics = state_mod.market_state_diagnostics
-    original_load_latest_replay_payload = state_mod.load_latest_replay_payload
-    original_latest_board_row = state_mod.latest_board_row
-    original_board_signal_metrics = state_mod.board_signal_metrics
 
     summary_payload = {
+        "market_uid": "bitflyer.fx.FX_BTC_JPY",
+        "symbol_raw": "FX_BTC_JPY",
         "trust_state": "trusted",
-        "continuity_state": "continuous",
+        "continuity_state": "rest_baseline_snapshot",
         "interpretation_bucket": "allow_structural_use",
         "semantic_runtime_wiring_status": "wired",
     }
@@ -40,9 +40,16 @@ def main() -> int:
     }
 
     try:
-        state_mod.latest_live_board_metrics = lambda: {}
-        state_mod.load_market_overview = lambda: {"market_uid": "bitflyer.spot.BTC_JPY"}
-        state_mod.load_market_summary_ui_bundle = lambda: summary_bundle
+        state_mod.execution_market_context = lambda: {
+            "exchange": "bitflyer",
+            "symbol_raw": "FX_BTC_JPY",
+            "product_code": "FX_BTC_JPY",
+            "market_uid": "bitflyer.fx.FX_BTC_JPY",
+        }
+        calls: list[tuple[str, str]] = []
+        state_mod.latest_live_board_metrics = lambda **kwargs: calls.append((kwargs["exchange"], kwargs["symbol"])) or {}
+        state_mod.load_execution_market_overview = lambda: {"market_uid": "bitflyer.fx.FX_BTC_JPY"}
+        state_mod.load_execution_market_summary_ui_bundle = lambda: summary_bundle
         state_mod.market_monitor_metrics = lambda _state: {
             "best_bid": 100.0,
             "best_ask": 101.0,
@@ -57,29 +64,26 @@ def main() -> int:
             "interpretation_bucket": None,
             "interpretation_reason": None,
         }
-        state_mod.market_state_diagnostics = lambda: {"preferred_row_freshness": "LIVE"}
-        state_mod.load_latest_replay_payload = lambda: {}
-        state_mod.latest_board_row = lambda _payload: {}
-        state_mod.board_signal_metrics = lambda _row: {}
+        state_mod.market_state_diagnostics = lambda **kwargs: {"preferred_row_freshness": "LIVE", "symbol_raw": kwargs["symbol_raw"]}
 
         state_bundle = state_mod.analyze_market_monitor_state()
         assert state_bundle is not None
 
+        assert calls == [("bitflyer", "FX_BTC_JPY")]
         assert state_bundle["summary_bundle"] is summary_bundle
         assert state_bundle["summary"] is summary_payload
         assert state_bundle["summary_widget"] is summary_widget
         assert state_bundle["state_diag"]["preferred_row_freshness"] == "LIVE"
-        assert state_bundle["source_label"] == "market_state_live"
+        assert state_bundle["state_diag"]["symbol_raw"] == "FX_BTC_JPY"
+        assert state_bundle["source_label"] == "execution_market_state"
         assert state_bundle["board"]["spread"] == 1.0
     finally:
+        state_mod.execution_market_context = original_execution_market_context
         state_mod.latest_live_board_metrics = original_latest_live_board_metrics
-        state_mod.load_market_overview = original_load_market_overview
-        state_mod.load_market_summary_ui_bundle = original_load_market_summary_ui_bundle
+        state_mod.load_execution_market_overview = original_load_execution_market_overview
+        state_mod.load_execution_market_summary_ui_bundle = original_load_execution_market_summary_ui_bundle
         state_mod.market_monitor_metrics = original_market_monitor_metrics
         state_mod.market_state_diagnostics = original_market_state_diagnostics
-        state_mod.load_latest_replay_payload = original_load_latest_replay_payload
-        state_mod.latest_board_row = original_latest_board_row
-        state_mod.board_signal_metrics = original_board_signal_metrics
 
     print("ok")
     return 0

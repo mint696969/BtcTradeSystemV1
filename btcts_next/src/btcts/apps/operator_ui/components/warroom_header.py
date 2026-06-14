@@ -7,8 +7,8 @@ import streamlit as st
 
 from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_status_payload,
-    load_market_summary_widget_model,
+    load_execution_market_summary_status_payload,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     active_event_compact_reading_line,
@@ -165,8 +165,8 @@ def render():
         st.warning(get_text(lang, "warroom_header_missing_data"))
         return
 
-    summary_widget = load_market_summary_widget_model()
-    summary_payload = load_market_summary_status_payload()
+    summary_widget = load_execution_market_summary_widget_model()
+    summary_payload = load_execution_market_summary_status_payload()
 
     regime = state.get("regime") or "unknown"
     best_strategy = state.get("best_strategy") or "-"

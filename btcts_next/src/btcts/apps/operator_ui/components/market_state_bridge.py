@@ -187,6 +187,14 @@ def load_execution_market_summary_ui_bundle() -> MarketSummaryUiBundle:
     )
 
 
+def load_execution_market_summary_widget_model() -> MarketSummaryWidgetModel:
+    ctx = execution_market_context()
+    return load_market_summary_widget_model(
+        exchange=str(ctx["exchange"]),
+        symbol_raw=str(ctx["symbol_raw"]),
+    )
+
+
 def load_execution_market_prediction_summary_bundle(
     *,
     include_health_caution: bool = True,
@@ -215,6 +223,18 @@ def load_execution_market_prediction_summary_status_payload(
     payload["read_only"] = True
     payload["would_send_to_broker"] = False
     return payload
+
+
+def load_execution_market_prediction_summary_widget_model(
+    *,
+    include_health_caution: bool = True,
+) -> PredictionSummaryWidgetModel:
+    ctx = execution_market_context()
+    return load_prediction_summary_widget_model(
+        exchange=str(ctx["exchange"]),
+        symbol_raw=str(ctx["symbol_raw"]),
+        include_health_caution=include_health_caution,
+    )
 
 
 def load_prediction_summary_bundle(
