@@ -212,3 +212,44 @@ def test_live_contract_rejects_non_live_target_mode() -> None:
 
     assert result.ready is False
     assert "target_mode_not_live_capable" in result.blocked_by
+
+
+
+def test_live_contract_blocks_active_paper_orders_from_ledger_reconciliation() -> None:
+    readiness = _readiness(clear=True)
+    reconciliation, preview = _parts(readiness)
+    reconciliation = type(reconciliation)(
+        ok=reconciliation.ok,
+        product_code=reconciliation.product_code,
+        market_uid=reconciliation.market_uid,
+        private_state_known_and_fresh=reconciliation.private_state_known_and_fresh,
+        account_clear_for_new_auto_entry=reconciliation.account_clear_for_new_auto_entry,
+        position_item_count=reconciliation.position_item_count,
+        open_order_item_count=reconciliation.open_order_item_count,
+        own_execution_item_count=reconciliation.own_execution_item_count,
+        active_paper_order_count=1,
+        terminal_paper_order_count=0,
+        paper_order_ledger_path="D:/btc_ts_hot/autotrade/decisions/paper_orders.jsonl",
+        paper_order_ledger_skipped_rows=0,
+        blocked_by=reconciliation.blocked_by,
+        warnings=reconciliation.warnings,
+        would_send_to_broker=False,
+        read_only=True,
+    )
+
+    result = evaluate_fx_live_readiness_contract(
+        private_readiness=readiness,
+        reconciliation=reconciliation,
+        order_preview=preview,
+        public_market_readiness=_public_market(ok=True),
+        bitflyer_order_send_enabled=True,
+        autotrade_live_order_enabled=True,
+        order_sender_implemented=True,
+    )
+
+    assert result.ready is False
+    assert "active_paper_orders_present" in result.blocked_by
+    assert result.active_paper_order_count == 1
+    assert result.paper_order_ledger_path == "D:/btc_ts_hot/autotrade/decisions/paper_orders.jsonl"
+    assert result.would_send_to_broker is False
+    assert result.read_only is True

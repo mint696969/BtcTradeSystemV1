@@ -22,6 +22,10 @@ class FxLiveReadinessContractResult:
     private_state_known_and_fresh: bool
     account_clear_for_new_auto_entry: bool
     reconciliation_ok: bool
+    active_paper_order_count: int
+    terminal_paper_order_count: int
+    paper_order_ledger_path: str | None
+    paper_order_ledger_skipped_rows: int
     preview_ok: bool
     bitflyer_order_send_enabled: bool
     autotrade_live_order_enabled: bool
@@ -104,6 +108,10 @@ def evaluate_fx_live_readiness_contract(
     if not reconciliation.ok:
         blocked.append("reconciliation_not_clean")
         blocked.extend(reconciliation.blocked_by)
+    if int(reconciliation.active_paper_order_count or 0) > 0:
+        blocked.append("active_paper_orders_present")
+    if int(reconciliation.paper_order_ledger_skipped_rows or 0) > 0:
+        warnings.append("paper_order_ledger_has_skipped_rows")
     if not order_preview.ok:
         blocked.append("order_preview_not_ok")
         blocked.extend(order_preview.blocked_by)
@@ -129,6 +137,10 @@ def evaluate_fx_live_readiness_contract(
         private_state_known_and_fresh=private_fresh,
         account_clear_for_new_auto_entry=account_clear,
         reconciliation_ok=bool(reconciliation.ok),
+        active_paper_order_count=int(reconciliation.active_paper_order_count or 0),
+        terminal_paper_order_count=int(reconciliation.terminal_paper_order_count or 0),
+        paper_order_ledger_path=reconciliation.paper_order_ledger_path,
+        paper_order_ledger_skipped_rows=int(reconciliation.paper_order_ledger_skipped_rows or 0),
         preview_ok=bool(order_preview.ok),
         bitflyer_order_send_enabled=bool(bitflyer_order_send_enabled),
         autotrade_live_order_enabled=bool(autotrade_live_order_enabled),

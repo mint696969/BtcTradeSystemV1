@@ -8,7 +8,10 @@ from btcts.autotrade.execution.reconciliation import (
     paper_order_counts,
     private_readiness_counts,
     reconcile_fx_private_state_with_paper,
+    reconcile_fx_private_state_with_paper_ledger,
 )
+from btcts.autotrade.execution.paper_intent import build_fx_paper_order_intent_from_service_input
+from btcts.autotrade.execution.paper_ledger import default_paper_order_ledger_path, record_paper_order
 from btcts.autotrade.replay.paper_engine import PaperExecutionEngine
 
 
@@ -99,3 +102,68 @@ def test_paper_order_counts_active_and_terminal() -> None:
     counts = paper_order_counts(engine.all_orders())
     assert counts["active_paper_order_count"] == 0
     assert counts["terminal_paper_order_count"] == 1
+
+
+
+def _service_input():
+    return {
+        "contract_type": "execution_market_service_input",
+        "service_input_role": "execution_market",
+        "exchange": "bitflyer",
+        "symbol_raw": "FX_BTC_JPY",
+        "market_uid": "bitflyer.fx.FX_BTC_JPY",
+        "freshness": "LIVE",
+        "is_stale": False,
+        "trust_state": "trusted",
+        "continuity_state": "rest_baseline_snapshot",
+        "interpretation_bucket": "allow_structural_use",
+        "consumer_allowed": ["workroom", "operator_ui", "autotrade", "l4_consumer"],
+        "blocked_by": [],
+        "warnings": [],
+        "read_only": True,
+        "would_send_to_broker": False,
+    }
+
+
+def test_reconciliation_reads_active_paper_orders_from_hot_ledger(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("BTC_TS_AUTOTRADE_RUNTIME_ROOT", str(tmp_path / "btc_ts_hot"))
+    intent_build = build_fx_paper_order_intent_from_service_input(
+        _service_input(),
+        decision_id="decision_recon_ledger_001",
+        snapshot_id="snapshot_recon_ledger_001",
+        forecast_id=None,
+        parameter_set_id="params_001",
+        logic_version="logic_test",
+        side="buy",
+        size=0.001,
+        price=100.0,
+        risk_gate_allowed=True,
+        mode="PAPER_OR_REPLAY",
+    )
+    assert intent_build.intent is not None
+    order = PaperExecutionEngine().submit_fx_execution_intent(intent_build.intent, ts="2026-06-14T00:00:00Z")
+    record_paper_order(intent_build=intent_build, order=order, recorded_at="2026-06-14T00:00:01Z")
+
+    result = reconcile_fx_private_state_with_paper_ledger(private_readiness=_readiness(clear=True))
+
+    assert result.ok is True
+    assert result.active_paper_order_count == 1
+    assert result.terminal_paper_order_count == 0
+    assert result.paper_order_ledger_path == str(default_paper_order_ledger_path(ensure=False))
+    assert "active_paper_orders_without_exchange_open_orders" in result.warnings
+    assert result.read_only is True
+    assert result.would_send_to_broker is False
+
+
+def test_reconciliation_ledger_summary_failsoft_malformed_rows(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("BTC_TS_AUTOTRADE_RUNTIME_ROOT", str(tmp_path / "btc_ts_hot"))
+    path = default_paper_order_ledger_path(ensure=True)
+    path.write_text("not-json\n", encoding="utf-8")
+
+    result = reconcile_fx_private_state_with_paper_ledger(private_readiness=_readiness(clear=True))
+
+    assert result.ok is True
+    assert result.paper_order_ledger_skipped_rows == 1
+    assert "paper_order_ledger_has_skipped_rows" in result.warnings
+    assert result.read_only is True
+    assert result.would_send_to_broker is False
