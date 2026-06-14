@@ -309,6 +309,22 @@ def load_prediction_review_hint_summary_payload() -> dict[str, Any]:
     return out
 
 
+def load_execution_market_prediction_tactic_proposal_payload() -> dict[str, Any]:
+    ctx = execution_market_context()
+    payload = load_prediction_tactic_proposal_payload(
+        exchange=str(ctx["exchange"]),
+        symbol_raw=str(ctx["symbol_raw"]),
+    )
+    if payload:
+        payload = dict(payload)
+        payload["service_input_role"] = "execution_market"
+        payload["execution_market_uid"] = ctx["market_uid"]
+        payload["execution_product_code"] = ctx["product_code"]
+        payload["read_only"] = True
+        payload["would_send_to_broker"] = False
+    return payload
+
+
 def load_prediction_tactic_proposal_payload(
     *,
     exchange: str = "bitflyer",

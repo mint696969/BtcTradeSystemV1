@@ -209,7 +209,21 @@ def build_fx_market_state_record_from_ws_live(
 
     valid = best_bid is not None and best_ask is not None and spread is not None and spread >= 0 and trade_delta is not None
     orderbook_summary = _orderbook_semantics_summary(wall_ratio=wall_ratio, wall_side=wall_side)
-    orderbook_status = "partial" if orderbook_summary["summary_slots_count"] > 0 else "missing"
+    orderbook_observed = bool(
+        valid
+        and best_bid is not None
+        and best_ask is not None
+        and bid_depth is not None
+        and ask_depth is not None
+    )
+    # A balanced book can be a valid observed orderbook context with no active
+    # near-wall event. Do not label that as missing; missing means no usable
+    # orderbook context was observed at all.
+    orderbook_status = (
+        "partial"
+        if orderbook_summary["summary_slots_count"] > 0 or orderbook_observed
+        else "missing"
+    )
 
     return MarketStateRecord(
         market_uid=market_uid,
@@ -288,6 +302,8 @@ def build_fx_market_state_record_from_ws_live(
             "delta_orderbook_application_complete": False,
             "board_record_type": board.get("record_type"),
             "board_stream_session_id": board.get("stream_session_id"),
+            "orderbook_observed": orderbook_observed,
+            "orderbook_active_event_count": orderbook_summary["active_event_count"],
         },
         source_series_id=f"{stream_session_id or 'unknown'}:ws_live_canonical_bridge",
         source_stream_session_id=stream_session_id,

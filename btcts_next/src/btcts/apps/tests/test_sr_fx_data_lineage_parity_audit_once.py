@@ -162,7 +162,33 @@ def test_audit_can_mark_continuous_ws_and_orderbook_context_as_review_eligible()
     assert rows["l1_public_rest_board"]["warnings"] == ["rest_board_not_current_primary_lineage"]
 
 
-def test_audit_does_not_accept_stale_continuous_ws_as_lineage_present() -> None:
+def test_audit_accepts_continuous_ws_observed_orderbook_with_no_active_event() -> None:
+    payload = app.build_sr_fx_data_lineage_parity_audit_payload(
+        context=_ctx(),
+        overview=_overview(continuity_state="continuous", wall_side="balanced"),
+        summary_payload=_summary(
+            continuity_state="continuous",
+            orderbook_wiring_status="partial",
+            orderbook_active_event_count=0,
+            orderbook_summary_slots_count=0,
+        ),
+        service_input_payload=_service(
+            continuity_state="continuous",
+            orderbook_wiring_status="partial",
+            capabilities=["market_summary_anchor", "freshness_usable", "trusted_market_state", "structural_use_allowed", "semantic_context_available", "orderbook_context_available"],
+            warnings=[],
+        ),
+    )
+
+    assert payload["ok"] is True
+    assert payload["parity_complete"] is True
+    assert payload["summary"]["orderbook_context_available"] is True
+    assert "sr_fx_orderbook_context_missing" not in payload["blocked_by"]
+    rows = {row["stage_id"]: row for row in payload["stages"]}
+    assert rows["l3_orderbook_semantics"]["status"] == "ok"
+    assert rows["l3_orderbook_semantics"]["evidence"]["orderbook_active_event_count"] == 0
+
+
     payload = app.build_sr_fx_data_lineage_parity_audit_payload(
         context=_ctx(),
         overview=_overview(continuity_state="continuous"),

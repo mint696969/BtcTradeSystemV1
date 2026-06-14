@@ -41,6 +41,13 @@ def _board() -> dict:
     }
 
 
+def _balanced_board() -> dict:
+    data = _board()
+    data["bid_depth"] = 1.0
+    data["ask_depth"] = 1.0
+    return data
+
+
 def _flow() -> dict:
     return {
         "source": "live_canonical",
@@ -78,6 +85,26 @@ def test_build_record_marks_ws_live_continuous_and_orderbook_partial() -> None:
     assert data["interpretation_policy"]["delta_orderbook_application_complete"] is False
 
 
+
+def test_build_record_treats_balanced_observed_orderbook_as_partial_context() -> None:
+    record = build_fx_market_state_record_from_ws_live(
+        board=_balanced_board(),
+        flow=_flow(),
+        exchange="bitflyer",
+        product_code="FX_BTC_JPY",
+        market_uid="bitflyer.fx.FX_BTC_JPY",
+        stream_session_id="unit:fx_ws_board",
+    )
+    data = record.to_dict()
+
+    assert data["wall_side"] == "balanced"
+    assert data["orderbook_semantics_contract_status"] == "partial"
+    assert data["orderbook_semantics_summary"]["summary_slots_present"] == []
+    assert data["orderbook_semantics_summary"]["active_event_count"] == 0
+    assert data["zone_density_metadata"]["orderbook_observed"] is True
+    assert data["interpretation_policy"]["context_only_not_order_signal"] is True
+
+
 def test_write_ws_live_market_state_from_fx_live_canonical(monkeypatch, tmp_path) -> None:
     _env(monkeypatch, tmp_path)
     board_calls: list[tuple[str, str]] = []
@@ -101,7 +128,6 @@ def test_write_ws_live_market_state_from_fx_live_canonical(monkeypatch, tmp_path
     assert result.read_only is True
     assert result.would_send_to_broker is False
     assert "ws_live_canonical_bridge_not_full_delta_orderbook_engine" in result.warnings
-
 
 def test_write_ws_live_market_state_blocks_missing_live_board(monkeypatch, tmp_path) -> None:
     _env(monkeypatch, tmp_path)
