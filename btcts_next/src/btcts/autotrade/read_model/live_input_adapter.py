@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +31,14 @@ class LiveInputAdapterDiagnostics:
     market_state_root: Path
     latest_part_path: Path | None
     latest_part_exists: bool
+    requested_exchange: str
+    requested_symbol_raw: str
+    requested_state_type: str
+    requested_market_role: str
+    execution_product_code: str | None
+    execution_market_uid: str | None
+    latest_row_market_uid: str | None
+    latest_row_symbol_raw: str | None
     preferred_row_freshness: str
     preferred_row_age_sec: float | None
     preferred_row_is_stale: bool | None
@@ -125,6 +134,40 @@ def freshness_label(row: dict[str, Any], *, live_sec: float = 30.0, stale_sec: f
         return "QUIET"
     return "STALE"
 
+def _execution_product_code() -> str | None:
+    value = os.getenv("BTCTS_EXECUTION_PRODUCT_CODE")
+    return value.strip() if value and value.strip() else None
+
+
+def _execution_market_uid() -> str | None:
+    value = os.getenv("BTCTS_EXECUTION_MARKET_UID")
+    return value.strip() if value and value.strip() else None
+
+
+def _market_role_for_symbol(symbol_raw: str) -> str:
+    text = str(symbol_raw or "").strip().upper()
+    if text.startswith("FX_"):
+        return "execution"
+    return "reference"
+
+
+def _identity_blockers(*, symbol_raw: str, preferred: dict[str, Any]) -> tuple[str, ...]:
+    blocked: list[str] = []
+    execution_product = _execution_product_code()
+    execution_uid = _execution_market_uid()
+    requested_symbol = str(symbol_raw or "").strip()
+    row_symbol = str(preferred.get("symbol_raw") or "").strip() if preferred else ""
+    row_uid = str(preferred.get("market_uid") or "").strip() if preferred else ""
+
+    if execution_product and requested_symbol and requested_symbol != execution_product:
+        blocked.append("live_input_symbol_differs_from_execution_product")
+    if execution_product and row_symbol and row_symbol != execution_product:
+        blocked.append("live_input_row_symbol_differs_from_execution_product")
+    if execution_uid and row_uid and row_uid != execution_uid:
+        blocked.append("live_input_row_market_uid_differs_from_execution_market_uid")
+    return tuple(dict.fromkeys(blocked))
+
+
 
 def live_input_adapter_diagnostics(*, exchange: str = "bitflyer", symbol_raw: str = "BTC_JPY", state_type: str = "market.overview") -> LiveInputAdapterDiagnostics:
     latest = latest_market_state_part_file(exchange=exchange, symbol_raw=symbol_raw, state_type=state_type)
@@ -132,7 +175,7 @@ def live_input_adapter_diagnostics(*, exchange: str = "bitflyer", symbol_raw: st
     preferred = preferred_market_state_row(rows)
     freshness = freshness_label(preferred) if preferred else "UNKNOWN"
     age = row_age_seconds(preferred) if preferred else None
-    blocked: list[str] = []
+    blocked: list[str] = list(_identity_blockers(symbol_raw=symbol_raw, preferred=preferred))
     warnings: list[str] = []
     if latest is None or not latest.exists():
         blocked.append("market_state_latest_part_missing")
@@ -147,10 +190,18 @@ def live_input_adapter_diagnostics(*, exchange: str = "bitflyer", symbol_raw: st
         market_state_root=market_state_root(),
         latest_part_path=latest,
         latest_part_exists=bool(latest and latest.exists()),
+        requested_exchange=str(exchange),
+        requested_symbol_raw=str(symbol_raw),
+        requested_state_type=str(state_type),
+        requested_market_role=_market_role_for_symbol(symbol_raw),
+        execution_product_code=_execution_product_code(),
+        execution_market_uid=_execution_market_uid(),
+        latest_row_market_uid=str(preferred.get("market_uid")) if preferred.get("market_uid") else None,
+        latest_row_symbol_raw=str(preferred.get("symbol_raw")) if preferred.get("symbol_raw") else None,
         preferred_row_freshness=freshness,
         preferred_row_age_sec=age,
         preferred_row_is_stale=(freshness == "STALE") if freshness != "UNKNOWN" else None,
-        blocked_by=tuple(blocked),
+        blocked_by=tuple(dict.fromkeys(blocked)),
         warnings=tuple(warnings),
     )
 
