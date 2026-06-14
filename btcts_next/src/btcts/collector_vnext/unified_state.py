@@ -45,6 +45,10 @@ def write_unified_checkpoint(cfg: CollectorConfig, payload: Dict[str, Any]):
     return write_json_state(cfg, "unified_checkpoint.json", payload)
 
 
+def write_unified_market_state_status(cfg: CollectorConfig, payload: Dict[str, Any]):
+    return write_json_state(cfg, "unified_market_state_status.json", payload)
+
+
 def read_unified_state(cfg: CollectorConfig, filename: str) -> Dict[str, Any]:
     path = cfg.roots()["state"] / filename
     if not path.exists():

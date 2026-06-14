@@ -126,6 +126,7 @@ class UnifiedWsExecutionsLane:
                     self.cfg.symbol,
                     ssl_verify=self.cfg.ws_ssl_verify,
                     recv_timeout_sec=60.0,
+                    ca_file=str(self.cfg.ws_ca_file) if self.cfg.ws_ca_file else None,
                 )
 
                 audit.emit(

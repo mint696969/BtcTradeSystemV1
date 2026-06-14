@@ -24,3 +24,10 @@ def env_int(name: str, default: int) -> int:
         return int(raw)
     except Exception:
         return default
+
+
+def env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if not raw:
+        return default
+    return raw in {"1", "true", "yes", "on"}

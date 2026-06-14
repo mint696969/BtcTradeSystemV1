@@ -20,6 +20,7 @@ from .transforms.facade import (
     canonical_board_event,
 )
 from .unified_state import write_unified_origin_status
+from .unified_market_state_lane import UnifiedMarketStateLane
 from .venue_adapters.bitflyer_board import BitflyerBoardVenueAdapter
 from .writer import write_canonical, write_raw
 
@@ -40,6 +41,7 @@ class UnifiedWsBoardLane:
         self.cfg = load_config()
         self.seq = SequenceManager.start()
         self.adapter = BitflyerBoardVenueAdapter()
+        self.market_state_lane = UnifiedMarketStateLane()
         self.state = UnifiedWsBoardLaneState()
         self._lock = threading.Lock()
 
@@ -131,6 +133,7 @@ class UnifiedWsBoardLane:
                 stream = connect_and_stream_board(
                     self.cfg.symbol,
                     ssl_verify=self.cfg.ws_ssl_verify,
+                    ca_file=str(self.cfg.ws_ca_file) if self.cfg.ws_ca_file else None,
                 )
 
                 self._set_state(
@@ -268,6 +271,7 @@ class UnifiedWsBoardLane:
                         record_type=record_type,
                         record=canonical_record,
                     )
+                    self.market_state_lane.step(canonical_record)
 
                     last_board_event_id = current_event_id
 
