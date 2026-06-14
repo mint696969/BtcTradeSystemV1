@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Iterable, Optional
+import os
+import ssl
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional
 
 from .events import EnvelopeContext, EventType, make_record
 from .fx_public_rest import execution_market_config, market_identity_payload
@@ -373,6 +375,87 @@ def preflight_fx_public_ws(
         "ssl_verify": cfg.ws_ssl_verify,
         "channel_plan": plan,
         "attempts": attempts,
+        "read_only": True,
+        "would_send_to_broker": False,
+    }
+
+
+
+def _path_exists(raw: Any) -> bool:
+    try:
+        return bool(raw) and os.path.exists(str(raw))
+    except Exception:
+        return False
+
+
+def _tls_error_classes(preflight: Mapping[str, Any] | None) -> tuple[str, ...]:
+    if not isinstance(preflight, Mapping):
+        return ()
+    attempts = preflight.get("attempts")
+    if not isinstance(attempts, Mapping):
+        return ()
+    classes: list[str] = []
+    for attempt in attempts.values():
+        if isinstance(attempt, Mapping) and attempt.get("error_class"):
+            classes.append(str(attempt.get("error_class")))
+    return tuple(dict.fromkeys(classes))
+
+
+def diagnose_fx_ws_tls_environment(*, preflight: Mapping[str, Any] | None = None) -> Dict[str, object]:
+    """Return read-only TLS diagnostics for SR-FX public WS.
+
+    This does not open a socket, does not write market data, and does not modify ssl settings.
+    It intentionally treats disabling certificate verification as not acceptable for live readiness.
+    """
+
+    cfg = execution_market_config(load_config())
+    verify_paths = ssl.get_default_verify_paths()
+    env_paths = {
+        "SSL_CERT_FILE": os.getenv("SSL_CERT_FILE"),
+        "SSL_CERT_DIR": os.getenv("SSL_CERT_DIR"),
+        "REQUESTS_CA_BUNDLE": os.getenv("REQUESTS_CA_BUNDLE"),
+        "CURL_CA_BUNDLE": os.getenv("CURL_CA_BUNDLE"),
+    }
+    default_paths = {
+        "cafile": verify_paths.cafile,
+        "capath": verify_paths.capath,
+        "openssl_cafile": verify_paths.openssl_cafile,
+        "openssl_capath": verify_paths.openssl_capath,
+    }
+    env_path_status = {k: {"value": v, "exists": _path_exists(v)} for k, v in env_paths.items()}
+    default_path_status = {k: {"value": v, "exists": _path_exists(v)} for k, v in default_paths.items()}
+    error_classes = _tls_error_classes(preflight)
+    tls_error_detected = any("SSL" in cls or "Certificate" in cls or "CERT" in cls.upper() for cls in error_classes)
+
+    blocked_by: list[str] = []
+    warnings: list[str] = []
+    if not cfg.ws_ssl_verify:
+        blocked_by.append("ws_ssl_verify_disabled")
+    if tls_error_detected:
+        blocked_by.append("ws_tls_certificate_verification_failed")
+    if not any(item["exists"] for item in env_path_status.values()) and not any(item["exists"] for item in default_path_status.values()):
+        warnings.append("no_existing_ca_bundle_path_detected")
+    if preflight is not None and not bool(preflight.get("ok", False)):
+        warnings.append("ws_preflight_not_ok")
+
+    return {
+        "ok": not blocked_by,
+        "exchange": cfg.execution_market.exchange,
+        "product_code": cfg.execution_market.product_code,
+        "market_uid": cfg.execution_market.market_uid,
+        "ssl_verify": cfg.ws_ssl_verify,
+        "tls_error_detected": tls_error_detected,
+        "error_classes": list(error_classes),
+        "env_paths": env_path_status,
+        "default_verify_paths": default_path_status,
+        "blocked_by": list(dict.fromkeys(blocked_by)),
+        "warnings": list(dict.fromkeys(warnings)),
+        "recommended_operator_actions": [
+            "keep_BTCTS_WS_SSL_VERIFY_enabled_for_live_readiness",
+            "inspect_corporate_proxy_or_antivirus_tls_interception",
+            "install_or_point_python_to_trusted_ca_bundle_if_environment_requires_it",
+            "rerun_bitflyer_fx_public_ws_preflight_once_after_trust_store_fix",
+        ],
         "read_only": True,
         "would_send_to_broker": False,
     }

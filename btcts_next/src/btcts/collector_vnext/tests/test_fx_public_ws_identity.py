@@ -164,3 +164,42 @@ def test_fx_ws_preflight_connection_failure_is_safe(monkeypatch, tmp_path) -> No
     assert out["attempts"]["executions"]["error_class"] == "RuntimeError"
     assert out["would_send_to_broker"] is False
     assert out["read_only"] is True
+
+
+
+def test_fx_ws_tls_diagnostics_flags_certificate_error(monkeypatch, tmp_path) -> None:
+    from btcts.collector_vnext.fx_public_ws import diagnose_fx_ws_tls_environment
+
+    _runtime_paths(monkeypatch, tmp_path)
+    preflight = {
+        "ok": False,
+        "attempts": {
+            "executions": {"ok": False, "error_class": "SSLCertVerificationError"},
+            "board": {"ok": False, "error_class": "SSLCertVerificationError"},
+        },
+    }
+
+    out = diagnose_fx_ws_tls_environment(preflight=preflight)
+
+    assert out["ok"] is False
+    assert out["product_code"] == "FX_BTC_JPY"
+    assert out["tls_error_detected"] is True
+    assert "ws_tls_certificate_verification_failed" in out["blocked_by"]
+    assert "keep_BTCTS_WS_SSL_VERIFY_enabled_for_live_readiness" in out["recommended_operator_actions"]
+    assert out["would_send_to_broker"] is False
+    assert out["read_only"] is True
+
+
+def test_fx_ws_tls_diagnostics_blocks_disabled_ssl_verify(monkeypatch, tmp_path) -> None:
+    from btcts.collector_vnext.fx_public_ws import diagnose_fx_ws_tls_environment
+
+    _runtime_paths(monkeypatch, tmp_path)
+    monkeypatch.setenv("BTCTS_WS_SSL_VERIFY", "0")
+
+    out = diagnose_fx_ws_tls_environment(preflight={"ok": True, "attempts": {}})
+
+    assert out["ok"] is False
+    assert out["ssl_verify"] is False
+    assert "ws_ssl_verify_disabled" in out["blocked_by"]
+    assert out["would_send_to_broker"] is False
+    assert out["read_only"] is True
