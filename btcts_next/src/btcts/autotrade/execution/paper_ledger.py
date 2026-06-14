@@ -4,12 +4,13 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from btcts.autotrade.execution.intents import OrderSide, OrderType, build_order_intent_from_decision
-from btcts.autotrade.execution.order_state import PaperOrder, PaperOrderStatus
+from btcts.autotrade.execution.order_state import PaperOrder, PaperOrderStatus, TERMINAL_PAPER_ORDER_STATUSES
 from btcts.autotrade.execution.paper_intent import PaperOrderIntentBuildResult
 from btcts.autotrade.runtime_paths import decision_ledger_path
 
@@ -161,3 +162,169 @@ def read_paper_orders(path: Path | None = None) -> Tuple[PaperOrder, ...]:
         if order is not None:
             orders.append(order)
     return tuple(orders)
+
+
+@dataclass(frozen=True)
+class PaperOrderLedgerReadResult:
+    path: Path
+    rows: Tuple[dict[str, Any], ...]
+    skipped_count: int = 0
+    error_samples: Tuple[str, ...] = ()
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "path": str(self.path),
+            "rows": list(self.rows),
+            "skipped_count": self.skipped_count,
+            "error_samples": list(self.error_samples),
+            "read_only": True,
+            "would_send_to_broker": False,
+        }
+
+
+@dataclass(frozen=True)
+class PaperOrderLedgerSummary:
+    path: Path
+    exists: bool
+    total_rows: int
+    accepted_count: int
+    rejected_count: int
+    active_paper_order_count: int
+    terminal_paper_order_count: int
+    skipped_rows: int
+    latest_record_id: str | None = None
+    latest_recorded_at: str | None = None
+    latest_order_id: str | None = None
+    latest_decision_id: str | None = None
+    latest_status: str | None = None
+    latest_product_code: str | None = None
+    latest_market_uid: str | None = None
+    latest_accepted: bool | None = None
+    latest_blocked_by: Tuple[str, ...] = ()
+    latest_warnings: Tuple[str, ...] = ()
+    status_counts: Dict[str, int] | None = None
+    blocked_by_counts: Dict[str, int] | None = None
+    warning_counts: Dict[str, int] | None = None
+    error_samples: Tuple[str, ...] = ()
+    read_only: bool = True
+    would_send_to_broker: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = asdict(self)
+        data["path"] = str(self.path)
+        data["status_counts"] = dict(self.status_counts or {})
+        data["blocked_by_counts"] = dict(self.blocked_by_counts or {})
+        data["warning_counts"] = dict(self.warning_counts or {})
+        return data
+
+
+def _iter_recent_lines(path: Path, *, max_lines: int | None = None) -> list[str]:
+    if not path.exists() or not path.is_file():
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return []
+    if max_lines is not None and max_lines >= 0:
+        return lines[-max_lines:]
+    return lines
+
+
+def read_paper_order_ledger_rows(path: Path | None = None, *, max_lines: int | None = 1000) -> PaperOrderLedgerReadResult:
+    target = path or default_paper_order_ledger_path(ensure=False)
+    rows: list[dict[str, Any]] = []
+    skipped = 0
+    errors: list[str] = []
+    for index, line in enumerate(_iter_recent_lines(target, max_lines=max_lines), start=1):
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            obj = json.loads(text)
+            if not isinstance(obj, dict):
+                raise ValueError("not_object")
+            rows.append(obj)
+        except Exception as exc:
+            skipped += 1
+            if len(errors) < 5:
+                errors.append(f"line:{index}:{exc.__class__.__name__}")
+    return PaperOrderLedgerReadResult(path=target, rows=tuple(rows), skipped_count=skipped, error_samples=tuple(errors))
+
+
+def _tuple_str(value: Any) -> Tuple[str, ...]:
+    if not isinstance(value, (list, tuple)):
+        return ()
+    return tuple(str(item) for item in value if str(item))
+
+
+def _status_of(row: dict[str, Any]) -> str | None:
+    order = row.get("order") if isinstance(row.get("order"), dict) else None
+    if not isinstance(order, dict):
+        return None
+    status = order.get("status")
+    return str(status) if status is not None else None
+
+
+def _order_intent_of(row: dict[str, Any]) -> dict[str, Any]:
+    order = row.get("order") if isinstance(row.get("order"), dict) else None
+    if not isinstance(order, dict):
+        return {}
+    intent = order.get("intent")
+    return dict(intent) if isinstance(intent, dict) else {}
+
+
+def summarize_paper_order_ledger(path: Path | None = None, *, max_lines: int | None = 1000) -> PaperOrderLedgerSummary:
+    target = path or default_paper_order_ledger_path(ensure=False)
+    read = read_paper_order_ledger_rows(target, max_lines=max_lines)
+    rows = read.rows
+    latest = rows[-1] if rows else None
+    status_counter: Counter[str] = Counter()
+    blocked_counter: Counter[str] = Counter()
+    warning_counter: Counter[str] = Counter()
+    active_count = 0
+    terminal_count = 0
+    accepted_count = 0
+
+    terminal_values = {status.value for status in TERMINAL_PAPER_ORDER_STATUSES}
+    for row in rows:
+        if bool(row.get("accepted")):
+            accepted_count += 1
+        status = _status_of(row)
+        if status:
+            status_counter[status] += 1
+            if status in terminal_values:
+                terminal_count += 1
+            else:
+                active_count += 1
+        blocked_counter.update(_tuple_str(row.get("blocked_by")))
+        warning_counter.update(_tuple_str(row.get("warnings")))
+
+    latest_order = latest.get("order") if isinstance(latest, dict) and isinstance(latest.get("order"), dict) else {}
+    latest_intent = _order_intent_of(latest) if isinstance(latest, dict) else {}
+
+    return PaperOrderLedgerSummary(
+        path=target,
+        exists=target.exists(),
+        total_rows=len(rows),
+        accepted_count=accepted_count,
+        rejected_count=len(rows) - accepted_count,
+        active_paper_order_count=active_count,
+        terminal_paper_order_count=terminal_count,
+        skipped_rows=read.skipped_count,
+        latest_record_id=str(latest.get("record_id")) if isinstance(latest, dict) and latest.get("record_id") is not None else None,
+        latest_recorded_at=str(latest.get("recorded_at")) if isinstance(latest, dict) and latest.get("recorded_at") is not None else None,
+        latest_order_id=str(latest_order.get("order_id")) if latest_order.get("order_id") is not None else None,
+        latest_decision_id=str(latest_intent.get("decision_id")) if latest_intent.get("decision_id") is not None else None,
+        latest_status=_status_of(latest) if isinstance(latest, dict) else None,
+        latest_product_code=str(latest_intent.get("product_code")) if latest_intent.get("product_code") is not None else None,
+        latest_market_uid=str(latest_intent.get("market_uid")) if latest_intent.get("market_uid") is not None else None,
+        latest_accepted=bool(latest.get("accepted")) if isinstance(latest, dict) else None,
+        latest_blocked_by=_tuple_str(latest.get("blocked_by")) if isinstance(latest, dict) else (),
+        latest_warnings=_tuple_str(latest.get("warnings")) if isinstance(latest, dict) else (),
+        status_counts=dict(status_counter),
+        blocked_by_counts=dict(blocked_counter),
+        warning_counts=dict(warning_counter),
+        error_samples=read.error_samples,
+        read_only=True,
+        would_send_to_broker=False,
+    )
