@@ -328,3 +328,226 @@ def summarize_paper_order_ledger(path: Path | None = None, *, max_lines: int | N
         read_only=True,
         would_send_to_broker=False,
     )
+
+
+
+@dataclass(frozen=True)
+class PaperOrderTransitionRecord:
+    record_id: str
+    recorded_at: str
+    order_id: str
+    decision_id: str
+    previous_status: str | None
+    new_status: str
+    transition_event: str
+    order: PaperOrder
+    fill_size: float | None = None
+    fill_price: float | None = None
+    reason: str | None = None
+    ledger_event: str = "autotrade.paper_order_transition_recorded"
+    read_only: bool = True
+    would_send_to_broker: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "ledger_event": self.ledger_event,
+            "record_id": self.record_id,
+            "recorded_at": self.recorded_at,
+            "order_id": self.order_id,
+            "decision_id": self.decision_id,
+            "previous_status": self.previous_status,
+            "new_status": self.new_status,
+            "transition_event": self.transition_event,
+            "transition": {
+                "event": self.transition_event,
+                "previous_status": self.previous_status,
+                "new_status": self.new_status,
+                "fill_size": self.fill_size,
+                "fill_price": self.fill_price,
+                "reason": self.reason,
+            },
+            "accepted": self.new_status != PaperOrderStatus.REJECTED.value,
+            "blocked_by": [self.reason] if self.new_status == PaperOrderStatus.REJECTED.value and self.reason else [],
+            "warnings": [],
+            "order": self.order.to_dict(),
+            "read_only": self.read_only,
+            "would_send_to_broker": self.would_send_to_broker,
+        }
+
+
+@dataclass(frozen=True)
+class PaperOrderLifecycleSummary:
+    path: Path
+    exists: bool
+    total_rows: int
+    order_count: int
+    active_paper_order_count: int
+    terminal_paper_order_count: int
+    rejected_order_count: int
+    skipped_rows: int
+    latest_record_id: str | None = None
+    latest_recorded_at: str | None = None
+    latest_order_id: str | None = None
+    latest_decision_id: str | None = None
+    latest_status: str | None = None
+    latest_transition_event: str | None = None
+    latest_product_code: str | None = None
+    latest_market_uid: str | None = None
+    status_counts: Dict[str, int] | None = None
+    transition_event_counts: Dict[str, int] | None = None
+    error_samples: Tuple[str, ...] = ()
+    read_only: bool = True
+    would_send_to_broker: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = asdict(self)
+        data["path"] = str(self.path)
+        data["status_counts"] = dict(self.status_counts or {})
+        data["transition_event_counts"] = dict(self.transition_event_counts or {})
+        return data
+
+
+def _safe_id_fragment(value: str) -> str:
+    return str(value or "unknown").replace(":", "").replace("-", "").replace(".", "").replace(" ", "_")
+
+
+def _transition_event(previous_status: str | None, new_status: str) -> str:
+    prev = previous_status or "none"
+    return f"{prev}_to_{new_status}"
+
+
+def build_paper_order_transition_record(
+    *,
+    order: PaperOrder,
+    recorded_at: str,
+    previous_order: PaperOrder | None = None,
+    transition_event: str | None = None,
+    fill_size: float | None = None,
+    fill_price: float | None = None,
+    reason: str | None = None,
+    record_id: str | None = None,
+) -> PaperOrderTransitionRecord:
+    previous_status = previous_order.status.value if previous_order is not None else None
+    new_status = order.status.value
+    event = transition_event or _transition_event(previous_status, new_status)
+    rid = record_id or f"paper_order_transition_{order.order_id}_{event}_{_safe_id_fragment(recorded_at)}"
+    return PaperOrderTransitionRecord(
+        record_id=rid,
+        recorded_at=recorded_at,
+        order_id=order.order_id,
+        decision_id=order.intent.decision_id,
+        previous_status=previous_status,
+        new_status=new_status,
+        transition_event=event,
+        order=order,
+        fill_size=fill_size,
+        fill_price=fill_price,
+        reason=reason,
+        read_only=True,
+        would_send_to_broker=False,
+    )
+
+
+def append_paper_order_transition_record(path: Path, record: PaperOrderTransitionRecord) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record.to_dict(), ensure_ascii=False, sort_keys=True, default=str) + "\n")
+
+
+def record_paper_order_transition(
+    *,
+    order: PaperOrder,
+    recorded_at: str,
+    previous_order: PaperOrder | None = None,
+    transition_event: str | None = None,
+    fill_size: float | None = None,
+    fill_price: float | None = None,
+    reason: str | None = None,
+    path: Path | None = None,
+) -> PaperOrderTransitionRecord:
+    target = path or default_paper_order_ledger_path(ensure=True)
+    record = build_paper_order_transition_record(
+        order=order,
+        recorded_at=recorded_at,
+        previous_order=previous_order,
+        transition_event=transition_event,
+        fill_size=fill_size,
+        fill_price=fill_price,
+        reason=reason,
+    )
+    append_paper_order_transition_record(target, record)
+    return record
+
+
+def _transition_event_of(row: dict[str, Any]) -> str | None:
+    transition = row.get("transition") if isinstance(row.get("transition"), dict) else None
+    if isinstance(transition, dict) and transition.get("event") is not None:
+        return str(transition.get("event"))
+    if row.get("transition_event") is not None:
+        return str(row.get("transition_event"))
+    return None
+
+
+def summarize_paper_order_lifecycle(path: Path | None = None, *, max_lines: int | None = 1000) -> PaperOrderLifecycleSummary:
+    target = path or default_paper_order_ledger_path(ensure=False)
+    read = read_paper_order_ledger_rows(target, max_lines=max_lines)
+    rows = read.rows
+    latest_by_order: dict[str, dict[str, Any]] = {}
+    transition_counter: Counter[str] = Counter()
+    terminal_values = {status.value for status in TERMINAL_PAPER_ORDER_STATUSES}
+
+    for row in rows:
+        event = _transition_event_of(row)
+        if event:
+            transition_counter[event] += 1
+        order = row.get("order") if isinstance(row.get("order"), dict) else None
+        if not isinstance(order, dict):
+            continue
+        order_id = order.get("order_id")
+        if order_id is None:
+            continue
+        latest_by_order[str(order_id)] = row
+
+    status_counter: Counter[str] = Counter()
+    active_count = 0
+    terminal_count = 0
+    rejected_count = 0
+    for row in latest_by_order.values():
+        status = _status_of(row)
+        if not status:
+            continue
+        status_counter[status] += 1
+        if status == PaperOrderStatus.REJECTED.value:
+            rejected_count += 1
+        if status in terminal_values:
+            terminal_count += 1
+        else:
+            active_count += 1
+
+    latest = rows[-1] if rows else None
+    latest_order = latest.get("order") if isinstance(latest, dict) and isinstance(latest.get("order"), dict) else {}
+    latest_intent = _order_intent_of(latest) if isinstance(latest, dict) else {}
+
+    return PaperOrderLifecycleSummary(
+        path=target,
+        exists=target.exists(),
+        total_rows=len(rows),
+        order_count=len(latest_by_order),
+        active_paper_order_count=active_count,
+        terminal_paper_order_count=terminal_count,
+        rejected_order_count=rejected_count,
+        skipped_rows=read.skipped_count,
+        latest_record_id=str(latest.get("record_id")) if isinstance(latest, dict) and latest.get("record_id") is not None else None,
+        latest_recorded_at=str(latest.get("recorded_at")) if isinstance(latest, dict) and latest.get("recorded_at") is not None else None,
+        latest_order_id=str(latest_order.get("order_id")) if latest_order.get("order_id") is not None else None,
+        latest_decision_id=str(latest_intent.get("decision_id")) if latest_intent.get("decision_id") is not None else None,
+        latest_status=_status_of(latest) if isinstance(latest, dict) else None,
+        latest_transition_event=_transition_event_of(latest) if isinstance(latest, dict) else None,
+        latest_product_code=str(latest_intent.get("product_code")) if latest_intent.get("product_code") is not None else None,
+        latest_market_uid=str(latest_intent.get("market_uid")) if latest_intent.get("market_uid") is not None else None,
+        status_counts=dict(status_counter),
+        transition_event_counts=dict(transition_counter),
+        error_samples=read.error_samples,
+        read_only=True,
+        would_send_to_broker=False,
+    )
