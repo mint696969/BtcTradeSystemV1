@@ -63,7 +63,7 @@ def emit_fx_ws_trade_smoke(
     canonical_path: Optional[str] = None
     trade_count = 0
 
-    for msg in stream_factory(exe.product_code, ssl_verify=cfg.ws_ssl_verify, recv_timeout_sec=60.0):
+    for msg in stream_factory(exe.product_code, ssl_verify=cfg.ws_ssl_verify, recv_timeout_sec=60.0, ca_file=str(cfg.ws_ca_file) if cfg.ws_ca_file else None):
         raw_payload = {
             "provider": msg.provider,
             "exchange": msg.exchange,
@@ -179,7 +179,7 @@ def emit_fx_ws_board_smoke(
     canonical_path: Optional[str] = None
     event_type: Optional[str] = None
 
-    for msg in stream_factory(exe.product_code, ssl_verify=cfg.ws_ssl_verify):
+    for msg in stream_factory(exe.product_code, ssl_verify=cfg.ws_ssl_verify, ca_file=str(cfg.ws_ca_file) if cfg.ws_ca_file else None):
         is_snapshot = "snapshot" in str(msg.channel)
         record_type = EventType.MARKET_ORDERBOOK_SNAPSHOT if is_snapshot else EventType.MARKET_ORDERBOOK_DIFF
         raw_payload = {
@@ -320,7 +320,7 @@ def preflight_fx_public_ws(
     if check_executions:
         expected_channel = str(plan["channels"]["executions"])
         try:
-            msg = _safe_next_message(executions_stream_factory(exe.product_code, ssl_verify=cfg.ws_ssl_verify, recv_timeout_sec=10.0))
+            msg = _safe_next_message(executions_stream_factory(exe.product_code, ssl_verify=cfg.ws_ssl_verify, recv_timeout_sec=10.0, ca_file=str(cfg.ws_ca_file) if cfg.ws_ca_file else None))
             actual_channel = str(getattr(msg, "channel", ""))
             attempts["executions"] = {
                 "ok": actual_channel == expected_channel,
@@ -345,7 +345,7 @@ def preflight_fx_public_ws(
             str(plan["channels"]["board_delta"]),
         }
         try:
-            msg = _safe_next_message(board_stream_factory(exe.product_code, ssl_verify=cfg.ws_ssl_verify))
+            msg = _safe_next_message(board_stream_factory(exe.product_code, ssl_verify=cfg.ws_ssl_verify, ca_file=str(cfg.ws_ca_file) if cfg.ws_ca_file else None))
             actual_channel = str(getattr(msg, "channel", ""))
             attempts["board"] = {
                 "ok": actual_channel in expected_channels,
@@ -411,6 +411,7 @@ def diagnose_fx_ws_tls_environment(*, preflight: Mapping[str, Any] | None = None
     cfg = execution_market_config(load_config())
     verify_paths = ssl.get_default_verify_paths()
     env_paths = {
+        "BTCTS_WS_CA_FILE": str(cfg.ws_ca_file) if cfg.ws_ca_file else None,
         "SSL_CERT_FILE": os.getenv("SSL_CERT_FILE"),
         "SSL_CERT_DIR": os.getenv("SSL_CERT_DIR"),
         "REQUESTS_CA_BUNDLE": os.getenv("REQUESTS_CA_BUNDLE"),
@@ -431,6 +432,8 @@ def diagnose_fx_ws_tls_environment(*, preflight: Mapping[str, Any] | None = None
     warnings: list[str] = []
     if not cfg.ws_ssl_verify:
         blocked_by.append("ws_ssl_verify_disabled")
+    if cfg.ws_ca_file is not None and not _path_exists(cfg.ws_ca_file):
+        blocked_by.append("ws_ca_file_not_found")
     if tls_error_detected:
         blocked_by.append("ws_tls_certificate_verification_failed")
     if not any(item["exists"] for item in env_path_status.values()) and not any(item["exists"] for item in default_path_status.values()):
@@ -444,6 +447,8 @@ def diagnose_fx_ws_tls_environment(*, preflight: Mapping[str, Any] | None = None
         "product_code": cfg.execution_market.product_code,
         "market_uid": cfg.execution_market.market_uid,
         "ssl_verify": cfg.ws_ssl_verify,
+        "ws_ca_file": str(cfg.ws_ca_file) if cfg.ws_ca_file else None,
+        "ws_ca_file_exists": _path_exists(cfg.ws_ca_file) if cfg.ws_ca_file else False,
         "tls_error_detected": tls_error_detected,
         "error_classes": list(error_classes),
         "env_paths": env_path_status,

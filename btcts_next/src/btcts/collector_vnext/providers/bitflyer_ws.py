@@ -48,6 +48,7 @@ def connect_and_stream_executions(
     *,
     ssl_verify: bool = True,
     recv_timeout_sec: float = 60.0,
+    ca_file: str | None = None,
 ) -> Generator[WSMessage, None, None]:
     channel = f"lightning_executions_{symbol}"
 
@@ -56,6 +57,11 @@ def connect_and_stream_executions(
         sslopt = {
             "cert_reqs": ssl.CERT_NONE,
             "check_hostname": False,
+        }
+    elif ca_file:
+        sslopt = {
+            "cert_reqs": ssl.CERT_REQUIRED,
+            "ca_certs": str(ca_file),
         }
 
     try:
@@ -99,6 +105,7 @@ def connect_and_stream_executions(
                         "recv_timeout_sec": recv_timeout_sec,
                         "ssl_verify": ssl_verify,
                         "socket_url": WS_URL,
+                        "ca_file": ca_file,
                     },
                 )
                 continue
@@ -125,6 +132,7 @@ def connect_and_stream_executions(
                         "recv_timeout_sec": recv_timeout_sec,
                         "ssl_verify": ssl_verify,
                         "socket_url": WS_URL,
+                        "ca_file": ca_file,
                     },
                 )
                 continue
@@ -152,6 +160,7 @@ def connect_and_stream_executions(
                         "recv_timeout_sec": recv_timeout_sec,
                         "ssl_verify": ssl_verify,
                         "socket_url": WS_URL,
+                        "ca_file": ca_file,
                     },
                 )
                 continue
@@ -180,6 +189,7 @@ def connect_and_stream_executions(
                                 "recv_timeout_sec": recv_timeout_sec,
                                 "ssl_verify": ssl_verify,
                                 "socket_url": WS_URL,
+                        "ca_file": ca_file,
                             },
                         )
                         continue
@@ -200,6 +210,7 @@ def connect_and_stream_executions(
                             "recv_timeout_sec": recv_timeout_sec,
                             "ssl_verify": ssl_verify,
                             "socket_url": WS_URL,
+                        "ca_file": ca_file,
                         },
                     )
                 continue
@@ -221,6 +232,7 @@ def connect_and_stream_executions(
                         "recv_timeout_sec": recv_timeout_sec,
                         "ssl_verify": ssl_verify,
                         "socket_url": WS_URL,
+                        "ca_file": ca_file,
                     },
                 )
                 continue

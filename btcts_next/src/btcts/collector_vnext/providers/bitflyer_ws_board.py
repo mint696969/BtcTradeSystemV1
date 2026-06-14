@@ -48,6 +48,7 @@ def connect_and_stream_board(
     symbol: str,
     *,
     ssl_verify: bool = True,
+    ca_file: str | None = None,
 ) -> Generator[BoardMessage, None, None]:
     snapshot_channel = f"lightning_board_snapshot_{symbol}"
     diff_channel = f"lightning_board_{symbol}"
@@ -58,6 +59,11 @@ def connect_and_stream_board(
         sslopt = {
             "cert_reqs": ssl.CERT_NONE,
             "check_hostname": False,
+        }
+    elif ca_file:
+        sslopt = {
+            "cert_reqs": ssl.CERT_REQUIRED,
+            "ca_certs": str(ca_file),
         }
 
     ws = websocket.create_connection(
@@ -115,6 +121,7 @@ def connect_and_stream_board(
                     "recv_timeout_sec": 10,
                     "ssl_verify": ssl_verify,
                     "socket_url": WS_URL,
+                    "ca_file": ca_file,
                 },
             )
 

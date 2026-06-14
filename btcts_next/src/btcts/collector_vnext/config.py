@@ -158,6 +158,7 @@ class CollectorConfig:
         )
     )
     ws_ssl_verify: bool = True
+    ws_ca_file: Path | None = None
     rotation: RotationPolicy = field(default_factory=RotationPolicy)
 
     def roots(self) -> Dict[str, Path]:
@@ -243,6 +244,8 @@ def load_config() -> CollectorConfig:
     validate_market_identities(reference_market, execution_market)
 
     ws_ssl_verify = _env_bool("BTCTS_WS_SSL_VERIFY", True)
+    ws_ca_file_raw = os.getenv("BTCTS_WS_CA_FILE", "").strip()
+    ws_ca_file = Path(ws_ca_file_raw) if ws_ca_file_raw else None
 
     rotation = RotationPolicy(
         max_bytes=env_int("BTCTS_ROTATE_MAX_BYTES", 128 * 1024 * 1024),
@@ -264,5 +267,6 @@ def load_config() -> CollectorConfig:
         reference_market=reference_market,
         execution_market=execution_market,
         ws_ssl_verify=ws_ssl_verify,
+        ws_ca_file=ws_ca_file,
         rotation=rotation,
     )

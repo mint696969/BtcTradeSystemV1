@@ -95,3 +95,15 @@ def test_execution_identity_summary_is_explicit() -> None:
     assert summary["reference_market"]["role"] == "reference_signal"  # type: ignore[index]
     assert summary["execution_market"]["role"] == "execution"  # type: ignore[index]
     assert summary["execution_market"]["market_uid"] != summary["reference_market"]["market_uid"]  # type: ignore[index]
+
+
+
+def test_ws_ca_file_env_is_loaded(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    ca_file = tmp_path / "ca.pem"
+    ca_file.write_text("unit", encoding="utf-8")
+    monkeypatch.setenv("BTCTS_WS_CA_FILE", str(ca_file))
+
+    cfg = load_config()
+
+    assert cfg.ws_ca_file == ca_file
+    assert cfg.ws_ssl_verify is True
