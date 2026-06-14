@@ -48,6 +48,7 @@ from .paper_intent import PaperOrderIntentBuildResult, build_fx_paper_order_inte
 from .paper_ledger import PaperOrderLedgerReadResult, PaperOrderLedgerRecord, PaperOrderLedgerSummary, PaperOrderLifecycleSummary, PaperOrderTransitionRecord, default_paper_order_ledger_path, record_paper_order, record_paper_order_transition, read_paper_order_ledger, read_paper_order_ledger_rows, read_paper_orders, summarize_paper_order_ledger, summarize_paper_order_lifecycle
 from .paper_position import PaperFillEvent, PaperPositionSummary, summarize_paper_position_from_lifecycle
 from .reconciliation import FxReconciliationResult, reconcile_fx_private_state_with_paper, reconcile_fx_private_state_with_paper_ledger
+from .safety_harness import SrFxExecutionSafetyHarnessResult, evaluate_sr_fx_execution_safety_harness
 from .live_readiness_contract import FxLiveReadinessContractResult, evaluate_fx_live_readiness_contract
 
 __all__ = [
@@ -59,7 +60,9 @@ __all__ = [
     "reconcile_fx_private_state_with_paper",
     "reconcile_fx_private_state_with_paper_ledger",
     "FxLiveReadinessContractResult",
+    "SrFxExecutionSafetyHarnessResult",
     "evaluate_fx_live_readiness_contract",
+    "evaluate_sr_fx_execution_safety_harness",
     "CommandLedgerReadResult",
     "CommandLedgerRecord",
     "CommandLedgerSummary",

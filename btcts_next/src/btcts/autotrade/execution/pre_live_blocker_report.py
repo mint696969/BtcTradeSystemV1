@@ -96,22 +96,26 @@ def build_sr_fx_pre_live_blocker_report(
     private_readiness: Mapping[str, Any],
     live_readiness_contract: Mapping[str, Any],
     autotrade_readiness: Mapping[str, Any],
+    execution_safety_harness: Mapping[str, Any] | None = None,
 ) -> SrFxPreLiveBlockerReport:
     public_market = _nested(_as_mapping(public_market_readiness), "public_market_readiness")
     private_state = _nested(_as_mapping(private_readiness), "readiness")
     live_contract = _nested(_as_mapping(live_readiness_contract), "live_readiness_contract")
     autotrade = _nested(_as_mapping(autotrade_readiness), "readiness")
+    safety_harness = _nested(_as_mapping(execution_safety_harness), "execution_safety_harness") if execution_safety_harness is not None else {}
 
     product_code = str(
         public_market.get("product_code")
         or private_state.get("product_code")
         or live_contract.get("product_code")
+        or safety_harness.get("product_code")
         or ""
     )
     market_uid = str(
         public_market.get("market_uid")
         or private_state.get("market_uid")
         or live_contract.get("market_uid")
+        or safety_harness.get("market_uid")
         or ""
     )
 
@@ -203,6 +207,30 @@ def build_sr_fx_pre_live_blocker_report(
         read_only=_bool_at(autotrade, "read_only", True),
         would_send_to_broker=_bool_at(autotrade, "would_send_to_broker"),
     )
+
+
+
+    if execution_safety_harness is not None:
+        sections["execution_safety_harness"] = _section(
+            name="execution_safety_harness",
+            ok=_bool_at(safety_harness, "ok"),
+            blocked_by=_list_at(safety_harness, "blocked_by"),
+            warnings=_list_at(safety_harness, "warnings"),
+            summary={
+                "ok": _bool_at(safety_harness, "ok"),
+                "target_mode": safety_harness.get("target_mode"),
+                "active_paper_order_count": safety_harness.get("active_paper_order_count"),
+                "paper_position_size": safety_harness.get("paper_position_size"),
+                "paper_position_side": safety_harness.get("paper_position_side"),
+                "kill_switch_active": _bool_at(safety_harness, "kill_switch_active"),
+                "order_sender_implemented": _bool_at(safety_harness, "order_sender_implemented"),
+                "bitflyer_order_send_enabled": _bool_at(safety_harness, "bitflyer_order_send_enabled"),
+                "autotrade_live_order_enabled": _bool_at(safety_harness, "autotrade_live_order_enabled"),
+                "contract_version": safety_harness.get("contract_version"),
+            },
+            read_only=_bool_at(safety_harness, "read_only", True),
+            would_send_to_broker=_bool_at(safety_harness, "would_send_to_broker"),
+        )
 
     primary: list[str] = []
     warnings: list[str] = []

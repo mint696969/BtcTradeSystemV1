@@ -63,6 +63,29 @@ def _live(ready: bool = False) -> dict:
     }
 
 
+def _safety(ok: bool = False) -> dict:
+    return {
+        "execution_safety_harness": {
+            "ok": ok,
+            "target_mode": "LIVE_MIN_SIZE",
+            "product_code": "FX_BTC_JPY",
+            "market_uid": "bitflyer.fx.FX_BTC_JPY",
+            "active_paper_order_count": 0 if ok else 1,
+            "paper_position_size": 0.0 if ok else 0.001,
+            "paper_position_side": "flat" if ok else "long",
+            "kill_switch_active": False,
+            "order_sender_implemented": ok,
+            "bitflyer_order_send_enabled": ok,
+            "autotrade_live_order_enabled": ok,
+            "blocked_by": [] if ok else ["active_paper_orders_present", "paper_position_open"],
+            "warnings": ["execution_safety_harness_read_only"],
+            "read_only": True,
+            "would_send_to_broker": False,
+            "contract_version": "unit_safety",
+        }
+    }
+
+
 def _autotrade(ready: bool = False) -> dict:
     return {
         "readiness": {
@@ -134,3 +157,38 @@ def test_pre_live_blocker_report_blocks_unexpected_broker_send_signal() -> None:
     assert report.ok is False
     assert "unexpected_broker_send_signal" in report.primary_blockers
     assert report.would_send_to_broker is True
+
+
+
+def test_pre_live_blocker_report_includes_execution_safety_harness_when_provided() -> None:
+    report = build_sr_fx_pre_live_blocker_report(
+        public_market_readiness=_public(ok=True),
+        private_readiness=_private(clear=True),
+        live_readiness_contract=_live(ready=True),
+        autotrade_readiness=_autotrade(ready=True),
+        execution_safety_harness=_safety(ok=False),
+    )
+
+    assert report.ok is False
+    assert "execution_safety_harness" in report.sections
+    assert report.sections["execution_safety_harness"].ok is False
+    assert "active_paper_orders_present" in report.primary_blockers
+    assert "paper_position_open" in report.primary_blockers
+    assert report.would_send_to_broker is False
+    assert report.read_only is True
+
+
+def test_pre_live_blocker_report_ready_with_clean_execution_safety_harness() -> None:
+    report = build_sr_fx_pre_live_blocker_report(
+        public_market_readiness=_public(ok=True),
+        private_readiness=_private(clear=True),
+        live_readiness_contract=_live(ready=True),
+        autotrade_readiness=_autotrade(ready=True),
+        execution_safety_harness=_safety(ok=True),
+    )
+
+    assert report.ok is True
+    assert report.sections["execution_safety_harness"].ok is True
+    assert report.primary_blockers == ()
+    assert report.would_send_to_broker is False
+    assert report.read_only is True
