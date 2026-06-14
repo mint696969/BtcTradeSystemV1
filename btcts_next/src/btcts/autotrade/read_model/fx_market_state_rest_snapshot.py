@@ -237,11 +237,6 @@ def write_fx_market_state_from_public_rest_board(
     res = fetch_board_func(product_code=exe.product_code, timeout_sec=10.0)
     _note_rate_result(rate_runtime, exchange=exchange, request_class=REQUEST_CLASS, result=res)
 
-    _rate_acquire(rate_runtime, exchange)
-    executions_res = fetch_executions_func(product_code=exe.product_code, count=50, timeout_sec=10.0)
-    _note_rate_result(rate_runtime, exchange=exchange, request_class=REQUEST_CLASS, result=executions_res)
-    trade_delta = _trade_delta_from_executions_payload(executions_res.payload) if executions_res.ok else None
-
     if not res.ok or not isinstance(res.payload, dict):
         return FxMarketStateRestSnapshotResult(
             ok=False,
@@ -258,6 +253,11 @@ def write_fx_market_state_from_public_rest_board(
             read_only=False,
             would_send_to_broker=False,
         )
+
+    _rate_acquire(rate_runtime, exchange)
+    executions_res = fetch_executions_func(product_code=exe.product_code, count=50, timeout_sec=10.0)
+    _note_rate_result(rate_runtime, exchange=exchange, request_class=REQUEST_CLASS, result=executions_res)
+    trade_delta = _trade_delta_from_executions_payload(executions_res.payload) if executions_res.ok else None
 
     stream_session_id = f"{base_cfg.collector_id}:fx_public_rest_board:{_utc_now().replace(':', '').replace('-', '')}"
     record = build_fx_market_state_record_from_rest_board(

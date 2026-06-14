@@ -218,3 +218,79 @@ def test_rate_runtime_snapshot_exposes_sr_fx_request_classes(monkeypatch: pytest
     assert classes["private_rest_own_fills"]["requests_60s"] == 1
     assert "order_send" in classes
     assert "order_cancel" in classes
+
+
+
+def _rest_429_result(endpoint: str, retry_after_sec: float = 2.5) -> RestFetchResult:
+    return RestFetchResult(
+        ok=False,
+        provider="bitflyer_rest",
+        exchange="bitflyer",
+        transport="rest",
+        endpoint=endpoint,
+        status_code=429,
+        payload={"error_message": "rate limit"},
+        error="rate limit",
+        retry_after_sec=retry_after_sec,
+        request_meta={"endpoint": endpoint},
+        response_meta={"headers": {"Retry-After": str(retry_after_sec)}},
+        received_ts="2026-06-14T00:00:00Z",
+    )
+
+
+def test_fx_market_state_writer_uses_shared_bitflyer_rate_runtime(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from btcts.autotrade.read_model.fx_market_state_rest_snapshot import write_fx_market_state_from_public_rest_board
+
+    _set_runtime_paths(monkeypatch, tmp_path)
+    fake_rate = FakeRateRuntime()
+
+    result = write_fx_market_state_from_public_rest_board(
+        fetch_board_func=lambda **kwargs: _rest_result(
+            "/v1/board",
+            {"mid_price": 100, "bids": [{"price": 99, "size": 1}], "asks": [{"price": 101, "size": 1}]},
+        ),
+        fetch_executions_func=lambda **kwargs: _rest_result(
+            "/v1/executions",
+            {"items": [{"id": 1, "side": "BUY", "price": 100, "size": 0.25, "exec_date": "2026-06-14T00:00:00Z"}]},
+        ),
+        rate_runtime=fake_rate,
+    )
+
+    assert result.ok is True
+    assert result.product_code == "FX_BTC_JPY"
+    assert result.market_uid == "bitflyer.fx.FX_BTC_JPY"
+    assert "symbol=FX_BTC_JPY" in str(result.market_state_path)
+    assert result.row is not None
+    assert result.row["trade_delta"] == 0.25
+    assert fake_rate.acquire_calls == ["bitflyer", "bitflyer"]
+    assert fake_rate.sent_calls == [
+        ("bitflyer", "public_rest_market_data"),
+        ("bitflyer", "public_rest_market_data"),
+    ]
+    assert fake_rate.success_calls == ["bitflyer", "bitflyer"]
+    assert fake_rate.on_429_calls == []
+
+
+def test_fx_market_state_writer_429_engages_shared_bitflyer_bucket_and_stops(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    from btcts.autotrade.read_model.fx_market_state_rest_snapshot import write_fx_market_state_from_public_rest_board
+
+    _set_runtime_paths(monkeypatch, tmp_path)
+    fake_rate = FakeRateRuntime()
+
+    def should_not_fetch_executions(**kwargs: Any) -> RestFetchResult:
+        raise AssertionError("executions fetch must not run after board 429")
+
+    result = write_fx_market_state_from_public_rest_board(
+        fetch_board_func=lambda **kwargs: _rest_429_result("/v1/board", retry_after_sec=3.0),
+        fetch_executions_func=should_not_fetch_executions,
+        rate_runtime=fake_rate,
+    )
+
+    assert result.ok is False
+    assert result.status_code == 429
+    assert result.blocked_by == ("fx_public_rest_board_not_ok",)
+    assert result.market_state_path is None
+    assert fake_rate.acquire_calls == ["bitflyer"]
+    assert fake_rate.sent_calls == [("bitflyer", "public_rest_market_data")]
+    assert fake_rate.success_calls == []
+    assert fake_rate.on_429_calls == [("bitflyer", 3.0)]
