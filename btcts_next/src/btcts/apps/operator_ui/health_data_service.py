@@ -84,6 +84,7 @@ def _audit_coverage_meta(
     oldest_bucket: datetime,
 ) -> dict[str, Any]:
     earliest_ts: datetime | None = None
+    latest_ts: datetime | None = None
 
     for row in rows:
         dt = parse_ts(row.get("ts"))
@@ -92,10 +93,21 @@ def _audit_coverage_meta(
         dt_utc = dt.astimezone(timezone.utc)
         if earliest_ts is None or dt_utc < earliest_ts:
             earliest_ts = dt_utc
+        if latest_ts is None or dt_utc > latest_ts:
+            latest_ts = dt_utc
 
-    coverage_complete = earliest_ts is not None and earliest_ts <= oldest_bucket
+    coverage_complete = (
+        earliest_ts is not None
+        and latest_ts is not None
+        and earliest_ts <= oldest_bucket
+        and latest_ts >= oldest_bucket
+    )
     coverage_warning = None
-    if not coverage_complete:
+    if earliest_ts is None or latest_ts is None:
+        coverage_warning = "audit_tail_empty_or_unparseable"
+    elif latest_ts < oldest_bucket:
+        coverage_warning = "audit_tail_has_no_rows_in_selected_window"
+    elif earliest_ts > oldest_bucket:
         coverage_warning = "audit_tail_did_not_cover_full_window"
 
     return {
@@ -104,6 +116,11 @@ def _audit_coverage_meta(
         "coverage_oldest_available_ts": (
             earliest_ts.isoformat().replace("+00:00", "Z")
             if earliest_ts is not None
+            else None
+        ),
+        "coverage_latest_available_ts": (
+            latest_ts.isoformat().replace("+00:00", "Z")
+            if latest_ts is not None
             else None
         ),
         "coverage_window_start_ts": oldest_bucket.isoformat().replace("+00:00", "Z"),
@@ -745,6 +762,67 @@ def build_layer3_orderbook_runtime_summary(
     }
 
 
+def _ws_lane_last_event_ts(row_spec: dict[str, Any]) -> str | None:
+    lane_payload = row_spec.get("lane_payload")
+    fallback_payload = row_spec.get("fallback_payload")
+    lane = lane_payload if isinstance(lane_payload, dict) else {}
+    fallback = fallback_payload if isinstance(fallback_payload, dict) else {}
+    value = (
+        lane.get("last_event_ts")
+        or fallback.get("last_event_ts")
+        or lane.get("connected_ts")
+        or fallback.get("connected_ts")
+        or fallback.get("ts")
+    )
+    return str(value) if value else None
+
+
+def _apply_current_freshness_overlay_to_recent_cells(
+    *,
+    cells: list[dict[str, Any]],
+    row_spec: dict[str, Any],
+    current_level: str,
+    current_reason: str,
+) -> list[dict[str, Any]]:
+    if not cells or current_level not in {"green", "yellow", "orange", "red"}:
+        return cells
+
+    if not bool(row_spec.get("freshness_overlay_enabled", False)):
+        return cells
+
+    last_event_ts = _ws_lane_last_event_ts(row_spec)
+    last_event_dt = parse_ts(last_event_ts)
+    now_age_sec = age_seconds_from_ts(last_event_ts)
+
+    # Do not paint a long fake history.  This is only a current-freshness overlay
+    # for the newest cells, so the older cells still mean audit-observed history.
+    overlay_cell_count = 1
+    if current_level == "green" and now_age_sec is not None:
+        if now_age_sec <= 75:
+            overlay_cell_count = 2
+        if now_age_sec <= 15:
+            overlay_cell_count = 3
+
+    start_index = max(0, len(cells) - overlay_cell_count)
+    out = list(cells)
+    for index in range(start_index, len(out)):
+        cell = dict(out[index])
+        # If the last event is older than the cell end, still keep the rightmost
+        # current overlay only; do not imply historical activity in older cells.
+        if index < len(out) - 1 and last_event_dt is not None:
+            end_dt = parse_ts(str(cell.get("end_ts") or ""))
+            if end_dt is not None and end_dt.astimezone(timezone.utc) < last_event_dt.astimezone(timezone.utc):
+                continue
+        cell["level"] = current_level
+        cell["reason"] = current_reason
+        cell["current_truth_overlay"] = True
+        cell["freshness_overlay"] = True
+        cell["freshness_overlay_last_event_ts"] = last_event_ts
+        cell["source_kind"] = "audit_continuity_rail_with_current_freshness_overlay"
+        out[index] = cell
+    return out
+
+
 def _build_continuity_rail(
     *,
     range_key: str,
@@ -882,11 +960,18 @@ def _build_continuity_rail(
                     "coverage_complete": coverage_meta["coverage_complete"],
                     "coverage_warning": coverage_meta["coverage_warning"],
                     "coverage_oldest_available_ts": coverage_meta["coverage_oldest_available_ts"],
+                    "coverage_latest_available_ts": coverage_meta.get("coverage_latest_available_ts"),
                     "coverage_window_start_ts": coverage_meta["coverage_window_start_ts"],
                 }
             )
 
         current_level, current_reason = current_truth()
+        cells = _apply_current_freshness_overlay_to_recent_cells(
+            cells=cells,
+            row_spec=row_spec,
+            current_level=current_level,
+            current_reason=current_reason,
+        )
 
         out_rows.append(
             {
@@ -947,6 +1032,9 @@ def build_ws_continuity_rail(
                 "use_gap": True,
                 "use_resync": True,
                 "use_warn": True,
+                "freshness_overlay_enabled": True,
+                "lane_payload": ws_board_lane,
+                "fallback_payload": origin_payload,
                 "current_truth": lambda: ws_current_truth(
                     lane_payload=ws_board_lane,
                     fallback_payload=origin_payload,
@@ -958,6 +1046,9 @@ def build_ws_continuity_rail(
                 "use_gap": False,
                 "use_resync": False,
                 "use_warn": True,
+                "freshness_overlay_enabled": True,
+                "lane_payload": ws_executions_lane,
+                "fallback_payload": executions_payload,
                 "current_truth": lambda: ws_current_truth(
                     lane_payload=ws_executions_lane,
                     fallback_payload=executions_payload,

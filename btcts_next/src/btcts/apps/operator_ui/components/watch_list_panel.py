@@ -11,7 +11,7 @@ from btcts.apps.operator_ui.components.ai_operator_action_payloads import (
     normalize_watch_item_payload,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -67,7 +67,7 @@ def render():
 
     watch_list = st.session_state.ai_operator_watch_list
     persisted_flag = st.session_state.get("ai_operator_watch_persisted")
-    summary_widget = load_market_summary_widget_model()
+    summary_widget = load_execution_market_summary_widget_model()
 
     if persisted_flag is False:
         st.warning(get_text(lang, "watch_list_persist_failed"))

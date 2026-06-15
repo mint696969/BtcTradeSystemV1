@@ -90,10 +90,10 @@ def main() -> int:
         )
         assert warroom_fragment_plan["slot_refresh_target"] is True
         assert warroom_fragment_plan["fragment_refresh_target"] is True
-        assert warroom_fragment_plan["page_auto_refresh_target"] is True
-        assert warroom_fragment_plan["page_reload_enabled"] is True
+        assert warroom_fragment_plan["page_auto_refresh_target"] is False
+        assert warroom_fragment_plan["page_reload_enabled"] is False
         assert warroom_fragment_plan["fragment_refresh_enabled"] is True
-        assert warroom_fragment_plan["effective_refresh_interval_sec"] == 5
+        assert warroom_fragment_plan["effective_refresh_interval_sec"] == 3
 
         logs_plan = live_shell.resolve_page_refresh_plan(
             page_key="logs",
@@ -108,18 +108,33 @@ def main() -> int:
         assert logs_plan["fragment_refresh_enabled"] is False
         assert logs_plan["effective_refresh_interval_sec"] == 10
 
-        collector_plan = live_shell.resolve_page_refresh_plan(
+        collector_auto_plan = live_shell.resolve_page_refresh_plan(
+            page_key="collector",
+            ui_auto_refresh=True,
+            ui_refresh_interval_sec=15,
+            fragment_supported=True,
+        )
+        assert collector_auto_plan["slot_refresh_target"] is True
+        assert collector_auto_plan["fragment_refresh_target"] is True
+        assert collector_auto_plan["page_auto_refresh_target"] is False
+        assert collector_auto_plan["page_reload_enabled"] is False
+        assert collector_auto_plan["fragment_refresh_enabled"] is True
+        assert collector_auto_plan["refresh_status_visible"] is True
+        assert collector_auto_plan["effective_refresh_interval_sec"] == 3
+
+        collector_manual_plan = live_shell.resolve_page_refresh_plan(
             page_key="collector",
             ui_auto_refresh=False,
             ui_refresh_interval_sec=15,
             fragment_supported=True,
         )
-        assert collector_plan["slot_refresh_target"] is True
-        assert collector_plan["page_auto_refresh_target"] is True
-        assert collector_plan["page_reload_enabled"] is False
-        assert collector_plan["fragment_refresh_enabled"] is False
-        assert collector_plan["refresh_status_visible"] is False
-        assert collector_plan["effective_refresh_interval_sec"] == 3
+        assert collector_manual_plan["slot_refresh_target"] is True
+        assert collector_manual_plan["fragment_refresh_target"] is True
+        assert collector_manual_plan["page_auto_refresh_target"] is False
+        assert collector_manual_plan["page_reload_enabled"] is False
+        assert collector_manual_plan["fragment_refresh_enabled"] is False
+        assert collector_manual_plan["refresh_status_visible"] is False
+        assert collector_manual_plan["effective_refresh_interval_sec"] == 3
 
         static_plan = live_shell.resolve_page_refresh_plan(
             page_key="config",

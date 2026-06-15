@@ -6,6 +6,9 @@ from __future__ import annotations
 import streamlit as st
 
 from btcts.apps.operator_ui.components import live_shell
+from btcts.apps.operator_ui.components.compact_metric_cards import (
+    render_compact_metric_grid,
+)
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_execution_market_summary_status_payload,
     load_execution_market_summary_widget_model,
@@ -183,17 +186,20 @@ def render():
     risk_label = _risk_label(risk_level, lang)
     ai_decision = _ai_decision(regime, imbalance, delta, lang)
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-
-    c1.metric(get_text(lang, "warroom_header_regime"), _regime_label(regime, lang))
-    c2.metric(get_text(lang, "warroom_header_spread_state"), spread_state)
-    c3.metric(get_text(lang, "warroom_header_pressure"), pressure)
-    c4.metric(
-        get_text(lang, "warroom_header_trade_flow"),
-        "-" if delta is None else round(float(delta), 4),
+    render_compact_metric_grid(
+        (
+            (get_text(lang, "warroom_header_regime"), _regime_label(regime, lang)),
+            (get_text(lang, "warroom_header_spread_state"), spread_state),
+            (get_text(lang, "warroom_header_pressure"), pressure),
+            (
+                get_text(lang, "warroom_header_trade_flow"),
+                "-" if delta is None else round(float(delta), 4),
+            ),
+            (get_text(lang, "warroom_header_ai_decision"), ai_decision),
+            (get_text(lang, "warroom_header_risk"), risk_label),
+        ),
+        min_width_px=110,
     )
-    c5.metric(get_text(lang, "warroom_header_ai_decision"), ai_decision)
-    c6.metric(get_text(lang, "warroom_header_risk"), risk_label)
 
     st.caption(
         get_text(lang, "warroom_header_summary_caption").format(

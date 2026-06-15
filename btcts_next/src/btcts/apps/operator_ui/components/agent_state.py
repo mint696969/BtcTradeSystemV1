@@ -4,9 +4,10 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import TypedDict
+
+from btcts.core import paths as core_paths
 
 from btcts.apps.operator_ui.components.market_signal_state import (
     MarketSignalContext,
@@ -15,8 +16,7 @@ from btcts.apps.operator_ui.components.market_signal_state import (
 
 
 def _audit_log_path() -> Path:
-    logs_dir = os.environ.get("BTC_TS_LOGS_DIR", r"E:\btc_ts\logs")
-    return Path(logs_dir) / "audit.jsonl"
+    return core_paths.logs_dir(ensure=False) / "audit.jsonl"
 
 
 def read_recent_audit(lines: int = 40) -> list[dict]:
@@ -57,6 +57,20 @@ def read_recent_audit(lines: int = 40) -> list[dict]:
     return out
 
 
+def _source_label_for_data_source(data_source: str, *, suffix: str) -> str:
+    labels = {
+        "execution_market_live_canonical": f"execution_market_live_canonical + {suffix}",
+        "execution_market_state": f"execution_market_state + {suffix}",
+        # Legacy labels kept only for compatibility with old tests/callers.
+        "live_canonical": f"live_canonical + {suffix}",
+        "replay_board_tradeflow": f"replay_board+tradeflow + {suffix}",
+        "replay_research": f"replay_board+tradeflow + {suffix}",
+    }
+    if data_source == "unknown":
+        return f"unknown + {suffix}"
+    return labels.get(data_source, f"{data_source} + {suffix}")
+
+
 class AgentState(TypedDict):
     audit_rows: list[dict]
     source_label: str
@@ -78,10 +92,9 @@ def analyze_agent_state() -> AgentState | None:
         return None
 
     data_source = str(signal_state.get("data_source") or "unknown")
-    source_label = (
-        "live_canonical + research_experiment + audit_latency"
-        if data_source == "live_canonical"
-        else "replay_board+tradeflow + research_experiment + audit_latency"
+    source_label = _source_label_for_data_source(
+        data_source,
+        suffix="research_experiment + audit_latency",
     )
 
     return {

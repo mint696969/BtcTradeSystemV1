@@ -78,14 +78,23 @@ def ws_current_truth(
 
     if not ws_state and age_sec is None:
         return "gray", "health_continuity_reason_no_data"
-    if ws_state in {"BROKEN", "STOPPED", "FAILED", "ERROR"}:
+    if ws_state in {"BROKEN", "STOPPED", "FAILED", "ERROR"} or freshness == "BROKEN":
         return "red", "health_continuity_reason_warn_error"
-    if age_sec is not None and age_sec > 300:
-        return "red", "health_continuity_reason_warn_error"
-    if freshness == "STALE" or (age_sec is not None and age_sec > 30):
+    if freshness == "STALE":
         return "orange", "health_continuity_reason_warn_error"
-    if ws_state in {"SYNCING", "CONNECTING", "QUIET"}:
+    if ws_state in {"SYNCING", "CONNECTING"}:
         return "yellow", "health_continuity_reason_warn_error"
     if ws_state == "LIVE":
+        # A live websocket can be quiet, especially executions/trades.  Do not
+        # turn a live lane orange only because no trade/message event was
+        # observed for 30 seconds; rely on explicit freshness/state when present.
+        if freshness in {"", "LIVE", "QUIET"}:
+            return "green", "health_continuity_reason_steady"
+        return "yellow", "health_continuity_reason_warn_error"
+    if ws_state == "QUIET":
         return "green", "health_continuity_reason_steady"
+    if age_sec is not None and age_sec > 300:
+        return "red", "health_continuity_reason_warn_error"
+    if age_sec is not None and age_sec > 30:
+        return "orange", "health_continuity_reason_warn_error"
     return "gray", "health_continuity_reason_no_data"

@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 from typing import TypedDict
 
+from btcts.core import paths as core_paths
+
 from btcts.apps.operator_ui.components.market_signal_state import (
     MarketSignalContext,
     load_market_signal_context,
@@ -21,14 +23,16 @@ from btcts.apps.operator_ui.components.research_bridge import (
     tradeflow_metrics,
 )
 
-AUDIT_LOG = Path(r"E:\btc_ts\logs\audit.jsonl")
+def _audit_log_path() -> Path:
+    return core_paths.logs_dir(ensure=False) / "audit.jsonl"
 
 
 def recent_audit_latency(lines: int = 40):
-    if not AUDIT_LOG.exists():
+    audit_log = _audit_log_path()
+    if not audit_log.exists():
         return None
 
-    with open(AUDIT_LOG, "rb") as f:
+    with open(audit_log, "rb") as f:
         f.seek(0, 2)
         size = f.tell()
 

@@ -6,9 +6,9 @@ from __future__ import annotations
 import streamlit as st
 
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
-    load_prediction_summary_widget_model,
-    load_prediction_tactic_proposal_payload,
+    load_execution_market_prediction_summary_widget_model,
+    load_execution_market_prediction_tactic_proposal_payload,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.ai_operator_tactic_presenter import (
     build_tactic_compact_reading_line,
@@ -72,9 +72,9 @@ def render():
 
     regime = str(regime_report.get("regime") or summary.get("regime") or "unknown")
     best_name = str(best_strategy.get("strategy") or summary.get("best_strategy") or "unknown")
-    summary_widget = load_market_summary_widget_model()
-    prediction_widget = load_prediction_summary_widget_model()
-    tactic_payload = load_prediction_tactic_proposal_payload()
+    summary_widget = load_execution_market_summary_widget_model()
+    prediction_widget = load_execution_market_prediction_summary_widget_model()
+    tactic_payload = load_execution_market_prediction_tactic_proposal_payload()
     total_pnl = float(best_strategy.get("total_pnl") or 0.0)
     wins = int(best_strategy.get("wins") or 0)
     losses = int(best_strategy.get("losses") or 0)

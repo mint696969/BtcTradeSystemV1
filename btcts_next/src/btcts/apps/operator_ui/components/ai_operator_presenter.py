@@ -21,7 +21,10 @@ def build_display_state(
     runtime_source: str,
     ai_mode: str,
 ) -> dict:
-    is_live_market = state.get("data_source") == "live_canonical"
+    is_live_market = state.get("data_source") in {
+        "execution_market_live_canonical",
+        "live_canonical",
+    }
 
     display_ai_mode = ai_mode
     if is_live_market and runtime_source == "fallback-local":

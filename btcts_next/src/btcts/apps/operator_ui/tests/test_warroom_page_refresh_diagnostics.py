@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_page_refresh_diagnostics.py
-# desc: Verify WarRoom diagnostics summarize hybrid refresh profile safely.
+# desc: Verify WarRoom diagnostics summarize fragment refresh without page reload.
 
 from __future__ import annotations
 

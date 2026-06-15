@@ -9,8 +9,8 @@ from btcts.apps.operator_ui.components.ai_reasoning_state import (
     build_ai_reasoning_state,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
-    load_prediction_summary_widget_model,
+    load_execution_market_prediction_summary_widget_model,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -115,8 +115,8 @@ def render():
 
     regime = state.get("regime") or "unknown"
     best_strategy = state.get("best_strategy") or "-"
-    summary_widget = load_market_summary_widget_model()
-    prediction_widget = load_prediction_summary_widget_model()
+    summary_widget = load_execution_market_summary_widget_model()
+    prediction_widget = load_execution_market_prediction_summary_widget_model()
 
     st.info(_headline(lang, regime, imbalance, delta, pressure_bias))
 

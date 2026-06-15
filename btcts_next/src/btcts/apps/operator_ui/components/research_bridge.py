@@ -6,6 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+from btcts.core import paths as core_paths
+
 from btcts.replay import (
     list_experiment_sessions,
     list_replay_sessions,
@@ -13,12 +15,16 @@ from btcts.replay import (
     load_replay_session,
 )
 
-REPLAY_ROOT = Path(r"E:\btc_ts\replay")
-RESEARCH_ROOT = Path(r"E:\btc_ts\research")
+def _replay_root() -> Path:
+    return core_paths.replay_dir(ensure=False)
+
+
+def _research_root() -> Path:
+    return core_paths.research_dir(ensure=False)
 
 
 def load_latest_replay_payload() -> Optional[dict]:
-    sessions = list_replay_sessions(REPLAY_ROOT)
+    sessions = list_replay_sessions(_replay_root())
     if not sessions:
         return None
 
@@ -28,7 +34,7 @@ def load_latest_replay_payload() -> Optional[dict]:
 
 
 def load_latest_experiment_payload() -> Optional[dict]:
-    sessions = list_experiment_sessions(RESEARCH_ROOT)
+    sessions = list_experiment_sessions(_research_root())
     if not sessions:
         return None
 

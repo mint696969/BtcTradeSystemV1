@@ -133,6 +133,69 @@ def _inject_live_shell_styles() -> None:
         .live-shell-scrollable-text-block-muted {
             color: inherit;
         }
+
+
+        /* B-8 reload whitening readability shield:
+           Widgetization is temporarily frozen. Keep the current UI readable
+           during Streamlit refresh/stale replacement without changing data or
+           lower-layer semantics. This targets only presentation artifacts: white
+           background flashes, skeleton washout, and transition/fade effects. */
+        html,
+        body,
+        .stApp,
+        [data-testid="stAppViewContainer"],
+        [data-testid="stMain"],
+        [data-testid="stMainBlockContainer"],
+        [data-testid="stVerticalBlock"],
+        [data-testid="stHorizontalBlock"],
+        [data-testid="stElementContainer"] {
+            background-color: transparent !important;
+            transition: none !important;
+            animation: none !important;
+        }
+
+        [data-testid="stElementContainer"],
+        [data-testid="stMarkdownContainer"],
+        [data-testid="stMetric"],
+        [data-testid="stDataFrame"],
+        [data-testid="stJson"],
+        [data-testid="stExpander"],
+        [data-testid="stAlert"],
+        [data-testid="stCaptionContainer"],
+        [data-testid="stPlotlyChart"],
+        [data-testid="stDeckGlJsonChart"] {
+            opacity: 1 !important;
+            filter: none !important;
+            transition: none !important;
+            animation: none !important;
+        }
+
+        /* Do not force Streamlit stale elements visible.
+           Keeping stale DOM visible makes previous page/tab content remain
+           under the newly selected page while Streamlit replaces blocks. */
+
+        [data-testid="stSkeleton"],
+        [class*="skeleton"],
+        [class*="Skeleton"],
+        [aria-busy="true"] {
+            background: transparent !important;
+            background-color: transparent !important;
+            box-shadow: none !important;
+            opacity: 0.18 !important;
+            transition: none !important;
+            animation: none !important;
+        }
+
+        [data-testid="stMetric"] div,
+        [data-testid="stMetric"] label,
+        [data-testid="stMetric"] [data-testid="stMetricValue"],
+        [data-testid="stMetric"] [data-testid="stMetricDelta"] {
+            opacity: 1 !important;
+            filter: none !important;
+            transition: none !important;
+            animation: none !important;
+        }
+
         </style>
         """,
         unsafe_allow_html=True,
@@ -653,8 +716,13 @@ def resolve_page_refresh_plan(
     ui_refresh_interval_sec: int,
     fragment_supported: bool | None = None,
 ) -> dict[str, bool | int]:
-    is_slot_refresh_target = page_supports_auto_refresh(page_key)
+    """Resolve no-whiteout refresh behavior for Operator UI pages.
 
+    Collector / WarRoom / Health may use Streamlit fragment refresh when
+    available.  Browser/parent-page reload remains disabled because it causes
+    visible whiteout and can leave stale page content during navigation.
+    """
+    is_slot_refresh_target = page_supports_auto_refresh(page_key)
     supports_fragment = (
         supports_streamlit_fragment()
         if fragment_supported is None
@@ -662,59 +730,34 @@ def resolve_page_refresh_plan(
     )
 
     fragment_refresh_page_keys = {
+        "collector",
+        "warroom",
         "health",
-        "warroom",
     }
-    hybrid_refresh_page_keys = {
-        "warroom",
-    }
-
     is_fragment_refresh_target = (
         page_key in fragment_refresh_page_keys
         and supports_fragment
         and is_slot_refresh_target
     )
-    is_page_auto_refresh_target = (
-        page_key == "logs"
-        or page_key in hybrid_refresh_page_keys
-        or (
-            is_slot_refresh_target
-            and not is_fragment_refresh_target
-        )
-    )
 
-    effective_refresh_interval_sec = int(ui_refresh_interval_sec)
+    effective_refresh_interval_sec = max(1, int(ui_refresh_interval_sec))
     if is_slot_refresh_target:
-        if (
-            page_key in hybrid_refresh_page_keys
-            and is_fragment_refresh_target
-        ):
-            slot_recommended_interval_sec = page_non_fragment_refresh_interval_sec(
-                page_key,
-                default_sec=effective_refresh_interval_sec,
-            )
-        else:
-            slot_recommended_interval_sec = page_auto_refresh_interval_sec(
-                page_key,
-                default_sec=effective_refresh_interval_sec,
-            )
-
+        slot_recommended_interval_sec = page_auto_refresh_interval_sec(
+            page_key,
+            default_sec=effective_refresh_interval_sec,
+        )
         effective_refresh_interval_sec = min(
             effective_refresh_interval_sec,
             int(slot_recommended_interval_sec),
         )
 
-    refresh_status_visible = bool(
-        ui_auto_refresh and (
-            is_page_auto_refresh_target or is_fragment_refresh_target
-        )
-    )
+    refresh_status_visible = bool(ui_auto_refresh and is_fragment_refresh_target)
 
     return {
         "slot_refresh_target": is_slot_refresh_target,
         "fragment_refresh_target": is_fragment_refresh_target,
-        "page_auto_refresh_target": is_page_auto_refresh_target,
-        "page_reload_enabled": bool(ui_auto_refresh and is_page_auto_refresh_target),
+        "page_auto_refresh_target": False,
+        "page_reload_enabled": False,
         "fragment_refresh_enabled": bool(ui_auto_refresh and is_fragment_refresh_target),
         "refresh_status_visible": refresh_status_visible,
         "effective_refresh_interval_sec": effective_refresh_interval_sec,
@@ -725,12 +768,43 @@ def supports_streamlit_fragment() -> bool:
     return callable(getattr(st, "fragment", None))
 
 
+def current_fragment_page_key() -> str | None:
+    value = st.session_state.get("_live_shell_active_fragment_page_key")
+    return str(value) if value else None
+
+
+def in_fragment_context(page_key: str | None = None) -> bool:
+    active_page_key = current_fragment_page_key()
+    if active_page_key is None:
+        return False
+    if page_key is None:
+        return True
+    return active_page_key == str(page_key)
+
+
+def _run_with_fragment_context(page_key: str | None, render_body: Callable[[], None]) -> None:
+    if not page_key:
+        render_body()
+        return
+
+    previous_page_key = st.session_state.get("_live_shell_active_fragment_page_key")
+    st.session_state["_live_shell_active_fragment_page_key"] = str(page_key)
+    try:
+        render_body()
+    finally:
+        if previous_page_key is None:
+            st.session_state.pop("_live_shell_active_fragment_page_key", None)
+        else:
+            st.session_state["_live_shell_active_fragment_page_key"] = previous_page_key
+
+
 def render_fragment_block(
     render_body: Callable[[], None],
     *,
     enabled: bool = True,
     refresh_mode: str = "static",
     default_sec: int = 15,
+    page_key: str | None = None,
 ) -> None:
     use_fragment = (
         enabled
@@ -750,7 +824,9 @@ def render_fragment_block(
 
     @fragment(run_every=f"{int(interval_sec)}s")
     def _fragment_runner() -> None:
-        render_body()
+        if page_key and str(st.session_state.get("ui_selected_page_key") or "") != str(page_key):
+            return
+        _run_with_fragment_context(page_key, render_body)
 
     _fragment_runner()
 
@@ -773,6 +849,7 @@ def render_fragment_slot(
         enabled=enabled,
         refresh_mode=refresh_mode,
         default_sec=default_sec,
+        page_key=_meta_str(meta, "page_id"),
     )
 
 
@@ -782,6 +859,17 @@ def render_page_auto_refresh(
     interval_sec: int,
     page_key: str,
 ) -> None:
+    """Install a parent-page reload timer for operational control pages.
+
+    This is intentionally used for pages such as Collector where button state,
+    pending requests, and watchdog state should track the filesystem/process
+    state every few seconds.  WarRoom remains outside this path to avoid
+    whole-page whiteout.
+    """
+    # UI navigation recovery gate:
+    # Parent-page reload is disabled while repairing tab/page navigation.
+    return
+
     interval_ms = max(1000, int(interval_sec) * 1000)
 
     payload = {
@@ -793,38 +881,44 @@ def render_page_auto_refresh(
     components.html(
         f"""
         <script>
-        const config = {json.dumps(payload)};
-        const parentWindow = window.parent;
+        (() => {{
+            const config = {json.dumps(payload)};
+            const parentWindow = window.parent || window;
+            const timerKey = "__btcts_auto_refresh_timer__";
+            const pageKeyKey = "__btcts_auto_refresh_page_key__";
+            const intervalKey = "__btcts_auto_refresh_interval_ms__";
+            const armedAtKey = "__btcts_auto_refresh_armed_at__";
 
-        if (!parentWindow) {{
-            return;
-        }}
-
-        const timerKey = "__btcts_auto_refresh_timer__";
-        const pageKeyKey = "__btcts_auto_refresh_page_key__";
-
-        if (parentWindow[timerKey]) {{
-            parentWindow.clearTimeout(parentWindow[timerKey]);
-            parentWindow[timerKey] = null;
-        }}
-
-        if (!config.enabled) {{
-            parentWindow[pageKeyKey] = null;
-            return;
-        }}
-
-        parentWindow[pageKeyKey] = config.page_key;
-        parentWindow[timerKey] = parentWindow.setTimeout(() => {{
-            if (parentWindow[pageKeyKey] === config.page_key) {{
-                parentWindow.location.reload();
+            if (parentWindow[timerKey]) {{
+                parentWindow.clearInterval(parentWindow[timerKey]);
+                parentWindow[timerKey] = null;
             }}
-        }}, config.interval_ms);
+
+            if (!config.enabled) {{
+                parentWindow[pageKeyKey] = null;
+                parentWindow[intervalKey] = null;
+                parentWindow[armedAtKey] = null;
+                return;
+            }}
+
+            parentWindow[pageKeyKey] = config.page_key;
+            parentWindow[intervalKey] = config.interval_ms;
+            parentWindow[armedAtKey] = Date.now();
+
+            parentWindow[timerKey] = parentWindow.setInterval(() => {{
+                if (parentWindow[pageKeyKey] !== config.page_key) {{
+                    parentWindow.clearInterval(parentWindow[timerKey]);
+                    parentWindow[timerKey] = null;
+                    return;
+                }}
+                parentWindow.location.reload();
+            }}, config.interval_ms);
+        }})();
         </script>
         """,
         height=0,
         width=0,
     )
-
 
 def render_folded_section(
     label: str,
@@ -833,3 +927,4 @@ def render_folded_section(
 ):
     _inject_live_shell_styles()
     return st.expander(label, expanded=expanded)
+

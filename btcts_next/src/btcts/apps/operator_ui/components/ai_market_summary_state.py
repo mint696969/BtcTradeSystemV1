@@ -11,6 +11,20 @@ from btcts.apps.operator_ui.components.market_signal_state import (
 )
 
 
+def _source_label_for_data_source(data_source: str, *, suffix: str) -> str:
+    labels = {
+        "execution_market_live_canonical": f"execution_market_live_canonical + {suffix}",
+        "execution_market_state": f"execution_market_state + {suffix}",
+        # Legacy labels kept only for compatibility with old tests/callers.
+        "live_canonical": f"live_canonical + {suffix}",
+        "replay_board_tradeflow": f"replay_board+tradeflow + {suffix}",
+        "replay_research": f"replay_board+tradeflow + {suffix}",
+    }
+    if data_source == "unknown":
+        return f"unknown + {suffix}"
+    return labels.get(data_source, f"{data_source} + {suffix}")
+
+
 class AiMarketSummaryState(TypedDict):
     spread: float
     imbalance: float
@@ -29,10 +43,9 @@ def build_ai_market_summary_state() -> AiMarketSummaryState | None:
         return None
 
     data_source = str(signal_state.get("data_source") or "unknown")
-    source_label = (
-        "live_canonical + research_experiment"
-        if data_source == "live_canonical"
-        else "replay_board+tradeflow + research_experiment"
+    source_label = _source_label_for_data_source(
+        data_source,
+        suffix="research_experiment",
     )
 
     return {

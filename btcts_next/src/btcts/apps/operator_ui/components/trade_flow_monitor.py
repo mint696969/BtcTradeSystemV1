@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.compact_metric_cards import (
+    render_compact_metric_grid,
+)
 from btcts.apps.operator_ui.components.market_state_bridge import (
     load_execution_market_summary_widget_model,
 )
@@ -33,12 +36,8 @@ def render(
 
         metric_rows = overlay_contract_metric_rows(overlay_contract)
         if metric_rows:
-            metric_cols = st.columns(len(metric_rows))
-            for col, (label, value) in zip(metric_cols, metric_rows):
-                col.metric(label, value)
-
-        with st.expander(get_text(lang, "graph_overlay_contract_title"), expanded=False):
-            st.json(overlay_contract)
+            render_compact_metric_grid(metric_rows, min_width_px=100)
+        st.caption(get_text(lang, "graph_overlay_contract_title"))
 
     st.markdown(f"### {get_text(lang, 'trade_flow_title')}")
 
@@ -55,11 +54,14 @@ def render(
     trade_count = flow.get("trade_count")
     summary_widget = load_execution_market_summary_widget_model()
 
-    c1, c2, c3 = st.columns(3)
-
-    c1.metric(get_text(lang, "trade_flow_buy_volume"), "-" if buy_vol is None else round(float(buy_vol), 4))
-    c2.metric(get_text(lang, "trade_flow_sell_volume"), "-" if sell_vol is None else round(float(sell_vol), 4))
-    c3.metric(get_text(lang, "trade_flow_delta"), "-" if delta is None else round(float(delta), 4))
+    render_compact_metric_grid(
+        (
+            (get_text(lang, "trade_flow_buy_volume"), "-" if buy_vol is None else round(float(buy_vol), 4)),
+            (get_text(lang, "trade_flow_sell_volume"), "-" if sell_vol is None else round(float(sell_vol), 4)),
+            (get_text(lang, "trade_flow_delta"), "-" if delta is None else round(float(delta), 4)),
+        ),
+        min_width_px=120,
+    )
 
     st.caption(
         get_text(lang, "trade_flow_recent_count_caption").format(

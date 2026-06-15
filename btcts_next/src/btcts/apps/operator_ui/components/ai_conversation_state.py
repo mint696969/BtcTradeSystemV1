@@ -30,10 +30,17 @@ def build_ai_conversation_state() -> AiConversationState | None:
         return None
 
     data_source = str(signal_state.get("data_source") or "unknown")
-    runtime_note = (
-        "live board/trade canonical"
-        if data_source == "live_canonical"
-        else "fallback replay/research snapshot"
+    runtime_note_by_data_source = {
+        "execution_market_live_canonical": "execution-market live canonical",
+        "execution_market_state": "execution-market state fallback",
+        # Legacy labels kept only for compatibility with old tests/callers.
+        "live_canonical": "live board/trade canonical",
+        "replay_research": "fallback replay/research snapshot",
+        "replay_board_tradeflow": "fallback replay/research snapshot",
+    }
+    runtime_note = runtime_note_by_data_source.get(
+        data_source,
+        f"{data_source} snapshot" if data_source != "unknown" else "unknown snapshot",
     )
 
     return {

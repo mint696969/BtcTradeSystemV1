@@ -101,6 +101,11 @@ class UnifiedWsBoardLane:
         board_event_no = 0
         last_board_event_id: Optional[str] = None
         current_base_snapshot_id: Optional[str] = None
+        last_audit_heartbeat_monotonic = 0.0
+        audit_heartbeat_interval_sec = max(
+            1.0,
+            self._env_float("BTCTS_UNIFIED_WS_BOARD_AUDIT_HEARTBEAT_SEC", 60.0),
+        )
         reconnect_backoff_sec = max(
             0.5,
             self._env_float("BTCTS_UNIFIED_WS_BOARD_RECONNECT_BACKOFF_SEC", 2.0),
@@ -284,6 +289,39 @@ class UnifiedWsBoardLane:
                         saw_delta=bool(lane_snapshot.get("saw_delta")) or (not is_snapshot),
                     )
                     self._write_origin_status()
+
+                    now_monotonic = time.monotonic()
+                    if (
+                        last_audit_heartbeat_monotonic <= 0.0
+                        or now_monotonic - last_audit_heartbeat_monotonic >= audit_heartbeat_interval_sec
+                    ):
+                        last_audit_heartbeat_monotonic = now_monotonic
+                        try:
+                            audit.emit(
+                                "collector_vnext.unified.ws_board.message.received",
+                                level="INFO",
+                                feature="collector_vnext",
+                                actor="collector_vnext.unified_ws_board_lane",
+                                site="collector_vnext.unified_ws_board_lane.run_forever",
+                                payload={
+                                    "collector_id": self.cfg.collector_id,
+                                    "collector_role": self.cfg.collector_role,
+                                    "exchange": "bitflyer",
+                                    "topic": "ws_board",
+                                    "stream_session_id": stream_session_id,
+                                    "received_ts": msg.received_ts,
+                                    "provider": msg.provider,
+                                    "channel": msg.channel,
+                                    "message_kind": message_kind,
+                                    "board_event_no": board_event_no,
+                                    "saw_snapshot": bool(self.snapshot().get("saw_snapshot")),
+                                    "saw_delta": bool(self.snapshot().get("saw_delta")),
+                                    "heartbeat_interval_sec": audit_heartbeat_interval_sec,
+                                },
+                            )
+                        except Exception:
+                            # Audit heartbeat must never break the live board stream.
+                            pass
 
             except Exception as exc:
                 # Break board continuity chain across provider reconnects.

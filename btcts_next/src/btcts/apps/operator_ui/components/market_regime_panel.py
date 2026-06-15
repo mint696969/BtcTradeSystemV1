@@ -9,7 +9,7 @@ from btcts.apps.operator_ui.components.market_regime_state import (
     build_market_regime_state,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -67,7 +67,7 @@ def render():
     event_ts = state.get("event_ts")
     source_label = str(state.get("source_label") or "unknown")
 
-    summary_widget = load_market_summary_widget_model()
+    summary_widget = load_execution_market_summary_widget_model()
     spread_state = _spread_state(spread, lang)
     pressure = _pressure_label(pressure_bias, lang)
 

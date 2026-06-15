@@ -11,6 +11,19 @@ from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.components.live_shell import make_slot_meta
 
 
+def _request_rerun() -> None:
+    """Immediately refresh Collector controls after a button action.
+
+    The Collector tab is an operational control surface.  After writing a start,
+    safe-stop, or restart request, rerun the page so disabled/enabled button
+    states and pending-request captions are visible without waiting for the next
+    auto-refresh tick.
+    """
+    rerun = getattr(st, "rerun", None)
+    if callable(rerun):
+        rerun()
+
+
 def render_overview_summary_panel(
     *,
     lang: str,
@@ -170,6 +183,7 @@ def render_supervisor_control_section(
                             message=msg,
                         )
                     )
+                _request_rerun()
 
         with sup_col2:
             if st.button(
@@ -190,6 +204,7 @@ def render_supervisor_control_section(
                             message=msg,
                         )
                     )
+                _request_rerun()
 
         with sup_col3:
             if st.button(
@@ -210,6 +225,7 @@ def render_supervisor_control_section(
                             message=msg,
                         )
                     )
+                _request_rerun()
 
         with sup_col4:
             st.metric(

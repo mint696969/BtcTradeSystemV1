@@ -36,7 +36,7 @@ from btcts.apps.operator_ui.components.health_top_panels import (
     render_ws_summary_metric,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -399,7 +399,7 @@ def _load_cached_health_snapshot(range_key: str) -> dict:
 
 @st.cache_data(show_spinner=False, ttl=1)
 def _load_cached_market_summary_widget_model():
-    return load_market_summary_widget_model()
+    return load_execution_market_summary_widget_model()
 
 
 def _snapshot_current_state_bundle(snapshot: dict) -> dict:
@@ -497,6 +497,7 @@ def _render_health_fragment(*, refresh_mode: str, render_body) -> None:
         render_body,
         enabled=bool(st.session_state.get("ui_auto_refresh", True)),
         refresh_mode=refresh_mode,
+        page_key="health",
     )
 
 
@@ -519,6 +520,15 @@ def render():
 
     live_shell.render_compact_page_header(get_text(lang, "health_title"))
     selected_range_key = _render_health_range_selector(lang)
+    # Build the expensive Health read model once per page render and share it
+    # across all sections.  st.cache_data(ttl=1) can expire during a heavy
+    # page render, causing repeated snapshot rebuilds inside one UI pass.
+    health_snapshot = _load_cached_health_snapshot(selected_range_key)
+
+    def _health_snapshot_for_section() -> dict:
+        if live_shell.in_fragment_context("health"):
+            return _load_cached_health_snapshot(selected_range_key)
+        return health_snapshot
 
     live_shell.render_fragment_slot(
         health_widget_slot("live_tick_caption"),
@@ -528,7 +538,7 @@ def render():
 
 
     def _render_collector_summary_section() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         current_state_bundle = _snapshot_current_state_bundle(snapshot)
 
         collector_state = current_state_bundle.get("collector_state") or {}
@@ -550,7 +560,7 @@ def render():
         )
 
     def _render_api_summary_section() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         current_state_bundle = _snapshot_current_state_bundle(snapshot)
 
         collector_state = current_state_bundle.get("collector_state") or {}
@@ -572,7 +582,7 @@ def render():
         )
 
     def _render_ws_summary_section() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         current_state_bundle = _snapshot_current_state_bundle(snapshot)
 
         collector_state = current_state_bundle.get("collector_state") or {}
@@ -592,7 +602,7 @@ def render():
         )
 
     def _render_layer3_summary_section() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         current_state_bundle = _snapshot_current_state_bundle(snapshot)
 
         market_latest = current_state_bundle.get("market_latest") or {}
@@ -618,7 +628,7 @@ def render():
         )
 
     def _render_hot_cold_retention_safety_section() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         safety_payload = _snapshot_hot_cold_retention_safety_payload(snapshot)
         if safety_payload is not None:
             render_hot_cold_retention_safety_panel(safety_payload, expanded=False)
@@ -630,7 +640,7 @@ def render():
     )
 
     def _render_evidence_presentation_section() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         evidence_payload = _snapshot_evidence_presentation_payload(snapshot)
         render_evidence_presentation_panel(evidence_payload, expanded=False)
 
@@ -650,7 +660,7 @@ def render():
     )
 
     def _render_api_chart_section() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         current_state_bundle = _snapshot_current_state_bundle(snapshot)
         timeline_bundle = _snapshot_timeline_bundle(snapshot)
 
@@ -687,7 +697,7 @@ def render():
         )
 
     def _render_ws_chart_section() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         timeline_bundle = _snapshot_timeline_bundle(snapshot)
 
         render_ws_chart_panel(
@@ -700,7 +710,7 @@ def render():
         )
 
     def _render_layer3_chart_section() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         current_state_bundle = _snapshot_current_state_bundle(snapshot)
         timeline_bundle = _snapshot_timeline_bundle(snapshot)
 
@@ -720,7 +730,7 @@ def render():
         )
 
     def _render_current_state_section_fragment() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         current_state_bundle = _snapshot_current_state_bundle(snapshot)
 
         collector_state = current_state_bundle.get("collector_state") or {}
@@ -812,7 +822,7 @@ def render():
         )
 
     def _render_recent_events_section_fragment() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
 
         render_recent_events_section(
             lang=lang,
@@ -822,7 +832,7 @@ def render():
         )
 
     def _render_continuity_section() -> None:
-        snapshot = _load_cached_health_snapshot(selected_range_key)
+        snapshot = _health_snapshot_for_section()
         continuity_bundle = _snapshot_continuity_bundle(snapshot)
 
         render_continuity_panels(

@@ -98,6 +98,59 @@ def main() -> int:
     assert "notable=trusted_source" in caption
     assert "alerts=none" in caption
 
+
+
+def test_summary_widget_caption_caps_large_fx_lists() -> None:
+    widget = MarketSummaryWidgetModel(
+        widget_kind="market_summary",
+        freshness_key="LIVE",
+        trust_key="trusted",
+        continuity_key="continuous",
+        interpretation_key="allow_structural_use",
+        semantic_wiring_key="wired",
+        semantic_observer_status_key="healthy",
+        semantic_observer_present_key="true",
+        semantic_usage_summary_present_key="true",
+        semantic_contract_rows_present_key="true",
+        semantic_summary_source_key="market_state_semantic_usage_summary",
+        semantic_contract_source_key="l3_event_usage_policy",
+        semantic_meaning_version_key="l3_event_usage_policy.v1alpha1",
+        orderbook_wiring_key="partial",
+        orderbook_contract_status_source_key="orderbook_summary_inference",
+        semantic_rows_count=250,
+        semantic_total_rows=9999,
+        semantic_active_event_count=120,
+        semantic_mapped_event_count=118,
+        semantic_unknown_event_count=2,
+        semantic_event_family_distribution={f"family_{idx}": idx for idx in range(30)},
+        semantic_trust_bucket_distribution={f"trust_{idx}": idx for idx in range(30)},
+        semantic_interpretation_bucket_distribution={f"interp_{idx}": idx for idx in range(30)},
+        semantic_consumer_distribution={f"consumer_{idx}": idx for idx in range(30)},
+        summary_slots_count=20,
+        orderbook_summary_slots_present=[f"slot_{idx}" for idx in range(50)],
+        orderbook_near_wall_present_key="true",
+        orderbook_support_present_key="true",
+        orderbook_resistance_present_key="true",
+        active_event_count=120,
+        orderbook_active_event_names=[f"fx_event_{idx}" for idx in range(200)],
+        persistence_present_key="true",
+        persistence_observable_key="true",
+        headline_key="normal",
+        notable_tags=[f"notable_{idx}" for idx in range(100)],
+        alert_tags=[f"alert_{idx}" for idx in range(100)],
+        age_sec=1.2,
+        event_ts="2026-06-15T13:00:00Z",
+        source_kind="market_state_preferred",
+        source_series_id="bitflyer.fx.FX_BTC_JPY:series:100",
+    )
+
+    caption = summary_widget_caption(widget)
+    assert "freshness=LIVE" in caption
+    assert "semantic_total_rows=9999" in caption
+    assert "active_event_names=fx_event_0,fx_event_1" in caption
+    assert "+194 more" in caption
+    assert len(caption) <= 2400
+
     print("ok")
     return 0
 

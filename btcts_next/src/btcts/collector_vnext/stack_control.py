@@ -203,6 +203,45 @@ def _has_active_or_pending_control_state(
     )
 
 
+def _is_stop_stack_request(payload: dict[str, Any]) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    return str(payload.get("action") or "").strip().lower() == "stop_stack"
+
+
+def _is_restart_request(payload: dict[str, Any]) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    return str(payload.get("action") or "").strip().lower() == "restart"
+
+
+def _request_owner_process_alive(
+    *,
+    supervisor_status: dict[str, Any],
+    supervisor_lock: dict[str, Any],
+) -> bool:
+    # Supervisor/watchdog is the only process that can consume
+    # unified_supervisor_request.json.  A daemon pid alone does not own this
+    # request file.
+    return bool(
+        is_pid_alive(supervisor_lock.get("pid"))
+        or is_pid_alive(supervisor_status.get("supervisor_pid"))
+    )
+
+
+def _active_worker_process_alive(
+    *,
+    supervisor_status: dict[str, Any],
+    daemon_lock: dict[str, Any],
+    archive_lock: dict[str, Any],
+) -> bool:
+    return bool(
+        is_pid_alive(daemon_lock.get("pid"))
+        or is_pid_alive(archive_lock.get("pid"))
+        or is_pid_alive(supervisor_status.get("daemon_pid"))
+    )
+
+
 def _write_recovered_stopped_state(state_dir: Path, *, backup_dir: str | None) -> None:
     now = _now_iso_utc()
     note = "auto stale control state recovery; no collector_vnext control process was alive"
@@ -296,11 +335,52 @@ def _reconcile_stale_control_state_if_safe(
         archive_lock=archive_lock,
     )
 
-    if actual_alive or not has_artifacts:
+    owner_alive = _request_owner_process_alive(
+        supervisor_status=supervisor_status,
+        supervisor_lock=supervisor_lock,
+    )
+    worker_alive = _active_worker_process_alive(
+        supervisor_status=supervisor_status,
+        daemon_lock=daemon_lock,
+        archive_lock=archive_lock,
+    )
+    pending_stop_stack = _is_stop_stack_request(supervisor_request)
+    pending_restart = _is_restart_request(supervisor_request)
+
+    # If a stop request remains but the watchdog/supervisor that consumes it is
+    # gone, and no daemon/archive worker process is alive, the request is an
+    # orphan.  Keeping it blocks Collector-tab Start forever even though there
+    # is no process left to complete the stop orchestration.
+    orphan_stop_stack_request = bool(
+        pending_stop_stack
+        and not owner_alive
+        and not worker_alive
+    )
+
+    # Restart requests are also supervisor-owned; if no owner and no worker are
+    # alive they are stale artifacts, not active control state.
+    orphan_restart_request = bool(
+        pending_restart
+        and not owner_alive
+        and not worker_alive
+    )
+
+    if (actual_alive or not has_artifacts) and not (
+        orphan_stop_stack_request or orphan_restart_request
+    ):
         return {
             "stale_control_state_recovered": False,
             "stale_control_state_detected": bool(has_artifacts and not actual_alive),
             "stale_control_state_backup_dir": None,
+            "orphan_stop_stack_request_recovered": False,
+        }
+
+    if actual_alive and not (orphan_stop_stack_request or orphan_restart_request):
+        return {
+            "stale_control_state_recovered": False,
+            "stale_control_state_detected": False,
+            "stale_control_state_backup_dir": None,
+            "orphan_stop_stack_request_recovered": False,
         }
 
     backup_dir = _backup_stale_control_files(state_dir)
@@ -320,6 +400,7 @@ def _reconcile_stale_control_state_if_safe(
         "stale_control_state_detected": True,
         "stale_control_state_backup_dir": backup_dir,
         "stale_control_state_reason": "no_collector_vnext_control_process_alive",
+        "orphan_stop_stack_request_recovered": orphan_stop_stack_request,
     }
 
 
@@ -417,6 +498,32 @@ def _setdefault_env(env: dict[str, str], key: str, value: str) -> None:
         env[key] = value
 
 
+def _discover_certifi_ca_file() -> str | None:
+    try:
+        import certifi  # type: ignore
+
+        candidate = Path(certifi.where())
+        if candidate.exists():
+            return str(candidate)
+    except Exception:
+        pass
+    return None
+
+
+def _setdefault_verified_ws_tls_env(env: dict[str, str]) -> None:
+    # Live readiness must keep certificate verification enabled.  Some Windows
+    # Python/OpenSSL installs do not expose a usable default CA path, so provide
+    # the venv certifi bundle when the operator has not supplied BTCTS_WS_CA_FILE.
+    _setdefault_env(env, "BTCTS_WS_SSL_VERIFY", "true")
+    if str(env.get("BTCTS_WS_SSL_VERIFY") or "").strip().lower() in {"0", "false", "no", "off"}:
+        return
+    if str(env.get("BTCTS_WS_CA_FILE") or "").strip():
+        return
+    certifi_ca_file = _discover_certifi_ca_file()
+    if certifi_ca_file:
+        env["BTCTS_WS_CA_FILE"] = certifi_ca_file
+
+
 def _build_child_env() -> dict[str, str]:
     repo_root = _repo_root()
     cfg = load_config()
@@ -438,7 +545,7 @@ def _build_child_env() -> dict[str, str]:
     _setdefault_env(env, "BTCTS_UNIFIED_GRACEFUL_TIMEOUT_SEC", "30")
     _setdefault_env(env, "BTCTS_UNIFIED_SUPERVISOR_BACKOFF_SEC", "3")
     _setdefault_env(env, "BTCTS_UNIFIED_SUPERVISOR_MAX_FAILURES", "10")
-    _setdefault_env(env, "BTCTS_WS_SSL_VERIFY", "false")
+    _setdefault_verified_ws_tls_env(env)
 
     _setdefault_env(env, "BTCTS_ARCHIVE_COLD_ROOT", r"E:\btc_ts")
     _setdefault_env(env, "BTCTS_ARCHIVE_SCAN_INTERVAL_SEC", "30")

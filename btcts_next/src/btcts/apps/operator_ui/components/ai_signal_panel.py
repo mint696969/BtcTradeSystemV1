@@ -9,8 +9,8 @@ from btcts.apps.operator_ui.components.ai_signal_state import (
     build_ai_signal_state,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
-    load_prediction_summary_widget_model,
+    load_execution_market_prediction_summary_widget_model,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -50,8 +50,8 @@ def render():
     best_strategy = str(signal_state.get("best_strategy") or "unknown")
     replay_ts = signal_state.get("replay_ts")
     source_label = str(signal_state.get("source_label") or "unknown")
-    summary_widget = load_market_summary_widget_model()
-    prediction_widget = load_prediction_summary_widget_model()
+    summary_widget = load_execution_market_summary_widget_model()
+    prediction_widget = load_execution_market_prediction_summary_widget_model()
 
     regime_label = get_text(lang, "ai_signal_value_range")
     if regime in {"trend_up", "trend_down"}:

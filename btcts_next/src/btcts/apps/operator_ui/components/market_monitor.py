@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.compact_metric_cards import (
+    render_compact_metric_grid,
+)
 from btcts.apps.operator_ui.components.market_state_bridge import (
     market_state_age_seconds,
     market_state_freshness_label,
@@ -45,12 +48,8 @@ def render(
 
         metric_rows = overlay_contract_metric_rows(overlay_contract)
         if metric_rows:
-            metric_cols = st.columns(len(metric_rows))
-            for col, (label, value) in zip(metric_cols, metric_rows):
-                col.metric(label, value)
-
-        with st.expander(get_text(lang, "graph_overlay_contract_title"), expanded=False):
-            st.json(overlay_contract)
+            render_compact_metric_grid(metric_rows, min_width_px=100)
+        st.caption(get_text(lang, "graph_overlay_contract_title"))
 
     state_bundle = analyze_market_monitor_state()
     if not state_bundle:
@@ -74,20 +73,18 @@ def render(
     continuity_state = status_values["continuity_state"]
     interpretation_bucket = status_values["interpretation_bucket"]
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric(get_text(lang, "market_monitor_spread"), "-" if spread is None else round(float(spread), 2))
-    c2.metric(get_text(lang, "market_monitor_bid_volume"), "-" if bid_depth is None else round(float(bid_depth), 4))
-    c3.metric(get_text(lang, "market_monitor_ask_volume"), "-" if ask_depth is None else round(float(ask_depth), 4))
-
-    st.metric(
-        get_text(lang, "market_monitor_imbalance"),
-        "-" if imbalance is None else round(float(imbalance), 3),
+    render_compact_metric_grid(
+        (
+            (get_text(lang, "market_monitor_spread"), "-" if spread is None else round(float(spread), 2)),
+            (get_text(lang, "market_monitor_bid_volume"), "-" if bid_depth is None else round(float(bid_depth), 4)),
+            (get_text(lang, "market_monitor_ask_volume"), "-" if ask_depth is None else round(float(ask_depth), 4)),
+            (get_text(lang, "market_monitor_imbalance"), "-" if imbalance is None else round(float(imbalance), 3)),
+            (get_text(lang, "market_monitor_trust"), trust_state or "-"),
+            (get_text(lang, "market_monitor_continuity"), continuity_state or "-"),
+            (get_text(lang, "market_monitor_interpretation"), interpretation_bucket or "-"),
+        ),
+        min_width_px=110,
     )
-
-    p1, p2, p3 = st.columns(3)
-    p1.metric(get_text(lang, "market_monitor_trust"), trust_state or "-")
-    p2.metric(get_text(lang, "market_monitor_continuity"), continuity_state or "-")
-    p3.metric(get_text(lang, "market_monitor_interpretation"), interpretation_bucket or "-")
 
     st.caption(best_bid_ask_ts_caption(lang, board))
 

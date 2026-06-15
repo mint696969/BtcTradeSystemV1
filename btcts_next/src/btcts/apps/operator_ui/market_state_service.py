@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,19 +22,11 @@ def market_state_root() -> Path:
 
 
 def _latest_jsonl_line(path: Path) -> dict[str, Any]:
-    rows = _read_jsonl_rows(path)
+    rows = _read_jsonl_recent_rows(path)
     return rows[-1] if rows else {}
 
 
-def _read_jsonl_rows(path: Path) -> list[dict[str, Any]]:
-    if not path.exists() or not path.is_file():
-        return []
-
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except Exception:
-        return []
-
+def _parse_jsonl_lines(lines: list[str]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for line in lines:
         text = line.strip()
@@ -45,8 +38,106 @@ def _read_jsonl_rows(path: Path) -> list[dict[str, Any]]:
             continue
         if isinstance(obj, dict):
             rows.append(obj)
-
     return rows
+
+
+def _read_jsonl_rows(path: Path) -> list[dict[str, Any]]:
+    """Read a complete JSONL file.
+
+    Kept for compatibility and small-file tests. Runtime UI paths should use
+    _read_jsonl_recent_rows() to avoid full scans of large append-only market
+    state files.
+    """
+    if not path.exists() or not path.is_file():
+        return []
+
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return []
+
+    return _parse_jsonl_lines(lines)
+
+
+def _read_text_tail_lines(
+    path: Path,
+    *,
+    max_lines: int = 5000,
+    max_bytes: int = 4 * 1024 * 1024,
+) -> list[str]:
+    """Read recent lines from an append-only JSONL file without loading all of it."""
+    try:
+        size = path.stat().st_size
+    except Exception:
+        return []
+
+    if size <= 0:
+        return []
+
+    read_size = min(int(size), int(max_bytes))
+    try:
+        with path.open("rb") as fh:
+            fh.seek(max(0, int(size) - read_size))
+            data = fh.read(read_size)
+    except Exception:
+        return []
+
+    if not data:
+        return []
+
+    # If we started in the middle of a line, discard that partial first row.
+    if read_size < size:
+        first_newline = data.find(bytes((10,)))
+        if first_newline >= 0:
+            data = data[first_newline + 1 :]
+
+    try:
+        lines = data.decode("utf-8", errors="replace").splitlines()
+    except Exception:
+        return []
+
+    return lines[-max(1, int(max_lines)) :]
+
+
+@lru_cache(maxsize=128)
+def _read_jsonl_recent_rows_cached(
+    path_text: str,
+    mtime_ns: int,
+    size: int,
+    max_lines: int,
+    max_bytes: int,
+) -> tuple[dict[str, Any], ...]:
+    path = Path(path_text)
+    lines = _read_text_tail_lines(
+        path,
+        max_lines=max_lines,
+        max_bytes=max_bytes,
+    )
+    return tuple(_parse_jsonl_lines(lines))
+
+
+def _read_jsonl_recent_rows(
+    path: Path,
+    *,
+    max_lines: int = 5000,
+    max_bytes: int = 4 * 1024 * 1024,
+) -> list[dict[str, Any]]:
+    if not path.exists() or not path.is_file():
+        return []
+
+    try:
+        stat = path.stat()
+    except Exception:
+        return []
+
+    rows = _read_jsonl_recent_rows_cached(
+        str(path),
+        int(stat.st_mtime_ns),
+        int(stat.st_size),
+        int(max_lines),
+        int(max_bytes),
+    )
+    return [dict(row) for row in rows]
 
 
 def _latest_market_state_part_file(
@@ -173,7 +264,7 @@ def market_state_diagnostics(
         except Exception:
             pass
 
-        rows = _read_jsonl_rows(latest_part)
+        rows = _read_jsonl_recent_rows(latest_part)
         preferred = _preferred_market_state_row(rows)
         if preferred:
             preferred_age = _row_age_seconds(preferred)
@@ -204,7 +295,7 @@ def load_latest_market_state(
     if latest_part is None:
         return {}
 
-    rows = _read_jsonl_rows(latest_part)
+    rows = _read_jsonl_recent_rows(latest_part)
     return _preferred_market_state_row(rows)
 
 

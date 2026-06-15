@@ -7,7 +7,7 @@ import streamlit as st
 
 from btcts.apps.operator_ui.components.live_bridge import collector_runtime_snapshot
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -21,7 +21,7 @@ def render():
     st.markdown(f"### {get_text(lang, 'system_stats_title')}")
 
     runtime = collector_runtime_snapshot()
-    summary_widget = load_market_summary_widget_model()
+    summary_widget = load_execution_market_summary_widget_model()
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Live Mode", runtime["mode"])

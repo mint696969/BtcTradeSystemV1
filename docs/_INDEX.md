@@ -69,6 +69,9 @@ Human-AI インターフェース
 - UI Architecture  
   docs/ui/UI_ARCHITECTURE.md
 
+- SR-FX Operator UI D-hot / Execution-Market Integrity Spec  
+  docs/ui/SR_FX_OPERATOR_UI_DHOT_EXECUTION_MARKET_SPEC_2026-06-16.md
+
 ---
 
 # 4. Development Plan

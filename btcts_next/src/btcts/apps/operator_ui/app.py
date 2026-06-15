@@ -2,6 +2,7 @@
 # desc: BTC-TS Operator UI のエントリ。Streamlit サイドバーで各 Operator ページを切り替える。
 
 import streamlit as st
+import time
 
 from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.views import (
@@ -14,6 +15,11 @@ from btcts.apps.operator_ui.views import (
     warroom_page,
 )
 from btcts.apps.operator_ui.ui_state_store import load_ui_state, save_ui_state
+from btcts.apps.operator_ui.ui_check_exporter import (
+    load_gpt_ui_check_auto_save_enabled,
+    save_gpt_ui_check_auto_save_enabled,
+    save_gpt_ui_check_snapshot,
+)
 
 from btcts.apps.operator_ui.ui_text import get_text
 
@@ -231,6 +237,24 @@ selected_page_label = next(
 
 st.sidebar.title(get_text(lang, "sidebar_title"))
 
+if "ui_check_auto_save_enabled" not in st.session_state:
+    st.session_state.ui_check_auto_save_enabled = load_gpt_ui_check_auto_save_enabled()
+
+previous_auto_save_enabled = bool(st.session_state.ui_check_auto_save_enabled)
+st.session_state.ui_check_auto_save_enabled = st.sidebar.checkbox(
+    "GPT UI Auto Save",
+    value=previous_auto_save_enabled,
+    key="ui_check_auto_save_checkbox",
+    help="Save one GPT-facing UI Check file after a full page render. Turn this off during normal browsing.",
+)
+ui_check_auto_save_enabled = bool(st.session_state.ui_check_auto_save_enabled)
+if ui_check_auto_save_enabled != previous_auto_save_enabled:
+    save_gpt_ui_check_auto_save_enabled(ui_check_auto_save_enabled)
+
+ui_check_save_status_slot = st.sidebar.empty()
+if not ui_check_auto_save_enabled:
+    ui_check_save_status_slot.caption("GPT UI Check auto-save is OFF")
+
 selection = st.sidebar.radio(
     get_text(lang, "sidebar_nav"),
     page_labels,
@@ -239,6 +263,10 @@ selection = st.sidebar.radio(
 )
 
 st.session_state.ui_selected_page_key = page_label_to_key[selection]
+selected_page_label = selection
+selected_page_key = str(st.session_state.ui_selected_page_key)
+previous_page_key = str(st.session_state.get("_ui_last_rendered_page_key") or "")
+page_changed = bool(previous_page_key and previous_page_key != selected_page_key)
 
 save_ui_state(
     {
@@ -251,10 +279,14 @@ save_ui_state(
 )
 
 selected_page_key = str(st.session_state.ui_selected_page_key)
+
+
 page_module = pages[selected_page_key]
 
 live_shell.reset_registered_slots(selected_page_key)
+page_render_started_at = time.perf_counter()
 page_module.render()
+page_render_elapsed_ms = int((time.perf_counter() - page_render_started_at) * 1000)
 
 refresh_plan = live_shell.resolve_page_refresh_plan(
     page_key=selected_page_key,
@@ -280,9 +312,30 @@ render_dashboard_hub_status_strip(
     refresh_plan=refresh_plan,
 )
 
+if ui_check_auto_save_enabled:
+    try:
+        auto_ui_check_path = save_gpt_ui_check_snapshot(
+            page_key=selected_page_key,
+            page_label=selected_page_label,
+            previous_page_key=previous_page_key,
+            page_changed=page_changed,
+            refresh_plan=refresh_plan,
+            session_state=st.session_state,
+            slot_registry=live_shell.get_registered_slots(selected_page_key),
+            page_render_ms=page_render_elapsed_ms,
+            human_note="post-render auto snapshot; auto-save toggle was ON; captured after full page render without a snapshot button rerun",
+        )
+        st.session_state["_ui_last_post_render_uicheck_path"] = auto_ui_check_path
+        ui_check_save_status_slot.success(f"GPT UI Check saved: {auto_ui_check_path}")
+    except Exception as exc:
+        st.session_state["_ui_last_post_render_uicheck_error"] = repr(exc)
+        ui_check_save_status_slot.warning(f"GPT UI Check auto-save failed: {exc}")
+
 # Auto refresh は live / monitor 系ページに限定する
 live_shell.render_page_auto_refresh(
     enabled=bool(refresh_plan["page_reload_enabled"]),
     interval_sec=effective_refresh_interval_sec,
     page_key=selected_page_key,
 )
+
+st.session_state["_ui_last_rendered_page_key"] = selected_page_key

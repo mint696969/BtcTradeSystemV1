@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.compact_metric_cards import (
+    render_compact_metric_grid,
+)
 from btcts.apps.operator_ui.components.liquidity_pressure_state import (
     build_liquidity_pressure_state,
 )
@@ -41,12 +44,8 @@ def render(
 
         metric_rows = overlay_contract_metric_rows(overlay_contract)
         if metric_rows:
-            metric_cols = st.columns(len(metric_rows))
-            for col, (label, value) in zip(metric_cols, metric_rows):
-                col.metric(label, value)
-
-        with st.expander(get_text(lang, "graph_overlay_contract_title"), expanded=False):
-            st.json(overlay_contract)
+            render_compact_metric_grid(metric_rows, min_width_px=100)
+        st.caption(get_text(lang, "graph_overlay_contract_title"))
 
     st.markdown(f"### {get_text(lang, 'liquidity_pressure_title')}")
 
@@ -69,21 +68,24 @@ def render(
     elif wall_side == "ask":
         wall_bias = get_text(lang, "liquidity_pressure_value_sell")
 
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric(
-        get_text(lang, "liquidity_pressure_top_bid_wall"),
-        "-" if top_bid_wall is None else round(float(top_bid_wall), 4),
+    render_compact_metric_grid(
+        (
+            (
+                get_text(lang, "liquidity_pressure_top_bid_wall"),
+                "-" if top_bid_wall is None else round(float(top_bid_wall), 4),
+            ),
+            (
+                get_text(lang, "liquidity_pressure_top_ask_wall"),
+                "-" if top_ask_wall is None else round(float(top_ask_wall), 4),
+            ),
+            (
+                get_text(lang, "liquidity_pressure_wall_ratio"),
+                "-" if wall_ratio is None else round(float(wall_ratio), 3),
+            ),
+            (get_text(lang, "liquidity_pressure_wall_bias"), wall_bias),
+        ),
+        min_width_px=110,
     )
-    c2.metric(
-        get_text(lang, "liquidity_pressure_top_ask_wall"),
-        "-" if top_ask_wall is None else round(float(top_ask_wall), 4),
-    )
-    c3.metric(
-        get_text(lang, "liquidity_pressure_wall_ratio"),
-        "-" if wall_ratio is None else round(float(wall_ratio), 3),
-    )
-    c4.metric(get_text(lang, "liquidity_pressure_wall_bias"), wall_bias)
 
     st.markdown(
         f"""

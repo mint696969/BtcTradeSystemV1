@@ -5,6 +5,9 @@ from __future__ import annotations
 
 import streamlit as st
 
+from btcts.apps.operator_ui.components.compact_metric_cards import (
+    render_compact_metric_grid,
+)
 from btcts.apps.operator_ui.components.ai_operator_actions import (
     ask_ai_why,
     mark_watch_item,
@@ -163,10 +166,14 @@ def render():
     ]
     tactic_primary_summary_line = display_payloads["tactic_primary_summary_line"]
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric(get_text(lang, "ai_operator_action"), display_action_label)
-    c2.metric(get_text(lang, "ai_operator_risk"), display_risk_label)
-    c3.metric(get_text(lang, "ai_operator_mode"), display_ai_mode)
+    render_compact_metric_grid(
+        (
+            (get_text(lang, "ai_operator_action"), display_action_label),
+            (get_text(lang, "ai_operator_risk"), display_risk_label),
+            (get_text(lang, "ai_operator_mode"), display_ai_mode),
+        ),
+        min_width_px=130,
+    )
 
     if display_notice_kind == "warning":
         st.warning(display_answer)
@@ -176,28 +183,23 @@ def render():
     st.caption(status_caption)
     st.caption(runtime_caption)
 
-    b1, b2, b3, b4 = st.columns(4)
+    if st.button(
+        get_text(lang, "ai_operator_open_research"),
+        key="ai_operator_open_research",
+    ):
+        open_research_from_replay_context(research_replay_context)
 
-    with b2:
-        if st.button(
-            get_text(lang, "ai_operator_open_research"),
-            key="ai_operator_open_research",
-        ):
-            open_research_from_replay_context(research_replay_context)
+    if st.button(
+        get_text(lang, "ai_operator_ask_ai_why"),
+        key="ai_operator_ask_why",
+    ):
+        ask_ai_why(lang)
 
-    with b3:
-        if st.button(
-            get_text(lang, "ai_operator_ask_ai_why"),
-            key="ai_operator_ask_why",
-        ):
-            ask_ai_why(lang)
-
-    with b4:
-        if st.button(
-            get_text(lang, "ai_operator_mark_as_watch"),
-            key="ai_operator_mark_watch",
-        ):
-            mark_watch_item(watch_item)
+    if st.button(
+        get_text(lang, "ai_operator_mark_as_watch"),
+        key="ai_operator_mark_watch",
+    ):
+        mark_watch_item(watch_item)
 
     if watch_note_caption:
         st.caption(watch_note_caption)

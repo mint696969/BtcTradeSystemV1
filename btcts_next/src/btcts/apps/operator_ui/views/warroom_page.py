@@ -5,7 +5,6 @@ from __future__ import annotations
 
 from typing import Callable
 import json
-
 import streamlit as st
 
 from btcts.apps.operator_ui.components import agent_panels
@@ -25,7 +24,7 @@ from btcts.apps.operator_ui.components import watch_list_panel
 from btcts.apps.operator_ui.components import warroom_header
 from btcts.apps.operator_ui.components import warroom_timeline
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_status_payload,
+    load_execution_market_summary_status_payload,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     active_event_compact_reading_line,
@@ -96,7 +95,7 @@ def _warroom_reading_block_captions() -> dict[str, str]:
 
 
 def _warroom_active_event_reading_caption() -> str:
-    summary_payload = load_market_summary_status_payload()
+    summary_payload = load_execution_market_summary_status_payload()
     return active_event_compact_reading_line(summary_payload)
 
 
@@ -125,6 +124,16 @@ def _render_warroom_scrollable_json_block(payload: object, *, max_height_px: int
         monospace=True,
     )
 
+
+
+def _warroom_diagnostics_enabled(*, key: str, label: str) -> bool:
+    enabled = bool(st.checkbox(label, value=False, key=key))
+    if not enabled:
+        st.caption(
+            "diagnostics rendering is paused by default; enable this checkbox "
+            "only when inspecting this diagnostic block."
+        )
+    return enabled
 
 def _render_warroom_reading_caption(text: str, *, max_height_px: int = 120) -> None:
     """Render WarRoom reading captions as wrapped, local-scroll, operator review text."""
@@ -356,6 +365,10 @@ def _warroom_refresh_diagnostics_summary(
 
 
 def render():
+    _render_warroom_page_body()
+
+
+def _render_warroom_page_body() -> None:
     lang = st.session_state.get("ui_lang", "en")
     fragment_enabled = bool(st.session_state.get("ui_auto_refresh", True))
 
@@ -429,144 +442,156 @@ def render():
             _render_warroom_evidence_presentation()
 
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
-        slot_rows = get_registered_slots("warroom")
-        if slot_rows:
-            st.dataframe(slot_rows, width="stretch")
+        if _warroom_diagnostics_enabled(
+            key="warroom_run_slot_diagnostics",
+            label="Run WarRoom slot diagnostics",
+        ):
+            slot_rows = get_registered_slots("warroom")
+            if slot_rows:
+                st.dataframe(slot_rows, width="stretch")
 
-            overlay_rows = [
-                row
-                for row in slot_rows
-                if row.get("overlay_enabled")
-            ]
-            partial_update_rows = [
-                row
-                for row in slot_rows
-                if row.get("partial_update_enabled")
-            ]
-            st.caption(
-                get_text(
-                    lang,
-                    "warroom_overlay_enabled_widgets_caption",
-                ).format(
-                    count=len(overlay_rows),
-                    total=warroom_overlay_contract_count(),
+                overlay_rows = [
+                    row
+                    for row in slot_rows
+                    if row.get("overlay_enabled")
+                ]
+                partial_update_rows = [
+                    row
+                    for row in slot_rows
+                    if row.get("partial_update_enabled")
+                ]
+                st.caption(
+                    get_text(
+                        lang,
+                        "warroom_overlay_enabled_widgets_caption",
+                    ).format(
+                        count=len(overlay_rows),
+                        total=warroom_overlay_contract_count(),
+                    )
                 )
-            )
-            st.caption(
-                get_text(
-                    lang,
-                    "warroom_partial_update_enabled_widgets_caption",
-                ).format(
-                    count=len(partial_update_rows),
-                    total=warroom_overlay_contract_count(),
+                st.caption(
+                    get_text(
+                        lang,
+                        "warroom_partial_update_enabled_widgets_caption",
+                    ).format(
+                        count=len(partial_update_rows),
+                        total=warroom_overlay_contract_count(),
+                    )
                 )
-            )
-            missing_widget_ids = _missing_registered_widget_ids(slot_rows)
-            if missing_widget_ids:
-                st.warning(
-                    "missing slot registrations: " + ", ".join(missing_widget_ids)
-                )
+                missing_widget_ids = _missing_registered_widget_ids(slot_rows)
+                if missing_widget_ids:
+                    st.warning(
+                        "missing slot registrations: " + ", ".join(missing_widget_ids)
+                    )
 
-            unexpected_zone_ids = _unexpected_registered_zone_ids(slot_rows)
-            if unexpected_zone_ids:
-                st.warning(
-                    "unexpected zone ids: " + ", ".join(unexpected_zone_ids)
-                )
-        else:
-            st.info(get_text(lang, "ui_slot_registry_empty_warroom"))
+                unexpected_zone_ids = _unexpected_registered_zone_ids(slot_rows)
+                if unexpected_zone_ids:
+                    st.warning(
+                        "unexpected zone ids: " + ", ".join(unexpected_zone_ids)
+                    )
+            else:
+                st.info(get_text(lang, "ui_slot_registry_empty_warroom"))
 
     with live_shell.render_folded_section(
         get_text(lang, "warroom_graph_overlay_diagnostics_title"),
         expanded=False,
     ):
-        overlay_diag = {
-            widget_id: {
-                "overlay_enabled": warroom_overlay_enabled(widget_id),
-                "partial_update_enabled": warroom_partial_update_enabled(widget_id),
-                "refresh_policy": warroom_refresh_policy(widget_id),
-                "chart_sensitive": warroom_chart_sensitive(widget_id),
-                "overlay_contract": warroom_graph_overlay_contract(widget_id),
-                "layout_hints": warroom_layout_hints(widget_id),
+        if _warroom_diagnostics_enabled(
+            key="warroom_run_graph_overlay_diagnostics",
+            label="Run WarRoom graph overlay diagnostics",
+        ):
+            overlay_diag = {
+                widget_id: {
+                    "overlay_enabled": warroom_overlay_enabled(widget_id),
+                    "partial_update_enabled": warroom_partial_update_enabled(widget_id),
+                    "refresh_policy": warroom_refresh_policy(widget_id),
+                    "chart_sensitive": warroom_chart_sensitive(widget_id),
+                    "overlay_contract": warroom_graph_overlay_contract(widget_id),
+                    "layout_hints": warroom_layout_hints(widget_id),
+                }
+                for widget_id in warroom_overlay_widget_ids()
             }
-            for widget_id in warroom_overlay_widget_ids()
-        }
-        _render_warroom_scrollable_json_block(overlay_diag, max_height_px=320)
-        st.caption(
-            get_text(
-                lang,
-                "warroom_overlay_diagnostics_targets_caption",
-            ).format(
-                count=warroom_overlay_contract_count(),
-            )
-        )
-        st.caption(
-            get_text(
-                lang,
-                "warroom_chart_sensitive_widgets_caption",
-            ).format(
-                count=warroom_chart_sensitive_count(),
-            )
-        )
-        st.caption(
-            get_text(
-                lang,
-                "warroom_refresh_modes_caption",
-            ).format(
-                counts=warroom_refresh_mode_counts(),
-            )
-        )
-        refresh_diag = _warroom_refresh_diagnostics_summary()
-        if refresh_diag["hybrid_refresh"]:
+            _render_warroom_scrollable_json_block(overlay_diag, max_height_px=320)
             st.caption(
                 get_text(
                     lang,
-                    "warroom_hybrid_refresh_caption",
+                    "warroom_overlay_diagnostics_targets_caption",
+                ).format(
+                    count=warroom_overlay_contract_count(),
                 )
             )
-        st.caption(
-            get_text(
-                lang,
-                "warroom_fragment_refresh_caption",
-            ).format(
-                count=refresh_diag["fragment_widget_count"],
-                interval=refresh_diag["fragment_interval_sec"],
-            )
-        )
-        st.caption(
-            get_text(
-                lang,
-                "warroom_page_reload_refresh_caption",
-            ).format(
-                interval=refresh_diag["page_reload_interval_sec"],
-            )
-        )
-        st.caption(
-            "rerender scope counts: "
-            + str(warroom_rerender_scope_counts())
-        )
-        first_candidate = warroom_first_partial_redraw_candidate()
-        if first_candidate is not None:
             st.caption(
-                "first partial redraw candidate: "
-                + first_candidate
-            )
-            if first_candidate == "market_monitor":
-                st.caption(
-                    "W3 entry fixed: market_monitor"
+                get_text(
+                    lang,
+                    "warroom_chart_sensitive_widgets_caption",
+                ).format(
+                    count=warroom_chart_sensitive_count(),
                 )
+            )
+            st.caption(
+                get_text(
+                    lang,
+                    "warroom_refresh_modes_caption",
+                ).format(
+                    counts=warroom_refresh_mode_counts(),
+                )
+            )
+            refresh_diag = _warroom_refresh_diagnostics_summary()
+            if refresh_diag["hybrid_refresh"]:
+                st.caption(
+                    get_text(
+                        lang,
+                        "warroom_hybrid_refresh_caption",
+                    )
+                )
+            st.caption(
+                get_text(
+                    lang,
+                    "warroom_fragment_refresh_caption",
+                ).format(
+                    count=refresh_diag["fragment_widget_count"],
+                    interval=refresh_diag["fragment_interval_sec"],
+                )
+            )
+            st.caption(
+                get_text(
+                    lang,
+                    "warroom_page_reload_refresh_caption",
+                ).format(
+                    interval=refresh_diag["page_reload_interval_sec"],
+                )
+            )
+            st.caption(
+                "rerender scope counts: "
+                + str(warroom_rerender_scope_counts())
+            )
+            first_candidate = warroom_first_partial_redraw_candidate()
+            if first_candidate is not None:
+                st.caption(
+                    "first partial redraw candidate: "
+                    + first_candidate
+                )
+                if first_candidate == "market_monitor":
+                    st.caption(
+                        "W3 entry fixed: market_monitor"
+                    )
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_ai_diagnostics"), expanded=False):
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("ai_reasoning_panel")
+        if _warroom_diagnostics_enabled(
+            key="warroom_run_ai_diagnostics",
+            label="Run WarRoom AI diagnostics",
         ):
-            ai_reasoning_panel.render()
+            with live_shell.slot_widget_from_meta(
+                warroom_widget_slot("ai_reasoning_panel")
+            ):
+                ai_reasoning_panel.render()
 
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("ai_market_summary_panel")
-        ):
-            ai_market_summary_panel.render()
+            with live_shell.slot_widget_from_meta(
+                warroom_widget_slot("ai_market_summary_panel")
+            ):
+                ai_market_summary_panel.render()
 
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("ai_conversation_panel")
-        ):
-            ai_conversation_panel.render()
+            with live_shell.slot_widget_from_meta(
+                warroom_widget_slot("ai_conversation_panel")
+            ):
+                ai_conversation_panel.render()

@@ -27,7 +27,7 @@ from btcts.apps.operator_ui.components.live_bridge import (
     read_recent_audit_events,
 )
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -342,6 +342,15 @@ def _render_scrollable_json_block(payload: object, *, max_height_px: int = 260) 
     )
 
 def render():
+    live_shell.render_fragment_block(
+        _render_collector_page_body,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+        refresh_mode="poll_fast",
+        page_key="collector",
+    )
+
+
+def _render_collector_page_body():
     lang = st.session_state.get("ui_lang", "en")
 
     live_shell.render_compact_page_header(get_text(lang, "collector_title"))
@@ -365,7 +374,7 @@ def render():
     origin_continuity = status_state.get("origin_continuity", {}) if isinstance(status_state, dict) else {}
     state_dir_info = collector_state.get("state_dir", {})
     market_state_info = market_state_diagnostics()
-    summary_widget = load_market_summary_widget_model()
+    summary_widget = load_execution_market_summary_widget_model()
     recent_audit_events = read_recent_audit_events(lines=200)
     origin_audit_summary = _origin_audit_summary(recent_audit_events)
 

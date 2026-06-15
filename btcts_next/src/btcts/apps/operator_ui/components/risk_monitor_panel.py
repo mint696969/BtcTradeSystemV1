@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/risk_monitor_panel.py
-# desc: Replay / Research / Audit からリアルタイムリスクを評価する WarRoom Risk Monitor
+# desc: Execution-market signal / Audit からリアルタイムリスクを評価する WarRoom Risk Monitor
 
 from __future__ import annotations
 
@@ -7,10 +7,11 @@ import json
 from pathlib import Path
 import streamlit as st
 
-import os
+
+from btcts.core import paths as core_paths
 
 from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_market_summary_widget_model,
+    load_execution_market_summary_widget_model,
 )
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     summary_widget_caption,
@@ -22,8 +23,7 @@ from btcts.apps.operator_ui.ui_text import get_text
 
 
 def _audit_log_path() -> Path:
-    logs_dir = os.environ.get("BTC_TS_LOGS_DIR", r"E:\btc_ts\logs")
-    return Path(logs_dir) / "audit.jsonl"
+    return core_paths.logs_dir(ensure=False) / "audit.jsonl"
 
 
 def _recent_audit_latency(lines: int = 40):
@@ -123,7 +123,7 @@ def render():
     delta = state.get("delta")
     source_label = state.get("source_label") or "unknown"
 
-    summary_widget = load_market_summary_widget_model()
+    summary_widget = load_execution_market_summary_widget_model()
 
     latency = _recent_audit_latency()
 

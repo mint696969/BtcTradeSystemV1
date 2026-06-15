@@ -4,10 +4,56 @@
 from __future__ import annotations
 
 
+SUMMARY_WIDGET_CAPTION_MAX_CHARS = 2400
+SUMMARY_WIDGET_CAPTION_LIST_LIMIT = 6
+SUMMARY_WIDGET_CAPTION_DIST_LIMIT = 6
+SUMMARY_WIDGET_CAPTION_VALUE_MAX_CHARS = 120
+
+
+def _short_text(value: object, *, max_chars: int = SUMMARY_WIDGET_CAPTION_VALUE_MAX_CHARS) -> str:
+    text = str(value).strip()
+    if len(text) <= max_chars:
+        return text
+    keep = max(1, int(max_chars) - 1)
+    return text[:keep] + "…"
+
+
+def _join_limited(values: object, *, limit: int = SUMMARY_WIDGET_CAPTION_LIST_LIMIT) -> str:
+    if not values:
+        return "-"
+
+    try:
+        items = list(values)
+    except Exception:
+        text = _short_text(values)
+        return text if text else "-"
+
+    normalized = [_short_text(item) for item in items if str(item).strip()]
+    if not normalized:
+        return "-"
+
+    head = normalized[:limit]
+    suffix = f",+{len(normalized) - limit} more" if len(normalized) > limit else ""
+    return ",".join(head) + suffix
+
+
 def _dist_text(distribution: dict[str, int]) -> str:
     if not distribution:
         return "-"
-    return ",".join(f"{key}:{distribution[key]}" for key in sorted(distribution))
+
+    items = [(str(key), distribution[key]) for key in sorted(distribution)]
+    head = items[:SUMMARY_WIDGET_CAPTION_DIST_LIMIT]
+    text = ",".join(f"{_short_text(key)}:{value}" for key, value in head)
+    if len(items) > SUMMARY_WIDGET_CAPTION_DIST_LIMIT:
+        text += f",+{len(items) - SUMMARY_WIDGET_CAPTION_DIST_LIMIT} more"
+    return text
+
+
+def _cap_caption(text: str) -> str:
+    if len(text) <= SUMMARY_WIDGET_CAPTION_MAX_CHARS:
+        return text
+    keep = max(1, SUMMARY_WIDGET_CAPTION_MAX_CHARS - 40)
+    return text[:keep] + " … [caption_truncated=true]"
 
 
 def active_event_compact_reading_line(summary_payload: dict | None) -> str:
@@ -52,19 +98,11 @@ def active_event_compact_reading_line(summary_payload: dict | None) -> str:
 
 
 def summary_widget_caption(summary_widget) -> str:
-    notable_text = "-" if not summary_widget.notable_tags else ",".join(summary_widget.notable_tags)
-    alert_text = "-" if not summary_widget.alert_tags else ",".join(summary_widget.alert_tags)
+    notable_text = _join_limited(summary_widget.notable_tags)
+    alert_text = _join_limited(summary_widget.alert_tags)
 
-    slots_present_text = (
-        ",".join(summary_widget.orderbook_summary_slots_present)
-        if summary_widget.orderbook_summary_slots_present
-        else "-"
-    )
-    active_event_names_text = (
-        ",".join(summary_widget.orderbook_active_event_names)
-        if summary_widget.orderbook_active_event_names
-        else "-"
-    )
+    slots_present_text = _join_limited(summary_widget.orderbook_summary_slots_present)
+    active_event_names_text = _join_limited(summary_widget.orderbook_active_event_names)
     family_dist_text = _dist_text(summary_widget.semantic_event_family_distribution)
     trust_dist_text = _dist_text(summary_widget.semantic_trust_bucket_distribution)
     interpretation_dist_text = _dist_text(
@@ -74,7 +112,7 @@ def summary_widget_caption(summary_widget) -> str:
     age_text = "-" if summary_widget.age_sec is None else f"{float(summary_widget.age_sec):.1f}s"
     event_ts_text = summary_widget.event_ts or "-"
 
-    return (
+    caption = (
         "summary_widget "
         f"freshness={summary_widget.freshness_key} / "
         f"trust={summary_widget.trust_key or '-'} / "
@@ -115,3 +153,4 @@ def summary_widget_caption(summary_widget) -> str:
         f"notable={notable_text} / "
         f"alerts={alert_text}"
     )
+    return _cap_caption(caption)
