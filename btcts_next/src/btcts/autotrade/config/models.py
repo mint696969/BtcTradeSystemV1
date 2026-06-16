@@ -23,6 +23,54 @@ class AggressivenessProfile(str, Enum):
     OPPORTUNISTIC = "opportunistic"
 
 
+class RegimeParameterSetStatus(str, Enum):
+    DRAFT = "draft"
+    SHADOW = "shadow"
+    PAPER = "paper"
+    LIVE_ACTIVE = "live_active"
+    RETIRED = "retired"
+    ROLLBACK_CANDIDATE = "rollback_candidate"
+
+
+@dataclass(frozen=True)
+class RegimeThresholds:
+    trend_strength_min: float = 0.65
+    range_score_min: float = 0.60
+    volatility_spike_threshold: float = 0.75
+    liquidity_thin_threshold: float = 0.70
+    spread_wide_threshold: float = 0.65
+    min_data_freshness_score: float = 0.90
+
+
+@dataclass(frozen=True)
+class RegimeParameterSet:
+    regime_parameter_set_id: str
+    parent_regime_parameter_set_id: str | None
+    status: RegimeParameterSetStatus
+    product_type: "ProductType"
+    exchange: str
+    symbol: str
+    created_at: str
+    created_by: str
+    change_reason: str
+    logic_version: str
+    thresholds: RegimeThresholds = field(default_factory=RegimeThresholds)
+    notes: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = asdict(self)
+        data["status"] = self.status.value
+        data["product_type"] = self.product_type.value
+        data["kind"] = "regime"
+        return data
+
+    def activate_shadow(self) -> "RegimeParameterSet":
+        return replace(self, status=RegimeParameterSetStatus.SHADOW)
+
+    def retire(self) -> "RegimeParameterSet":
+        return replace(self, status=RegimeParameterSetStatus.RETIRED)
+
+
 class ProductType(str, Enum):
     FX = "FX"
 
@@ -211,3 +259,72 @@ class ParameterSetRegistry:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+class ParameterSetBundleStatus(str, Enum):
+    DRAFT = "draft"
+    SHADOW = "shadow"
+    PAPER = "paper"
+    LIVE_ACTIVE = "live_active"
+    RETIRED = "retired"
+    ROLLBACK_CANDIDATE = "rollback_candidate"
+
+
+@dataclass(frozen=True)
+class ParameterSetBundle:
+    parameter_bundle_id: str
+    parent_parameter_bundle_id: str | None
+    status: ParameterSetBundleStatus
+    regime_parameter_set: RegimeParameterSet
+    trade_parameter_set: ParameterSet
+    created_at: str
+    created_by: str
+    change_reason: str
+    market_uid: str
+    product_code: str
+    logic_version: str
+    notes: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        regime_data = self.regime_parameter_set.to_dict()
+        trade_data = self.trade_parameter_set.to_dict()
+        trade_data["kind"] = "trade"
+        return {
+            "schema_version": "autotrade_parameter_bundle.v1",
+            "parameter_bundle_id": self.parameter_bundle_id,
+            "parent_parameter_bundle_id": self.parent_parameter_bundle_id,
+            "status": self.status.value,
+            "created_at": self.created_at,
+            "created_by": self.created_by,
+            "change_reason": self.change_reason,
+            "market_uid": self.market_uid,
+            "product_code": self.product_code,
+            "logic_version": self.logic_version,
+            "regime_parameter_set": regime_data,
+            "trade_parameter_set": trade_data,
+            "notes": self.notes,
+        }
+
+    @property
+    def regime_parameter_set_id(self) -> str:
+        return self.regime_parameter_set.regime_parameter_set_id
+
+    @property
+    def trade_parameter_set_id(self) -> str:
+        return self.trade_parameter_set.parameter_set_id
+
+
+@dataclass(frozen=True)
+class ParameterSetBundleRegistry:
+    active_shadow_bundle_id: str | None = None
+    active_paper_bundle_id: str | None = None
+    active_live_bundle_id: str | None = None
+    last_known_good_bundle_id: str | None = None
+    rollback_bundle_id: str | None = None
+    pending_draft_bundle_id: str | None = None
+    retired_bundle_ids: Tuple[str, ...] = ()
+
+    def to_dict(self) -> Dict[str, Any]:
+        data = asdict(self)
+        data["schema_version"] = "autotrade_parameter_bundle_registry.v1"
+        return data
+
