@@ -15,6 +15,7 @@ from btcts.autotrade.ledger import (
     summarize_observer_run_ledger,
     summarize_shadow_decision_ledger,
 )
+from btcts.autotrade.config.bundle_runtime_store import build_parameter_bundle_runtime_status
 from btcts.autotrade.runtime_paths import AutoTradeRuntimePathDiagnostics, autotrade_runtime_path_diagnostics
 
 DEFAULT_MAX_OBSERVER_RUN_AGE_SEC = 120.0
@@ -28,6 +29,7 @@ class AutoTradeRuntimeHealthSnapshot:
     observer_runs: ObserverRunLedgerSummary
     shadow_decisions: ShadowDecisionLedgerSummary
     forecast_outcomes: ForecastOutcomeLedgerSummary
+    parameter_bundle_runtime: Dict[str, Any]
     observer_run_age_sec: float | None
     observer_run_fresh: bool
     max_observer_run_age_sec: float
@@ -92,6 +94,7 @@ def build_autotrade_runtime_health_snapshot(
     observer_runs = summarize_observer_run_ledger(max_lines=max_lines)
     shadow_decisions = summarize_shadow_decision_ledger(max_lines=max_lines)
     forecast_outcomes = summarize_forecast_outcome_ledger(max_lines=max_lines)
+    parameter_bundle_runtime = build_parameter_bundle_runtime_status(max_events=5)
 
     blocked: list[str] = list(runtime.blocked_by)
     warnings: list[str] = list(runtime.warnings)
@@ -121,6 +124,7 @@ def build_autotrade_runtime_health_snapshot(
         observer_runs=observer_runs,
         shadow_decisions=shadow_decisions,
         forecast_outcomes=forecast_outcomes,
+        parameter_bundle_runtime=parameter_bundle_runtime,
         observer_run_age_sec=observer_age,
         observer_run_fresh=observer_fresh,
         max_observer_run_age_sec=float(max_observer_run_age_sec),
