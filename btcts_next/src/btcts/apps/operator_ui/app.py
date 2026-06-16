@@ -13,6 +13,7 @@ from btcts.apps.operator_ui.views import (
     research_page,
     replay_page,
     warroom_page,
+    autotrade_page,
 )
 from btcts.apps.operator_ui.ui_state_store import load_ui_state, save_ui_state
 from btcts.apps.operator_ui.ui_check_exporter import (
@@ -214,6 +215,7 @@ st.subheader(get_text(lang, "app_subtitle"))
 page_defs = [
     ("collector", get_text(lang, "page_collector"), collector_page),
     ("warroom", get_text(lang, "page_warroom"), warroom_page),
+    ("autotrade", get_text(lang, "page_autotrade"), autotrade_page),
     ("health", get_text(lang, "page_health"), health_page),
     ("logs", get_text(lang, "page_logs"), logs_page),
     ("config", get_text(lang, "page_config"), config_page),

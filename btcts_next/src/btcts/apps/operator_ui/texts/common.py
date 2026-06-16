@@ -21,6 +21,7 @@ COMMON_TEXTS = {
         "page_research": "Research",
         "page_replay": "Replay",
         "page_warroom": "War Room",
+        "page_autotrade": "AutoTrade",
         "dashboard_hub_status_title": "ダッシュボードハブ",
         "dashboard_hub_status_caption": "移動とアラートのハブです。表示専用の状態で、市場意味の判定は行いません。",
         "dashboard_hub_selected_page": "選択中ページ",
@@ -55,5 +56,6 @@ COMMON_TEXTS = {
         "page_research": "Research",
         "page_replay": "Replay",
         "page_warroom": "War Room",
+        "page_autotrade": "AutoTrade",
     },
 }
