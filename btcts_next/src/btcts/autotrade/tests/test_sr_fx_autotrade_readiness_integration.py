@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Tuple
 
 from btcts.autotrade.readiness import evaluate_autotrade_live_readiness
@@ -41,6 +41,29 @@ class DummyLedgerSummary:
         return {}
 
 
+
+def _ready_parameter_bundle_runtime() -> Dict[str, Any]:
+    return {
+        "schema_version": "autotrade_parameter_bundle_runtime_status.v1",
+        "registry_exists": True,
+        "event_ledger_exists": True,
+        "registry": {
+            "active_shadow_bundle_id": "pb_shadow",
+            "active_paper_bundle_id": "pb_paper",
+            "active_live_bundle_id": "pb_live",
+            "last_known_good_bundle_id": "pb_live",
+            "rollback_bundle_id": "pb_previous",
+            "pending_draft_bundle_id": None,
+            "retired_bundle_ids": [],
+        },
+        "event_count": 2,
+        "latest_event_type": "bundle_activated_live",
+        "warnings": [],
+        "blocked_by": [],
+        "would_send_to_broker": False,
+    }
+
+
 @dataclass(frozen=True)
 class DummyHealth:
     health_state: str = "ok"
@@ -48,6 +71,7 @@ class DummyHealth:
     observer_runs: DummyObserverRuns = DummyObserverRuns()
     shadow_decisions: DummyLedgerSummary = DummyLedgerSummary()
     forecast_outcomes: DummyLedgerSummary = DummyLedgerSummary()
+    parameter_bundle_runtime: Dict[str, Any] = field(default_factory=_ready_parameter_bundle_runtime)
     observer_run_fresh: bool = True
     blocked_by: Tuple[str, ...] = ()
     warnings: Tuple[str, ...] = ()
@@ -59,6 +83,7 @@ class DummyHealth:
             "observer_runs": self.observer_runs.to_dict(),
             "shadow_decisions": self.shadow_decisions.to_dict(),
             "forecast_outcomes": self.forecast_outcomes.to_dict(),
+            "parameter_bundle_runtime": self.parameter_bundle_runtime,
             "observer_run_fresh": self.observer_run_fresh,
             "blocked_by": list(self.blocked_by),
             "warnings": list(self.warnings),
@@ -211,3 +236,63 @@ def test_autotrade_readiness_propagates_public_market_blocker_from_sr_fx_contrac
     assert "ws_executions_not_ok:RuntimeError" in result.warnings
     assert result.would_send_to_broker is False
     assert result.read_only is True
+
+
+def test_live_readiness_blocks_when_live_parameter_bundle_missing(monkeypatch) -> None:
+    import btcts.autotrade.readiness as readiness
+
+    missing_live_bundle = _ready_parameter_bundle_runtime()
+    missing_live_bundle["registry"] = dict(missing_live_bundle["registry"])
+    missing_live_bundle["registry"]["active_live_bundle_id"] = None
+    monkeypatch.setattr(
+        readiness,
+        "build_autotrade_runtime_health_snapshot",
+        lambda **kwargs: DummyHealth(parameter_bundle_runtime=missing_live_bundle),
+    )
+
+    result = evaluate_autotrade_live_readiness(
+        current_mode="ARMED_DRY_RUN",
+        target_mode="LIVE_MIN_SIZE",
+        human_confirmed=True,
+        allow_warnings=True,
+        sr_fx_live_contract=_contract(ready=True),
+    )
+
+    assert result.ready is False
+    assert result.parameter_bundle_runtime is not None
+    assert "parameter_bundle_runtime_not_ready" in result.blocked_by
+    assert "active_live_parameter_bundle_missing" in result.blocked_by
+    assert result.would_send_to_broker is False
+
+
+def test_non_live_target_does_not_require_parameter_bundle_runtime(monkeypatch) -> None:
+    import btcts.autotrade.readiness as readiness
+
+    missing_runtime = {
+        "schema_version": "autotrade_parameter_bundle_runtime_status.v1",
+        "registry_exists": False,
+        "event_ledger_exists": False,
+        "registry": {},
+        "event_count": 0,
+        "warnings": ["parameter_bundle_registry_missing"],
+        "blocked_by": [],
+        "would_send_to_broker": False,
+    }
+    monkeypatch.setattr(
+        readiness,
+        "build_autotrade_runtime_health_snapshot",
+        lambda **kwargs: DummyHealth(parameter_bundle_runtime=missing_runtime),
+    )
+
+    result = evaluate_autotrade_live_readiness(
+        current_mode="SHADOW",
+        target_mode="PAPER_OR_REPLAY",
+        human_confirmed=True,
+        allow_warnings=True,
+        sr_fx_live_contract=None,
+    )
+
+    assert "parameter_bundle_runtime_not_ready" not in result.blocked_by
+    assert "active_live_parameter_bundle_missing" not in result.blocked_by
+    assert result.parameter_bundle_runtime == missing_runtime
+

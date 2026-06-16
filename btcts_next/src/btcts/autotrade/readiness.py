@@ -25,6 +25,7 @@ class AutoTradeReadinessResult:
     health: AutoTradeRuntimeHealthSnapshot
     blocked_by: Tuple[str, ...]
     warnings: Tuple[str, ...]
+    parameter_bundle_runtime: Dict[str, Any] | None = None
     sr_fx_live_readiness: Dict[str, Any] | None = None
     would_send_to_broker: bool = False
     read_only: bool = True
@@ -63,6 +64,73 @@ def _load_sr_fx_live_readiness_contract(path: Path | None = None) -> Dict[str, A
     payload = _read_json(target)
     contract = payload.get("live_readiness_contract") if isinstance(payload.get("live_readiness_contract"), dict) else payload
     return contract if isinstance(contract, dict) else None
+
+
+
+def _parameter_bundle_runtime_summary(health: AutoTradeRuntimeHealthSnapshot) -> Dict[str, Any]:
+    direct = getattr(health, "parameter_bundle_runtime", None)
+    if isinstance(direct, dict):
+        return direct
+    try:
+        data = health.to_dict()
+    except Exception:
+        data = {}
+    value = data.get("parameter_bundle_runtime") if isinstance(data, dict) else None
+    if isinstance(value, dict):
+        return value
+    return {
+        "schema_version": "autotrade_parameter_bundle_runtime_status.v1",
+        "registry_exists": False,
+        "event_ledger_exists": False,
+        "registry": {},
+        "event_count": 0,
+        "warnings": ["parameter_bundle_runtime_status_missing"],
+        "blocked_by": [],
+        "would_send_to_broker": False,
+    }
+
+
+def _active_parameter_bundle_id_for_stage(parameter_bundle_runtime: Mapping[str, Any], stage: str) -> str | None:
+    registry = parameter_bundle_runtime.get("registry")
+    registry_data = registry if isinstance(registry, Mapping) else {}
+    normalized = str(stage).strip().lower()
+    if normalized == "shadow":
+        return registry_data.get("active_shadow_bundle_id")
+    if normalized == "paper":
+        return registry_data.get("active_paper_bundle_id")
+    if normalized == "live":
+        return registry_data.get("active_live_bundle_id")
+    if normalized == "rollback":
+        return registry_data.get("rollback_bundle_id")
+    if normalized == "last_known_good":
+        return registry_data.get("last_known_good_bundle_id")
+    if normalized == "pending_draft":
+        return registry_data.get("pending_draft_bundle_id")
+    raise ValueError(f"unsupported parameter bundle readiness stage: {stage!r}")
+
+
+def _parameter_bundle_runtime_live_blockers(
+    parameter_bundle_runtime: Mapping[str, Any],
+    *,
+    required_stage: str = "live",
+) -> Tuple[str, ...]:
+    blocked: list[str] = []
+    if not bool(parameter_bundle_runtime.get("registry_exists", False)):
+        blocked.append("parameter_bundle_registry_missing")
+    if not bool(parameter_bundle_runtime.get("event_ledger_exists", False)):
+        blocked.append("parameter_bundle_event_ledger_missing")
+    try:
+        event_count = int(parameter_bundle_runtime.get("event_count") or 0)
+    except Exception:
+        event_count = 0
+    if event_count <= 0:
+        blocked.append("parameter_bundle_event_ledger_empty")
+    active_bundle_id = _active_parameter_bundle_id_for_stage(parameter_bundle_runtime, required_stage)
+    if not active_bundle_id:
+        blocked.append(f"active_{required_stage}_parameter_bundle_missing")
+    if bool(parameter_bundle_runtime.get("would_send_to_broker", False)):
+        blocked.append("parameter_bundle_runtime_attempted_broker_send")
+    return tuple(dict.fromkeys(blocked))
 
 
 def _sr_fx_contract_summary(contract: Mapping[str, Any] | None, *, source: str) -> Dict[str, Any]:
@@ -106,6 +174,8 @@ def evaluate_autotrade_live_readiness(
     max_observer_run_age_sec: float = 120.0,
     max_lines: int | None = 1000,
     enforce_sr_fx_live_contract: bool = True,
+    enforce_parameter_bundle_runtime: bool = True,
+    required_parameter_bundle_stage: str = "live",
     sr_fx_live_contract: Mapping[str, Any] | None = None,
     sr_fx_live_contract_path: Path | None = None,
 ) -> AutoTradeReadinessResult:
@@ -117,6 +187,7 @@ def evaluate_autotrade_live_readiness(
     )
     blocked: list[str] = []
     warnings: list[str] = list(health.warnings)
+    parameter_bundle_runtime = _parameter_bundle_runtime_summary(health)
 
     transition_allowed = is_transition_allowed(current, target, human_confirmed=human_confirmed)
     confirmation_required = requires_human_confirmation(current, target)
@@ -132,6 +203,16 @@ def evaluate_autotrade_live_readiness(
         blocked.append("autotrade_runtime_not_live_ready")
     if target in DANGEROUS_MODES and not health.observer_run_fresh:
         blocked.append("observer_run_not_fresh_for_live_target")
+    if enforce_parameter_bundle_runtime and target in DANGEROUS_MODES:
+        bundle_blockers = _parameter_bundle_runtime_live_blockers(
+            parameter_bundle_runtime,
+            required_stage=required_parameter_bundle_stage,
+        )
+        if bundle_blockers:
+            blocked.append("parameter_bundle_runtime_not_ready")
+            blocked.extend(bundle_blockers)
+        warnings.extend(str(x) for x in parameter_bundle_runtime.get("warnings") or ())
+        warnings.extend(str(x) for x in parameter_bundle_runtime.get("blocked_by") or ())
     latest_observer_blocked_by = tuple(health.observer_runs.latest_blocked_by or ())
     if target in DANGEROUS_MODES and latest_observer_blocked_by:
         blocked.append("observer_run_latest_blocked_for_live_target")
@@ -174,6 +255,7 @@ def evaluate_autotrade_live_readiness(
         health=health,
         blocked_by=blocked_tuple,
         warnings=warnings_tuple,
+        parameter_bundle_runtime=parameter_bundle_runtime,
         sr_fx_live_readiness=sr_fx_summary,
         would_send_to_broker=False,
         read_only=True,
