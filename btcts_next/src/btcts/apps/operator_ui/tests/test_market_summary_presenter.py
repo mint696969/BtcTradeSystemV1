@@ -152,7 +152,6 @@ def test_summary_widget_caption_caps_large_fx_lists() -> None:
     assert len(caption) <= 2400
 
     print("ok")
-    return 0
 
 
 if __name__ == "__main__":
