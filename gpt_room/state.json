@@ -1,0 +1,12 @@
+{
+  "schema_version": "btcts.gpt_room.state.v1",
+  "project": "BtcTradeSystem",
+  "room_style": "standard_room",
+  "baseline_branch": "phase2",
+  "synced_remote": "origin/phase2",
+  "head": "0e615c31",
+  "sync_status": "phase2...origin/phase2 = 0 0",
+  "test_status": "247 passed",
+  "github_actions": "not configured; .github/workflows absent",
+  "action_status": "not confirmed in this thread; PowerShell logs are current source of truth"
+}

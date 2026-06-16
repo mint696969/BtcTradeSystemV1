@@ -122,16 +122,36 @@ docs/placeholders/
 
 GPTの作業・記憶領域
 
-tmp/gpt_room/
+gpt_room/
 
-※ここは正本ではない
+※現在のスレ跨ぎ用の引き継ぎ正本
 
 ---
 
 # Rule
 
 - 正式仕様 → docs/
-- 作業メモ → tmp/gpt_room
+- GPT引き継ぎ → gpt_room
 - 古い仕様 → _stash/Docs_OLD
 
 docs = Project Chimera Official Documentation
+
+---
+
+# 9. Current GPT Handoff Room
+
+Current cross-thread handoff files:
+
+- gpt_room/STATUS.md
+- gpt_room/FOCUS.json
+- gpt_room/state.json
+- gpt_room/runbook/PROJECT_STATE.md
+- gpt_room/DECISIONS.md
+
+Current baseline:
+
+- Branch: phase2
+- HEAD: 0e615c31
+- Test checkpoint: 247 passed
+
+Use these files when continuing work across threads.

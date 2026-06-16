@@ -1,0 +1,22 @@
+{
+  "schema_version": "btcts.gpt_room.focus.v1",
+  "active_baseline": "phase2",
+  "current_head": "0e615c31",
+  "last_test_checkpoint": "247 passed",
+  "current_focus": "pre-live operational validation after AutoTrade parameter bundle readiness merge",
+  "completed_recently": [
+    "PR #1 AutoTrade parameter bundle readiness chain merged into phase2",
+    "PR #2 pytest discovery hygiene merged into phase2"
+  ],
+  "next_tasks": [
+    "pre-live operational validation",
+    "paper/readiness verification",
+    "Operator UI AutoTrade closeout review",
+    "consider GitHub Actions CI setup"
+  ],
+  "safety_notes": [
+    "AutoTrade readiness work is read-only/pre-live oriented",
+    "do not treat this as live broker execution enablement",
+    "broker-send paths remain out of scope unless explicitly reviewed"
+  ]
+}
