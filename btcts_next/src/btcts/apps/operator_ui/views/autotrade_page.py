@@ -85,6 +85,8 @@ def _submit_mode_change_request(
     target_mode: str,
     human_confirmed: bool,
     allow_warnings: bool,
+    enforce_parameter_bundle_runtime: bool = True,
+    required_parameter_bundle_stage: str = "live",
 ) -> dict:
     result = submit_mode_change_command_request(
         current_mode=current_mode,
@@ -113,6 +115,9 @@ def _submit_mode_change_request(
             "target_mode": readiness_data.get("target_mode"),
             "blocked_by": readiness_data.get("blocked_by"),
             "warnings": readiness_data.get("warnings"),
+            "parameter_bundle_runtime": readiness_data.get("parameter_bundle_runtime"),
+            "enforce_parameter_bundle_runtime": enforce_parameter_bundle_runtime,
+            "required_parameter_bundle_stage": required_parameter_bundle_stage,
             "health_state": readiness_health.get("health_state"),
             "observer_run_fresh": readiness_health.get("observer_run_fresh"),
             "observer_latest_run_id": readiness_observer_runs.get("latest_run_id"),
@@ -556,6 +561,8 @@ def _render_live_readiness_preflight() -> None:
         target_mode=target_mode_value,
         human_confirmed=human_confirmed,
         allow_warnings=allow_warnings,
+        enforce_parameter_bundle_runtime=enforce_parameter_bundle_runtime,
+        required_parameter_bundle_stage=required_parameter_bundle_stage,
         max_observer_run_age_sec=120,
         max_lines=500,
     )
@@ -615,6 +622,8 @@ def _render_live_readiness_preflight() -> None:
             target_mode=target_mode_value,
             human_confirmed=human_confirmed,
             allow_warnings=allow_warnings,
+            enforce_parameter_bundle_runtime=enforce_parameter_bundle_runtime,
+            required_parameter_bundle_stage=required_parameter_bundle_stage,
         )
     mode_change_record = st.session_state.get("autotrade_last_mode_change_request_record")
     if isinstance(mode_change_record, dict):

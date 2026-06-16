@@ -67,6 +67,7 @@ def _readiness_note(readiness: AutoTradeReadinessResult) -> str:
         "observer_latest_would_send_to_broker": readiness.health.observer_runs.latest_would_send_to_broker,
         "observer_latest_bounded": readiness.health.observer_runs.latest_bounded,
         "runtime_live_ready": readiness.health.runtime.live_ready,
+        "parameter_bundle_runtime": getattr(readiness, "parameter_bundle_runtime", None),
         "mode_changed": False,
         "would_send_to_broker": False,
     }
@@ -80,6 +81,8 @@ def build_mode_change_command_request_record(
     requested_by: str = "operator_ui",
     human_confirmed: bool = False,
     allow_warnings: bool = False,
+    enforce_parameter_bundle_runtime: bool = True,
+    required_parameter_bundle_stage: str = "live",
     max_observer_run_age_sec: float = 120.0,
     max_lines: int | None = 1000,
 ) -> tuple[CommandLedgerRecord, AutoTradeReadinessResult]:
@@ -88,6 +91,8 @@ def build_mode_change_command_request_record(
         target_mode=target_mode,
         human_confirmed=human_confirmed,
         allow_warnings=allow_warnings,
+        enforce_parameter_bundle_runtime=enforce_parameter_bundle_runtime,
+        required_parameter_bundle_stage=required_parameter_bundle_stage,
         max_observer_run_age_sec=max_observer_run_age_sec,
         max_lines=max_lines,
     )
@@ -127,6 +132,8 @@ def submit_mode_change_command_request(
     requested_by: str = "operator_ui",
     human_confirmed: bool = False,
     allow_warnings: bool = False,
+    enforce_parameter_bundle_runtime: bool = True,
+    required_parameter_bundle_stage: str = "live",
     max_observer_run_age_sec: float = 120.0,
     max_lines: int | None = 1000,
     path: Path | None = None,
@@ -137,6 +144,8 @@ def submit_mode_change_command_request(
         requested_by=requested_by,
         human_confirmed=human_confirmed,
         allow_warnings=allow_warnings,
+        enforce_parameter_bundle_runtime=enforce_parameter_bundle_runtime,
+        required_parameter_bundle_stage=required_parameter_bundle_stage,
         max_observer_run_age_sec=max_observer_run_age_sec,
         max_lines=max_lines,
     )
