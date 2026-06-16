@@ -7,6 +7,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from btcts.autotrade.mode_runtime_gate import ModeRuntimeGate, build_mode_runtime_gate
@@ -135,10 +136,18 @@ def run_observer_cycle_once(
     persist: bool = True,
     max_decision_lines: int | None = 1000,
     max_actual_match_age_sec: float = 45.0,
+    load_runtime_parameter_bundle: bool = False,
+    parameter_bundle_stage: str = "shadow",
+    parameter_bundle_id: str | None = None,
+    parameter_bundle_registry_path: Path | None = None,
 ) -> ObserverCycleOnceResult:
     gate = build_mode_runtime_gate()
     shadow = run_shadow_cycle_once(
         exchange=exchange,
+        load_runtime_parameter_bundle=load_runtime_parameter_bundle,
+        parameter_bundle_stage=parameter_bundle_stage,
+        parameter_bundle_id=parameter_bundle_id,
+        parameter_bundle_registry_path=parameter_bundle_registry_path,
         symbol_raw=symbol_raw,
         state_type=state_type,
         persist=bool(persist and gate.allow_shadow_decision_append),
@@ -176,6 +185,10 @@ def run_observer_cycle_bounded(
     max_actual_match_age_sec: float = 45.0,
     skip_duplicate_snapshot: bool = True,
     persist_run_record: bool = True,
+    load_runtime_parameter_bundle: bool = False,
+    parameter_bundle_stage: str = "shadow",
+    parameter_bundle_id: str | None = None,
+    parameter_bundle_registry_path: Path | None = None,
 ) -> ObserverCycleBoundedResult:
     _validate_observer_cycle_args(max_cycles=max_cycles, interval_sec=interval_sec)
     started_at = _utc_now()
@@ -187,6 +200,10 @@ def run_observer_cycle_bounded(
     for index in range(max_cycles):
         probe = run_shadow_cycle_once(
             exchange=exchange,
+            load_runtime_parameter_bundle=load_runtime_parameter_bundle,
+            parameter_bundle_stage=parameter_bundle_stage,
+            parameter_bundle_id=parameter_bundle_id,
+            parameter_bundle_registry_path=parameter_bundle_registry_path,
             symbol_raw=symbol_raw,
             state_type=state_type,
             persist=False,
@@ -199,6 +216,10 @@ def run_observer_cycle_bounded(
 
         item = run_observer_cycle_once(
             exchange=exchange,
+            load_runtime_parameter_bundle=load_runtime_parameter_bundle,
+            parameter_bundle_stage=parameter_bundle_stage,
+            parameter_bundle_id=parameter_bundle_id,
+            parameter_bundle_registry_path=parameter_bundle_registry_path,
             symbol_raw=symbol_raw,
             state_type=state_type,
             persist=should_persist_shadow_and_outcomes,
