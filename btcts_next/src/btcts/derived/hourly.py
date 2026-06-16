@@ -205,10 +205,15 @@ def _apply_audit(bucket: Dict[str, Any], row: Dict[str, Any]) -> None:
             topics[k] = _new_topic()
         topics[k]["ok_count"] += 1
 
+        # ★追加：status.json が無くても last_ok_ts を埋める（audit ts を採用）
+        ts = row.get("ts")
+        if isinstance(ts, str) and ts:
+            topics[k]["last_ok_ts"] = ts
+
         bucket["collector"]["http"]["total"] += 1
         bucket["collector"]["http"]["status_2xx"] += 1
         return
-
+        
     # collector 429
     if event == "collector.http.429":
         k = _topic_key(payload) or "unknown/unknown"

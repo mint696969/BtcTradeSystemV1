@@ -1,0 +1,9 @@
+{
+  "ts": "2026-03-16T05:35:06Z",
+  "collector_id": "collector_main",
+  "session_id": "collector_main-sess-20260316T053444Z-d42c7a70",
+  "last_sequence_id": 85,
+  "last_symbol": "BTC_JPY",
+  "last_exchange": "bitflyer",
+  "last_channel": "board_ws"
+}

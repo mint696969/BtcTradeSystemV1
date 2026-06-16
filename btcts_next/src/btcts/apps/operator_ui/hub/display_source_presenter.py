@@ -1,0 +1,90 @@
+# path: ./btcts_next/src/btcts/apps/operator_ui/hub/display_source_presenter.py
+# desc: Render-free presenter model for dashboard hub display source diagnostics. No Streamlit/app.py/layout/runtime wiring.
+
+from __future__ import annotations
+
+from btcts.apps.operator_ui.hub.display_source_ui_entry_criteria import (
+    dashboard_hub_display_source_ui_entry_criteria,
+)
+
+DASHBOARD_HUB_SOURCE_PRESENTER_CONTRACT = {
+    "presenter_type": "dashboard_hub_display_source_presenter",
+    "dashboard_role": "hub",
+    "read_only_contract": True,
+    "widget_reusable": True,
+    "layout_decision_free": True,
+    "not_runtime_wiring": True,
+    "not_ui_rendering": True,
+    "not_app_py_wiring": True,
+    "render_free": True,
+}
+
+
+def _hot_cold_detail_rows(entry: dict) -> tuple[dict, ...]:
+    summary = entry.get("hot_cold_summary") if isinstance(entry.get("hot_cold_summary"), dict) else {}
+    status = entry.get("hot_cold_status") if isinstance(entry.get("hot_cold_status"), dict) else {}
+    unopened = entry.get("hot_cold_unopened_boundary_statuses")
+    if not isinstance(unopened, dict):
+        unopened = status.get("unopened_boundary_statuses") if isinstance(status.get("unopened_boundary_statuses"), dict) else {}
+    status_label = entry.get("hot_cold_status_label") or summary.get("status_label") or status.get("status_label") or "unknown"
+    metadata_detail_status = (
+        entry.get("hot_cold_metadata_detail_status")
+        or summary.get("metadata_detail_status")
+        or status.get("metadata_detail_status")
+        or "unknown"
+    )
+    next_gate = status.get("next_opening_gate") if isinstance(status.get("next_opening_gate"), dict) else {}
+    return (
+        {"label": "hot_cold_status", "value": str(status_label)},
+        {"label": "hot_cold_metadata", "value": str(metadata_detail_status)},
+        {"label": "hot_cold_payload_loader", "value": str(summary.get("payload_loader_status") or unopened.get("payload_loader") or "unknown")},
+        {"label": "hot_cold_dataset_reader", "value": str(summary.get("dataset_reader_status") or unopened.get("dataset_reader") or "unknown")},
+        {"label": "hot_cold_dashboard_rendering", "value": str(summary.get("dashboard_rendering_status") or unopened.get("dashboard_rendering") or "unknown")},
+        {"label": "hot_cold_copy_executor", "value": str(summary.get("copy_executor_status") or unopened.get("copy_executor") or "unknown")},
+        {"label": "hot_cold_next_gate", "value": str(summary.get("entry_note") or next_gate.get("gate_type") or "unknown")},
+    )
+
+
+def _status_label(entry: dict) -> str:
+    if entry.get("ui_entry_ready") is True:
+        return "ready"
+    return "blocked"
+
+
+def dashboard_hub_display_source_presenter(entry: dict | None = None) -> dict:
+    payload = entry or dashboard_hub_display_source_ui_entry_criteria()
+    blocked_reasons = tuple(str(item) for item in (payload.get("blocked_reasons") or ()) if item)
+    summary_rows = (
+        {"label": "status", "value": _status_label(payload)},
+        {"label": "diagnostic_level", "value": str(payload.get("diagnostic_level") or "unknown")},
+        {"label": "pages", "value": str(int(payload.get("page_count") or 0))},
+        {"label": "sources", "value": str(int(payload.get("source_count") or 0))},
+        {"label": "blocked_reasons", "value": ",".join(blocked_reasons) or "none"},
+        {"label": "allowed_initial_surface", "value": str(payload.get("allowed_initial_surface") or "none")},
+    )
+    hot_cold_rows = _hot_cold_detail_rows(payload)
+    detail_rows = (
+        {"label": "guardrail_failures", "value": ",".join(tuple(payload.get("guardrail_failures") or ())) or "none"},
+        {"label": "missing_references", "value": ",".join(tuple(payload.get("missing_references") or ())) or "none"},
+        {"label": "empty_page_keys", "value": ",".join(tuple(payload.get("empty_page_keys") or ())) or "none"},
+        {"label": "orphan_source_keys", "value": ",".join(tuple(payload.get("orphan_source_keys") or ())) or "none"},
+        {"label": "next_required_step", "value": str(payload.get("next_required_step") or "unknown")},
+        *hot_cold_rows,
+    )
+    return {
+        **DASHBOARD_HUB_SOURCE_PRESENTER_CONTRACT,
+        "entry_type": payload.get("entry_type"),
+        "ui_entry_ready": payload.get("ui_entry_ready") is True,
+        "status_label": _status_label(payload),
+        "title": "Dashboard hub display source diagnostics",
+        "subtitle": "Read-only source readiness for future dashboard panels",
+        "summary_rows": summary_rows,
+        "detail_rows": detail_rows,
+        "hot_cold_detail_rows": hot_cold_rows,
+        "hot_cold_status_label": hot_cold_rows[0]["value"] if hot_cold_rows else "unknown",
+        "hot_cold_metadata_detail_status": hot_cold_rows[1]["value"] if len(hot_cold_rows) > 1 else "unknown",
+        "blocked_reasons": blocked_reasons,
+        "compact_line": "dashboard_hub_source_presenter=" + ";".join(
+            f"{row['label']}:{row['value']}" for row in summary_rows
+        ),
+    }

@@ -93,6 +93,17 @@ def build_evidence_pack(
 
     items: List[Item] = []
 
+    def latest_match(base: Path, pattern: str) -> Optional[Path]:
+        # pattern にマッチするファイルのうち、mtimeが新しいものを返す（無ければNone）
+        try:
+            cand = [p for p in base.glob(pattern) if p.is_file()]
+        except Exception:
+            return None
+        if not cand:
+            return None
+        cand.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return cand[0]
+
     def add_copy(src: Path, dst_rel: str, *, note: str = "") -> None:
         dst_rel2 = _posix(dst_rel)
         if src.exists():
@@ -120,6 +131,24 @@ def build_evidence_pack(
     add_copy(derived_dir / "latest_hourly.json", "derived/latest_hourly.json", note="derived summary (latest hour)")
     add_copy(derived_dir / "latest_daily.json", "derived/latest_daily.json", note="derived summary (latest day)")
     add_copy(derived_dir / "state.json", "derived/state.json", note="derived cursor/state (internal)")
+
+    # ---- quality（GPT判定の主役）----
+    quality_dir = logs_dir / "quality"
+    cov = latest_match(quality_dir, "coverage_*.json")
+    gaps = latest_match(quality_dir, "gaps_*.jsonl")
+    ano = latest_match(quality_dir, "anomaly_*.json")
+    if cov is not None:
+        add_copy(cov, f"quality/{cov.name}", note="quality coverage (latest)")
+    else:
+        add_copy(quality_dir / "coverage_*.json", "quality/_missing_coverage.txt", note="no coverage file found")
+    if gaps is not None:
+        add_copy(gaps, f"quality/{gaps.name}", note="quality gaps (latest)")
+    else:
+        add_copy(quality_dir / "gaps_*.jsonl", "quality/_missing_gaps.txt", note="no gaps file found")
+    if ano is not None:
+        add_copy(ano, f"quality/{ano.name}", note="quality anomaly (latest)")
+    else:
+        add_copy(quality_dir / "anomaly_*.json", "quality/_missing_anomaly.txt", note="no anomaly file found")
 
     # ---- settings / status（判断の土台）----
     add_copy(cfg_dir / "collector.yaml", "config/ui/collector.yaml", note="collector runtime config")

@@ -1,0 +1,22 @@
+{
+  "ts": "2026-03-16T05:35:34Z",
+  "ok": false,
+  "status": "stopped",
+  "collector_vnext": true,
+  "daemon": true,
+  "stopped": true,
+  "reason": "keyboard_interrupt",
+  "cycle_no": 2,
+  "last_error": null,
+  "last_success_ts": "2026-03-16T05:35:06Z",
+  "ws_trades_warn_streak": 0,
+  "rate_control": {
+    "summary_state": "NORMAL",
+    "engaged": false,
+    "reason": "normal_util_range",
+    "wait_ms": 275,
+    "util_ratio": 0.11999760004799903,
+    "last_429_ts": null,
+    "recovery_phase": "steady"
+  }
+}

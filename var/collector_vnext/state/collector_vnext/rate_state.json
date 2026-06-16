@@ -1,0 +1,22 @@
+{
+  "ts": 1773639321.9274855,
+  "items": {
+    "bitflyer": {
+      "exchange": "bitflyer",
+      "summary_state": "NORMAL",
+      "engaged": false,
+      "reason": "normal_util_range",
+      "official_max_rps": 1.6667,
+      "internal_safe_max_rps": 1.5000300000000002,
+      "eff_max_rps": 1.6667,
+      "wait_ms": 300,
+      "util_ratio": 0.11999760004799903,
+      "last_429_ts": null,
+      "last_retry_after_sec": 0.0,
+      "hold_until_ts": "2026-03-16T05:35:21.674Z",
+      "backoff_sec": 0.0,
+      "recovery_phase": "steady",
+      "ts": "2026-03-16T05:35:21.926Z"
+    }
+  }
+}

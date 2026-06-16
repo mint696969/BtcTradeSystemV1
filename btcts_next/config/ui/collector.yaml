@@ -10,5 +10,5 @@ enabled_exchanges:
 
 feeds:
   bitflyer:
-    orderbook: { enabled: true, priority: 0, target_interval: 2.0 }
-    trades:    { enabled: true, priority: 1, target_interval: 3.0 }
+    orderbook: { enabled: true, priority: 0, target_interval: 10.0 }
+    trades:    { enabled: true, priority: 1, target_interval: 20.0 }

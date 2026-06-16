@@ -1,0 +1,17 @@
+# path: ./archive/replay_exports/btc_bitflyer_replay_snapshot_diff_smoke_20260417T101607Z/replay_report.json
+# desc: Archived project artifact.
+
+{
+  "name": "btc_bitflyer_replay_snapshot_diff_smoke",
+  "source_paths": [
+    "D:\\btc_ts_hot\\data\\market_data\\exchange=bitflyer\\symbol=BTC_JPY\\type=market.orderbook.snapshot\\date=2026-04-17\\part-00001.jsonl",
+    "D:\\btc_ts_hot\\data\\market_data\\exchange=bitflyer\\symbol=BTC_JPY\\type=market.orderbook.diff\\date=2026-04-17\\part-00001.jsonl"
+  ],
+  "result_count": 244383,
+  "board_count": 0,
+  "trade_count": 0,
+  "signal_count": 0,
+  "microstructure_event_count": 0,
+  "event_name_counts": {},
+  "prediction_evaluation_summary": null
+}

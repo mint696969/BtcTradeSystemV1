@@ -1,0 +1,13 @@
+{
+  "exchange": "bitflyer",
+  "channel": "board_ws",
+  "last_event_name": "stream_resync_completed",
+  "reason": "snapshot_received_after_gap",
+  "stream_session_id": "collector_main-stream-bitflyer-board_ws-20260316T053504Z-2c3583af",
+  "last_good_event_id": null,
+  "first_uncertain_event_id": null,
+  "provider": "bitflyer_ws_board",
+  "transport": "websocket",
+  "error_class": null,
+  "error_message": null
+}

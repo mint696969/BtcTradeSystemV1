@@ -1,0 +1,323 @@
+# path: ./btcts_next/src/btcts/processing/l3_market_semantics/orderbook/event_enrichment.py
+# desc: Enrich liquidity signal comparisons into higher-level market microstructure events.
+
+from __future__ import annotations
+
+from typing import Dict, List, Optional
+
+
+def _safe_get(payload: Optional[Dict], *path, default=None):
+    cur = payload
+    for key in path:
+        if not isinstance(cur, dict):
+            return default
+        cur = cur.get(key)
+    return cur if cur is not None else default
+
+
+def wall_strength_events(prev_signal: Optional[Dict], curr_signal: Dict, *, ratio_threshold: float = 0.05) -> List[Dict]:
+    events: List[Dict] = []
+
+    prev_ratio = _safe_get(prev_signal, "wall", "strongest_ratio")
+    curr_ratio = _safe_get(curr_signal, "wall", "strongest_ratio")
+    prev_side = _safe_get(prev_signal, "wall", "strongest_side")
+    curr_side = _safe_get(curr_signal, "wall", "strongest_side")
+
+    if prev_ratio is None or curr_ratio is None:
+        return events
+
+    if prev_side != curr_side:
+        return events
+
+    diff = float(curr_ratio) - float(prev_ratio)
+
+    if diff >= ratio_threshold:
+        events.append(
+            {
+                "event_name": "wall_strengthened",
+                "side": curr_side,
+                "prev_ratio": prev_ratio,
+                "curr_ratio": curr_ratio,
+                "ratio_delta": diff,
+            }
+        )
+    elif diff <= -ratio_threshold:
+        events.append(
+            {
+                "event_name": "wall_weakened",
+                "side": curr_side,
+                "prev_ratio": prev_ratio,
+                "curr_ratio": curr_ratio,
+                "ratio_delta": diff,
+            }
+        )
+
+    return events
+
+
+def liquidity_depth_change_events(
+    prev_signal: Optional[Dict],
+    curr_signal: Dict,
+    *,
+    added_threshold: float = 0.15,
+    removed_threshold: float = 0.15,
+) -> List[Dict]:
+    events: List[Dict] = []
+
+    for side_key, label in (("bid", "bid"), ("ask", "ask")):
+        prev_depth = _safe_get(prev_signal, "summary", f"{side_key}_depth")
+        curr_depth = _safe_get(curr_signal, "summary", f"{side_key}_depth")
+
+        if prev_depth is None or curr_depth is None:
+            continue
+
+        prev_depth = float(prev_depth)
+        curr_depth = float(curr_depth)
+
+        if prev_depth <= 0:
+            continue
+
+        delta = curr_depth - prev_depth
+        ratio = delta / prev_depth
+
+        if ratio >= added_threshold:
+            events.append(
+                {
+                    "event_name": f"{label}_liquidity_added",
+                    "side": label,
+                    "prev_depth": prev_depth,
+                    "curr_depth": curr_depth,
+                    "depth_delta": delta,
+                    "depth_ratio": ratio,
+                }
+            )
+        elif ratio <= -removed_threshold:
+            events.append(
+                {
+                    "event_name": f"{label}_liquidity_removed",
+                    "side": label,
+                    "prev_depth": prev_depth,
+                    "curr_depth": curr_depth,
+                    "depth_delta": delta,
+                    "depth_ratio": ratio,
+                }
+            )
+
+    return events
+
+
+def spread_change_events(
+    prev_signal: Optional[Dict],
+    curr_signal: Dict,
+    *,
+    expansion_threshold: float = 1.0,
+    compression_threshold: float = 1.0,
+) -> List[Dict]:
+    events: List[Dict] = []
+
+    prev_spread = _safe_get(prev_signal, "summary", "spread")
+    curr_spread = _safe_get(curr_signal, "summary", "spread")
+
+    if prev_spread is None or curr_spread is None:
+        return events
+
+    prev_spread = float(prev_spread)
+    curr_spread = float(curr_spread)
+    delta = curr_spread - prev_spread
+
+    if delta >= expansion_threshold:
+        events.append(
+            {
+                "event_name": "spread_expansion",
+                "prev_spread": prev_spread,
+                "curr_spread": curr_spread,
+                "spread_delta": delta,
+            }
+        )
+    elif delta <= -compression_threshold:
+        events.append(
+            {
+                "event_name": "spread_compression",
+                "prev_spread": prev_spread,
+                "curr_spread": curr_spread,
+                "spread_delta": delta,
+            }
+        )
+
+    return events
+
+
+def candidate_events(curr_signal: Dict) -> List[Dict]:
+    events: List[Dict] = []
+
+    pressure_bias = _safe_get(curr_signal, "pressure", "bias")
+    wall_detected = bool(_safe_get(curr_signal, "wall", "wall_detected", default=False))
+    wall_side = _safe_get(curr_signal, "wall", "strongest_side")
+    wall_is_near = bool(_safe_get(curr_signal, "wall", "strongest_is_near", default=False))
+    wall_rank = _safe_get(curr_signal, "wall", "strongest_rank")
+
+    near_wall_detected = bool(
+        _safe_get(
+            curr_signal,
+            "wall",
+            "near_wall_detected",
+            default=wall_detected and wall_is_near,
+        )
+    )
+    near_wall_side = _safe_get(
+        curr_signal,
+        "wall",
+        "near_strongest_side",
+        default=wall_side if wall_is_near else None,
+    )
+    near_wall_rank = _safe_get(
+        curr_signal,
+        "wall",
+        "near_strongest_rank",
+        default=wall_rank if wall_is_near else None,
+    )
+    near_wall_ratio = _safe_get(curr_signal, "wall", "near_strongest_ratio")
+
+    bid_pull = bool(_safe_get(curr_signal, "bid_pull", "detected", default=False))
+    ask_pull = bool(_safe_get(curr_signal, "ask_pull", "detected", default=False))
+
+    bid_pull_strength = _safe_get(curr_signal, "bid_pull", "pull_strength", default="none")
+    ask_pull_strength = _safe_get(curr_signal, "ask_pull", "pull_strength", default="none")
+
+    bid_near_removed_ratio = _safe_get(curr_signal, "bid_pull", "near_removed_ratio")
+    ask_near_removed_ratio = _safe_get(curr_signal, "ask_pull", "near_removed_ratio")
+
+    spread = _safe_get(curr_signal, "summary", "spread")
+    imbalance = _safe_get(curr_signal, "summary", "imbalance")
+
+    absorption_emitted = False
+
+    if near_wall_detected:
+        if near_wall_side == "ask" and pressure_bias == "buy_pressure":
+            events.append(
+                {
+                    "event_name": "absorption_candidate",
+                    "side": "ask",
+                    "reason": "buy_pressure_against_near_ask_wall",
+                    "wall_scope": "near",
+                    "wall_is_near": True,
+                    "wall_rank": near_wall_rank,
+                    "wall_ratio": near_wall_ratio,
+                    "imbalance": imbalance,
+                    "spread": spread,
+                }
+            )
+            absorption_emitted = True
+        elif near_wall_side == "bid" and pressure_bias == "sell_pressure":
+            events.append(
+                {
+                    "event_name": "absorption_candidate",
+                    "side": "bid",
+                    "reason": "sell_pressure_against_near_bid_wall",
+                    "wall_scope": "near",
+                    "wall_is_near": True,
+                    "wall_rank": near_wall_rank,
+                    "wall_ratio": near_wall_ratio,
+                    "imbalance": imbalance,
+                    "spread": spread,
+                }
+            )
+            absorption_emitted = True
+
+    if (not absorption_emitted) and wall_detected:
+        if wall_side == "ask" and pressure_bias == "buy_pressure":
+            events.append(
+                {
+                    "event_name": "absorption_candidate",
+                    "side": "ask",
+                    "reason": "buy_pressure_against_ask_wall",
+                    "wall_scope": "overall",
+                    "wall_is_near": wall_is_near,
+                    "wall_rank": wall_rank,
+                    "imbalance": imbalance,
+                    "spread": spread,
+                }
+            )
+        elif wall_side == "bid" and pressure_bias == "sell_pressure":
+            events.append(
+                {
+                    "event_name": "absorption_candidate",
+                    "side": "bid",
+                    "reason": "sell_pressure_against_bid_wall",
+                    "wall_scope": "overall",
+                    "wall_is_near": wall_is_near,
+                    "wall_rank": wall_rank,
+                    "imbalance": imbalance,
+                    "spread": spread,
+                }
+            )
+
+    if near_wall_detected:
+        if near_wall_side == "bid" and pressure_bias == "buy_pressure":
+            events.append(
+                {
+                    "event_name": "support_candidate",
+                    "side": "bid",
+                    "reason": "buy_pressure_supported_by_near_bid_wall",
+                    "wall_scope": "near",
+                    "wall_is_near": True,
+                    "wall_rank": near_wall_rank,
+                    "wall_ratio": near_wall_ratio,
+                    "imbalance": imbalance,
+                    "spread": spread,
+                }
+            )
+        elif near_wall_side == "ask" and pressure_bias == "sell_pressure":
+            events.append(
+                {
+                    "event_name": "resistance_candidate",
+                    "side": "ask",
+                    "reason": "sell_pressure_resisted_by_near_ask_wall",
+                    "wall_scope": "near",
+                    "wall_is_near": True,
+                    "wall_rank": near_wall_rank,
+                    "wall_ratio": near_wall_ratio,
+                    "imbalance": imbalance,
+                    "spread": spread,
+                }
+            )
+
+    if ask_pull and pressure_bias == "buy_pressure":
+        reason = "ask_liquidity_pulled_under_buy_pressure"
+        if ask_pull_strength == "strong":
+            reason = "strong_ask_liquidity_pulled_under_buy_pressure"
+        elif ask_near_removed_ratio is not None and float(ask_near_removed_ratio) >= 0.30:
+            reason = "near_ask_liquidity_pulled_under_buy_pressure"
+
+        events.append(
+            {
+                "event_name": "sweep_candidate",
+                "side": "ask",
+                "reason": reason,
+                "pull_strength": ask_pull_strength,
+                "near_removed_ratio": ask_near_removed_ratio,
+                "imbalance": imbalance,
+                "spread": spread,
+            }
+        )
+
+    if bid_pull and pressure_bias == "sell_pressure":
+        reason = "bid_liquidity_pulled_under_sell_pressure"
+        if bid_pull_strength == "strong":
+            reason = "strong_bid_liquidity_pulled_under_sell_pressure"
+        elif bid_near_removed_ratio is not None and float(bid_near_removed_ratio) >= 0.30:
+            reason = "near_bid_liquidity_pulled_under_sell_pressure"
+
+        events.append(
+            {
+                "event_name": "sweep_candidate",
+                "side": "bid",
+                "reason": reason,
+                "pull_strength": bid_pull_strength,
+                "near_removed_ratio": bid_near_removed_ratio,
+                "imbalance": imbalance,
+                "spread": spread,
+            }
+        )
+
+    return events

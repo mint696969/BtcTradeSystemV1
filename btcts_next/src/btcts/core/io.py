@@ -29,6 +29,7 @@ def file_lock(target_path: Path, *, timeout_sec: float = 10.0, stale_sec: float 
     - 既存 lock が stale_sec より古ければ回収（削除）して取り直す
     """
     lock_path = Path(str(target_path) + ".lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
     deadline = time.time() + float(timeout_sec)
 
     while True:
@@ -148,18 +149,63 @@ def append_jsonl(path: Path, row: Dict[str, Any], *, fsync_each: bool = True) ->
             os.fsync(f.fileno())
 
 
-def read_jsonl_tail(path: Path, *, max_lines: int = 200) -> list[Dict[str, Any]]:
-    """簡易 tail（大きすぎるファイル向けの最適化は別途）。"""
+def read_jsonl_tail(
+    path: Path,
+    *,
+    max_lines: int = 200,
+    max_bytes: int = 8 * 1024 * 1024,
+) -> list[Dict[str, Any]]:
+    """Read recent JSONL rows without loading the full append-only file.
+
+    The previous implementation used ``readlines()[-max_lines:]``, which still
+    read the whole file before slicing.  Health UI reads large audit logs on the
+    render path, so this function must tail from the end with bounded bytes.
+
+    If the file tail is unusually sparse or a line is extremely large, the
+    returned row count may be smaller than ``max_lines``.  That is preferable to
+    blocking UI render on a full-file scan.
+    """
     if not path.exists():
         return []
+
+    try:
+        size = path.stat().st_size
+    except Exception:
+        return []
+
+    if size <= 0:
+        return []
+
+    read_size = min(int(size), max(1024, int(max_bytes)))
+    try:
+        with open(path, "rb") as f:
+            f.seek(max(0, int(size) - read_size))
+            data = f.read(read_size)
+    except Exception:
+        return []
+
+    if not data:
+        return []
+
+    if read_size < size:
+        first_newline = data.find(bytes((10,)))
+        if first_newline >= 0:
+            data = data[first_newline + 1 :]
+
+    try:
+        lines = data.decode("utf-8", errors="replace").splitlines()
+    except Exception:
+        return []
+
     out: list[Dict[str, Any]] = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f.readlines()[-max_lines:]:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                out.append(json.loads(line))
-            except Exception:
-                continue
+    for line in lines[-max(1, int(max_lines)) :]:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(obj, dict):
+            out.append(obj)
     return out

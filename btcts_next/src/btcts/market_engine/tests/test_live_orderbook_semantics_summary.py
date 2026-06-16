@@ -1,0 +1,194 @@
+# path: ./btcts_next/src/btcts/market_engine/tests/test_live_orderbook_semantics_summary.py
+# desc: Minimal contract test for live partial orderbook semantics summary.
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+_SRC_ROOT = Path(__file__).resolve().parents[3]
+if str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
+
+from btcts.market_engine.market_state.live_orderbook_semantics import (
+    build_live_orderbook_semantics_summary,
+)
+from btcts.processing.l3_market_semantics.continuity.models import BookState
+
+
+_STABLE_EVENT_CONTRACT_KEYS = (
+    "contract_source",
+    "event_name",
+    "event_family",
+    "usage_grade",
+    "interpretation_bucket",
+    "meaning_version",
+    "trust_bucket",
+    "actionability",
+    "forecast_horizon_hint",
+    "half_life_sec",
+    "side",
+)
+
+
+def _prev_book() -> BookState:
+    return BookState(
+        best_bid=100.0,
+        best_ask=101.0,
+        spread=1.0,
+        mid_price=100.5,
+        interpretation_bucket="allow_structural_use",
+        bids_near=[
+            {"price": 100.0, "size": 1.0},
+            {"price": 99.5, "size": 2.0},
+            {"price": 99.0, "size": 4.5},
+        ],
+        asks_near=[
+            {"price": 101.0, "size": 1.0},
+            {"price": 101.5, "size": 1.0},
+            {"price": 102.0, "size": 1.0},
+        ],
+        bids_far=[],
+        asks_far=[],
+    )
+
+
+def _book() -> BookState:
+    return BookState(
+        best_bid=100.0,
+        best_ask=101.0,
+        spread=1.0,
+        mid_price=100.5,
+        interpretation_bucket="allow_structural_use",
+        bids_near=[
+            {"price": 100.0, "size": 1.0},
+            {"price": 99.5, "size": 2.0},
+            {"price": 99.0, "size": 5.0},
+        ],
+        asks_near=[
+            {"price": 101.0, "size": 1.0},
+            {"price": 101.5, "size": 1.0},
+            {"price": 102.0, "size": 1.0},
+        ],
+        bids_far=[],
+        asks_far=[],
+    )
+
+
+def _flat_book() -> BookState:
+    return BookState(
+        best_bid=100.0,
+        best_ask=101.0,
+        spread=1.0,
+        mid_price=100.5,
+        interpretation_bucket="allow_structural_use",
+        bids_near=[
+            {"price": 100.0, "size": 1.0},
+            {"price": 99.5, "size": 1.0},
+            {"price": 99.0, "size": 1.0},
+        ],
+        asks_near=[
+            {"price": 101.0, "size": 1.0},
+            {"price": 101.5, "size": 1.0},
+            {"price": 102.0, "size": 1.0},
+        ],
+        bids_far=[],
+        asks_far=[],
+    )
+
+
+def main() -> int:
+    status, summary = build_live_orderbook_semantics_summary(
+        prev_book_state=_prev_book(),
+        book_state=_book(),
+        semantic_policy={
+            "pressure_threshold": 0.20,
+            "wall_ratio_threshold": 0.30,
+            "wall_near_rank_threshold": 5,
+        },
+    )
+
+    assert status == "partial"
+    assert summary["near_wall"] is not None
+    assert summary["near_wall"]["side"] == "bid"
+    assert summary["support"] is not None
+    assert summary["support"]["event_name"] == "support_candidate"
+    assert summary["resistance"] is None
+    assert summary["persistence"] is not None
+    assert summary["persistence"]["event_name"] in {
+        "near_wall_continued",
+        "support_continued",
+    }
+    assert summary["summary_slots_present"] == [
+        "near_wall",
+        "support",
+        "persistence",
+    ]
+    assert summary["summary_slots_count"] == 3
+    assert summary["active_event_count"] == len(summary["active_event_names"])
+    assert "support_candidate" in summary["active_event_names"]
+    assert isinstance(summary["active_event_contracts"], list)
+    assert any(
+        str(event.get("event_name")) == "support_candidate"
+        and str(event.get("event_family")) == "support_resistance"
+        and str(event.get("usage_grade")) == "strong"
+        for event in summary["active_event_contracts"]
+    )
+
+    support_row = next(
+        event
+        for event in summary["active_event_contracts"]
+        if str(event.get("event_name")) == "support_candidate"
+    )
+    stable_support_projection = {
+        key: support_row.get(key)
+        for key in _STABLE_EVENT_CONTRACT_KEYS
+    }
+    assert set(stable_support_projection) == set(_STABLE_EVENT_CONTRACT_KEYS)
+    assert stable_support_projection["meaning_version"] == "l3_event_usage_policy.v1alpha1"
+    assert stable_support_projection["contract_source"] == "l3_event_usage_policy"
+    assert stable_support_projection["trust_bucket"] == "degraded"
+    assert stable_support_projection["interpretation_bucket"] == "allow_structural_use"
+    assert support_row["consumer_allowed"] == [
+        "ui",
+        "alert",
+        "ai",
+        "strategy",
+        "execution",
+    ]
+    assert support_row["actionability"] == "actionable"
+    assert support_row["forecast_horizon_hint"] == "short"
+    assert support_row["half_life_sec"] == 30
+    assert support_row["invalidates_on"] == [
+        "series_boundary",
+        "reanchor_required",
+    ]
+    assert support_row["evidence_refs"] == []
+
+    flat_status, flat_summary = build_live_orderbook_semantics_summary(
+        prev_book_state=None,
+        book_state=_flat_book(),
+        semantic_policy={
+            "pressure_threshold": 0.20,
+            "wall_ratio_threshold": 0.60,
+            "wall_near_rank_threshold": 5,
+        },
+    )
+
+    assert flat_status == "partial"
+    assert flat_summary["near_wall"] is None
+    assert flat_summary["support"] is None
+    assert flat_summary["resistance"] is None
+    assert flat_summary["persistence"] is None
+    assert flat_summary["summary_slots_present"] == []
+    assert flat_summary["summary_slots_count"] == 0
+    assert flat_summary["active_event_count"] == 0
+    assert flat_summary["active_event_names"] == []
+    assert flat_summary["active_event_contracts"] == []
+
+    print("ok")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
