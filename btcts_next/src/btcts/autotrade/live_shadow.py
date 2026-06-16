@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict
 
-from btcts.autotrade.config.models import ParameterSet
+from btcts.autotrade.config.models import ParameterSet, ParameterSetBundle
 from btcts.autotrade.ledger import ShadowDecisionRecord, append_decision_jsonl, build_shadow_decision_record
 from btcts.autotrade.modes import AutoTradeMode
 from btcts.autotrade.read_model import build_rule_based_forecast_5m, load_latest_snapshot_from_market_state
@@ -50,10 +50,13 @@ def run_shadow_decision_from_snapshot(
     *,
     snapshot: AutoTradeSnapshot,
     parameter_set: ParameterSet,
+    parameter_bundle: ParameterSetBundle | None = None,
     ledger_path: Path | None = None,
     persist: bool = True,
 ) -> ShadowDecisionVerticalResult:
     path = ledger_path or default_shadow_decision_ledger_path(ensure=persist)
+    if parameter_bundle is not None:
+        parameter_set = parameter_bundle.trade_parameter_set
     forecast = build_rule_based_forecast_5m(snapshot, parameter_set)
     candidate = build_action_candidate(snapshot, forecast, parameter_set)
     risk = evaluate_risk_gate(snapshot, candidate, mode=AutoTradeMode.SHADOW)
@@ -63,6 +66,7 @@ def run_shadow_decision_from_snapshot(
         forecast_5m=forecast,
         candidate=candidate,
         risk_gate=risk,
+        parameter_bundle=parameter_bundle,
     )
     appended = False
     if persist:
@@ -86,6 +90,7 @@ def run_shadow_decision_from_snapshot(
 def run_latest_market_state_shadow_decision(
     *,
     parameter_set: ParameterSet,
+    parameter_bundle: ParameterSetBundle | None = None,
     exchange: str = "bitflyer",
     symbol_raw: str = "BTC_JPY",
     state_type: str = "market.overview",
@@ -93,6 +98,8 @@ def run_latest_market_state_shadow_decision(
     persist: bool = True,
 ) -> ShadowDecisionVerticalResult:
     path = ledger_path or default_shadow_decision_ledger_path(ensure=persist)
+    if parameter_bundle is not None:
+        parameter_set = parameter_bundle.trade_parameter_set
     snapshot, diagnostics = load_latest_snapshot_from_market_state(
         parameter_set=parameter_set,
         exchange=exchange,
@@ -116,6 +123,7 @@ def run_latest_market_state_shadow_decision(
     result = run_shadow_decision_from_snapshot(
         snapshot=snapshot,
         parameter_set=parameter_set,
+        parameter_bundle=parameter_bundle,
         ledger_path=path,
         persist=persist,
     )

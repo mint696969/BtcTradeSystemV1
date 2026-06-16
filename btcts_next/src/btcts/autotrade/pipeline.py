@@ -6,7 +6,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Dict
 
-from btcts.autotrade.config.models import ParameterSet
+from btcts.autotrade.config.models import ParameterSet, ParameterSetBundle
 from btcts.autotrade.execution import OrderIntent, build_order_intent_from_decision, evaluate_armed_dry_run_intent
 from btcts.autotrade.ledger import abstention_from_decision, outcome_from_decision, build_shadow_decision_record
 from btcts.autotrade.modes import AutoTradeMode
@@ -44,12 +44,15 @@ def run_shadow_paper_dry_run_vertical_slice(
     snapshot: AutoTradeSnapshot,
     parameter_set: ParameterSet,
     mode: AutoTradeMode,
+    parameter_bundle: ParameterSetBundle | None = None,
     paper_engine: PaperExecutionEngine | None = None,
     runtime: RuntimeHealthState | None = None,
     kill_switch: KillSwitchState | None = None,
     size: float = 0.01,
     price: float | None = None,
 ) -> AutoTradeVerticalSliceResult:
+    if parameter_bundle is not None:
+        parameter_set = parameter_bundle.trade_parameter_set
     forecast = build_rule_based_forecast_5m(snapshot, parameter_set)
     candidate = build_action_candidate(snapshot, forecast, parameter_set)
     risk = evaluate_risk_gate(snapshot, candidate, mode=mode)
@@ -59,6 +62,7 @@ def run_shadow_paper_dry_run_vertical_slice(
         forecast_5m=forecast,
         candidate=candidate,
         risk_gate=risk,
+        parameter_bundle=parameter_bundle,
     )
     outcome_from_decision(decision)
     abstention = abstention_from_decision(decision)
