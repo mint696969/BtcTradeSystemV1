@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
@@ -74,6 +74,38 @@ def _candidate_parameter_bundle_recheck_controls(candidate_note: Dict[str, Any])
     enforce = bool(candidate_note.get("enforce_parameter_bundle_runtime", True))
     stage = str(candidate_note.get("required_parameter_bundle_stage") or "live")
     return enforce, stage
+
+
+
+
+def _readiness_recheck_payload(
+    *,
+    readiness: Any,
+    candidate_note: Dict[str, Any],
+    enforce_parameter_bundle_runtime: bool,
+    required_parameter_bundle_stage: str,
+) -> Dict[str, Any]:
+    if hasattr(readiness, "to_dict"):
+        readiness_data = readiness.to_dict()
+    else:
+        readiness_data = {}
+    if not isinstance(readiness_data, dict):
+        readiness_data = {}
+    return {
+        "schema_version": "autotrade.mode_state_readiness_recheck.v1",
+        "ready": bool(getattr(readiness, "ready", readiness_data.get("ready", False))),
+        "blocked_by": list(getattr(readiness, "blocked_by", readiness_data.get("blocked_by", ()) or ())),
+        "warnings": list(getattr(readiness, "warnings", readiness_data.get("warnings", ()) or ())),
+        "enforce_parameter_bundle_runtime": bool(enforce_parameter_bundle_runtime),
+        "required_parameter_bundle_stage": str(required_parameter_bundle_stage),
+        "parameter_bundle_runtime": readiness_data.get("parameter_bundle_runtime"),
+        "candidate_parameter_bundle_runtime": candidate_note.get("parameter_bundle_runtime"),
+        "candidate_ready": candidate_note.get("ready"),
+        "candidate_current_mode": candidate_note.get("current_mode"),
+        "candidate_target_mode": candidate_note.get("target_mode"),
+        "would_send_to_broker": False,
+        "read_only_audit": True,
+    }
 
 
 def _applied_command_ids(path: Path, *, max_lines: int | None) -> tuple[set[str], int]:
@@ -220,6 +252,7 @@ def _readiness_rejected_mode_state_record(
     command: Any,
     readiness: Any,
     blocked_by: Tuple[str, ...],
+    readiness_recheck: Dict[str, Any] | None = None,
 ) -> ModeStateRecord:
     return ModeStateRecord(
         current_mode=current_mode,
@@ -233,6 +266,7 @@ def _readiness_rejected_mode_state_record(
         blocked_by=blocked_by,
         ledger_event="autotrade.mode_state_readiness_recheck_rejected",
         would_send_to_broker=False,
+        readiness_recheck=readiness_recheck,
     )
 
 
@@ -480,11 +514,18 @@ def apply_latest_mode_change_command_once_with_readiness_recheck(
     )
     if not readiness.ready:
         blocked = tuple(dict.fromkeys(("readiness_recheck_not_ready",) + tuple(readiness.blocked_by) + tuple(command.blocked_by)))
+        readiness_recheck = _readiness_recheck_payload(
+            readiness=readiness,
+            candidate_note=candidate_note,
+            enforce_parameter_bundle_runtime=enforce_parameter_bundle_runtime,
+            required_parameter_bundle_stage=required_parameter_bundle_stage,
+        )
         record = _readiness_rejected_mode_state_record(
             current_mode=before.current_mode,
             command=command,
             readiness=readiness,
             blocked_by=blocked,
+            readiness_recheck=readiness_recheck,
         )
         append_mode_state_record(state_path, record)
         return ModeChangeCommandReadinessApplyResult(
@@ -528,7 +569,16 @@ def apply_latest_mode_change_command_once_with_readiness_recheck(
             mode_changed=False,
             would_send_to_broker=False,
         )
-    record = build_mode_state_record_from_command(current_mode=before.current_mode, command_record=command)
+    readiness_recheck = _readiness_recheck_payload(
+        readiness=readiness,
+        candidate_note=candidate_note,
+        enforce_parameter_bundle_runtime=enforce_parameter_bundle_runtime,
+        required_parameter_bundle_stage=required_parameter_bundle_stage,
+    )
+    record = replace(
+        build_mode_state_record_from_command(current_mode=before.current_mode, command_record=command),
+        readiness_recheck=readiness_recheck,
+    )
     append_mode_state_record(state_path, record)
     return ModeChangeCommandReadinessApplyResult(
         applied=True,

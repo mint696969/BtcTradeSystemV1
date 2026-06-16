@@ -37,6 +37,7 @@ class ModeStateRecord:
     blocked_by: Tuple[str, ...] = ()
     ledger_event: str = "autotrade.mode_state_recorded"
     would_send_to_broker: bool = False
+    readiness_recheck: Dict[str, Any] | None = None
 
     def to_dict(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -78,6 +79,7 @@ class ModeStateSummary:
     latest_reason_codes: Tuple[str, ...] = ()
     latest_blocked_by: Tuple[str, ...] = ()
     latest_would_send_to_broker: bool | None = None
+    latest_readiness_recheck: Dict[str, Any] | None = None
     mode_counts: Dict[str, int] = field(default_factory=dict)
     blocked_by_counts: Dict[str, int] = field(default_factory=dict)
     error_samples: Tuple[str, ...] = ()
@@ -180,6 +182,7 @@ def _parse_record(obj: Any) -> ModeStateRecord:
         blocked_by=tuple(obj.get("blocked_by") or ()),
         ledger_event=str(obj.get("ledger_event") or "autotrade.mode_state_recorded"),
         would_send_to_broker=bool(obj.get("would_send_to_broker", False)),
+        readiness_recheck=obj.get("readiness_recheck") if isinstance(obj.get("readiness_recheck"), dict) else None,
     )
 
 
@@ -232,6 +235,7 @@ def summarize_mode_state(path: Path | None = None, *, max_lines: int | None = 10
         latest_reason_codes=latest.reason_codes,
         latest_blocked_by=latest.blocked_by,
         latest_would_send_to_broker=latest.would_send_to_broker,
+        latest_readiness_recheck=latest.readiness_recheck,
         mode_counts=dict(mode_counter),
         blocked_by_counts=dict(blocked_counter),
         error_samples=read.error_samples,

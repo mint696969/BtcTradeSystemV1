@@ -242,6 +242,7 @@ def _render_mode_state_status() -> None:
             "latest_reason_codes": data.get("latest_reason_codes"),
             "latest_blocked_by": data.get("latest_blocked_by"),
             "latest_would_send_to_broker": data.get("latest_would_send_to_broker"),
+            "latest_readiness_recheck": data.get("latest_readiness_recheck"),
             "mode_counts": data.get("mode_counts"),
             "blocked_by_counts": data.get("blocked_by_counts"),
             "error_samples": data.get("error_samples"),
