@@ -151,6 +151,17 @@ def parameter_registry_path(*, ensure: bool = True) -> Path:
 def parameter_sets_dir(*, ensure: bool = True) -> Path:
     return autotrade_runtime_paths(ensure=ensure).parameter_sets_dir
 
+def parameter_bundle_event_ledger_path(name: str = "parameter_bundle_events.jsonl", *, ensure: bool = True) -> Path:
+    filename = (name or "parameter_bundle_events.jsonl").strip()
+    if not filename.endswith(".jsonl"):
+        filename = f"{filename}.jsonl"
+    paths = autotrade_runtime_paths(ensure=ensure)
+    parameter_dir = paths.parameter_registry_path.parent
+    if ensure:
+        parameter_dir.mkdir(parents=True, exist_ok=True)
+    return parameter_dir / filename
+
+
 def decision_ledger_path(name: str = "shadow_decisions.jsonl", *, ensure: bool = True) -> Path:
     filename = (name or "shadow_decisions.jsonl").strip()
     if not filename.endswith(".jsonl"):
