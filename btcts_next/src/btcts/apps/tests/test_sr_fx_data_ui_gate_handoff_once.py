@@ -29,6 +29,9 @@ def _package_ok_blocked() -> dict:
             "order_sender_not_implemented",
             "observer_run_missing",
             "pre_live_blocker_report_not_clear",
+            "runtime_control_not_clear",
+            "heartbeat_stale",
+            "open_incident_present",
         ],
         "decision": "data_ui_ready_but_execution_safety_boundaries_remain_separate",
         "package_version": "sr_fx_final_review_package.v1",
@@ -40,6 +43,17 @@ def _package_ok_blocked() -> dict:
             "live_readiness_contract_ready": False,
             "execution_safety_harness_ready": False,
             "pre_live_blocker_report_clear": False,
+            "runtime_control_clear": False,
+        },
+        "runtime_control": {
+            "present": True,
+            "clear": False,
+            "source": "pre_live_blocker_report.runtime_control",
+            "path": "D:/btc_ts_hot/state/autotrade/diagnostics/runtime_control_state.json",
+            "blocked_by": ["heartbeat_stale", "open_incident_present"],
+            "kill_switch_active": False,
+            "heartbeat_fresh": False,
+            "incident_count": 1,
         },
         "summary": {
             "product_code": "FX_BTC_JPY",
@@ -68,7 +82,12 @@ def test_handoff_marks_data_ui_complete_but_keeps_execution_blocked() -> None:
     assert payload["completed_scope"]["primary_lineage"] == "continuous_ws"
     assert payload["execution_boundary"]["clear"] is False
     assert "account_not_clear_for_new_auto_entry" in payload["execution_boundary"]["blocked_by"]
+    assert payload["execution_boundary"]["runtime_control"]["present"] is True
+    assert payload["execution_boundary"]["runtime_control"]["clear"] is False
+    assert "heartbeat_stale" in payload["execution_boundary"]["runtime_control"]["blocked_by"]
     assert "resolve_or_explicitly_accept_existing_fx_positions_and_open_orders" in payload["execution_boundary"]["next_actions"]
+    assert "clear_runtime_control_heartbeat_kill_switch_incident_blockers" in payload["execution_boundary"]["next_actions"]
+    assert "resolve_or_explicitly_close_runtime_incident_before_live_review" in payload["execution_boundary"]["next_actions"]
     assert "require_final_human_review_before_any_mode_change" in payload["execution_boundary"]["next_actions"]
     assert payload["autotrade_resume_authorized"] is False
     assert payload["final_human_review_required"] is True

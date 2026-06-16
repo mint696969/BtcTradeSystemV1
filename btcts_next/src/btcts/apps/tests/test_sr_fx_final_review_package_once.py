@@ -84,19 +84,50 @@ def _safety(ok: bool = False) -> dict:
     }
 
 
-def _report(ok: bool = False) -> dict:
+def _report(ok: bool = False, *, runtime_ok: bool | None = None) -> dict:
+    runtime = _runtime_control(ok=bool(runtime_ok if runtime_ok is not None else ok))["runtime_control"]
     return {
+        "runtime_control": runtime,
         "report": {
             "ok": ok,
             "product_code": "FX_BTC_JPY",
             "market_uid": "bitflyer.fx.FX_BTC_JPY",
+            "primary_blockers": [] if ok else ["pre_live_blockers_present"],
             "blocked_by": [] if ok else ["pre_live_blockers_present"],
+            "sections": {
+                "runtime_control": {
+                    "ok": runtime["ok"],
+                    "blocked_by": runtime["blocked_by"],
+                    "warnings": runtime["warnings"],
+                    "summary": {"heartbeat_fresh": runtime["heartbeat"]["fresh"], "incident_count": len(runtime["incidents"])},
+                    "read_only": True,
+                    "would_send_to_broker": False,
+                }
+            },
             "read_only": True,
             "would_send_to_broker": False,
             "mode_changed": False,
         }
     }
 
+
+
+def _runtime_control(ok: bool = False) -> dict:
+    return {
+        "runtime_control": {
+            "exists": True,
+            "path": "D:/btc_ts_hot/state/autotrade/diagnostics/runtime_control_state.json",
+            "ok": ok,
+            "blocked_by": [] if ok else ["heartbeat_stale", "open_incident_present"],
+            "warnings": ["runtime_control_scaffold_read_only"],
+            "kill_switch": {"active": False, "action": "HALT_NEW"},
+            "heartbeat": {"fresh": ok, "component": "autotrade.runtime"},
+            "incidents": [] if ok else [{"incident_id": "inc_unit", "open": True}],
+            "read_only": True,
+            "would_send_to_broker": False,
+            "mode_changed": False,
+        }
+    }
 
 def test_package_can_be_ok_for_data_ui_while_execution_boundary_is_blocked() -> None:
     payload = app.build_sr_fx_final_review_package_payload(
@@ -162,6 +193,8 @@ def test_package_detects_missing_optional_execution_artifacts() -> None:
     assert "live_readiness_contract_not_ready" in payload["execution_boundary_blocked_by"]
     assert "execution_safety_harness_missing" in payload["execution_boundary_blocked_by"]
     assert "pre_live_blocker_report_missing" in payload["execution_boundary_blocked_by"]
+    assert "runtime_control_not_confirmed" in payload["execution_boundary_blocked_by"]
+    assert "runtime_control_snapshot_missing" in payload["execution_boundary_blocked_by"]
     assert payload["autotrade_resume_authorized"] is False
 
 
@@ -199,3 +232,45 @@ def test_main_writes_final_review_package(monkeypatch, tmp_path) -> None:
     assert data["autotrade_resume_authorized"] is False
     assert data["read_only"] is True
     assert data["would_send_to_broker"] is False
+
+def test_package_surfaces_runtime_control_visibility_and_blockers() -> None:
+    payload = app.build_sr_fx_final_review_package_payload(
+        data_ui_checkpoint=_data_ui_ok(),
+        public_market_readiness=_public(ok=True),
+        private_readiness=_private(clear=True),
+        live_readiness_contract=_live(ready=True),
+        execution_safety_harness=_safety(ok=True),
+        pre_live_blocker_report=_report(ok=False, runtime_ok=False),
+        generated_at="2026-06-14T00:00:00Z",
+    )
+
+    assert payload["execution_boundary_clear"] is False
+    assert payload["checks"]["runtime_control_present"] is True
+    assert payload["checks"]["runtime_control_clear"] is False
+    assert payload["runtime_control"]["present"] is True
+    assert payload["runtime_control"]["clear"] is False
+    assert payload["runtime_control"]["heartbeat_fresh"] is False
+    assert "runtime_control_not_clear" in payload["execution_boundary_blocked_by"]
+    assert "heartbeat_stale" in payload["execution_boundary_blocked_by"]
+    assert "open_incident_present" in payload["execution_boundary_blocked_by"]
+    assert payload["autotrade_resume_authorized"] is False
+    assert payload["would_send_to_broker"] is False
+
+
+def test_package_can_show_runtime_control_clear_when_pre_live_report_clear() -> None:
+    payload = app.build_sr_fx_final_review_package_payload(
+        data_ui_checkpoint=_data_ui_ok(),
+        public_market_readiness=_public(ok=True),
+        private_readiness=_private(clear=True),
+        live_readiness_contract=_live(ready=True),
+        execution_safety_harness=_safety(ok=True),
+        pre_live_blocker_report=_report(ok=True, runtime_ok=True),
+        generated_at="2026-06-14T00:00:00Z",
+    )
+
+    assert payload["checks"]["runtime_control_present"] is True
+    assert payload["checks"]["runtime_control_clear"] is True
+    assert payload["runtime_control"]["clear"] is True
+    assert "runtime_control_not_clear" not in payload["execution_boundary_blocked_by"]
+    assert payload["would_send_to_broker"] is False
+

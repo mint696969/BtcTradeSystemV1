@@ -73,6 +73,14 @@ def _next_execution_actions(blockers: list[str]) -> list[str]:
         actions.append("rerun_live_readiness_contract_and_execution_safety_harness_after_fixes")
     if "pre_live_blocker_report_not_clear" in blockers:
         actions.append("rerun_pre_live_blocker_report_until_primary_blockers_clear")
+    if "runtime_control_not_confirmed" in blockers or "runtime_control_snapshot_missing" in blockers:
+        actions.append("create_or_refresh_runtime_control_snapshot_before_final_review")
+    if "runtime_control_not_clear" in blockers or "heartbeat_stale" in blockers or "heartbeat_missing" in blockers:
+        actions.append("clear_runtime_control_heartbeat_kill_switch_incident_blockers")
+    if "open_incident_present" in blockers:
+        actions.append("resolve_or_explicitly_close_runtime_incident_before_live_review")
+    if "kill_switch_active" in blockers:
+        actions.append("keep_autotrade_halted_until_kill_switch_is_cleared_by_protocol")
     actions.append("require_final_human_review_before_any_mode_change")
     return list(dict.fromkeys(actions))
 
@@ -87,6 +95,7 @@ def build_sr_fx_data_ui_gate_handoff_payload(
     summary = dict(package.get("summary") or {})
     checks = dict(package.get("checks") or {})
     execution_blockers = _list(package.get("execution_boundary_blocked_by"))
+    runtime_control = dict(package.get("runtime_control") or {})
     data_ui_ready = bool(package.get("ok")) and bool(package.get("data_ui_integrity_ready_for_final_human_review"))
     execution_clear = bool(package.get("execution_boundary_clear"))
 
@@ -129,6 +138,17 @@ def build_sr_fx_data_ui_gate_handoff_payload(
             "live_readiness_contract_ready": bool(checks.get("live_readiness_contract_ready")),
             "execution_safety_harness_ready": bool(checks.get("execution_safety_harness_ready")),
             "pre_live_blocker_report_clear": bool(checks.get("pre_live_blocker_report_clear")),
+            "runtime_control_clear": bool(checks.get("runtime_control_clear")),
+            "runtime_control": {
+                "present": bool(runtime_control.get("present")),
+                "clear": bool(runtime_control.get("clear")),
+                "source": runtime_control.get("source"),
+                "path": runtime_control.get("path"),
+                "blocked_by": _list(runtime_control.get("blocked_by")),
+                "kill_switch_active": bool(runtime_control.get("kill_switch_active")),
+                "heartbeat_fresh": runtime_control.get("heartbeat_fresh"),
+                "incident_count": runtime_control.get("incident_count"),
+            },
         },
         "safety_lock": safety_lock,
         "source_package_decision": package.get("decision"),

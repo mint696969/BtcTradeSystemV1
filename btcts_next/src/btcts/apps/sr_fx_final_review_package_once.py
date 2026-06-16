@@ -68,7 +68,7 @@ def _nested(payload: Mapping[str, Any] | None, key: str) -> dict[str, Any]:
 
 def _blocked(payload: Mapping[str, Any] | None, *, nested_key: str | None = None) -> list[str]:
     target = _nested(payload, nested_key) if nested_key else dict(payload or {})
-    raw = target.get("blocked_by") or []
+    raw = target.get("blocked_by") or target.get("primary_blockers") or []
     if isinstance(raw, list):
         return [str(item) for item in raw]
     if isinstance(raw, tuple):
@@ -79,6 +79,14 @@ def _blocked(payload: Mapping[str, Any] | None, *, nested_key: str | None = None
 def _bool(payload: Mapping[str, Any] | None, key: str, *, nested_key: str | None = None, default: bool = False) -> bool:
     target = _nested(payload, nested_key) if nested_key else dict(payload or {})
     return bool(target.get(key, default))
+
+
+def _list(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(item) for item in value]
+    return [str(value)]
 
 
 def _identity_ok(*payloads: Mapping[str, Any] | None) -> bool:
@@ -93,6 +101,81 @@ def _identity_ok(*payloads: Mapping[str, Any] | None) -> bool:
         if market_uid and market_uid != EXPECTED_MARKET_UID:
             return False
     return True
+
+
+def _section(payload: Mapping[str, Any] | None, *keys: str) -> dict[str, Any]:
+    current: Mapping[str, Any] | None = payload
+    for key in keys:
+        if not isinstance(current, Mapping):
+            return {}
+        value = current.get(key)
+        if not isinstance(value, Mapping):
+            return {}
+        current = value
+    return dict(current or {})
+
+
+def _runtime_control_visibility(
+    *,
+    execution_safety_harness: Mapping[str, Any] | None,
+    pre_live_blocker_report: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    safety_runtime = _section(execution_safety_harness, "runtime_control")
+    safety_leaf = _nested(execution_safety_harness, "execution_safety_harness")
+    report_runtime = _section(pre_live_blocker_report, "runtime_control")
+    report_runtime_section = _section(pre_live_blocker_report, "report", "sections", "runtime_control")
+
+    source = "missing"
+    runtime = {}
+    if report_runtime:
+        source = "pre_live_blocker_report.runtime_control"
+        runtime = report_runtime
+    elif safety_runtime:
+        source = "execution_safety_harness.runtime_control"
+        runtime = safety_runtime
+    elif report_runtime_section:
+        source = "pre_live_blocker_report.report.sections.runtime_control"
+        runtime = report_runtime_section
+
+    section_summary = dict(report_runtime_section.get("summary") or {}) if isinstance(report_runtime_section.get("summary"), Mapping) else {}
+    safety_blocked = _blocked(safety_leaf)
+    runtime_blocked = _blocked(runtime)
+    section_blocked = _blocked(report_runtime_section)
+    runtime_control_blocked_by = list(dict.fromkeys([
+        *runtime_blocked,
+        *section_blocked,
+        *[str(item) for item in safety_leaf.get("runtime_control_blocked_by") or []],
+    ]))
+
+    present = bool(runtime or report_runtime_section or safety_leaf.get("runtime_control_ok") is not None)
+    ok_values = []
+    if runtime:
+        ok_values.append(bool(runtime.get("ok")))
+    if report_runtime_section:
+        ok_values.append(bool(report_runtime_section.get("ok")))
+    if safety_leaf.get("runtime_control_ok") is not None:
+        ok_values.append(bool(safety_leaf.get("runtime_control_ok")))
+    clear = bool(present and all(ok_values) and not runtime_control_blocked_by)
+
+    kill_switch = dict(runtime.get("kill_switch") or {}) if isinstance(runtime.get("kill_switch"), Mapping) else {}
+    heartbeat = dict(runtime.get("heartbeat") or {}) if isinstance(runtime.get("heartbeat"), Mapping) else {}
+    return {
+        "present": present,
+        "clear": clear,
+        "source": source,
+        "path": runtime.get("path"),
+        "exists": runtime.get("exists"),
+        "blocked_by": runtime_control_blocked_by,
+        "warnings": _list(runtime.get("warnings")) + _list(report_runtime_section.get("warnings")),
+        "kill_switch_active": bool(kill_switch.get("active") or section_summary.get("kill_switch_active")),
+        "kill_switch_action": kill_switch.get("action") or section_summary.get("kill_switch_action"),
+        "heartbeat_fresh": heartbeat.get("fresh", section_summary.get("heartbeat_fresh")),
+        "heartbeat_component": heartbeat.get("component") or section_summary.get("heartbeat_component"),
+        "incident_count": len(runtime.get("incidents") or []) if isinstance(runtime.get("incidents"), list) else section_summary.get("incident_count", 0),
+        "read_only": bool(runtime.get("read_only", True)),
+        "would_send_to_broker": bool(runtime.get("would_send_to_broker", False)),
+        "mode_changed": bool(runtime.get("mode_changed", False)),
+    }
 
 
 def build_sr_fx_final_review_package_payload(
@@ -113,6 +196,10 @@ def build_sr_fx_final_review_package_payload(
     live_leaf = _nested(live_readiness_contract, "live_readiness_contract")
     safety_leaf = _nested(execution_safety_harness, "execution_safety_harness")
     blocker_report_leaf = _nested(pre_live_blocker_report, "report")
+    runtime_control = _runtime_control_visibility(
+        execution_safety_harness=execution_safety_harness,
+        pre_live_blocker_report=pre_live_blocker_report,
+    )
 
     data_ui_ready = bool(data_ui_checkpoint.get("ok")) and bool(data_ui_checkpoint.get("data_ui_integrity_ready_for_final_human_review"))
     public_ready = bool(public_leaf.get("ok"))
@@ -141,6 +228,18 @@ def build_sr_fx_final_review_package_payload(
     elif not blocker_report_ready:
         execution_boundary_blocked_by.append("pre_live_blocker_report_not_clear")
         execution_boundary_blocked_by.extend(_blocked(pre_live_blocker_report, nested_key="report"))
+    if not runtime_control["present"]:
+        execution_boundary_blocked_by.append("runtime_control_not_confirmed")
+        execution_boundary_blocked_by.append("runtime_control_snapshot_missing")
+    elif not runtime_control["clear"]:
+        execution_boundary_blocked_by.append("runtime_control_not_clear")
+        execution_boundary_blocked_by.extend(runtime_control["blocked_by"])
+    if runtime_control["would_send_to_broker"]:
+        execution_boundary_blocked_by.append("runtime_control_unexpected_broker_send_signal")
+    if runtime_control["mode_changed"]:
+        execution_boundary_blocked_by.append("runtime_control_unexpected_mode_change")
+    if not runtime_control["read_only"]:
+        execution_boundary_blocked_by.append("runtime_control_not_read_only")
 
     identity_ok = _identity_ok(data_ui_checkpoint, lineage_audit, public_leaf, private_leaf, live_leaf, safety_leaf)
     if not identity_ok:
@@ -199,8 +298,11 @@ def build_sr_fx_final_review_package_payload(
             "live_readiness_contract_ready": live_contract_ready,
             "execution_safety_harness_ready": safety_ready,
             "pre_live_blocker_report_clear": blocker_report_ready,
+            "runtime_control_present": bool(runtime_control["present"]),
+            "runtime_control_clear": bool(runtime_control["clear"]),
             "no_unexpected_send_flags": not unexpected_send_flags,
         },
+        "runtime_control": runtime_control,
         "summary": {
             "product_code": EXPECTED_PRODUCT_CODE,
             "market_uid": EXPECTED_MARKET_UID,
@@ -212,6 +314,8 @@ def build_sr_fx_final_review_package_payload(
             "live_readiness_contract_ready": live_contract_ready,
             "execution_safety_harness_ready": safety_ready,
             "pre_live_blocker_report_clear": blocker_report_ready,
+            "runtime_control_clear": bool(runtime_control["clear"]),
+            "runtime_control_source": runtime_control["source"],
         },
         "source_status": {
             "data_ui_checkpoint_present": True,
@@ -221,6 +325,7 @@ def build_sr_fx_final_review_package_payload(
             "live_readiness_contract_present": live_readiness_contract is not None,
             "execution_safety_harness_present": execution_safety_harness is not None,
             "pre_live_blocker_report_present": pre_live_blocker_report is not None,
+            "runtime_control_present": bool(runtime_control["present"]),
         },
         "paths": {key: str(value) for key, value in p.items()},
     }
