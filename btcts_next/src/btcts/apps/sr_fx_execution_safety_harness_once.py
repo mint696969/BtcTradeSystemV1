@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import Dict
 
+from btcts.autotrade.execution.runtime_control import read_runtime_control_snapshot
 from btcts.autotrade.execution.safety_harness import evaluate_sr_fx_execution_safety_harness
 from btcts.autotrade.readiness import evaluate_autotrade_live_readiness
 from btcts.collector_vnext.config import ConfigValidationError, load_config
@@ -112,6 +113,7 @@ def main() -> int:
         sr_fx_live_contract_path=live_contract_path,
     )
 
+    runtime_control = read_runtime_control_snapshot()
     safety = evaluate_sr_fx_execution_safety_harness(
         public_market_readiness=public_market,
         private_readiness=private_readiness,
@@ -120,6 +122,7 @@ def main() -> int:
         target_mode=_target_mode(),
         kill_switch_active=_env_bool("BTCTS_AUTOTRADE_KILL_SWITCH_ACTIVE", False),
         kill_switch_reason=os.getenv("BTCTS_AUTOTRADE_KILL_SWITCH_REASON") or None,
+        runtime_control_snapshot=runtime_control,
     )
 
     out = {
@@ -130,7 +133,9 @@ def main() -> int:
             "private_readiness_path": str(private_path),
             "live_readiness_contract_path": str(live_contract_path),
             "safety_harness_path": str(safety_path),
+            "runtime_control_state_path": str(runtime_control.get("path")),
         },
+        "runtime_control": runtime_control,
         "autotrade_readiness": autotrade.to_dict(),
         "execution_safety_harness": safety.to_dict(),
         "read_only": True,

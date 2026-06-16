@@ -104,6 +104,23 @@ def _autotrade(ready: bool = False) -> dict:
     }
 
 
+
+def _runtime_control(ok: bool = True) -> dict:
+    return {
+        "runtime_control": {
+            "ok": ok,
+            "blocked_by": [] if ok else ["heartbeat_stale", "open_incident_present"],
+            "warnings": ["runtime_control_scaffold_read_only"],
+            "kill_switch": {"active": False, "action": "HALT_NEW"},
+            "heartbeat": {"fresh": ok, "component": "autotrade.runtime"},
+            "incidents": [] if ok else [{"incident_id": "inc_unit", "open": True}],
+            "read_only": True,
+            "would_send_to_broker": False,
+            "mode_changed": False,
+            "contract_version": "autotrade_runtime_control_snapshot.v1",
+        }
+    }
+
 def test_pre_live_blocker_report_collects_current_blockers() -> None:
     report = build_sr_fx_pre_live_blocker_report(
         public_market_readiness=_public(ok=False),
@@ -192,3 +209,40 @@ def test_pre_live_blocker_report_ready_with_clean_execution_safety_harness() -> 
     assert report.primary_blockers == ()
     assert report.would_send_to_broker is False
     assert report.read_only is True
+
+def test_pre_live_blocker_report_includes_runtime_control_when_provided() -> None:
+    report = build_sr_fx_pre_live_blocker_report(
+        public_market_readiness=_public(ok=True),
+        private_readiness=_private(clear=True),
+        live_readiness_contract=_live(ready=True),
+        autotrade_readiness=_autotrade(ready=True),
+        execution_safety_harness=_safety(ok=True),
+        runtime_control_snapshot=_runtime_control(ok=False),
+    )
+
+    assert report.ok is False
+    assert "runtime_control" in report.sections
+    assert report.sections["runtime_control"].ok is False
+    assert "heartbeat_stale" in report.primary_blockers
+    assert "open_incident_present" in report.primary_blockers
+    assert report.sections["runtime_control"].summary["heartbeat_fresh"] is False
+    assert report.would_send_to_broker is False
+    assert report.read_only is True
+
+
+def test_pre_live_blocker_report_ready_with_clean_runtime_control() -> None:
+    report = build_sr_fx_pre_live_blocker_report(
+        public_market_readiness=_public(ok=True),
+        private_readiness=_private(clear=True),
+        live_readiness_contract=_live(ready=True),
+        autotrade_readiness=_autotrade(ready=True),
+        execution_safety_harness=_safety(ok=True),
+        runtime_control_snapshot=_runtime_control(ok=True),
+    )
+
+    assert report.ok is True
+    assert report.sections["runtime_control"].ok is True
+    assert report.primary_blockers == ()
+    assert report.would_send_to_broker is False
+    assert report.mode_changed is False
+

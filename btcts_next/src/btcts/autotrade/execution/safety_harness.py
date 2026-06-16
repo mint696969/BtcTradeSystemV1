@@ -24,6 +24,8 @@ class SrFxExecutionSafetyHarnessResult:
     paper_position_size: float
     paper_position_side: str
     kill_switch_active: bool
+    runtime_control_ok: bool
+    runtime_control_blocked_by: Tuple[str, ...]
     order_sender_implemented: bool
     bitflyer_order_send_enabled: bool
     autotrade_live_order_enabled: bool
@@ -85,6 +87,7 @@ def evaluate_sr_fx_execution_safety_harness(
     target_mode: str = "LIVE_MIN_SIZE",
     kill_switch_active: bool = False,
     kill_switch_reason: str | None = None,
+    runtime_control_snapshot: Mapping[str, Any] | None = None,
 ) -> SrFxExecutionSafetyHarnessResult:
     """Evaluate the final read-only SR-FX pre-live safety harness.
 
@@ -95,6 +98,11 @@ def evaluate_sr_fx_execution_safety_harness(
     private_state = _nested(_as_mapping(private_readiness), "readiness")
     live_contract = _nested(_as_mapping(live_readiness_contract), "live_readiness_contract")
     autotrade = _nested(_as_mapping(autotrade_readiness), "readiness")
+    runtime_control = (
+        _nested(_as_mapping(runtime_control_snapshot), "runtime_control")
+        if runtime_control_snapshot is not None
+        else {}
+    )
 
     target = str(target_mode or "").strip().upper()
     product_code = str(
@@ -158,7 +166,26 @@ def evaluate_sr_fx_execution_safety_harness(
     if not autotrade_live_order_enabled:
         blocked.append("autotrade_live_order_flag_disabled")
 
-    if kill_switch_active:
+    runtime_control_ok = True
+    runtime_control_blocked_by: list[str] = []
+    runtime_kill_switch = _as_mapping(runtime_control.get("kill_switch"))
+    runtime_kill_switch_active = _bool_at(runtime_kill_switch, "active")
+    if runtime_control_snapshot is not None:
+        runtime_control_ok = _bool_at(runtime_control, "ok")
+        runtime_control_blocked_by = _list_at(runtime_control, "blocked_by")
+        if not runtime_control_ok:
+            blocked.append("runtime_control_not_ok")
+            blocked.extend(runtime_control_blocked_by)
+        if _bool_at(runtime_control, "would_send_to_broker"):
+            blocked.append("runtime_control_attempted_broker_send")
+        if not _bool_at(runtime_control, "read_only", True):
+            blocked.append("runtime_control_not_read_only")
+        if _bool_at(runtime_control, "mode_changed"):
+            blocked.append("runtime_control_unexpected_mode_change")
+        warnings.extend(_list_at(runtime_control, "warnings"))
+
+    effective_kill_switch_active = bool(kill_switch_active or runtime_kill_switch_active)
+    if effective_kill_switch_active:
         blocked.append("kill_switch_active")
         if kill_switch_reason:
             warnings.append(f"kill_switch_reason:{kill_switch_reason}")
@@ -190,7 +217,9 @@ def evaluate_sr_fx_execution_safety_harness(
         active_paper_order_count=active_paper_orders,
         paper_position_size=paper_position_size,
         paper_position_side=paper_position_side,
-        kill_switch_active=bool(kill_switch_active),
+        kill_switch_active=effective_kill_switch_active,
+        runtime_control_ok=runtime_control_ok,
+        runtime_control_blocked_by=_unique(runtime_control_blocked_by),
         order_sender_implemented=order_sender_implemented,
         bitflyer_order_send_enabled=bitflyer_order_send_enabled,
         autotrade_live_order_enabled=autotrade_live_order_enabled,

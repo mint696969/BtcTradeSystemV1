@@ -97,12 +97,14 @@ def build_sr_fx_pre_live_blocker_report(
     live_readiness_contract: Mapping[str, Any],
     autotrade_readiness: Mapping[str, Any],
     execution_safety_harness: Mapping[str, Any] | None = None,
+    runtime_control_snapshot: Mapping[str, Any] | None = None,
 ) -> SrFxPreLiveBlockerReport:
     public_market = _nested(_as_mapping(public_market_readiness), "public_market_readiness")
     private_state = _nested(_as_mapping(private_readiness), "readiness")
     live_contract = _nested(_as_mapping(live_readiness_contract), "live_readiness_contract")
     autotrade = _nested(_as_mapping(autotrade_readiness), "readiness")
     safety_harness = _nested(_as_mapping(execution_safety_harness), "execution_safety_harness") if execution_safety_harness is not None else {}
+    runtime_control = _nested(_as_mapping(runtime_control_snapshot), "runtime_control") if runtime_control_snapshot is not None else {}
 
     product_code = str(
         public_market.get("product_code")
@@ -210,6 +212,31 @@ def build_sr_fx_pre_live_blocker_report(
 
 
 
+
+    if runtime_control_snapshot is not None:
+        runtime_kill_switch = _as_mapping(runtime_control.get("kill_switch"))
+        runtime_heartbeat = _as_mapping(runtime_control.get("heartbeat"))
+        runtime_control_blockers = _list_at(runtime_control, "blocked_by")
+        if _bool_at(runtime_control, "mode_changed"):
+            runtime_control_blockers.append("runtime_control_unexpected_mode_change")
+        sections["runtime_control"] = _section(
+            name="runtime_control",
+            ok=_bool_at(runtime_control, "ok"),
+            blocked_by=runtime_control_blockers,
+            warnings=_list_at(runtime_control, "warnings"),
+            summary={
+                "ok": _bool_at(runtime_control, "ok"),
+                "exists": _bool_at(runtime_control, "exists", True),
+                "kill_switch_active": _bool_at(runtime_kill_switch, "active"),
+                "kill_switch_action": runtime_kill_switch.get("action"),
+                "heartbeat_fresh": _bool_at(runtime_heartbeat, "fresh"),
+                "heartbeat_component": runtime_heartbeat.get("component"),
+                "incident_count": len(runtime_control.get("incidents") or []),
+                "contract_version": runtime_control.get("contract_version"),
+            },
+            read_only=_bool_at(runtime_control, "read_only", True),
+            would_send_to_broker=_bool_at(runtime_control, "would_send_to_broker"),
+        )
     if execution_safety_harness is not None:
         sections["execution_safety_harness"] = _section(
             name="execution_safety_harness",

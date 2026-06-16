@@ -57,6 +57,23 @@ def _autotrade(ready: bool = True) -> dict:
     }
 
 
+
+def _runtime_control(ok: bool = True) -> dict:
+    return {
+        "runtime_control": {
+            "ok": ok,
+            "blocked_by": [] if ok else ["heartbeat_stale", "open_incident_present"],
+            "warnings": ["runtime_control_scaffold_read_only"],
+            "kill_switch": {"active": False, "action": "HALT_NEW"},
+            "heartbeat": {"fresh": ok, "component": "autotrade.runtime"},
+            "incidents": [] if ok else [{"incident_id": "inc_unit", "open": True}],
+            "read_only": True,
+            "would_send_to_broker": False,
+            "mode_changed": False,
+            "contract_version": "autotrade_runtime_control_snapshot.v1",
+        }
+    }
+
 def test_safety_harness_allows_only_clean_ready_inputs() -> None:
     result = evaluate_sr_fx_execution_safety_harness(
         public_market_readiness=_public(ok=True),
@@ -133,3 +150,41 @@ def test_safety_harness_blocks_non_live_target_and_unready_contracts() -> None:
     assert "autotrade_readiness_not_ready" in result.blocked_by
     assert result.read_only is True
     assert result.would_send_to_broker is False
+
+def test_safety_harness_blocks_runtime_control_snapshot() -> None:
+    result = evaluate_sr_fx_execution_safety_harness(
+        public_market_readiness=_public(ok=True),
+        private_readiness=_private(clear=True),
+        live_readiness_contract=_live(ready=True),
+        autotrade_readiness=_autotrade(ready=True),
+        target_mode="LIVE_MIN_SIZE",
+        runtime_control_snapshot=_runtime_control(ok=False),
+    )
+
+    assert result.ok is False
+    assert result.runtime_control_ok is False
+    assert "runtime_control_not_ok" in result.blocked_by
+    assert "heartbeat_stale" in result.blocked_by
+    assert "open_incident_present" in result.blocked_by
+    assert result.runtime_control_blocked_by == ("heartbeat_stale", "open_incident_present")
+    assert result.read_only is True
+    assert result.would_send_to_broker is False
+    assert result.mode_changed is False
+
+
+def test_safety_harness_accepts_clean_runtime_control_snapshot() -> None:
+    result = evaluate_sr_fx_execution_safety_harness(
+        public_market_readiness=_public(ok=True),
+        private_readiness=_private(clear=True),
+        live_readiness_contract=_live(ready=True),
+        autotrade_readiness=_autotrade(ready=True),
+        target_mode="LIVE_MIN_SIZE",
+        runtime_control_snapshot=_runtime_control(ok=True),
+    )
+
+    assert result.ok is True
+    assert result.runtime_control_ok is True
+    assert result.runtime_control_blocked_by == ()
+    assert result.would_send_to_broker is False
+    assert result.mode_changed is False
+

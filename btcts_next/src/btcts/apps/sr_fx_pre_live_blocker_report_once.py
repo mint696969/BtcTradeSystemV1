@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict
 
 from btcts.autotrade.execution.pre_live_blocker_report import build_sr_fx_pre_live_blocker_report
+from btcts.autotrade.execution.runtime_control import read_runtime_control_snapshot
 from btcts.autotrade.readiness import evaluate_autotrade_live_readiness
 from btcts.collector_vnext.config import ConfigValidationError, load_config
 from btcts.collector_vnext.paths import ensure_dir
@@ -58,6 +59,7 @@ def main() -> int:
     private_readiness = _read_json(private_path)
     live_contract = _read_json(live_contract_path)
     safety_harness = _read_json(safety_harness_path) if safety_harness_path.exists() else None
+    runtime_control = read_runtime_control_snapshot()
 
     autotrade = evaluate_autotrade_live_readiness(
         current_mode=os.getenv("BTCTS_AUTOTRADE_CURRENT_MODE", "ARMED_DRY_RUN"),
@@ -74,6 +76,7 @@ def main() -> int:
         live_readiness_contract=live_contract,
         autotrade_readiness={"readiness": autotrade.to_dict()},
         execution_safety_harness=safety_harness,
+        runtime_control_snapshot=runtime_control,
     )
 
     out: Dict[str, object] = {
@@ -85,7 +88,9 @@ def main() -> int:
             "live_readiness_contract_path": str(live_contract_path),
             "report_path": str(report_path),
             "execution_safety_harness_path": str(safety_harness_path),
+            "runtime_control_state_path": str(runtime_control.get("path")),
         },
+        "runtime_control": runtime_control,
         "report": report.to_dict(),
         "read_only": True,
         "would_send_to_broker": False,
