@@ -92,6 +92,8 @@ def _submit_mode_change_request(
         requested_by="operator_ui",
         human_confirmed=human_confirmed,
         allow_warnings=allow_warnings,
+        enforce_parameter_bundle_runtime=enforce_parameter_bundle_runtime,
+        required_parameter_bundle_stage=required_parameter_bundle_stage,
         max_observer_run_age_sec=120,
         max_lines=500,
     )
@@ -402,6 +404,30 @@ def _render_command_request_status() -> None:
         max_height_px=320,
     )
 
+
+def _parameter_bundle_runtime_summary_view(parameter_bundle_runtime: dict) -> dict:
+    registry = parameter_bundle_runtime.get("registry") if isinstance(parameter_bundle_runtime.get("registry"), dict) else {}
+    return {
+        "schema_version": parameter_bundle_runtime.get("schema_version"),
+        "registry_exists": parameter_bundle_runtime.get("registry_exists"),
+        "event_ledger_exists": parameter_bundle_runtime.get("event_ledger_exists"),
+        "event_count": parameter_bundle_runtime.get("event_count"),
+        "latest_event_type": parameter_bundle_runtime.get("latest_event_type"),
+        "latest_event_ts": parameter_bundle_runtime.get("latest_event_ts"),
+        "active_shadow_bundle_id": registry.get("active_shadow_bundle_id"),
+        "active_paper_bundle_id": registry.get("active_paper_bundle_id"),
+        "active_live_bundle_id": registry.get("active_live_bundle_id"),
+        "last_known_good_bundle_id": registry.get("last_known_good_bundle_id"),
+        "rollback_bundle_id": registry.get("rollback_bundle_id"),
+        "pending_draft_bundle_id": registry.get("pending_draft_bundle_id"),
+        "retired_bundle_ids": registry.get("retired_bundle_ids"),
+        "warnings": parameter_bundle_runtime.get("warnings"),
+        "blocked_by": parameter_bundle_runtime.get("blocked_by"),
+        "would_send_to_broker": False,
+        "read_only": True,
+    }
+
+
 def _render_runtime_health_status() -> None:
     st.subheader("Runtime Health")
     health = build_autotrade_runtime_health_snapshot(max_observer_run_age_sec=120, max_lines=500)
@@ -411,6 +437,8 @@ def _render_runtime_health_status() -> None:
     observer_runs = data.get("observer_runs") or {}
     shadow_decisions = data.get("shadow_decisions") or {}
     forecast_outcomes = data.get("forecast_outcomes") or {}
+    parameter_bundle_runtime = data.get("parameter_bundle_runtime") if isinstance(data.get("parameter_bundle_runtime"), dict) else {}
+    parameter_bundle_view = _parameter_bundle_runtime_summary_view(parameter_bundle_runtime)
 
     cols = st.columns(5)
     cols[0].metric("Health", health.health_state)
@@ -419,7 +447,14 @@ def _render_runtime_health_status() -> None:
     cols[3].metric("Latest Action", shadow_decisions.get("latest_action") or "none")
     cols[4].metric("Latest Outcome", forecast_outcomes.get("latest_result") or "none")
 
-    st.caption("Runtime health snapshot is read-only. UI does not run observer cycles or append ledgers.")
+    bundle_cols = st.columns(5)
+    bundle_cols[0].metric("Bundle Registry", "present" if parameter_bundle_view.get("registry_exists") else "missing")
+    bundle_cols[1].metric("Bundle Events", parameter_bundle_view.get("event_count") or 0)
+    bundle_cols[2].metric("Shadow Bundle", parameter_bundle_view.get("active_shadow_bundle_id") or "none")
+    bundle_cols[3].metric("Live Bundle", parameter_bundle_view.get("active_live_bundle_id") or "none")
+    bundle_cols[4].metric("Latest Bundle Event", parameter_bundle_view.get("latest_event_type") or "none")
+
+    st.caption("Runtime health snapshot is read-only. UI does not run observer cycles, append ledgers, mutate parameter bundles, or send broker orders.")
     _render_json(
         {
             "health_state": data.get("health_state"),
@@ -464,6 +499,7 @@ def _render_runtime_health_status() -> None:
                 "latest_forecast_confidence": forecast_outcomes.get("latest_forecast_confidence"),
                 "total_rows": forecast_outcomes.get("total_rows"),
             },
+            "parameter_bundle_runtime": parameter_bundle_view,
             "would_send_to_broker": False,
             "read_only": True,
         },
@@ -501,6 +537,20 @@ def _render_live_readiness_preflight() -> None:
         help="Preview only. Runtime still blocks on hard health failures.",
     )
 
+    bundle_cols = st.columns(2)
+    enforce_parameter_bundle_runtime = not bundle_cols[0].checkbox(
+        "Disable parameter bundle runtime check preview",
+        value=False,
+        key="autotrade_readiness_disable_parameter_bundle_runtime_check_preview",
+        help="Preview only. Dangerous targets normally require an active runtime parameter bundle.",
+    )
+    required_parameter_bundle_stage = bundle_cols[1].selectbox(
+        "Required parameter bundle stage preview",
+        ("shadow", "paper", "live", "rollback", "last_known_good", "pending_draft"),
+        index=2,
+        key="autotrade_readiness_required_parameter_bundle_stage_preview",
+    )
+
     result = evaluate_autotrade_live_readiness(
         current_mode=current_mode_value,
         target_mode=target_mode_value,
@@ -513,6 +563,8 @@ def _render_live_readiness_preflight() -> None:
     health = data.get("health") or {}
     runtime = health.get("runtime") or {}
     health_observer_runs = health.get("observer_runs") if isinstance(health.get("observer_runs"), dict) else {}
+    parameter_bundle_runtime = data.get("parameter_bundle_runtime") if isinstance(data.get("parameter_bundle_runtime"), dict) else {}
+    parameter_bundle_view = _parameter_bundle_runtime_summary_view(parameter_bundle_runtime)
 
     cols = st.columns(5)
     cols[0].metric("Ready", str(result.ready))
@@ -533,6 +585,9 @@ def _render_live_readiness_preflight() -> None:
             "human_confirmation_required": data.get("human_confirmation_required"),
             "human_confirmed": data.get("human_confirmed"),
             "allow_warnings": data.get("allow_warnings"),
+            "enforce_parameter_bundle_runtime": enforce_parameter_bundle_runtime,
+            "required_parameter_bundle_stage": required_parameter_bundle_stage,
+            "parameter_bundle_runtime": parameter_bundle_view,
             "blocked_by": data.get("blocked_by"),
             "warnings": data.get("warnings"),
             "health_state": health.get("health_state"),
