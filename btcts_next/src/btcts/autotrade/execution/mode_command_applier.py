@@ -68,6 +68,14 @@ def _command_readiness_note_payload(command_record: Any | None) -> Dict[str, Any
         return {}
     return payload
 
+
+
+def _candidate_parameter_bundle_recheck_controls(candidate_note: Dict[str, Any]) -> tuple[bool, str]:
+    enforce = bool(candidate_note.get("enforce_parameter_bundle_runtime", True))
+    stage = str(candidate_note.get("required_parameter_bundle_stage") or "live")
+    return enforce, stage
+
+
 def _applied_command_ids(path: Path, *, max_lines: int | None) -> tuple[set[str], int]:
     read = read_mode_state_records(path, max_lines=max_lines)
     ids = {str(row.source_command_id) for row in read.rows if row.source_command_id}
@@ -321,11 +329,14 @@ def preview_latest_mode_change_command_apply_with_readiness_recheck(
         )
     command = candidates[-1]
     candidate_note = _command_readiness_note_payload(command)
+    enforce_parameter_bundle_runtime, required_parameter_bundle_stage = _candidate_parameter_bundle_recheck_controls(candidate_note)
     readiness = evaluate_autotrade_live_readiness(
         current_mode=before.current_mode,
         target_mode=command.command.target,
         human_confirmed=bool(command.command.confirmation),
         allow_warnings=allow_warnings,
+        enforce_parameter_bundle_runtime=enforce_parameter_bundle_runtime,
+        required_parameter_bundle_stage=required_parameter_bundle_stage,
         max_observer_run_age_sec=max_observer_run_age_sec,
         max_lines=max_lines,
     )
@@ -456,11 +467,14 @@ def apply_latest_mode_change_command_once_with_readiness_recheck(
         )
     command = candidates[-1]
     candidate_note = _command_readiness_note_payload(command)
+    enforce_parameter_bundle_runtime, required_parameter_bundle_stage = _candidate_parameter_bundle_recheck_controls(candidate_note)
     readiness = evaluate_autotrade_live_readiness(
         current_mode=before.current_mode,
         target_mode=command.command.target,
         human_confirmed=bool(command.command.confirmation),
         allow_warnings=allow_warnings,
+        enforce_parameter_bundle_runtime=enforce_parameter_bundle_runtime,
+        required_parameter_bundle_stage=required_parameter_bundle_stage,
         max_observer_run_age_sec=max_observer_run_age_sec,
         max_lines=max_lines,
     )

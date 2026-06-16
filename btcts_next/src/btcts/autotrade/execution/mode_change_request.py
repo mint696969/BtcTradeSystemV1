@@ -52,7 +52,12 @@ class ModeChangeCommandRequestResult:
         return data
 
 
-def _readiness_note(readiness: AutoTradeReadinessResult) -> str:
+def _readiness_note(
+    readiness: AutoTradeReadinessResult,
+    *,
+    enforce_parameter_bundle_runtime: bool = True,
+    required_parameter_bundle_stage: str = "live",
+) -> str:
     payload = {
         "kind": "autotrade.mode_change_readiness_snapshot",
         "ready": readiness.ready,
@@ -67,6 +72,8 @@ def _readiness_note(readiness: AutoTradeReadinessResult) -> str:
         "observer_latest_would_send_to_broker": readiness.health.observer_runs.latest_would_send_to_broker,
         "observer_latest_bounded": readiness.health.observer_runs.latest_bounded,
         "runtime_live_ready": readiness.health.runtime.live_ready,
+        "enforce_parameter_bundle_runtime": enforce_parameter_bundle_runtime,
+        "required_parameter_bundle_stage": required_parameter_bundle_stage,
         "parameter_bundle_runtime": getattr(readiness, "parameter_bundle_runtime", None),
         "mode_changed": False,
         "would_send_to_broker": False,
@@ -105,7 +112,11 @@ def build_mode_change_command_request_record(
         target=readiness.target_mode.value,
         confirmation=bool(human_confirmed),
         reason_codes=("mode_change_request", "readiness_preflight"),
-        note=_readiness_note(readiness),
+        note=_readiness_note(
+            readiness,
+            enforce_parameter_bundle_runtime=enforce_parameter_bundle_runtime,
+            required_parameter_bundle_stage=required_parameter_bundle_stage,
+        ),
     )
     validation = validate_command_request(command)
     blocked = list(validation.blocked_by)
