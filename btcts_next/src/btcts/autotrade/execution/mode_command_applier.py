@@ -184,6 +184,7 @@ class ModeChangeCommandReadinessApplyResult:
     candidate_readiness_observer_latest_blocked_by: Tuple[str, ...] = ()
     candidate_readiness_observer_latest_would_send_to_broker: bool | None = None
     candidate_readiness_observer_latest_bounded: bool | None = None
+    candidate_readiness_parameter_bundle_runtime: Dict[str, Any] | None = None
     readiness: Any | None = None
     readiness_ready: bool = False
     blocked_by: Tuple[str, ...] = ()
@@ -256,6 +257,7 @@ class ModeChangeCommandReadinessApplyPreview:
     candidate_readiness_observer_latest_blocked_by: Tuple[str, ...] = ()
     candidate_readiness_observer_latest_would_send_to_broker: bool | None = None
     candidate_readiness_observer_latest_bounded: bool | None = None
+    candidate_readiness_parameter_bundle_runtime: Dict[str, Any] | None = None
     readiness: Any | None = None
     readiness_ready: bool = False
     blocked_by: Tuple[str, ...] = ()
@@ -352,6 +354,7 @@ def preview_latest_mode_change_command_apply_with_readiness_recheck(
             candidate_readiness_observer_latest_blocked_by=tuple(candidate_note.get("observer_latest_blocked_by") or ()),
             candidate_readiness_observer_latest_would_send_to_broker=candidate_note.get("observer_latest_would_send_to_broker"),
             candidate_readiness_observer_latest_bounded=candidate_note.get("observer_latest_bounded"),
+            candidate_readiness_parameter_bundle_runtime=candidate_note.get("parameter_bundle_runtime"),
             current_mode_before=before.current_mode.value,
             current_mode_after=before.current_mode.value,
             command_path=commands_path,
@@ -391,6 +394,7 @@ def preview_latest_mode_change_command_apply_with_readiness_recheck(
         candidate_readiness_observer_latest_blocked_by=tuple(candidate_note.get("observer_latest_blocked_by") or ()),
         candidate_readiness_observer_latest_would_send_to_broker=candidate_note.get("observer_latest_would_send_to_broker"),
         candidate_readiness_observer_latest_bounded=candidate_note.get("observer_latest_bounded"),
+        candidate_readiness_parameter_bundle_runtime=candidate_note.get("parameter_bundle_runtime"),
         current_mode_before=before.current_mode.value,
         current_mode_after=record.current_mode.value,
         command_path=commands_path,
@@ -493,6 +497,7 @@ def apply_latest_mode_change_command_once_with_readiness_recheck(
             candidate_readiness_observer_latest_blocked_by=tuple(candidate_note.get("observer_latest_blocked_by") or ()),
             candidate_readiness_observer_latest_would_send_to_broker=candidate_note.get("observer_latest_would_send_to_broker"),
             candidate_readiness_observer_latest_bounded=candidate_note.get("observer_latest_bounded"),
+            candidate_readiness_parameter_bundle_runtime=candidate_note.get("parameter_bundle_runtime"),
             current_mode_before=before.current_mode.value,
             current_mode_after=before.current_mode.value,
             command_path=commands_path,
@@ -535,6 +540,7 @@ def apply_latest_mode_change_command_once_with_readiness_recheck(
         candidate_readiness_observer_latest_blocked_by=tuple(candidate_note.get("observer_latest_blocked_by") or ()),
         candidate_readiness_observer_latest_would_send_to_broker=candidate_note.get("observer_latest_would_send_to_broker"),
         candidate_readiness_observer_latest_bounded=candidate_note.get("observer_latest_bounded"),
+        candidate_readiness_parameter_bundle_runtime=candidate_note.get("parameter_bundle_runtime"),
         current_mode_before=before.current_mode.value,
         current_mode_after=record.current_mode.value,
         command_path=commands_path,

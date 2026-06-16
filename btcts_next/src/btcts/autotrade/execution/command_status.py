@@ -49,6 +49,7 @@ class CommandLedgerSummary:
     latest_readiness_observer_blocked_by: Tuple[str, ...] = ()
     latest_readiness_observer_would_send_to_broker: bool | None = None
     latest_readiness_observer_bounded: bool | None = None
+    latest_readiness_parameter_bundle_runtime: Dict[str, Any] | None = None
     latest_mode_change_readiness_command_id: str | None = None
     latest_mode_change_readiness_requested_by: str | None = None
     latest_mode_change_readiness_requested_at: str | None = None
@@ -64,6 +65,7 @@ class CommandLedgerSummary:
     latest_mode_change_readiness_observer_blocked_by: Tuple[str, ...] = ()
     latest_mode_change_readiness_observer_would_send_to_broker: bool | None = None
     latest_mode_change_readiness_observer_bounded: bool | None = None
+    latest_mode_change_readiness_parameter_bundle_runtime: Dict[str, Any] | None = None
     command_type_counts: Dict[str, int] = field(default_factory=dict)
     target_counts: Dict[str, int] = field(default_factory=dict)
     blocked_by_counts: Dict[str, int] = field(default_factory=dict)
@@ -191,6 +193,7 @@ def summarize_command_ledger(path: Path | None = None, *, max_lines: int | None 
         latest_readiness_observer_blocked_by=tuple(latest_readiness_note.get("observer_latest_blocked_by") or ()),
         latest_readiness_observer_would_send_to_broker=latest_readiness_note.get("observer_latest_would_send_to_broker"),
         latest_readiness_observer_bounded=latest_readiness_note.get("observer_latest_bounded"),
+        latest_readiness_parameter_bundle_runtime=latest_readiness_note.get("parameter_bundle_runtime"),
         latest_mode_change_readiness_command_id=latest_mode_change_readiness_row.command_id if latest_mode_change_readiness_row is not None else None,
         latest_mode_change_readiness_requested_by=latest_mode_change_readiness_row.command.requested_by if latest_mode_change_readiness_row is not None else None,
         latest_mode_change_readiness_requested_at=latest_mode_change_readiness_row.command.requested_at if latest_mode_change_readiness_row is not None else None,
@@ -206,6 +209,7 @@ def summarize_command_ledger(path: Path | None = None, *, max_lines: int | None 
         latest_mode_change_readiness_observer_blocked_by=tuple(latest_mode_change_readiness_note.get("observer_latest_blocked_by") or ()),
         latest_mode_change_readiness_observer_would_send_to_broker=latest_mode_change_readiness_note.get("observer_latest_would_send_to_broker"),
         latest_mode_change_readiness_observer_bounded=latest_mode_change_readiness_note.get("observer_latest_bounded"),
+        latest_mode_change_readiness_parameter_bundle_runtime=latest_mode_change_readiness_note.get("parameter_bundle_runtime"),
         command_type_counts=dict(command_counter),
         target_counts=dict(target_counter),
         blocked_by_counts=dict(blocked_counter),
