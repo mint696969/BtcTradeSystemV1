@@ -11,6 +11,7 @@ from typing import Any, Sequence
 from btcts.autotrade.config.bundle_events import ParameterBundleEventType
 from btcts.autotrade.config.bundle_runtime_store import (
     activate_parameter_bundle_runtime,
+    build_parameter_bundle_runtime_status,
     initialize_default_parameter_bundle_runtime,
     rollback_parameter_bundle_runtime,
 )
@@ -52,6 +53,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         description="Run one AutoTrade parameter bundle runtime operation. Writes only parameter bundle files/registry/event ledger."
     )
     sub = parser.add_subparsers(dest="action", required=True)
+
+    status = sub.add_parser("status", help="Print read-only parameter bundle runtime status.")
+    status.add_argument("--registry-path")
+    status.add_argument("--event-ledger-path")
+    status.add_argument("--max-events", type=int, default=5)
 
     init = sub.add_parser("init-default", help="Create the default split regime/trade parameter bundle in runtime store.")
     init.add_argument("--event-ts", required=True)
@@ -99,6 +105,15 @@ def _optional_path(value: str | None) -> Path | None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
+
+    if args.action == "status":
+        data = build_parameter_bundle_runtime_status(
+            registry_path=_optional_path(args.registry_path),
+            event_ledger_path=_optional_path(args.event_ledger_path),
+            max_events=args.max_events,
+        )
+        print(json.dumps(data, ensure_ascii=False, indent=2, default=str))
+        return 0
 
     if args.action == "init-default":
         result = initialize_default_parameter_bundle_runtime(

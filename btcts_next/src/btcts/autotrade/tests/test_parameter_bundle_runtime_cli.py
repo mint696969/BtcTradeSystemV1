@@ -193,3 +193,100 @@ def test_cli_rollback_live_restores_target_bundle(tmp_path, capsys) -> None:
     assert events[-1].previous_bundle_id == "pb_bad"
     assert events[-1].new_bundle_id == "pb_good"
     assert events[-1].source_decision_ids == ("dec_bad_cli",)
+
+
+def test_cli_status_reports_registry_and_recent_events(tmp_path, capsys) -> None:
+    registry_path = tmp_path / "parameter_sets" / "registry.json"
+    event_path = tmp_path / "parameter_sets" / "parameter_bundle_events.jsonl"
+
+    assert main(
+        [
+            "init-default",
+            "--event-ts",
+            "2026-06-16T19:00:00+09:00",
+            "--reason",
+            "Initialize for status.",
+            "--created-by",
+            "human_gpt",
+            "--registry-path",
+            str(registry_path),
+            "--event-ledger-path",
+            str(event_path),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    assert main(
+        [
+            "activate-shadow",
+            "--event-ts",
+            "2026-06-16T19:30:00+09:00",
+            "--bundle-id",
+            "pb_status_shadow",
+            "--reason",
+            "Activate for status.",
+            "--approved-by",
+            "human",
+            "--registry-path",
+            str(registry_path),
+            "--event-ledger-path",
+            str(event_path),
+        ]
+    ) == 0
+    capsys.readouterr()
+
+    exit_code = main(
+        [
+            "status",
+            "--registry-path",
+            str(registry_path),
+            "--event-ledger-path",
+            str(event_path),
+            "--max-events",
+            "1",
+        ]
+    )
+
+    data = _read_stdout_json(capsys)
+
+    assert exit_code == 0
+    assert data["ok"] is True
+    assert data["schema_version"] == "autotrade_parameter_bundle_runtime_status.v1"
+    assert data["would_send_to_broker"] is False
+    assert data["registry_exists"] is True
+    assert data["event_ledger_exists"] is True
+    assert data["registry"]["active_shadow_bundle_id"] == "pb_status_shadow"
+    assert data["event_count"] == 2
+    assert data["latest_event_type"] == "bundle_activated_shadow"
+    assert len(data["recent_events"]) == 1
+    assert data["recent_events"][0]["new_bundle_id"] == "pb_status_shadow"
+
+
+def test_cli_status_handles_missing_paths_without_mutation(tmp_path, capsys) -> None:
+    registry_path = tmp_path / "parameter_sets" / "missing_registry.json"
+    event_path = tmp_path / "parameter_sets" / "missing_events.jsonl"
+
+    exit_code = main(
+        [
+            "status",
+            "--registry-path",
+            str(registry_path),
+            "--event-ledger-path",
+            str(event_path),
+        ]
+    )
+
+    data = _read_stdout_json(capsys)
+
+    assert exit_code == 0
+    assert data["ok"] is True
+    assert data["registry_exists"] is False
+    assert data["event_ledger_exists"] is False
+    assert "parameter_bundle_registry_missing" in data["warnings"]
+    assert "parameter_bundle_event_ledger_missing" in data["warnings"]
+    assert data["event_count"] == 0
+    assert data["recent_events"] == []
+    assert data["would_send_to_broker"] is False
+    assert not registry_path.exists()
+    assert not event_path.exists()
+
