@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Dict, Tuple
 
 from btcts.autotrade.config import initial_parameter_set_v0_1
-from btcts.autotrade.config.models import ParameterSet
+from btcts.autotrade.config.bundle_runtime_loader import ParameterBundleRuntimeLoadResult, load_parameter_bundle_runtime
+from btcts.autotrade.config.models import ParameterSet, ParameterSetBundle
 from btcts.autotrade.live_shadow import ShadowDecisionVerticalResult, default_shadow_decision_ledger_path, run_latest_market_state_shadow_decision
 from btcts.autotrade.mode_runtime_gate import ModeRuntimeGate, build_mode_runtime_gate
 from btcts.autotrade.runtime_paths import AutoTradeRuntimePathDiagnostics, autotrade_runtime_path_diagnostics
@@ -22,6 +24,7 @@ class ShadowCycleOnceResult:
     result: ShadowDecisionVerticalResult
     runtime_diagnostics: AutoTradeRuntimePathDiagnostics
     mode_runtime_gate: ModeRuntimeGate | None = None
+    parameter_bundle_load: ParameterBundleRuntimeLoadResult | None = None
     would_send_to_broker: bool = False
     loop_started: bool = False
 
@@ -38,6 +41,7 @@ class ShadowCycleOnceResult:
         data["result"] = self.result.to_dict()
         data["runtime_diagnostics"] = self.runtime_diagnostics.to_dict()
         data["mode_runtime_gate"] = self.mode_runtime_gate.to_dict() if self.mode_runtime_gate is not None else None
+        data["parameter_bundle_load"] = self.parameter_bundle_load.to_dict() if self.parameter_bundle_load is not None else None
         data["appended"] = self.appended
         data["blocked_by"] = list(self.blocked_by)
         return data
@@ -72,14 +76,62 @@ class ShadowCycleBoundedResult:
 def run_shadow_cycle_once(
     *,
     parameter_set: ParameterSet | None = None,
+    parameter_bundle: ParameterSetBundle | None = None,
+    load_runtime_parameter_bundle: bool = False,
+    parameter_bundle_stage: str = "shadow",
+    parameter_bundle_id: str | None = None,
+    parameter_bundle_registry_path: Path | None = None,
     exchange: str = "bitflyer",
     symbol_raw: str = "BTC_JPY",
     state_type: str = "market.overview",
     persist: bool = True,
 ) -> ShadowCycleOnceResult:
     ps = parameter_set or initial_parameter_set_v0_1()
+    active_bundle = parameter_bundle
+    bundle_load: ParameterBundleRuntimeLoadResult | None = None
     runtime_diag = autotrade_runtime_path_diagnostics()
     gate = build_mode_runtime_gate()
+
+    if active_bundle is not None:
+        ps = active_bundle.trade_parameter_set
+    elif load_runtime_parameter_bundle:
+        bundle_load = load_parameter_bundle_runtime(
+            registry_path=parameter_bundle_registry_path,
+            stage=parameter_bundle_stage,
+            bundle_id=parameter_bundle_id,
+        )
+        if bundle_load.bundle is None or bundle_load.blocked_by:
+            blocked = tuple(
+                dict.fromkeys(
+                    tuple(bundle_load.blocked_by)
+                    + tuple(bundle_load.warnings)
+                    + ("parameter_bundle_runtime_load_failed",)
+                )
+            )
+            result = ShadowDecisionVerticalResult(
+                snapshot_id=None,
+                forecast_id=None,
+                decision_id=None,
+                candidate_action=None,
+                risk_allowed=False,
+                appended=False,
+                ledger_path=default_shadow_decision_ledger_path(ensure=False),
+                blocked_by=blocked,
+                would_send_to_broker=False,
+                decision=None,
+                diagnostics=None,
+            )
+            return ShadowCycleOnceResult(
+                cycle_kind="autotrade.shadow_cycle_once",
+                result=result,
+                runtime_diagnostics=runtime_diag,
+                mode_runtime_gate=gate,
+                parameter_bundle_load=bundle_load,
+                would_send_to_broker=False,
+                loop_started=False,
+            )
+        active_bundle = bundle_load.bundle
+        ps = active_bundle.trade_parameter_set
     if not gate.allow_shadow_decision_append:
         blocked = tuple(dict.fromkeys(tuple(gate.blocked_by) + ("mode_runtime_gate_blocked_shadow_decision_append",)))
         result = ShadowDecisionVerticalResult(
@@ -100,11 +152,13 @@ def run_shadow_cycle_once(
             result=result,
             runtime_diagnostics=runtime_diag,
             mode_runtime_gate=gate,
+            parameter_bundle_load=bundle_load,
             would_send_to_broker=False,
             loop_started=False,
         )
     result = run_latest_market_state_shadow_decision(
         parameter_set=ps,
+        parameter_bundle=active_bundle,
         exchange=exchange,
         symbol_raw=symbol_raw,
         state_type=state_type,
@@ -115,6 +169,7 @@ def run_shadow_cycle_once(
         result=result,
         runtime_diagnostics=runtime_diag,
         mode_runtime_gate=gate,
+        parameter_bundle_load=bundle_load,
         would_send_to_broker=False,
         loop_started=False,
     )
@@ -134,6 +189,11 @@ def run_shadow_cycle_bounded(
     max_cycles: int,
     interval_sec: float = 0.0,
     parameter_set: ParameterSet | None = None,
+    parameter_bundle: ParameterSetBundle | None = None,
+    load_runtime_parameter_bundle: bool = False,
+    parameter_bundle_stage: str = "shadow",
+    parameter_bundle_id: str | None = None,
+    parameter_bundle_registry_path: Path | None = None,
     exchange: str = "bitflyer",
     symbol_raw: str = "BTC_JPY",
     state_type: str = "market.overview",
@@ -149,6 +209,11 @@ def run_shadow_cycle_bounded(
     for index in range(max_cycles):
         probe = run_shadow_cycle_once(
             parameter_set=ps,
+            parameter_bundle=parameter_bundle,
+            load_runtime_parameter_bundle=load_runtime_parameter_bundle,
+            parameter_bundle_stage=parameter_bundle_stage,
+            parameter_bundle_id=parameter_bundle_id,
+            parameter_bundle_registry_path=parameter_bundle_registry_path,
             exchange=exchange,
             symbol_raw=symbol_raw,
             state_type=state_type,
@@ -162,6 +227,11 @@ def run_shadow_cycle_bounded(
 
         item = run_shadow_cycle_once(
             parameter_set=ps,
+            parameter_bundle=parameter_bundle,
+            load_runtime_parameter_bundle=load_runtime_parameter_bundle,
+            parameter_bundle_stage=parameter_bundle_stage,
+            parameter_bundle_id=parameter_bundle_id,
+            parameter_bundle_registry_path=parameter_bundle_registry_path,
             exchange=exchange,
             symbol_raw=symbol_raw,
             state_type=state_type,
