@@ -1,3 +1,5 @@
+# path: ./docs/roadmap/DEVELOPMENT_ROADMAP.md
+# desc: Development roadmap and current phase checkpoints for BTC-TS.
 BTC Trade System (BTC-TS)
 DEVELOPMENT ROADMAP
 
@@ -261,3 +263,37 @@ AI intelligence
 System engineering
 
 の融合体である。
+---
+
+## Phase2 Checkpoint: AutoTrade Parameter Bundle Readiness Merge
+
+Date: 2026-06-16
+
+Current baseline:
+
+- Branch: phase2
+- HEAD: 0e615c31
+- Test checkpoint: 247 passed
+
+Completed:
+
+- AutoTrade parameter bundle readiness chain merged into phase2
+- Runtime parameter bundle store/status/loader/CLI added
+- Health and readiness visibility added
+- Operator UI parameter bundle visibility added
+- Mode request/recheck parameter bundle controls wired
+- Mode state readiness recheck audit added
+- Pytest discovery hygiene fixed with root pytest.ini
+
+Current position:
+
+- AutoTrade readiness infrastructure is integrated
+- Work remains pre-live/readiness oriented
+- This is not live broker execution enablement
+
+Next:
+
+1. Pre-live operational validation
+2. Paper/readiness verification
+3. Operator UI AutoTrade closeout review
+4. Optional GitHub Actions CI setup
