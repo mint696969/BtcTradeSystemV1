@@ -14,7 +14,7 @@ ensure_btcts_on_syspath()
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GATE = REPO_ROOT / "tools/run_sr_fx_pre_armed_dry_run_authorization_request_record_execution_gate_dry_run_status.py"
-PLAN = REPO_ROOT / "tools/run_sr_fx_pre_armed_dry_run_approval_record_append_execution_authorization_request_record_execution_authorization_request_record_execution_authorization_request_record_execution_authorization_request_record_dry_run_plan_status.py"
+PLAN = REPO_ROOT / "tools/run_sr_fx_pre_armed_dry_run_authorization_request_record_dry_run_plan_status.py"
 TMP_ROOT = REPO_ROOT / "tmp" / "_s77_pre_armed_dry_run_authorization_request_record_execution_gate_dry_run_status_guard"
 PROTECTED_PREFIXES = ("btcts_next/src/btcts/collector_vnext/", "btcts_next/src/btcts/ingestion/", "btcts_next/src/btcts/processing/l3_market_semantics/", "btcts_next/src/btcts/processing/l4_consumer_models/")
 CHECK_FILES = (GATE, PLAN, REPO_ROOT / "btcts_next/src/btcts/autotrade/execution/command_status.py")

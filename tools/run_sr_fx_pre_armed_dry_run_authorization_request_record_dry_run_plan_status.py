@@ -1,4 +1,4 @@
-# path: ./tools/run_sr_fx_pre_armed_dry_run_approval_record_append_execution_authorization_request_record_execution_authorization_request_record_execution_authorization_request_record_execution_authorization_request_record_dry_run_plan_status.py
+# path: ./tools/run_sr_fx_pre_armed_dry_run_authorization_request_record_dry_run_plan_status.py
 # desc: Broker-free Pre-Armed Dry Run authorization request record execution authorization request record execution authorization request record dry-run plan/status from S75. Plan/status only; non-recording; non-executing; non-authorizing.
 
 from __future__ import annotations

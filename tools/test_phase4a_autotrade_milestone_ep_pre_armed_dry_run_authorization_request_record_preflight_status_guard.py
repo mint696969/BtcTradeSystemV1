@@ -13,7 +13,7 @@ from _btcts_bootstrap import ensure_btcts_on_syspath
 ensure_btcts_on_syspath()
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PREFLIGHT = REPO_ROOT / "tools/run_sr_fx_pre_armed_dry_run_approval_record_append_execution_authorization_request_record_execution_authorization_request_record_execution_authorization_request_record_execution_authorization_request_record_preflight_status.py"
+PREFLIGHT = REPO_ROOT / "tools/run_sr_fx_pre_armed_dry_run_authorization_request_record_preflight_status.py"
 STATUS = REPO_ROOT / "tools/run_sr_fx_pre_armed_dry_run_approval_record_append_execution_authorization_request_record_execution_authorization_request_record_execution_authorization_request_record_execution_authorization_request_status.py"
 TMP_ROOT = REPO_ROOT / "tmp" / "_s75_pre_armed_dry_run_authorization_request_record_preflight_status_guard"
 PROTECTED_PREFIXES = ("btcts_next/src/btcts/collector_vnext/", "btcts_next/src/btcts/ingestion/", "btcts_next/src/btcts/processing/l3_market_semantics/", "btcts_next/src/btcts/processing/l4_consumer_models/")
