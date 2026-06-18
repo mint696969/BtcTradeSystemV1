@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from .contracts import InferenceBundle, ParameterSetIdentity, PredictionConfidence, PredictionFamily, PredictionOutput, SourceIdentity
+from .cross_venue import CrossVenueReferenceSummary, LeadLagSkeleton, SpotFxBasisSummary, VenueReferencePrice, build_cross_venue_reference_summary
 from .feature_registry import FeatureFamily, FeatureRegistryEntry, FeatureSpec, build_default_feature_registry, feature_registry_by_id
 from .horizons import CONTEXT_HORIZONS_SEC, EXECUTION_MICRO_HORIZONS_SEC, PRIMARY_TRADE_HORIZONS_SEC, HorizonLayer, PredictionHorizon, build_default_horizons, horizon_by_seconds
 from .ohlcv import OHLCVAggregationDiagnostics, OHLCVCandle, Timeframe, aggregate_ohlcv_from_rows, build_default_timeframes, timeframe_by_seconds
@@ -43,6 +44,7 @@ __all__ = [
     "CandleWickBodySummary",
     "ContinuityState",
     "CrossVenueConfirmationParameterSet",
+    "CrossVenueReferenceSummary",
     "EXECUTION_MICRO_HORIZONS_SEC",
     "FeatureFamily",
     "FeatureRegistryEntry",
@@ -51,6 +53,7 @@ __all__ = [
     "HumanTechnicalStructureParameterSet",
     "HumanTechnicalSummary",
     "InferenceBundle",
+    "LeadLagSkeleton",
     "LiquidityExecutionQualityParameterSet",
     "MacroRiskContextParameterSet",
     "MarketRegimePredictionParameterSet",
@@ -71,13 +74,16 @@ __all__ = [
     "SourceIdentity",
     "SourceQualityStatus",
     "SourceTrustState",
+    "SpotFxBasisSummary",
     "SupportResistanceZone",
     "Timeframe",
     "TrendPredictionParameterSet",
+    "VenueReferencePrice",
     "VolatilityRiskPredictionParameterSet",
     "VwapRelationSummary",
     "aggregate_ohlcv_from_rows",
     "assess_source_quality",
+    "build_cross_venue_reference_summary",
     "build_default_feature_registry",
     "build_default_horizons",
     "build_default_prediction_parameter_sets",
