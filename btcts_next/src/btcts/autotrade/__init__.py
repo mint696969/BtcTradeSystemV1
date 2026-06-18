@@ -12,6 +12,7 @@ __all__ = [
     "live_shadow",
     "pipeline",
     "prediction_preview_status",
+    "prediction_preview_artifact_preflight",
     "shadow_prediction_context",
     "readiness",
     "runtime_paths",
