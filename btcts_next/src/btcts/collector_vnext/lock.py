@@ -187,6 +187,37 @@ def release_daemon_lock(
     except Exception:
         pass
 
+def _normalize_windows_mutex_name(name: str) -> str:
+    r"""Normalize Windows mutex namespace separators.
+
+    Windows named mutexes use a single namespace separator, for example
+    Local\\BTCTS_NAME in source form, which becomes Local\BTCTS_NAME at
+    runtime.  Accidentally passing a raw string with two concrete separators,
+    such as r"Local\\BTCTS_NAME", fails with ERROR_INVALID_NAME (123).
+    Normalize that class of caller mistake before CreateMutexW.
+    """
+    mutex_name = str(name or "").strip().replace("/", "\\")
+    if os.name != "nt":
+        return mutex_name
+
+    for namespace in ("Local", "Global"):
+        single_prefix = namespace + "\\"
+        doubled_prefix = namespace + "\\\\"
+        while mutex_name.startswith(doubled_prefix):
+            mutex_name = single_prefix + mutex_name[len(doubled_prefix):]
+    return mutex_name
+
+
+def _kernel32_for_mutex():
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateMutexW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
+    kernel32.CreateMutexW.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    kernel32.GetLastError.argtypes = ()
+    kernel32.GetLastError.restype = wintypes.DWORD
+    return kernel32
+
 
 def acquire_process_singleton_mutex(name: str) -> tuple[bool, dict]:
     """Acquire a Windows named mutex for process-family singleton enforcement.
@@ -195,24 +226,25 @@ def acquire_process_singleton_mutex(name: str) -> tuple[bool, dict]:
     current Windows logon session even when two Python runtimes or environment
     roots accidentally launch the same collector component.
     """
-    mutex_name = str(name or "").strip()
+    raw_mutex_name = str(name or "").strip()
+    mutex_name = _normalize_windows_mutex_name(raw_mutex_name)
     if not mutex_name:
         return False, {"error": "mutex_name_empty"}
 
     if os.name != "nt":
-        return True, {"mutex_name": mutex_name, "handle": None, "platform": os.name}
+        return True, {
+            "mutex_name": mutex_name,
+            "raw_mutex_name": raw_mutex_name,
+            "handle": None,
+            "platform": os.name,
+        }
 
-    kernel32 = ctypes.windll.kernel32
-    kernel32.CreateMutexW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
-    kernel32.CreateMutexW.restype = wintypes.HANDLE
-    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
-    kernel32.CloseHandle.restype = wintypes.BOOL
-    kernel32.GetLastError.argtypes = ()
-    kernel32.GetLastError.restype = wintypes.DWORD
+    kernel32 = _kernel32_for_mutex()
     handle = kernel32.CreateMutexW(None, False, mutex_name)
     if not handle:
         return False, {
             "mutex_name": mutex_name,
+            "raw_mutex_name": raw_mutex_name,
             "error": "create_mutex_failed",
             "last_error": int(kernel32.GetLastError()),
         }
@@ -226,12 +258,14 @@ def acquire_process_singleton_mutex(name: str) -> tuple[bool, dict]:
             pass
         return False, {
             "mutex_name": mutex_name,
+            "raw_mutex_name": raw_mutex_name,
             "already_running": True,
             "error": "singleton_mutex_already_exists",
         }
 
     return True, {
         "mutex_name": mutex_name,
+        "raw_mutex_name": raw_mutex_name,
         "handle": int(handle),
         "platform": os.name,
     }
@@ -247,7 +281,6 @@ def release_process_singleton_mutex(info: dict | None) -> None:
         return
 
     try:
-        ctypes.windll.kernel32.CloseHandle(int(handle))
+        _kernel32_for_mutex().CloseHandle(int(handle))
     except Exception:
         pass
-
