@@ -29,6 +29,7 @@ from .parameter_sets import (
     build_default_prediction_parameter_sets,
     default_prediction_parameter_set_for_family,
 )
+from .prearmed_readiness import PredictionPreArmedReadinessSnapshot, build_prediction_prearmed_readiness_snapshot
 from .replay_validation import ReplayValidationResult, ReplayValidationScenario, build_replay_validation_result
 from .rule_based_v0 import build_rule_based_v0_outputs
 from .shadow_adapter import AutoTradeInferenceSnapshot, AutoTradeShadowSignalPreview, build_autotrade_shadow_signal_preview
@@ -84,6 +85,7 @@ __all__ = [
     "PredictionOutput",
     "PredictionParameterSetBase",
     "PredictionParameterSetStatus",
+    "PredictionPreArmedReadinessSnapshot",
     "RangeBoundarySummary",
     "RealizedOutcome",
     "ReplayValidationResult",
@@ -113,6 +115,7 @@ __all__ = [
     "build_inference_bundle_from_outputs",
     "build_missed_opportunity_report",
     "build_prediction_calibration_report",
+    "build_prediction_prearmed_readiness_snapshot",
     "build_replay_validation_result",
     "build_rule_based_v0_outputs",
     "default_prediction_parameter_set_for_family",
