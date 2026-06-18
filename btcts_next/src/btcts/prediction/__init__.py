@@ -30,6 +30,7 @@ from .parameter_sets import (
     default_prediction_parameter_set_for_family,
 )
 from .rule_based_v0 import build_rule_based_v0_outputs
+from .shadow_adapter import AutoTradeInferenceSnapshot, AutoTradeShadowSignalPreview, build_autotrade_shadow_signal_preview
 from .source_quality import ContinuityState, SourceQualityStatus, SourceTrustState, assess_source_quality
 from .technical import (
     CandleWickBodySummary,
@@ -44,6 +45,8 @@ from .technical import (
 
 __all__ = [
     "AlgorithmicParticipantFootprintParameterSet",
+    "AutoTradeInferenceSnapshot",
+    "AutoTradeShadowSignalPreview",
     "BreakoutFalseBreakPredictionParameterSet",
     "CONTEXT_HORIZONS_SEC",
     "CandleWickBodySummary",
@@ -95,6 +98,7 @@ __all__ = [
     "VwapRelationSummary",
     "aggregate_ohlcv_from_rows",
     "assess_source_quality",
+    "build_autotrade_shadow_signal_preview",
     "build_cross_venue_reference_summary",
     "build_default_feature_registry",
     "build_default_horizons",
