@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from .bundle_assembly import build_inference_bundle_from_outputs
 from .contracts import InferenceBundle, ParameterSetIdentity, PredictionConfidence, PredictionFamily, PredictionOutput, SourceIdentity
 from .cross_venue import CrossVenueReferenceSummary, LeadLagSkeleton, SpotFxBasisSummary, VenueReferencePrice, build_cross_venue_reference_summary
 from .feature_registry import FeatureFamily, FeatureRegistryEntry, FeatureSpec, build_default_feature_registry, feature_registry_by_id
@@ -90,6 +91,7 @@ __all__ = [
     "build_default_prediction_parameter_sets",
     "build_default_timeframes",
     "build_human_technical_summary",
+    "build_inference_bundle_from_outputs",
     "build_rule_based_v0_outputs",
     "default_prediction_parameter_set_for_family",
     "feature_registry_by_id",
