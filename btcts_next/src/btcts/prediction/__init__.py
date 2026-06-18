@@ -25,6 +25,7 @@ from .parameter_sets import (
     build_default_prediction_parameter_sets,
     default_prediction_parameter_set_for_family,
 )
+from .rule_based_v0 import build_rule_based_v0_outputs
 from .source_quality import ContinuityState, SourceQualityStatus, SourceTrustState, assess_source_quality
 from .technical import (
     CandleWickBodySummary,
@@ -89,6 +90,7 @@ __all__ = [
     "build_default_prediction_parameter_sets",
     "build_default_timeframes",
     "build_human_technical_summary",
+    "build_rule_based_v0_outputs",
     "default_prediction_parameter_set_for_family",
     "feature_registry_by_id",
     "horizon_by_seconds",
