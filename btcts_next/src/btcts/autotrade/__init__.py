@@ -11,6 +11,7 @@ __all__ = [
     "observer_cycle",
     "live_shadow",
     "pipeline",
+    "prediction_preview_status",
     "readiness",
     "runtime_paths",
     "shadow_cycle",
