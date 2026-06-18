@@ -23,7 +23,11 @@ from .archive.state import (
 )
 from .config import load_config
 from .events import now_iso_utc
-from .lock import is_pid_alive
+from .lock import (
+    acquire_process_singleton_mutex,
+    is_pid_alive,
+    release_process_singleton_mutex,
+)
 from .unified_state import (
     read_unified_supervisor_request,
     read_unified_supervisor_status,
@@ -407,11 +411,31 @@ def _archive_stopped(archive_cfg) -> tuple[bool, dict[str, Any], dict[str, Any]]
 
 
 def run_forever() -> int:
+    singleton_locked, singleton_info = acquire_process_singleton_mutex(
+        r"Local\BTCTS_COLLECTOR_VNEXT_UNIFIED_WATCHDOG"
+    )
+    if not singleton_locked:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "supervisor": True,
+                    "runtime_family": "unified",
+                    "already_running": True,
+                    "singleton_info": singleton_info,
+                },
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+        )
+        return 2
+
     cfg = load_config()
     archive_cfg = load_archive_config()
 
     locked, lock_info = _acquire_supervisor_lock(cfg)
     if not locked:
+        release_process_singleton_mutex(singleton_info)
         print(
             json.dumps(
                 {
@@ -903,6 +927,7 @@ def run_forever() -> int:
         _clear_request_file(cfg)
         _clear_daemon_stop_request(cfg)
         _release_supervisor_lock(cfg)
+        release_process_singleton_mutex(singleton_info)
 
 
 def main() -> int:

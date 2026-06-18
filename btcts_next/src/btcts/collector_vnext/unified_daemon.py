@@ -12,7 +12,12 @@ from ._env_utils import env_float, env_int
 
 from .config import load_config
 from .events import now_iso_utc
-from .lock import acquire_daemon_lock, release_daemon_lock
+from .lock import (
+    acquire_daemon_lock,
+    acquire_process_singleton_mutex,
+    release_daemon_lock,
+    release_process_singleton_mutex,
+)
 from .unified_runtime import run_once
 from .unified_state import (
     read_unified_daemon_stop_request,
@@ -155,10 +160,30 @@ def _write_stopped_state(
 
 
 def run_forever() -> int:
+    singleton_locked, singleton_info = acquire_process_singleton_mutex(
+        r"Local\BTCTS_COLLECTOR_VNEXT_UNIFIED_DAEMON"
+    )
+    if not singleton_locked:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "daemon": True,
+                    "runtime_kind": "unified",
+                    "already_running": True,
+                    "singleton_info": singleton_info,
+                },
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+        )
+        return 2
+
     cfg = load_config()
 
     locked, lock_info = acquire_daemon_lock(cfg, runtime_family="unified")
     if not locked:
+        release_process_singleton_mutex(singleton_info)
         print(
             json.dumps(
                 {
@@ -407,6 +432,7 @@ def run_forever() -> int:
     finally:
         stop_event.set()
         release_daemon_lock(cfg, runtime_family="unified")
+        release_process_singleton_mutex(singleton_info)
 
 
 if __name__ == "__main__":

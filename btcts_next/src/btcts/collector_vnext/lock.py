@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ctypes
+from ctypes import wintypes
 import json
 import os
 import socket
@@ -185,3 +186,68 @@ def release_daemon_lock(
         path.unlink(missing_ok=True)
     except Exception:
         pass
+
+
+def acquire_process_singleton_mutex(name: str) -> tuple[bool, dict]:
+    """Acquire a Windows named mutex for process-family singleton enforcement.
+
+    File locks protect the configured state root.  This mutex protects the
+    current Windows logon session even when two Python runtimes or environment
+    roots accidentally launch the same collector component.
+    """
+    mutex_name = str(name or "").strip()
+    if not mutex_name:
+        return False, {"error": "mutex_name_empty"}
+
+    if os.name != "nt":
+        return True, {"mutex_name": mutex_name, "handle": None, "platform": os.name}
+
+    kernel32 = ctypes.windll.kernel32
+    kernel32.CreateMutexW.argtypes = (wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR)
+    kernel32.CreateMutexW.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    kernel32.GetLastError.argtypes = ()
+    kernel32.GetLastError.restype = wintypes.DWORD
+    handle = kernel32.CreateMutexW(None, False, mutex_name)
+    if not handle:
+        return False, {
+            "mutex_name": mutex_name,
+            "error": "create_mutex_failed",
+            "last_error": int(kernel32.GetLastError()),
+        }
+
+    ERROR_ALREADY_EXISTS = 183
+    last_error = int(kernel32.GetLastError())
+    if last_error == ERROR_ALREADY_EXISTS:
+        try:
+            kernel32.CloseHandle(handle)
+        except Exception:
+            pass
+        return False, {
+            "mutex_name": mutex_name,
+            "already_running": True,
+            "error": "singleton_mutex_already_exists",
+        }
+
+    return True, {
+        "mutex_name": mutex_name,
+        "handle": int(handle),
+        "platform": os.name,
+    }
+
+
+def release_process_singleton_mutex(info: dict | None) -> None:
+    """Release a mutex acquired by acquire_process_singleton_mutex."""
+    if os.name != "nt" or not isinstance(info, dict):
+        return
+
+    handle = info.get("handle")
+    if not handle:
+        return
+
+    try:
+        ctypes.windll.kernel32.CloseHandle(int(handle))
+    except Exception:
+        pass
+

@@ -10,6 +10,10 @@ import sys
 import time
 
 from btcts.collector_vnext.events import now_iso_utc
+from btcts.collector_vnext.lock import (
+    acquire_process_singleton_mutex,
+    release_process_singleton_mutex,
+)
 
 from .audit import append_archive_audit
 from .config import load_archive_config
@@ -40,10 +44,29 @@ def _active_stop_request(cfg) -> dict:
 
 
 def run_forever() -> int:
+    singleton_locked, singleton_info = acquire_process_singleton_mutex(
+        r"Local\BTCTS_COLLECTOR_VNEXT_ARCHIVE_WORKER"
+    )
+    if not singleton_locked:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "archive_worker": True,
+                    "already_running": True,
+                    "singleton_info": singleton_info,
+                },
+                ensure_ascii=False,
+            ),
+            file=sys.stderr,
+        )
+        return 2
+
     cfg = load_archive_config()
 
     locked, lock_info = acquire_archive_worker_lock(cfg)
     if not locked:
+        release_process_singleton_mutex(singleton_info)
         print(
             json.dumps(
                 {
@@ -446,6 +469,7 @@ def run_forever() -> int:
     finally:
         clear_archive_stop_request(cfg)
         release_archive_worker_lock(cfg)
+        release_process_singleton_mutex(singleton_info)
 
 
 def main() -> int:
