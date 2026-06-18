@@ -52,6 +52,9 @@ Project Chimera の設計・仕様はここから参照します。
   docs/architecture/DATA_ARCHITECTURE.md
 - AutoTrade Pre-Armed Dry Run Authorization Chain Boundary Spec  
   docs/architecture/AUTOTRADE_PRE_ARMED_DRY_RUN_AUTHORIZATION_CHAIN_BOUNDARY_SPEC_2026-06-18.md
+- AutoTrade Pre-Armed Dry Run Authorization Grant Design Spec  
+  docs/architecture/AUTOTRADE_PRE_ARMED_DRY_RUN_AUTHORIZATION_GRANT_DESIGN_SPEC_2026-06-18.md
+
 
 
 ---
