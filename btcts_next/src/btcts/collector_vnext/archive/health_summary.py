@@ -263,9 +263,11 @@ def build_archive_transfer_health_summary(
 ) -> dict[str, Any]:
     """Build a compact, render-free D/E archive transfer health summary.
 
-    The verifier hashes bounded copy and delete-candidate item pairs while the
-    hot-side file still exists. It is intended to be called by the archive
-    worker immediately after copy and before/around GC execution, not by UI.
+    The verifier hashes bounded copy pairs and real-delete candidate pairs.
+    For GC dry-run cycles, delete candidates are already stat/size verified by
+    execute_gc_plan(dry_run=True); hashing those large D/E pairs every scan can
+    saturate cold HDDs without deleting anything, so the summary reuses the
+    bounded dry-run verification counts instead of reading file contents.
     """
     copy_result = dict(copy_result or {})
     gc_result = dict(gc_result or {})
@@ -278,13 +280,27 @@ def build_archive_transfer_health_summary(
         bad_files=bad_files,
         preview_limit=bad_files_preview_limit,
     )
-    delete_basis_counts = _verify_items(
-        cfg,
-        gc_items,
-        kind="delete_candidate",
-        bad_files=bad_files,
-        preview_limit=bad_files_preview_limit,
-    )
+    gc_dry_run = bool(gc_result.get("dry_run", False))
+    if gc_dry_run:
+        # execute_gc_plan(dry_run=True) already stats both hot and cold paths
+        # and records verified_before_files.  Do not hash-read multi-GB cold
+        # files every archive scan just to report a dry-run summary.
+        delete_basis_counts = {
+            "checked_files": _as_int(gc_result.get("planned_deleted_files")),
+            "verified_files": _as_int(gc_result.get("verified_before_files")),
+            "missing_count": 0,
+            "size_mismatch_count": 0,
+            "hash_mismatch_count": 0,
+            "stat_error_count": _as_int(gc_result.get("error_count")),
+        }
+    else:
+        delete_basis_counts = _verify_items(
+            cfg,
+            gc_items,
+            kind="delete_candidate",
+            bad_files=bad_files,
+            preview_limit=bad_files_preview_limit,
+        )
 
     copy_error_count = _as_int(copy_result.get("error_count"))
     gc_error_count = _as_int(gc_result.get("error_count"))
@@ -330,7 +346,11 @@ def build_archive_transfer_health_summary(
     else:
         status = "ok"
         severity = "info"
-        reasons = ["copy_and_delete_candidates_hash_verified"]
+        reasons = [
+            "copy_and_real_delete_candidates_hash_verified"
+            if not gc_dry_run
+            else "dry_run_delete_candidates_size_stat_verified_without_hash"
+        ]
 
     path = archive_transfer_health_summary_path(cfg)
     return {
@@ -359,11 +379,15 @@ def build_archive_transfer_health_summary(
             "planned_deleted_files": planned_deleted_files,
             "deleted_files": deleted_files,
             "deleted_bytes": _as_int(gc_result.get("deleted_bytes")),
-            "delete_basis": "verified_on_e_drive_by_size_and_sha256",
+            "delete_basis": (
+                "dry_run_size_stat_verified_before_delete_no_hash"
+                if gc_dry_run
+                else "verified_on_e_drive_by_size_and_sha256"
+            ),
             "verified_delete_candidates": delete_basis_counts["verified_files"],
             "unverified_delete_candidate_count": unverified_delete_candidate_count,
             "error_count": gc_error_count,
-            "dry_run": bool(gc_result.get("dry_run", False)),
+            "dry_run": gc_dry_run,
         },
         "integrity": {
             "hash_algorithm": "sha256",
@@ -373,6 +397,12 @@ def build_archive_transfer_health_summary(
             "missing_count": missing_count,
             "hash_mismatch_count": copy_counts["hash_mismatch_count"] + delete_basis_counts["hash_mismatch_count"],
             "size_mismatch_count": copy_counts["size_mismatch_count"] + delete_basis_counts["size_mismatch_count"],
+            "delete_candidate_hash_verification_skipped_due_dry_run": gc_dry_run,
+            "dry_run_cold_read_policy": (
+                "stat_size_only_no_content_hash"
+                if gc_dry_run
+                else "sha256_content_hash_before_real_delete"
+            ),
         },
         "policy": {
             "status_colors": {"ok": "green", "warn": "amber", "crit": "red", "unknown": "gray"},
