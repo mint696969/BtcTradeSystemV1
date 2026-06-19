@@ -20,6 +20,7 @@ from .system_contract import (
     DISPLAY_LABEL_JA_BY_GROUP,
     HorizonGroup,
     HorizonGroupSummary,
+    PredictionEvidenceRef,
     PredictionLifetime,
     PredictionRevisionSummary,
     PredictionRunIdentity,
@@ -432,6 +433,137 @@ def _aggregate_core_signals(outlooks: Tuple[HorizonGroupSummary, ...]) -> dict[s
         "conflict_reasons": list(dict.fromkeys(conflict_reasons))[:10],
     }
 
+
+def _best_output_by_family(outputs: Tuple[PredictionOutput, ...]) -> dict[str, PredictionOutput]:
+    best: dict[str, PredictionOutput] = {}
+    for output in outputs:
+        family = output.family.value
+        current = best.get(family)
+        if current is None:
+            best[family] = output
+            continue
+        current_score = float(current.score or 0.0) if not current.blockers else -1.0
+        new_score = float(output.score or 0.0) if not output.blockers else -1.0
+        if new_score > current_score:
+            best[family] = output
+    return best
+
+
+def _evidence_kind_for_family(family: str, label: str, scenario_lite: Mapping[str, Any]) -> str:
+    conflict_reasons = {str(item) for item in scenario_lite.get("conflict_reasons", [])}
+    if family == "trend_bias" and label in ("long_bias", "short_bias"):
+        return "dominant_direction"
+    if family == "cross_venue_confirmation" and (label == "divergent_warning" or "cross_venue_divergence" in conflict_reasons):
+        return "conflicting_evidence"
+    if family == "liquidity_execution_quality" and label in ("liquidity_caution", "poor_liquidity", "liquidity_unknown"):
+        return "risk_or_blocker_evidence"
+    if family == "breakout_false_break" and label == "false_break_risk":
+        return "scenario_switch_evidence"
+    if family == "reversal_zone" and label in ("reversal_watch", "reaction_zone_watch", "vwap_reversion_watch"):
+        return "turning_point_evidence"
+    if family == "volatility_risk" and label == "elevated_risk":
+        return "risk_or_blocker_evidence"
+    if family == "macro_risk_context" and label == "macro_risk_watch":
+        return "context_risk_evidence"
+    if family == "algorithmic_participant_footprint" and label in ("algorithmic_activity_watch", "potential_sweep_reversal_footprint"):
+        return "footprint_warning_evidence"
+    if family == "opportunity_participation" and label in ("opportunity_blocked", "wait_for_confirmation"):
+        return "participation_filter_evidence"
+    return "supporting_context_evidence"
+
+
+def _prediction_output_summary(output: PredictionOutput) -> str:
+    bits = [f"{output.family.value}={output.primary_label}"]
+    if output.score is not None:
+        bits.append(f"score={round(float(output.score), 6)}")
+    if output.drivers:
+        bits.append("drivers=" + ",".join(str(item) for item in output.drivers[:3]))
+    if output.warnings:
+        bits.append("warnings=" + ",".join(str(item) for item in output.warnings[:3]))
+    if output.blockers:
+        bits.append("blockers=" + ",".join(str(item) for item in output.blockers[:3]))
+    return "; ".join(bits)
+
+
+def _scenario_evidence_refs(
+    *,
+    group: HorizonGroup,
+    group_horizons: Tuple[int, ...],
+    outputs: Tuple[PredictionOutput, ...],
+    family_labels: Mapping[str, str],
+    scenario_lite: Mapping[str, Any],
+) -> Tuple[PredictionEvidenceRef, ...]:
+    by_family = _best_output_by_family(outputs)
+    preferred_order = (
+        "trend_bias",
+        "market_regime",
+        "reversal_zone",
+        "breakout_false_break",
+        "volatility_risk",
+        "liquidity_execution_quality",
+        "cross_venue_confirmation",
+        "opportunity_participation",
+        "macro_risk_context",
+        "algorithmic_participant_footprint",
+        "human_technical_structure",
+    )
+    refs: list[PredictionEvidenceRef] = []
+    horizon_label = "-".join(str(int(item)) for item in group_horizons) or "none"
+    for family in preferred_order:
+        output = by_family.get(family)
+        if output is None:
+            continue
+        label = str(family_labels.get(family, output.primary_label))
+        source_id = output.sources[0].source_id if output.sources else None
+        refs.append(
+            PredictionEvidenceRef(
+                evidence_ref_id=f"{LOGIC_VERSION}:{group.value}:{horizon_label}:{family}",
+                evidence_kind=_evidence_kind_for_family(family, label, scenario_lite),
+                source_id=source_id,
+                family=family,
+                horizon_sec=int(output.horizon.horizon_sec),
+                summary=_prediction_output_summary(output),
+                weight=float(output.score) if output.score is not None else None,
+                usable=not output.blockers,
+                blockers=tuple(output.blockers),
+                warnings=tuple(output.warnings),
+            )
+        )
+    return tuple(refs)
+
+
+def _scenario_trace_detail(
+    *,
+    group: HorizonGroup,
+    group_horizons: Tuple[int, ...],
+    primary_label: str,
+    family_labels: Mapping[str, str],
+    scenario_lite: Mapping[str, Any],
+    evidence_refs: Tuple[PredictionEvidenceRef, ...],
+) -> dict[str, Any]:
+    balance = dict(scenario_lite.get("continuation_vs_reversal_balance", {}))
+    return {
+        "trace_version": "ps_h2.v1",
+        "horizon_group": group.value,
+        "display_label_ja": DISPLAY_LABEL_JA_BY_GROUP[group],
+        "horizons_sec": list(group_horizons),
+        "primary_label": primary_label,
+        "continuation_vs_reversal_state": balance.get("state", "unknown"),
+        "continuation_score": balance.get("continuation_score"),
+        "reversal_score": balance.get("reversal_score"),
+        "turning_point_risk": scenario_lite.get("turning_point_risk", "unknown"),
+        "evidence_conflict_state": scenario_lite.get("evidence_conflict_state", "unknown"),
+        "invalidation_state": scenario_lite.get("invalidation_state", "unknown"),
+        "rewrite_state": scenario_lite.get("rewrite_state", "unknown"),
+        "scenario_switch_hint": scenario_lite.get("scenario_switch_hint", "unknown"),
+        "conflict_reasons": list(scenario_lite.get("conflict_reasons", [])),
+        "what_to_watch_next": list(scenario_lite.get("what_to_watch_next", [])),
+        "family_labels": dict(family_labels),
+        "evidence_ref_ids": [item.evidence_ref_id for item in evidence_refs],
+        "dominant_evidence_refs": [item.evidence_ref_id for item in evidence_refs if item.evidence_kind in ("dominant_direction", "scenario_switch_evidence", "turning_point_evidence")],
+        "conflicting_evidence_refs": [item.evidence_ref_id for item in evidence_refs if item.evidence_kind in ("conflicting_evidence", "risk_or_blocker_evidence", "context_risk_evidence", "footprint_warning_evidence", "participation_filter_evidence")],
+    }
+
 def _horizon_group_summary(
     *,
     group: HorizonGroup,
@@ -459,6 +591,8 @@ def _horizon_group_summary(
     family_labels = _family_label_map(group_outputs)
     scenario_lite = _scenario_signal_summary(family_labels, blockers, warnings)
     primary = _primary_label(group_outputs, blockers)
+    evidence_refs = _scenario_evidence_refs(group=group, group_horizons=group_horizons, outputs=group_outputs, family_labels=family_labels, scenario_lite=scenario_lite)
+    trace_detail = _scenario_trace_detail(group=group, group_horizons=group_horizons, primary_label=primary, family_labels=family_labels, scenario_lite=scenario_lite, evidence_refs=evidence_refs)
     trigger = PredictionTriggerEligibility(
         trigger_eligibility_state="blocked",
         reason="standalone_prediction_output_not_enabled_for_trigger",
@@ -500,6 +634,7 @@ def _horizon_group_summary(
         scenario_switch_hint=scenario_lite["scenario_switch_hint"],
         lifetime=_lifetime(now_dt, group),
         trigger_eligibility=trigger,
+        evidence_refs=evidence_refs,
         human_narrative_ja=narrative,
         gpt_review_digest={
             "logic_version": LOGIC_VERSION,
@@ -520,6 +655,8 @@ def _horizon_group_summary(
             "blockers": list(blockers),
             "warnings": list(warnings),
             "scenario_lite": scenario_lite,
+            "scenario_trace_detail": trace_detail,
+            "evidence_ref_count": len(evidence_refs),
         },
         blockers=blockers,
         warnings=warnings,
@@ -545,6 +682,8 @@ def _scenario_core(
     current_regime = first_usable.regime_state if first_usable else "unknown"
     health = "blocked" if blockers else ("caution" if warnings else "stable")
     core_signals = _aggregate_core_signals(outlooks)
+    outlook_traces = [dict(outlook.gpt_review_digest.get("scenario_trace_detail", {})) for outlook in outlooks if outlook.gpt_review_digest.get("scenario_trace_detail")]
+    evidence_ref_count = sum(len(outlook.evidence_refs) for outlook in outlooks)
     first_balance = next((dict(outlook.gpt_review_digest.get("scenario_lite", {})).get("continuation_vs_reversal_balance") for outlook in outlooks if outlook.gpt_review_digest.get("scenario_lite")), {"state": "unknown"})
     evidence_weighting = next((dict(outlook.gpt_review_digest.get("scenario_lite", {})).get("evidence_weighting_summary") for outlook in outlooks if outlook.gpt_review_digest.get("scenario_lite")), {"state": "deterministic_family_label_weighting_v1"})
     return ScenarioCoreOutput(
@@ -567,10 +706,12 @@ def _scenario_core(
             "output_count": len(outputs),
             "what_to_watch_next": core_signals["what_to_watch_next"],
             "conflict_reasons": core_signals["conflict_reasons"],
+            "outlook_traces": outlook_traces,
+            "evidence_ref_count": evidence_ref_count,
         },
         trigger_eligibility_state="blocked",
         human_narrative_ja="\n".join(outlook.human_narrative_ja for outlook in outlooks),
-        gpt_review_digest={"logic_version": LOGIC_VERSION, "scenario_core_lite_version": "ps_h1.v1", "outlook_count": len(outlooks), "blockers": list(blockers), "warnings": list(warnings), "what_to_watch_next": core_signals["what_to_watch_next"], "conflict_reasons": core_signals["conflict_reasons"]},
+        gpt_review_digest={"logic_version": LOGIC_VERSION, "scenario_core_lite_version": "ps_h1.v1", "scenario_trace_detail_version": "ps_h2.v1", "outlook_count": len(outlooks), "evidence_ref_count": evidence_ref_count, "blockers": list(blockers), "warnings": list(warnings), "what_to_watch_next": core_signals["what_to_watch_next"], "conflict_reasons": core_signals["conflict_reasons"]},
         blockers=blockers,
         warnings=warnings,
     )
