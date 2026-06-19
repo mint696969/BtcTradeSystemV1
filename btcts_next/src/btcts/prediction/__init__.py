@@ -7,6 +7,7 @@ from .bundle_assembly import build_inference_bundle_from_outputs
 from .calibration import MissedOpportunityReport, PredictionCalibrationReport, build_missed_opportunity_report, build_prediction_calibration_report
 from .contracts import InferenceBundle, ParameterSetIdentity, PredictionConfidence, PredictionFamily, PredictionOutput, SourceIdentity
 from .cross_venue import CrossVenueReferenceSummary, LeadLagSkeleton, SpotFxBasisSummary, VenueReferencePrice, build_cross_venue_reference_summary
+from .evaluation import PredictionEvaluationRecord, PredictionEvaluationReport, build_prediction_evaluation_records, build_prediction_evaluation_report
 from .feature_depth import FeatureDepthInputKind, FeatureDepthInputRef, FeatureDepthSnapshot, FeatureDepthState, OrderBookFeatureSummary, TradeFlowFeatureSummary, build_feature_depth_snapshot
 from .feature_registry import FeatureFamily, FeatureRegistryEntry, FeatureSpec, build_default_feature_registry, feature_registry_by_id
 from .forecast_ledger import ForecastLedgerBatch, ForecastLedgerRecord, build_forecast_ledger_records_from_bundle
@@ -121,6 +122,8 @@ __all__ = [
     "PredictionRevisionSummary",
     "PredictionLifetime",
     "PredictionEvidenceRef",
+    "PredictionEvaluationRecord",
+    "PredictionEvaluationReport",
     "PredictionOutput",
     "PredictionParameterSetBase",
     "PredictionParameterSetStatus",
@@ -159,6 +162,8 @@ __all__ = [
     "build_inference_bundle_from_outputs",
     "build_missed_opportunity_report",
     "build_prediction_calibration_report",
+    "build_prediction_evaluation_records",
+    "build_prediction_evaluation_report",
     "build_prediction_prearmed_readiness_snapshot",
     "build_prediction_system_result",
     "build_replay_validation_result",
