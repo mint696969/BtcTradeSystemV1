@@ -420,18 +420,40 @@ def _summary_by_key(records: Tuple[PredictionEvaluationRecord, ...], key: str) -
     }
 
 
-def _bucket_summary(records: Tuple[PredictionEvaluationRecord, ...], key: str) -> Dict[str, Any]:
-    values = tuple(dict.fromkeys(str(getattr(record, key)) for record in records))
+def _confidence_summary(records: Tuple[PredictionEvaluationRecord, ...]) -> Dict[str, Any]:
+    values = tuple(dict.fromkeys(record.confidence_bucket for record in records))
     hit_rate: Dict[str, float | None] = {}
     avg_return: Dict[str, float | None] = {}
     not_eval: Dict[str, int] = {}
     for value in values:
-        group = [record for record in records if str(getattr(record, key)) == value]
+        group = [record for record in records if record.confidence_bucket == value]
         evaluable = [record for record in group if record.hit_label != "not_evaluable"]
         hit_rate[value] = _rate(sum(1 for record in evaluable if record.hit_label == "correct_direction"), len(evaluable))
         avg_return[value] = _avg([float(record.observed_return_bps) for record in group if record.observed_return_bps is not None])
         not_eval[value] = sum(1 for record in group if record.hit_label == "not_evaluable")
-    return {"hit_rate": hit_rate, "average_return_bps": avg_return, "not_evaluable_count": not_eval}
+    return {
+        "confidence_bucket_hit_rate": hit_rate,
+        "confidence_bucket_average_return_bps": avg_return,
+        "confidence_bucket_not_evaluable_count": not_eval,
+    }
+
+
+def _caution_summary(records: Tuple[PredictionEvaluationRecord, ...]) -> Dict[str, Any]:
+    values = tuple(dict.fromkeys(record.caution_bucket for record in records))
+    adverse: Dict[str, float | None] = {}
+    wrong_rate: Dict[str, float | None] = {}
+    not_eval: Dict[str, int] = {}
+    for value in values:
+        group = [record for record in records if record.caution_bucket == value]
+        evaluable = [record for record in group if record.hit_label != "not_evaluable"]
+        adverse[value] = _avg([float(record.adverse_excursion_bps) for record in group if record.adverse_excursion_bps is not None])
+        wrong_rate[value] = _rate(sum(1 for record in evaluable if record.hit_label == "wrong_direction"), len(evaluable))
+        not_eval[value] = sum(1 for record in group if record.hit_label == "not_evaluable")
+    return {
+        "caution_bucket_adverse_excursion": adverse,
+        "caution_bucket_wrong_direction_rate": wrong_rate,
+        "caution_bucket_not_evaluable_count": not_eval,
+    }
 
 
 def build_prediction_evaluation_records(
@@ -523,8 +545,8 @@ def build_prediction_evaluation_report(
             "adverse_excursion_bps_by_horizon": horizon_summary["adverse_excursion_bps"],
             "not_evaluable_count_by_horizon": horizon_summary["not_evaluable_count"],
         },
-        confidence_summary=_bucket_summary(records, "confidence_bucket"),
-        caution_summary=_bucket_summary(records, "caution_bucket"),
+        confidence_summary=_confidence_summary(records),
+        caution_summary=_caution_summary(records),
         scenario_switch_summary={
             "scenario_switch_watch_follow_through_rate": None,
             "scenario_switch_watch_wrong_direction_rate": None,
