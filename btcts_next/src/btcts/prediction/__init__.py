@@ -33,7 +33,7 @@ from .prearmed_readiness import PredictionPreArmedReadinessSnapshot, build_predi
 from .replay_validation import ReplayValidationResult, ReplayValidationScenario, build_replay_validation_result
 from .rule_based_v0 import build_rule_based_v0_outputs
 from .shadow_adapter import AutoTradeInferenceSnapshot, AutoTradeShadowSignalPreview, build_autotrade_shadow_signal_preview
-from .source_quality import ContinuityState, SourceQualityStatus, SourceTrustState, assess_source_quality
+from .source_quality import ContinuityState, ProviderReliabilityRegistry, ProviderReliabilityStatus, SourceQualityStatus, SourceTrustState, assess_source_quality, build_provider_reliability_registry
 from .system import build_prediction_system_result
 from .system_contract import (
     DEFAULT_HORIZON_GROUPS,
@@ -117,6 +117,9 @@ __all__ = [
     "PredictionParameterSetBase",
     "PredictionParameterSetStatus",
     "PredictionPreArmedReadinessSnapshot",
+    "build_provider_reliability_registry",
+    "ProviderReliabilityStatus",
+    "ProviderReliabilityRegistry",
     "RangeBoundarySummary",
     "RealizedOutcome",
     "ReplayValidationResult",

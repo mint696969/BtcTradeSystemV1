@@ -13,7 +13,7 @@ from .cross_venue import CrossVenueReferenceSummary, build_cross_venue_reference
 from .forecast_ledger import ForecastLedgerBatch, build_forecast_ledger_records_from_bundle
 from .ohlcv import OHLCVAggregationDiagnostics, OHLCVCandle, TIMEFRAME_SECONDS, aggregate_ohlcv_from_rows
 from .rule_based_v0 import INITIAL_FAMILIES, build_rule_based_v0_outputs
-from .source_quality import SourceQualityStatus
+from .source_quality import SourceQualityStatus, build_provider_reliability_registry
 from .system_contract import (
     DEFAULT_HORIZON_GROUPS,
     DEFAULT_HORIZONS_BY_GROUP,
@@ -134,6 +134,18 @@ def _technical_for_horizon(candles: Tuple[OHLCVCandle, ...], horizon_sec: int) -
     timeframe_sec = _TECHNICAL_TIMEFRAME_BY_HORIZON_SEC.get(int(horizon_sec), int(horizon_sec))
     return build_human_technical_summary(candles, timeframe_sec=timeframe_sec)
 
+
+
+def _observed_source_ids(venue_snapshots: Iterable[Mapping[str, Any]] | None) -> Tuple[str, ...]:
+    if venue_snapshots is None:
+        return tuple()
+    out: list[str] = []
+    for item in venue_snapshots:
+        if isinstance(item, Mapping):
+            source_id = str(item.get("source_id") or item.get("source") or "").strip()
+            if source_id:
+                out.append(source_id)
+    return tuple(dict.fromkeys(out))
 
 def _build_cross_venue(
     *,
@@ -844,7 +856,10 @@ def build_prediction_system_result(
     run_id = f"{LOGIC_VERSION}:{market_uid}:{generated_at}"
 
     built_candles, ohlcv_diagnostics, candle_warnings = _build_candles(rows=rows, candles=candles, horizons_sec=horizons_sec, now_dt=now_dt)
+    observed_source_ids = _observed_source_ids(venue_snapshots)
     cross = _build_cross_venue(venue_snapshots=venue_snapshots, source_quality_by_id=source_quality_by_id, now_dt=now_dt)
+    provider_registry = build_provider_reliability_registry(source_quality_by_id=dict(source_quality_by_id or {}), observed_source_ids=observed_source_ids, now=now_dt)
+    provider_registry_summary = provider_registry.to_dict()
     outputs, technical_by_horizon = _build_outputs(candles=built_candles, cross_venue_summary=cross, horizons_sec=horizons_sec, now_dt=now_dt)
 
     source_quality_summary: dict[str, Any] = {
@@ -853,6 +868,7 @@ def build_prediction_system_result(
         "ohlcv_diagnostics": ohlcv_diagnostics.to_dict() if ohlcv_diagnostics else None,
         "cross_venue_summary": cross.to_dict() if cross else None,
         "technical_timeframes": {str(h): (summary.timeframe_sec if summary else None) for h, summary in technical_by_horizon.items()},
+        "provider_reliability_registry": provider_registry_summary,
     }
     bundle = build_inference_bundle_from_outputs(outputs, now=now_dt, source_quality_summary=source_quality_summary)
     forecast_batch = build_forecast_ledger_records_from_bundle(bundle, now=now_dt)
@@ -872,7 +888,7 @@ def build_prediction_system_result(
         market_uid=market_uid,
         requested_horizon_groups=groups,
         requested_horizons_sec=horizons_sec,
-        provider_quality_summary={"source_quality_count": len(source_quality_by_id or {})},
+        provider_quality_summary={"source_quality_count": len(source_quality_by_id or {}), "observed_source_ids": list(observed_source_ids), "provider_reliability_registry": provider_registry_summary},
         feature_snapshot={
             "row_count": _input_rows_count(rows),
             "candle_count": len(built_candles),
@@ -912,6 +928,11 @@ def build_prediction_system_result(
             "refresh_required_count": scenario.gpt_review_digest.get("refresh_required_count", 0),
             "revision_lite_version": "ps_i1.v1",
             "has_revision": revision.has_revision,
+            "provider_reliability_version": "ps_d1.v1",
+            "provider_reliability_context_only": provider_registry.context_only,
+            "provider_count": provider_registry.provider_count,
+            "usable_provider_count": provider_registry.usable_provider_count,
+            "unknown_provider_source_count": len(provider_registry.unknown_source_ids),
             "blockers": list(dict.fromkeys(blockers)),
             "warnings": list(dict.fromkeys(warnings)),
         },
