@@ -20,6 +20,7 @@ INITIAL_FAMILIES: Tuple[PredictionFamily, ...] = (
     PredictionFamily.VOLATILITY_RISK,
     PredictionFamily.LIQUIDITY_EXECUTION_QUALITY,
     PredictionFamily.BREAKOUT_FALSE_BREAK,
+    PredictionFamily.OPPORTUNITY_PARTICIPATION,
     PredictionFamily.CROSS_VENUE_CONFIRMATION,
     PredictionFamily.HUMAN_TECHNICAL_STRUCTURE,
 )
@@ -334,6 +335,87 @@ def _breakout_false_break(technical: HumanTechnicalSummary | None, cross: CrossV
     return label, round(score, 6), tuple(drivers or ("no_strong_breakout_driver",)), tuple(), tuple(dict.fromkeys(warnings)), values
 
 
+def _opportunity_participation(
+    *,
+    trend_label: str,
+    reversal_label: str,
+    volatility_label: str,
+    liquidity_label: str,
+    breakout_label: str,
+    cross_label: str,
+) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
+    drivers: list[str] = []
+    warnings: list[str] = []
+    blockers: list[str] = []
+    values: Dict[str, Any] = {
+        "proxy_kind": "summary_based_opportunity_proxy_v1",
+        "trend_bias": trend_label,
+        "reversal_zone": reversal_label,
+        "volatility_risk": volatility_label,
+        "liquidity_execution_quality": liquidity_label,
+        "breakout_false_break": breakout_label,
+        "cross_venue_confirmation": cross_label,
+        "note": "uses current family labels until outcome/near-miss ledger context is wired",
+    }
+    labels = {trend_label, reversal_label, volatility_label, liquidity_label, breakout_label, cross_label}
+    if "unknown" in labels and labels == {"unknown"}:
+        blockers.append("opportunity_proxy_family_labels_missing")
+        return "unknown", None, tuple(), tuple(blockers), tuple(), values
+
+    score = 0.40
+    if trend_label in ("long_bias", "short_bias"):
+        score += 0.12
+        drivers.append(f"trend_{trend_label}")
+    elif trend_label in ("neutral_bias", "flat", "unknown"):
+        warnings.append("trend_not_directional_for_participation")
+
+    if cross_label == "confirmed":
+        score += 0.08
+        drivers.append("cross_venue_confirmed")
+    elif cross_label == "divergent_warning":
+        score -= 0.16
+        warnings.append("cross_venue_divergent_wait")
+
+    if liquidity_label == "liquidity_proxy_adequate":
+        score += 0.08
+        drivers.append("liquidity_proxy_adequate")
+    elif liquidity_label in ("liquidity_caution", "poor_liquidity", "liquidity_unknown"):
+        score -= 0.14
+        warnings.append(f"liquidity_{liquidity_label}")
+
+    if breakout_label == "breakout_candidate":
+        score += 0.10
+        drivers.append("breakout_candidate")
+    elif breakout_label in ("breakout_watch", "range_continuation"):
+        warnings.append(f"breakout_{breakout_label}")
+    elif breakout_label == "false_break_risk":
+        score -= 0.18
+        warnings.append("false_break_risk_wait")
+
+    if reversal_label in ("reversal_watch", "reaction_zone_watch", "vwap_reversion_watch"):
+        score -= 0.10
+        warnings.append(f"reversal_{reversal_label}")
+    if volatility_label == "elevated_risk":
+        score -= 0.15
+        warnings.append("elevated_volatility_wait")
+    elif volatility_label == "normal_risk":
+        score += 0.03
+
+    score = max(0.0, min(1.0, score))
+    hard_wait = any(item in warnings for item in ("cross_venue_divergent_wait", "false_break_risk_wait", "elevated_volatility_wait")) or liquidity_label in ("poor_liquidity", "liquidity_unknown")
+    if hard_wait:
+        label = "opportunity_blocked"
+    elif score >= 0.62 and trend_label in ("long_bias", "short_bias") and liquidity_label == "liquidity_proxy_adequate" and cross_label == "confirmed":
+        label = "participation_candidate"
+    elif warnings:
+        label = "wait_for_confirmation"
+    elif trend_label in ("neutral_bias", "flat", "unknown"):
+        label = "no_edge"
+    else:
+        label = "opportunity_watch"
+    return label, round(score, 6), tuple(drivers or ("opportunity_proxy_no_strong_driver",)), tuple(blockers), tuple(dict.fromkeys(warnings)), values
+
+
 def _cross_venue_confirmation(cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     if cross is None or not cross.usable:
         return "unknown", None, tuple(), ("cross_venue_summary_missing_or_blocked",), tuple(), {}
@@ -388,6 +470,14 @@ def build_rule_based_v0_outputs(
     lq_label, lq_score, lq_drivers, lq_blockers, lq_warnings, lq_values = _liquidity_execution_quality(technical_summary, cross_venue_summary)
     bf_label, bf_score, bf_drivers, bf_blockers, bf_warnings, bf_values = _breakout_false_break(technical_summary, cross_venue_summary)
     cv_label, cv_score, cv_drivers, cv_blockers, cv_warnings, cv_values = _cross_venue_confirmation(cross_venue_summary)
+    op_label, op_score, op_drivers, op_blockers, op_warnings, op_values = _opportunity_participation(
+        trend_label=tb_label,
+        reversal_label=rz_label,
+        volatility_label=vr_label,
+        liquidity_label=lq_label,
+        breakout_label=bf_label,
+        cross_label=cv_label,
+    )
     ht_label, ht_score, ht_drivers, ht_blockers, ht_warnings, ht_values = _human_technical_structure(technical_summary)
     return (
         _output(family=PredictionFamily.MARKET_REGIME, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=mr_label, score=mr_score, drivers=mr_drivers, blockers=mr_blockers, values=mr_values),
@@ -396,6 +486,7 @@ def build_rule_based_v0_outputs(
         _output(family=PredictionFamily.VOLATILITY_RISK, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=vr_label, score=vr_score, drivers=vr_drivers, blockers=vr_blockers, values=vr_values),
         _output(family=PredictionFamily.LIQUIDITY_EXECUTION_QUALITY, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=lq_label, score=lq_score, drivers=lq_drivers, blockers=lq_blockers, warnings=lq_warnings, values=lq_values),
         _output(family=PredictionFamily.BREAKOUT_FALSE_BREAK, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=bf_label, score=bf_score, drivers=bf_drivers, blockers=bf_blockers, warnings=bf_warnings, values=bf_values),
+        _output(family=PredictionFamily.OPPORTUNITY_PARTICIPATION, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=op_label, score=op_score, drivers=op_drivers, blockers=op_blockers, warnings=op_warnings, values=op_values),
         _output(family=PredictionFamily.CROSS_VENUE_CONFIRMATION, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=cv_label, score=cv_score, drivers=cv_drivers, blockers=cv_blockers, warnings=cv_warnings, values=cv_values),
         _output(family=PredictionFamily.HUMAN_TECHNICAL_STRUCTURE, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=ht_label, score=ht_score, drivers=ht_drivers, blockers=ht_blockers, warnings=ht_warnings, values=ht_values),
     )

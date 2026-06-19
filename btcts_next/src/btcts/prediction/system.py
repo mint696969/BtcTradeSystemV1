@@ -197,9 +197,9 @@ def _caution(outputs: Tuple[PredictionOutput, ...], blockers: Tuple[str, ...], w
     labels = {output.primary_label for output in outputs}
     if blockers:
         return "blocked"
-    if warnings or labels.intersection({"elevated_risk", "divergent_warning", "volatile_or_divergent", "poor_liquidity", "liquidity_unknown", "false_break_risk"}):
+    if warnings or labels.intersection({"elevated_risk", "divergent_warning", "volatile_or_divergent", "poor_liquidity", "liquidity_unknown", "false_break_risk", "opportunity_blocked"}):
         return "high"
-    if labels.intersection({"compression_watch", "rejection_structure", "range_boundary_structure", "reversal_watch", "reaction_zone_watch", "vwap_reversion_watch", "liquidity_caution", "breakout_watch", "breakout_candidate"}):
+    if labels.intersection({"compression_watch", "rejection_structure", "range_boundary_structure", "reversal_watch", "reaction_zone_watch", "vwap_reversion_watch", "liquidity_caution", "breakout_watch", "breakout_candidate", "wait_for_confirmation", "opportunity_watch"}):
         return "medium"
     return "low"
 
@@ -258,6 +258,7 @@ def _horizon_group_summary(
     volatility = _best_label(group_outputs, "volatility_risk")
     liquidity = _best_label(group_outputs, "liquidity_execution_quality")
     breakout = _best_label(group_outputs, "breakout_false_break")
+    opportunity = _best_label(group_outputs, "opportunity_participation")
     cross = _best_label(group_outputs, "cross_venue_confirmation")
     technical = _best_label(group_outputs, "human_technical_structure")
     primary = _primary_label(group_outputs, blockers)
@@ -275,6 +276,7 @@ def _horizon_group_summary(
             "confidence": confidence,
             "caution_level": caution,
             "liquidity_execution_quality": liquidity,
+            "opportunity_participation": opportunity,
         },
     )
     narrative = _group_narrative(group, primary, trend, regime, caution, confidence)
@@ -306,6 +308,7 @@ def _horizon_group_summary(
                 "volatility_risk": volatility,
                 "liquidity_execution_quality": liquidity,
                 "breakout_false_break": breakout,
+                "opportunity_participation": opportunity,
                 "cross_venue_confirmation": cross,
                 "human_technical_structure": technical,
             },

@@ -31,7 +31,8 @@ def test_ps_f5_files_compile_and_import() -> None:
     assert "reversal_zone" in families
     assert "liquidity_execution_quality" in families
     assert "breakout_false_break" in families
-    assert len(families) == 8
+    assert "opportunity_participation" in families
+    assert len(families) == 9
 
 
 def main() -> int:
