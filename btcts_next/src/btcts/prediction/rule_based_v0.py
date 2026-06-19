@@ -326,6 +326,7 @@ def _apply_feature_depth_context_for_family(
     drivers: list[str],
     warnings: list[str],
     feature_depth_snapshot: FeatureDepthSnapshot | None,
+    context_version: str = "ps_e3.v1",
 ) -> None:
     if feature_depth_snapshot is None:
         return
@@ -333,7 +334,7 @@ def _apply_feature_depth_context_for_family(
     orderbook = dict(snapshot.get("orderbook", {}))
     tradeflow = dict(snapshot.get("tradeflow", {}))
     values["feature_depth_context"] = {
-        "version": "ps_e3.v1",
+        "version": context_version,
         "target_family": target_family,
         "feature_depth_state": snapshot.get("feature_depth_state"),
         "context_only": bool(snapshot.get("context_only", True)),
@@ -354,6 +355,8 @@ def _apply_feature_depth_context_for_family(
         drivers.append("breakout_false_break_feature_depth_context_supplied")
     elif target_family == "algorithmic_participant_footprint":
         drivers.append("algorithmic_participant_footprint_feature_depth_context_supplied")
+    elif target_family == "opportunity_participation":
+        drivers.append("opportunity_participation_feature_depth_context_supplied")
     else:
         drivers.append(f"{target_family}_feature_depth_context_supplied")
     if not bool(snapshot.get("context_only", True)):
@@ -452,6 +455,7 @@ def _opportunity_participation(
     liquidity_label: str,
     breakout_label: str,
     cross_label: str,
+    feature_depth_snapshot: FeatureDepthSnapshot | None = None,
 ) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     drivers: list[str] = []
     warnings: list[str] = []
@@ -469,7 +473,8 @@ def _opportunity_participation(
     labels = {trend_label, reversal_label, volatility_label, liquidity_label, breakout_label, cross_label}
     if "unknown" in labels and labels == {"unknown"}:
         blockers.append("opportunity_proxy_family_labels_missing")
-        return "unknown", None, tuple(), tuple(blockers), tuple(), values
+        _apply_feature_depth_context_for_family(target_family="opportunity_participation", values=values, drivers=drivers, warnings=warnings, feature_depth_snapshot=feature_depth_snapshot, context_version="ps_e4.v1")
+        return "unknown", None, tuple(drivers), tuple(blockers), tuple(dict.fromkeys(warnings)), values
 
     score = 0.40
     if trend_label in ("long_bias", "short_bias"):
@@ -509,6 +514,8 @@ def _opportunity_participation(
         warnings.append("elevated_volatility_wait")
     elif volatility_label == "normal_risk":
         score += 0.03
+
+    _apply_feature_depth_context_for_family(target_family="opportunity_participation", values=values, drivers=drivers, warnings=warnings, feature_depth_snapshot=feature_depth_snapshot, context_version="ps_e4.v1")
 
     score = max(0.0, min(1.0, score))
     hard_wait = any(item in warnings for item in ("cross_venue_divergent_wait", "false_break_risk_wait", "elevated_volatility_wait")) or liquidity_label in ("poor_liquidity", "liquidity_unknown")
@@ -720,6 +727,7 @@ def build_rule_based_v0_outputs(
         liquidity_label=lq_label,
         breakout_label=bf_label,
         cross_label=cv_label,
+        feature_depth_snapshot=feature_depth_snapshot,
     )
     ht_label, ht_score, ht_drivers, ht_blockers, ht_warnings, ht_values = _human_technical_structure(technical_summary)
     return (
