@@ -45,6 +45,15 @@ def _confirmed_snapshots(now: datetime) -> list[dict[str, object]]:
     ]
 
 
+def _divergent_snapshots(now: datetime) -> list[dict[str, object]]:
+    ts = now.isoformat().replace("+00:00", "Z")
+    return [
+        {"source_id": "bf_spot", "venue": "bitFlyer", "symbol": "BTC_JPY", "price": 10_000_000, "event_ts": ts, "market_role": "bitflyer_spot"},
+        {"source_id": "bf_fx", "venue": "bitFlyer", "symbol": "FX_BTC_JPY", "price": 10_180_000, "event_ts": ts, "market_role": "bitflyer_fx"},
+        {"source_id": "binance", "venue": "Binance", "symbol": "BTC_JPY_REF", "price": 9_850_000, "event_ts": ts, "market_role": "reference"},
+    ]
+
+
 def test_static_boundaries_and_family_registration() -> None:
     text = RULE.read_text(encoding="utf-8") + "\n" + SYSTEM.read_text(encoding="utf-8")
     forbidden = [
@@ -94,10 +103,12 @@ def test_false_break_warning_from_wick_or_unconfirmed_structure() -> None:
     now = datetime(2026, 6, 19, 0, 0, 0, tzinfo=timezone.utc)
     candles, _ = aggregate_ohlcv_from_rows(_false_break_rows(now), now=now)
     technical = build_human_technical_summary(candles, timeframe_sec=300)
-    cross = build_cross_venue_reference_summary(_confirmed_snapshots(now), now=now)
+    cross = build_cross_venue_reference_summary(_divergent_snapshots(now), now=now)
     outputs = build_rule_based_v0_outputs(technical_summary=technical, cross_venue_summary=cross, horizon_sec=300, now=now)
     breakout = {output.family.value: output for output in outputs}["breakout_false_break"]
     assert breakout.primary_label in {"false_break_risk", "range_continuation", "breakout_watch", "no_breakout_signal"}
+    assert breakout.primary_label != "breakout_candidate"
+    assert breakout.values["cross_venue_agreement_state"] == "divergent"
     assert breakout.values["range_close_position"] in {"near_range_high", "near_range_low", "mid_range", "flat"}
 
 
