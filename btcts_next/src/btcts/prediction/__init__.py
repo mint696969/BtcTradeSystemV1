@@ -34,6 +34,7 @@ from .replay_validation import ReplayValidationResult, ReplayValidationScenario,
 from .rule_based_v0 import build_rule_based_v0_outputs
 from .shadow_adapter import AutoTradeInferenceSnapshot, AutoTradeShadowSignalPreview, build_autotrade_shadow_signal_preview
 from .source_quality import ContinuityState, SourceQualityStatus, SourceTrustState, assess_source_quality
+from .system import build_prediction_system_result
 from .system_contract import (
     DEFAULT_HORIZON_GROUPS,
     DEFAULT_HORIZONS_BY_GROUP,
@@ -148,6 +149,7 @@ __all__ = [
     "build_missed_opportunity_report",
     "build_prediction_calibration_report",
     "build_prediction_prearmed_readiness_snapshot",
+    "build_prediction_system_result",
     "build_replay_validation_result",
     "build_rule_based_v0_outputs",
     "default_prediction_parameter_set_for_family",

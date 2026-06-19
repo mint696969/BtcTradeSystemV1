@@ -10,7 +10,7 @@ from typing import Any, Dict, Tuple
 from .contracts import PredictionFamily
 
 LOGIC_VERSION = "prediction_feature_registry.s125.v1"
-DEFAULT_HORIZONS_SEC: Tuple[int, ...] = (15, 30, 60, 180, 300, 900, 1800, 3600, 14400, 86400)
+DEFAULT_HORIZONS_SEC: Tuple[int, ...] = (15, 30, 60, 180, 300, 600, 900, 1800, 3600, 14400, 86400)
 
 
 class FeatureFamily(str, Enum):

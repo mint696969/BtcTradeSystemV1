@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Mapping, Tuple
 
-TIMEFRAME_SECONDS: Tuple[int, ...] = (60, 300, 900, 1800, 3600, 14400, 86400)
+TIMEFRAME_SECONDS: Tuple[int, ...] = (60, 300, 600, 900, 1800, 3600, 14400, 86400)
 LOGIC_VERSION = "prediction_ohlcv.s124.v1"
 
 
@@ -97,7 +97,7 @@ def _label(seconds: int) -> str:
 def _role(seconds: int) -> str:
     if seconds in (60, 300):
         return "short_technical_structure"
-    if seconds in (900, 1800):
+    if seconds in (600, 900, 1800):
         return "primary_trade_structure"
     return "higher_timeframe_context"
 
