@@ -833,6 +833,103 @@ def _build_revision_summary(
         },
     )
 
+
+def _scenario_review_summary(
+    *,
+    scenario: ScenarioCoreOutput,
+    outputs: Tuple[PredictionOutput, ...],
+    forecast_batch: ForecastLedgerBatch,
+    revision: PredictionRevisionSummary,
+    provider_registry_summary: Mapping[str, Any],
+    feature_depth_snapshot: FeatureDepthSnapshot | None,
+    blockers: Tuple[str, ...],
+    warnings: Tuple[str, ...],
+) -> dict[str, Any]:
+    """Build a review-only top-level scenario digest from already-emitted fields."""
+    outlooks = tuple(scenario.outlooks)
+    evidence_refs = tuple(ref for outlook in outlooks for ref in outlook.evidence_refs)
+    support_kinds = {"dominant_direction", "supporting_context_evidence", "turning_point_evidence", "scenario_switch_evidence"}
+    conflict_kinds = {"conflicting_evidence", "risk_or_blocker_evidence", "context_risk_evidence", "footprint_warning_evidence", "participation_filter_evidence"}
+
+    def _ref_payload(ref: PredictionEvidenceRef) -> dict[str, Any]:
+        return {
+            "evidence_ref_id": ref.evidence_ref_id,
+            "evidence_kind": ref.evidence_kind,
+            "family": ref.family,
+            "horizon_sec": ref.horizon_sec,
+            "summary": ref.summary,
+            "usable": ref.usable,
+            "blockers": list(ref.blockers),
+            "warnings": list(ref.warnings),
+        }
+
+    watch_next = list(dict.fromkeys(str(item) for item in scenario.scenario_trace.get("what_to_watch_next", [])))
+    if not watch_next:
+        watch_next = ["continue_monitoring_family_label_changes"]
+    refresh_required_count = int(scenario.gpt_review_digest.get("refresh_required_count", 0) or 0)
+    prediction_lifetime_state = str(scenario.gpt_review_digest.get("prediction_lifetime_state", "current_until_stale_after"))
+    return {
+        "version": "ps_n1.v1",
+        "review_only": True,
+        "primary_story": {
+            "current_regime_state": scenario.current_regime_state,
+            "current_hypothesis_health": scenario.current_hypothesis_health,
+            "turning_point_risk": scenario.turning_point_risk,
+            "evidence_conflict_state": scenario.evidence_conflict_state,
+            "scenario_switch_hint": scenario.scenario_switch_hint,
+            "headline_ja": scenario.human_narrative_ja.splitlines()[0] if scenario.human_narrative_ja else "",
+        },
+        "scenario_health": {
+            "invalidation_state": scenario.invalidation_state,
+            "rewrite_state": scenario.rewrite_state,
+            "trigger_eligibility_state": scenario.trigger_eligibility_state,
+            "blocker_count": len(blockers),
+            "warning_count": len(warnings),
+        },
+        "evidence_support": [_ref_payload(ref) for ref in evidence_refs if ref.evidence_kind in support_kinds][:8],
+        "evidence_conflicts": [_ref_payload(ref) for ref in evidence_refs if ref.evidence_kind in conflict_kinds][:8],
+        "watch_next": watch_next[:10],
+        "refresh_or_rewrite": {
+            "prediction_lifetime_state": prediction_lifetime_state,
+            "refresh_required_count": refresh_required_count,
+            "invalidation_state": scenario.invalidation_state,
+            "rewrite_state": scenario.rewrite_state,
+            "scenario_switch_hint": scenario.scenario_switch_hint,
+        },
+        "context_versions": {
+            "scenario_core_lite_version": "ps_h1.v1",
+            "scenario_trace_detail_version": "ps_h2.v1",
+            "lifetime_refresh_version": "ps_i1.v1",
+            "revision_lite_version": "ps_i1.v1",
+            "provider_reliability_version": "ps_d1.v1",
+            "liquidity_feature_depth_context_version": "ps_e2.v1" if feature_depth_snapshot is not None else None,
+            "orderbook_breakout_algo_context_version": "ps_e3.v1" if feature_depth_snapshot is not None else None,
+            "opportunity_tradeflow_context_version": "ps_e4.v1" if feature_depth_snapshot is not None else None,
+        },
+        "output_counts": {
+            "family_count": len(INITIAL_FAMILIES),
+            "output_count": len(outputs),
+            "forecast_record_count": forecast_batch.record_count if isinstance(forecast_batch, ForecastLedgerBatch) else 0,
+            "outlook_count": len(outlooks),
+            "evidence_ref_count": len(evidence_refs),
+            "provider_count": int(provider_registry_summary.get("provider_count", 0) or 0),
+            "usable_provider_count": int(provider_registry_summary.get("usable_provider_count", 0) or 0),
+        },
+        "boundaries": {
+            "read_only": True,
+            "non_executing": True,
+            "would_collect_public_source": False,
+            "would_send_to_broker": False,
+            "broker_execution_requested": False,
+            "mode_apply_requested": False,
+            "command_ledger_append_requested": False,
+            "trigger_eligibility_state": scenario.trigger_eligibility_state,
+            "feature_depth_context_only": bool(feature_depth_snapshot.context_only) if feature_depth_snapshot is not None else None,
+            "feature_depth_primary_direction_owner": bool(feature_depth_snapshot.primary_direction_owner) if feature_depth_snapshot is not None else None,
+            "has_revision": revision.has_revision,
+        },
+    }
+
 def build_prediction_system_result(
     *,
     rows: Iterable[Mapping[str, Any]] | None = None,
@@ -943,6 +1040,16 @@ def build_prediction_system_result(
             "provider_count": provider_registry.provider_count,
             "usable_provider_count": provider_registry.usable_provider_count,
             "unknown_provider_source_count": len(provider_registry.unknown_source_ids),
+            "scenario_review_summary": _scenario_review_summary(
+                scenario=scenario,
+                outputs=outputs,
+                forecast_batch=forecast_batch,
+                revision=revision,
+                provider_registry_summary=provider_registry_summary,
+                feature_depth_snapshot=feature_depth_snapshot,
+                blockers=tuple(dict.fromkeys(blockers)),
+                warnings=tuple(dict.fromkeys(warnings)),
+            ),
             "blockers": list(dict.fromkeys(blockers)),
             "warnings": list(dict.fromkeys(warnings)),
         },
