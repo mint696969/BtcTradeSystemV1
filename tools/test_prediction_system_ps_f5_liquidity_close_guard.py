@@ -1,5 +1,5 @@
-# path: ./tools/test_prediction_system_ps_f3_reversal_zone_close_guard.py
-# desc: Close guard for PS-F3 reversal_zone deterministic v1 syntax and importability.
+# path: ./tools/test_prediction_system_ps_f5_liquidity_close_guard.py
+# desc: Close guard for PS-F5 liquidity_execution_quality deterministic v1 syntax and importability.
 
 from __future__ import annotations
 
@@ -16,12 +16,12 @@ if str(SRC) not in sys.path:
 FILES = [
     ROOT / "btcts_next" / "src" / "btcts" / "prediction" / "rule_based_v0.py",
     ROOT / "btcts_next" / "src" / "btcts" / "prediction" / "system.py",
-    ROOT / "tools" / "test_prediction_system_ps_f3_reversal_zone_guard.py",
-    ROOT / "tools" / "test_prediction_system_ps_f3_reversal_zone_close_guard.py",
+    ROOT / "tools" / "test_prediction_system_ps_f5_liquidity_guard.py",
+    ROOT / "tools" / "test_prediction_system_ps_f5_liquidity_close_guard.py",
 ]
 
 
-def test_ps_f3_files_compile_and_import() -> None:
+def test_ps_f5_files_compile_and_import() -> None:
     for path in FILES:
         if not path.exists():
             raise AssertionError(f"missing file: {path}")
@@ -34,8 +34,8 @@ def test_ps_f3_files_compile_and_import() -> None:
 
 
 def main() -> int:
-    test_ps_f3_files_compile_and_import()
-    print("[OK] Prediction System PS-F3 reversal_zone close guard passed")
+    test_ps_f5_files_compile_and_import()
+    print("[OK] Prediction System PS-F5 liquidity_execution_quality close guard passed")
     return 0
 
 

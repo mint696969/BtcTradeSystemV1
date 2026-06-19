@@ -18,6 +18,7 @@ INITIAL_FAMILIES: Tuple[PredictionFamily, ...] = (
     PredictionFamily.TREND_BIAS,
     PredictionFamily.REVERSAL_ZONE,
     PredictionFamily.VOLATILITY_RISK,
+    PredictionFamily.LIQUIDITY_EXECUTION_QUALITY,
     PredictionFamily.CROSS_VENUE_CONFIRMATION,
     PredictionFamily.HUMAN_TECHNICAL_STRUCTURE,
 )
@@ -193,6 +194,78 @@ def _volatility_risk(technical: HumanTechnicalSummary | None) -> tuple[str, floa
     return label, score, (f"volatility_state_{vol.state}",), tuple(), vol.to_dict()
 
 
+def _liquidity_execution_quality(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
+    drivers: list[str] = []
+    blockers: list[str] = []
+    warnings: list[str] = []
+    values: Dict[str, Any] = {
+        "proxy_kind": "summary_based_liquidity_proxy_v1",
+        "note": "uses technical volatility and cross-venue summary until orderbook liquidity features are wired",
+    }
+    technical_usable = bool(technical and technical.usable)
+    cross_usable = bool(cross and cross.usable)
+    if not technical_usable and not cross_usable:
+        blockers.append("liquidity_proxy_inputs_missing_or_blocked")
+        return "liquidity_unknown", None, tuple(), tuple(blockers), tuple(), values
+
+    score = 0.62
+    if technical_usable and technical is not None:
+        vol_state = technical.volatility.state
+        values["volatility_state"] = vol_state
+        values["technical_warning_count"] = len(technical.warnings)
+        drivers.append(f"technical_volatility_{vol_state}")
+        if vol_state == "expanding":
+            score -= 0.18
+            warnings.append("expanding_volatility_liquidity_caution")
+        elif vol_state == "compressed":
+            score -= 0.05
+            warnings.append("compressed_volatility_liquidity_watch")
+        if technical.warnings:
+            score -= min(0.10, 0.03 * len(technical.warnings))
+            warnings.extend(f"technical_warning:{item}" for item in technical.warnings[:3])
+    else:
+        score -= 0.12
+        warnings.append("technical_summary_missing_for_liquidity_proxy")
+
+    if cross_usable and cross is not None:
+        values["cross_venue_agreement_state"] = cross.agreement_state
+        values["usable_venue_count"] = cross.usable_venue_count
+        values["max_deviation_pct"] = cross.max_deviation_pct
+        values["spot_fx_basis_state"] = cross.spot_fx_basis.premium_discount_state
+        drivers.append(f"cross_venue_{cross.agreement_state}")
+        if cross.usable_venue_count < 2:
+            score -= 0.15
+            warnings.append("low_usable_venue_count_liquidity_caution")
+        if cross.agreement_state == "divergent":
+            score -= 0.20
+            warnings.append("cross_venue_divergence_liquidity_caution")
+        elif cross.agreement_state == "confirmed":
+            score += 0.04
+        if cross.spot_fx_basis.blockers:
+            score -= 0.08
+            warnings.extend(f"basis_blocker:{item}" for item in cross.spot_fx_basis.blockers[:3])
+        if cross.spot_fx_basis.premium_discount_state in ("fx_premium", "fx_discount"):
+            score -= 0.05
+            warnings.append(f"spot_fx_basis_{cross.spot_fx_basis.premium_discount_state}")
+        if cross.warnings:
+            score -= min(0.10, 0.03 * len(cross.warnings))
+            warnings.extend(f"cross_warning:{item}" for item in cross.warnings[:3])
+    else:
+        score -= 0.15
+        warnings.append("cross_venue_summary_missing_for_liquidity_proxy")
+
+    score = max(0.0, min(1.0, score))
+    if score >= 0.64 and not warnings:
+        label = "liquidity_proxy_adequate"
+    elif score >= 0.44:
+        label = "liquidity_caution"
+    elif score >= 0.20:
+        label = "poor_liquidity"
+    else:
+        label = "liquidity_unknown"
+    return label, round(score, 6), tuple(drivers or ("liquidity_proxy_no_strong_driver",)), tuple(blockers), tuple(dict.fromkeys(warnings)), values
+
+
 def _cross_venue_confirmation(cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     if cross is None or not cross.usable:
         return "unknown", None, tuple(), ("cross_venue_summary_missing_or_blocked",), tuple(), {}
@@ -244,6 +317,7 @@ def build_rule_based_v0_outputs(
     tb_label, tb_score, tb_drivers, tb_blockers, tb_values = _trend_bias(technical_summary)
     rz_label, rz_score, rz_drivers, rz_blockers, rz_warnings, rz_values = _reversal_zone(technical_summary)
     vr_label, vr_score, vr_drivers, vr_blockers, vr_values = _volatility_risk(technical_summary)
+    lq_label, lq_score, lq_drivers, lq_blockers, lq_warnings, lq_values = _liquidity_execution_quality(technical_summary, cross_venue_summary)
     cv_label, cv_score, cv_drivers, cv_blockers, cv_warnings, cv_values = _cross_venue_confirmation(cross_venue_summary)
     ht_label, ht_score, ht_drivers, ht_blockers, ht_warnings, ht_values = _human_technical_structure(technical_summary)
     return (
@@ -251,6 +325,7 @@ def build_rule_based_v0_outputs(
         _output(family=PredictionFamily.TREND_BIAS, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=tb_label, score=tb_score, drivers=tb_drivers, blockers=tb_blockers, values=tb_values),
         _output(family=PredictionFamily.REVERSAL_ZONE, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=rz_label, score=rz_score, drivers=rz_drivers, blockers=rz_blockers, warnings=rz_warnings, values=rz_values),
         _output(family=PredictionFamily.VOLATILITY_RISK, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=vr_label, score=vr_score, drivers=vr_drivers, blockers=vr_blockers, values=vr_values),
+        _output(family=PredictionFamily.LIQUIDITY_EXECUTION_QUALITY, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=lq_label, score=lq_score, drivers=lq_drivers, blockers=lq_blockers, warnings=lq_warnings, values=lq_values),
         _output(family=PredictionFamily.CROSS_VENUE_CONFIRMATION, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=cv_label, score=cv_score, drivers=cv_drivers, blockers=cv_blockers, warnings=cv_warnings, values=cv_values),
         _output(family=PredictionFamily.HUMAN_TECHNICAL_STRUCTURE, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=ht_label, score=ht_score, drivers=ht_drivers, blockers=ht_blockers, warnings=ht_warnings, values=ht_values),
     )
