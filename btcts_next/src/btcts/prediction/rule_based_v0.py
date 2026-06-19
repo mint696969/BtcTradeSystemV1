@@ -23,6 +23,7 @@ INITIAL_FAMILIES: Tuple[PredictionFamily, ...] = (
     PredictionFamily.OPPORTUNITY_PARTICIPATION,
     PredictionFamily.CROSS_VENUE_CONFIRMATION,
     PredictionFamily.MACRO_RISK_CONTEXT,
+    PredictionFamily.ALGORITHMIC_PARTICIPANT_FOOTPRINT,
     PredictionFamily.HUMAN_TECHNICAL_STRUCTURE,
 )
 
@@ -484,6 +485,84 @@ def _macro_risk_context(technical: HumanTechnicalSummary | None, cross: CrossVen
     return label, round(score, 6), tuple(drivers or ("macro_proxy_context_only",)), tuple(), tuple(dict.fromkeys(warnings)), values
 
 
+def _algorithmic_participant_footprint(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
+    drivers: list[str] = []
+    warnings: list[str] = []
+    blockers: list[str] = []
+    values: Dict[str, Any] = {
+        "proxy_kind": "summary_based_algorithmic_footprint_proxy_v1",
+        "primary_direction_owner": False,
+        "note": "uses technical/cross-venue summaries only; no live tradeflow/orderbook collection",
+    }
+    technical_usable = bool(technical and technical.usable)
+    cross_usable = bool(cross and cross.usable)
+    if not technical_usable and not cross_usable:
+        blockers.append("algorithmic_footprint_proxy_inputs_missing_or_blocked")
+        return "algorithmic_footprint_unavailable", None, tuple(), tuple(blockers), tuple(), values
+
+    score = 0.36
+    if technical_usable and technical is not None:
+        vol = technical.volatility.state
+        wick = technical.wick_body.wick_signal
+        ma_slope = technical.moving_average.slope_label
+        ma_cross = technical.moving_average.cross_state
+        range_pos = technical.range_boundary.close_position
+        values.update({
+            "volatility_state": vol,
+            "wick_signal": wick,
+            "ma_slope_label": ma_slope,
+            "ma_cross_state": ma_cross,
+            "range_close_position": range_pos,
+        })
+        if vol == "expanding":
+            score += 0.16
+            warnings.append("expanding_volatility_algorithmic_activity_watch")
+        elif vol == "compressed":
+            drivers.append("compressed_volatility_no_clear_footprint")
+        if wick in ("upper_wick_rejection", "lower_wick_rejection") and range_pos in ("near_range_high", "near_range_low"):
+            score += 0.14
+            warnings.append("boundary_wick_possible_sweep_footprint")
+        if wick == "strong_body" and ma_slope in ("rising", "falling") and ma_cross in ("short_above_long", "short_below_long"):
+            score += 0.12
+            drivers.append("strong_body_directional_ma_footprint")
+    else:
+        values["technical_state"] = "missing_or_blocked"
+        warnings.append("technical_summary_missing_for_algorithmic_footprint_proxy")
+
+    if cross_usable and cross is not None:
+        values["cross_venue_agreement_state"] = cross.agreement_state
+        values["max_deviation_pct"] = cross.max_deviation_pct
+        values["spot_fx_basis_state"] = cross.spot_fx_basis.premium_discount_state
+        if cross.agreement_state == "divergent":
+            score += 0.14
+            warnings.append("cross_venue_divergence_possible_algorithmic_dislocation")
+        elif cross.agreement_state == "confirmed":
+            drivers.append("cross_venue_confirmed")
+        if cross.spot_fx_basis.premium_discount_state in ("fx_premium", "fx_discount"):
+            score += 0.04
+            warnings.append(f"spot_fx_basis_{cross.spot_fx_basis.premium_discount_state}_footprint_watch")
+    else:
+        values["cross_venue_agreement_state"] = "unknown"
+        warnings.append("cross_venue_summary_missing_for_algorithmic_footprint_proxy")
+
+    score = max(0.0, min(1.0, score))
+    activity_watch_warnings = {
+        "expanding_volatility_algorithmic_activity_watch",
+        "cross_venue_divergence_possible_algorithmic_dislocation",
+    }
+    if "boundary_wick_possible_sweep_footprint" in warnings:
+        label = "potential_sweep_reversal_footprint"
+    elif activity_watch_warnings.intersection(warnings):
+        label = "algorithmic_activity_watch"
+    elif "strong_body_directional_ma_footprint" in drivers:
+        label = "directional_algorithmic_flow_watch"
+    elif blockers:
+        label = "algorithmic_footprint_unavailable"
+    else:
+        label = "algorithmic_footprint_neutral"
+    return label, round(score, 6), tuple(drivers or ("algorithmic_footprint_proxy_context_only",)), tuple(blockers), tuple(dict.fromkeys(warnings)), values
+
+
 def _human_technical_structure(technical: HumanTechnicalSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     if technical is None or not technical.usable:
         return "unknown", None, tuple(), ("human_technical_summary_missing_or_blocked",), tuple(), {}
@@ -522,6 +601,7 @@ def build_rule_based_v0_outputs(
     bf_label, bf_score, bf_drivers, bf_blockers, bf_warnings, bf_values = _breakout_false_break(technical_summary, cross_venue_summary)
     cv_label, cv_score, cv_drivers, cv_blockers, cv_warnings, cv_values = _cross_venue_confirmation(cross_venue_summary)
     mc_label, mc_score, mc_drivers, mc_blockers, mc_warnings, mc_values = _macro_risk_context(technical_summary, cross_venue_summary)
+    af_label, af_score, af_drivers, af_blockers, af_warnings, af_values = _algorithmic_participant_footprint(technical_summary, cross_venue_summary)
     op_label, op_score, op_drivers, op_blockers, op_warnings, op_values = _opportunity_participation(
         trend_label=tb_label,
         reversal_label=rz_label,
@@ -541,5 +621,6 @@ def build_rule_based_v0_outputs(
         _output(family=PredictionFamily.OPPORTUNITY_PARTICIPATION, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=op_label, score=op_score, drivers=op_drivers, blockers=op_blockers, warnings=op_warnings, values=op_values),
         _output(family=PredictionFamily.CROSS_VENUE_CONFIRMATION, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=cv_label, score=cv_score, drivers=cv_drivers, blockers=cv_blockers, warnings=cv_warnings, values=cv_values),
         _output(family=PredictionFamily.MACRO_RISK_CONTEXT, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=mc_label, score=mc_score, drivers=mc_drivers, blockers=mc_blockers, warnings=mc_warnings, values=mc_values),
+        _output(family=PredictionFamily.ALGORITHMIC_PARTICIPANT_FOOTPRINT, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=af_label, score=af_score, drivers=af_drivers, blockers=af_blockers, warnings=af_warnings, values=af_values),
         _output(family=PredictionFamily.HUMAN_TECHNICAL_STRUCTURE, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=ht_label, score=ht_score, drivers=ht_drivers, blockers=ht_blockers, warnings=ht_warnings, values=ht_values),
     )

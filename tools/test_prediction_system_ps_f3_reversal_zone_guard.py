@@ -89,12 +89,12 @@ def test_prediction_system_runner_surfaces_reversal_risk() -> None:
         now=now,
     )
     data = result.to_dict()
-    assert len(data["outputs"]) == 30
-    assert data["forecast_batch"]["record_count"] == 30
+    assert len(data["outputs"]) == 33
+    assert data["forecast_batch"]["record_count"] == 33
     assert "reversal_zone" in data["inference_bundle"]["families_present"]
     outlook = data["scenario_core"]["outlooks"][0]
     assert outlook["reversal_risk"] != "not_implemented_ps_g_lite"
-    assert data["gpt_review_digest"]["family_count"] == 10
+    assert data["gpt_review_digest"]["family_count"] == 11
     assert data["read_only"] is True
     assert data["non_executing"] is True
     assert data["would_send_to_broker"] is False

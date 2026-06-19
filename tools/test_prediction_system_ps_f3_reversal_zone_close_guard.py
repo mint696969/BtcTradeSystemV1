@@ -33,7 +33,8 @@ def test_ps_f3_files_compile_and_import() -> None:
     assert "breakout_false_break" in families
     assert "opportunity_participation" in families
     assert "macro_risk_context" in families
-    assert len(families) == 10
+    assert "algorithmic_participant_footprint" in families
+    assert len(families) == 11
 
 
 def main() -> int:

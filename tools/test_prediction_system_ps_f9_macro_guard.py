@@ -117,15 +117,15 @@ def test_prediction_system_runner_surfaces_macro_context_without_direction_owner
         now=now,
     )
     data = result.to_dict()
-    assert len(data["outputs"]) == 30
-    assert data["forecast_batch"]["record_count"] == 30
+    assert len(data["outputs"]) == 33
+    assert data["forecast_batch"]["record_count"] == 33
     assert "macro_risk_context" in data["inference_bundle"]["families_present"]
     outlook = data["scenario_core"]["outlooks"][0]
     assert "macro_risk_context" in outlook["gpt_review_digest"]["family_labels"]
     assert outlook["trigger_eligibility"]["machine_fields"]["macro_risk_context"] in {"macro_context_neutral", "macro_risk_watch", "macro_context_unavailable", "unknown"}
     assert outlook["primary_label"] in {"long_bias", "short_bias", "trend_candidate", "range_candidate", "volatile_or_divergent", "unclear", "no_edge", "unknown"}
     assert outlook["primary_label"] not in {"macro_context_neutral", "macro_risk_watch", "macro_context_unavailable"}
-    assert data["gpt_review_digest"]["family_count"] == 10
+    assert data["gpt_review_digest"]["family_count"] == 11
     assert data["read_only"] is True
     assert data["non_executing"] is True
     assert data["would_send_to_broker"] is False
