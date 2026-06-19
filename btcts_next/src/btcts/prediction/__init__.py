@@ -7,6 +7,7 @@ from .bundle_assembly import build_inference_bundle_from_outputs
 from .calibration import MissedOpportunityReport, PredictionCalibrationReport, build_missed_opportunity_report, build_prediction_calibration_report
 from .contracts import InferenceBundle, ParameterSetIdentity, PredictionConfidence, PredictionFamily, PredictionOutput, SourceIdentity
 from .cross_venue import CrossVenueReferenceSummary, LeadLagSkeleton, SpotFxBasisSummary, VenueReferencePrice, build_cross_venue_reference_summary
+from .feature_depth import FeatureDepthInputKind, FeatureDepthInputRef, FeatureDepthSnapshot, FeatureDepthState, OrderBookFeatureSummary, TradeFlowFeatureSummary, build_feature_depth_snapshot
 from .feature_registry import FeatureFamily, FeatureRegistryEntry, FeatureSpec, build_default_feature_registry, feature_registry_by_id
 from .forecast_ledger import ForecastLedgerBatch, ForecastLedgerRecord, build_forecast_ledger_records_from_bundle
 from .horizons import CONTEXT_HORIZONS_SEC, EXECUTION_MICRO_HORIZONS_SEC, PRIMARY_TRADE_HORIZONS_SEC, HorizonLayer, PredictionHorizon, build_default_horizons, horizon_by_seconds
@@ -78,6 +79,13 @@ __all__ = [
     "DEFAULT_HORIZON_GROUPS",
     "EXECUTION_MICRO_HORIZONS_SEC",
     "FeatureFamily",
+    "build_feature_depth_snapshot",
+    "TradeFlowFeatureSummary",
+    "OrderBookFeatureSummary",
+    "FeatureDepthState",
+    "FeatureDepthSnapshot",
+    "FeatureDepthInputRef",
+    "FeatureDepthInputKind",
     "FeatureRegistryEntry",
     "FeatureSpec",
     "ForecastLedgerBatch",
