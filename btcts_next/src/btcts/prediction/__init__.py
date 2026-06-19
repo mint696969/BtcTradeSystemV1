@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from .bundle_assembly import build_inference_bundle_from_outputs
 from .calibration import MissedOpportunityReport, PredictionCalibrationReport, build_missed_opportunity_report, build_prediction_calibration_report
+from .calibration_review import PredictionCalibrationReview, build_prediction_calibration_review
 from .contracts import InferenceBundle, ParameterSetIdentity, PredictionConfidence, PredictionFamily, PredictionOutput, SourceIdentity
 from .cross_venue import CrossVenueReferenceSummary, LeadLagSkeleton, SpotFxBasisSummary, VenueReferencePrice, build_cross_venue_reference_summary
 from .evaluation import PredictionEvaluationRecord, PredictionEvaluationReport, build_prediction_evaluation_records, build_prediction_evaluation_report
@@ -111,6 +112,7 @@ __all__ = [
     "PRIMARY_TRADE_HORIZONS_SEC",
     "ParameterSetIdentity",
     "PredictionCalibrationReport",
+    "PredictionCalibrationReview",
     "PredictionConfidence",
     "PredictionFamily",
     "PredictionHorizon",
@@ -162,6 +164,7 @@ __all__ = [
     "build_inference_bundle_from_outputs",
     "build_missed_opportunity_report",
     "build_prediction_calibration_report",
+    "build_prediction_calibration_review",
     "build_prediction_evaluation_records",
     "build_prediction_evaluation_report",
     "build_prediction_prearmed_readiness_snapshot",
