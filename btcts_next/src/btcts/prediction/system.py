@@ -239,6 +239,199 @@ def _group_narrative(group: HorizonGroup, primary_label: str, trend_bias: str, r
     return f"{label_ja}は{direction}。地合い={regime}、トレンド={trend_bias}、警戒={caution}、信頼度={confidence}。"
 
 
+
+def _family_label_map(outputs: Tuple[PredictionOutput, ...]) -> dict[str, str]:
+    return {
+        "market_regime": _best_label(outputs, "market_regime"),
+        "trend_bias": _best_label(outputs, "trend_bias"),
+        "reversal_zone": _best_label(outputs, "reversal_zone"),
+        "volatility_risk": _best_label(outputs, "volatility_risk"),
+        "liquidity_execution_quality": _best_label(outputs, "liquidity_execution_quality"),
+        "breakout_false_break": _best_label(outputs, "breakout_false_break"),
+        "opportunity_participation": _best_label(outputs, "opportunity_participation"),
+        "cross_venue_confirmation": _best_label(outputs, "cross_venue_confirmation"),
+        "macro_risk_context": _best_label(outputs, "macro_risk_context"),
+        "algorithmic_participant_footprint": _best_label(outputs, "algorithmic_participant_footprint"),
+        "human_technical_structure": _best_label(outputs, "human_technical_structure"),
+    }
+
+
+def _scenario_signal_summary(labels: Mapping[str, str], blockers: Tuple[str, ...], warnings: Tuple[str, ...]) -> dict[str, Any]:
+    trend = labels.get("trend_bias", "unknown")
+    reversal = labels.get("reversal_zone", "unknown")
+    volatility = labels.get("volatility_risk", "unknown")
+    liquidity = labels.get("liquidity_execution_quality", "unknown")
+    breakout = labels.get("breakout_false_break", "unknown")
+    opportunity = labels.get("opportunity_participation", "unknown")
+    cross = labels.get("cross_venue_confirmation", "unknown")
+    macro = labels.get("macro_risk_context", "unknown")
+    algo = labels.get("algorithmic_participant_footprint", "unknown")
+    technical = labels.get("human_technical_structure", "unknown")
+
+    continuation_score = 0.0
+    reversal_score = 0.0
+    conflict_reasons: list[str] = []
+    watch_next: list[str] = []
+    switch_reasons: list[str] = []
+
+    if blockers:
+        conflict_reasons.append("blocked_family_outputs")
+        watch_next.append("restore_missing_or_blocked_prediction_inputs")
+
+    if trend in ("long_bias", "short_bias"):
+        continuation_score += 2.0
+    elif trend in ("neutral_bias", "unknown"):
+        conflict_reasons.append("trend_not_directional")
+        watch_next.append("wait_for_directional_trend_bias")
+
+    if breakout == "breakout_candidate":
+        continuation_score += 1.0
+        watch_next.append("watch_breakout_follow_through")
+    elif breakout == "breakout_watch":
+        continuation_score += 0.5
+        watch_next.append("watch_breakout_confirmation")
+    elif breakout == "false_break_risk":
+        reversal_score += 2.0
+        switch_reasons.append("false_break_risk")
+        watch_next.append("watch_false_break_resolution")
+
+    if reversal in ("reversal_watch", "reaction_zone_watch", "vwap_reversion_watch"):
+        reversal_score += 2.0
+        switch_reasons.append(reversal)
+        watch_next.append("watch_reversal_zone_reaction")
+    elif reversal == "low_reversal_signal":
+        continuation_score += 0.5
+
+    if cross == "confirmed":
+        continuation_score += 1.0
+    elif cross == "divergent_warning":
+        reversal_score += 1.5
+        conflict_reasons.append("cross_venue_divergence")
+        switch_reasons.append("cross_venue_divergence")
+        watch_next.append("watch_cross_venue_reconfirmation")
+
+    if liquidity == "liquidity_proxy_adequate":
+        continuation_score += 0.5
+    elif liquidity in ("liquidity_caution", "poor_liquidity", "liquidity_unknown"):
+        conflict_reasons.append(f"liquidity_{liquidity}")
+        watch_next.append("watch_liquidity_quality_recovery")
+
+    if volatility == "elevated_risk":
+        reversal_score += 1.0
+        switch_reasons.append("elevated_volatility")
+        watch_next.append("watch_volatility_normalization")
+    elif volatility == "normal_risk":
+        continuation_score += 0.5
+
+    if macro == "macro_risk_watch":
+        reversal_score += 0.5
+        conflict_reasons.append("macro_risk_watch")
+        watch_next.append("watch_macro_context_cooldown")
+
+    if algo in ("algorithmic_activity_watch", "potential_sweep_reversal_footprint"):
+        reversal_score += 1.0
+        switch_reasons.append(algo)
+        watch_next.append("watch_algorithmic_footprint_resolution")
+    elif algo == "directional_algorithmic_flow_watch":
+        continuation_score += 0.5
+
+    if opportunity in ("opportunity_blocked", "wait_for_confirmation"):
+        conflict_reasons.append(opportunity)
+        watch_next.append("wait_for_participation_confirmation")
+
+    if technical in ("directional_structure", "range_boundary_structure"):
+        continuation_score += 0.25
+    elif technical == "rejection_structure":
+        reversal_score += 0.5
+        watch_next.append("watch_rejection_structure_follow_through")
+
+    if continuation_score > reversal_score + 1.0:
+        balance_state = "continuation_bias"
+    elif reversal_score > continuation_score + 1.0:
+        balance_state = "reversal_risk_bias"
+    else:
+        balance_state = "mixed_or_transition"
+
+    turning_point_risk = "high" if reversal_score >= 3.0 else ("medium" if reversal_score >= 1.5 else "low")
+    evidence_conflict_state = "conflicting_evidence" if conflict_reasons else "aligned_or_low_conflict"
+
+    if blockers:
+        invalidation_state = "blocked_inputs"
+    elif "false_break_risk" in switch_reasons or reversal == "reversal_watch":
+        invalidation_state = "active_invalidation_watch"
+    elif evidence_conflict_state == "conflicting_evidence":
+        invalidation_state = "soft_invalidation_watch"
+    else:
+        invalidation_state = "valid_until_new_conflict"
+
+    if switch_reasons:
+        scenario_switch_hint = "watch_for_scenario_switch:" + ",".join(dict.fromkeys(switch_reasons[:4]))
+    elif evidence_conflict_state == "conflicting_evidence":
+        scenario_switch_hint = "wait_for_confirmation"
+    else:
+        scenario_switch_hint = "no_immediate_switch"
+
+    rewrite_state = "rewrite_if_switch_confirms" if scenario_switch_hint.startswith("watch_for_scenario_switch") else "no_rewrite_required"
+    evidence_weighting_summary = {
+        "state": "deterministic_family_label_weighting_v1",
+        "continuation_score": round(continuation_score, 6),
+        "reversal_score": round(reversal_score, 6),
+        "dominant_side": balance_state,
+        "weighted_families": list(labels.keys()),
+    }
+    if not watch_next:
+        watch_next.append("continue_monitoring_family_label_changes")
+
+    return {
+        "continuation_vs_reversal_balance": {
+            "state": balance_state,
+            "continuation_score": round(continuation_score, 6),
+            "reversal_score": round(reversal_score, 6),
+            "drivers": list(dict.fromkeys(switch_reasons + conflict_reasons))[:8],
+        },
+        "turning_point_risk": turning_point_risk,
+        "evidence_conflict_state": evidence_conflict_state,
+        "conflict_reasons": list(dict.fromkeys(conflict_reasons))[:8],
+        "scenario_switch_hint": scenario_switch_hint,
+        "invalidation_state": invalidation_state,
+        "rewrite_state": rewrite_state,
+        "what_to_watch_next": list(dict.fromkeys(watch_next))[:8],
+        "evidence_weighting_summary": evidence_weighting_summary,
+    }
+
+
+def _aggregate_core_signals(outlooks: Tuple[HorizonGroupSummary, ...]) -> dict[str, Any]:
+    summaries = [dict(outlook.gpt_review_digest.get("scenario_lite", {})) for outlook in outlooks]
+    conflict_reasons: list[str] = []
+    watch_next: list[str] = []
+    turning_ranks = {"unknown": 0, "low": 1, "medium": 2, "high": 3}
+    top_turning = "unknown"
+    switch_hint = "no_immediate_switch"
+    invalidation = "valid_until_new_conflict"
+    rewrite = "no_rewrite_required"
+    for summary in summaries:
+        if turning_ranks.get(str(summary.get("turning_point_risk", "unknown")), 0) > turning_ranks.get(top_turning, 0):
+            top_turning = str(summary.get("turning_point_risk", "unknown"))
+        conflict_reasons.extend(str(item) for item in summary.get("conflict_reasons", []))
+        watch_next.extend(str(item) for item in summary.get("what_to_watch_next", []))
+        hint = str(summary.get("scenario_switch_hint", ""))
+        if hint.startswith("watch_for_scenario_switch"):
+            switch_hint = hint
+        if str(summary.get("invalidation_state", "")) in ("active_invalidation_watch", "blocked_inputs"):
+            invalidation = str(summary.get("invalidation_state"))
+        if str(summary.get("rewrite_state", "")) == "rewrite_if_switch_confirms":
+            rewrite = "rewrite_if_switch_confirms"
+    evidence_conflict_state = "conflicting_evidence" if conflict_reasons else "aligned_or_low_conflict"
+    return {
+        "turning_point_risk": top_turning,
+        "evidence_conflict_state": evidence_conflict_state,
+        "scenario_switch_hint": switch_hint,
+        "invalidation_state": invalidation,
+        "rewrite_state": rewrite,
+        "what_to_watch_next": list(dict.fromkeys(watch_next or ["continue_monitoring_family_label_changes"]))[:10],
+        "conflict_reasons": list(dict.fromkeys(conflict_reasons))[:10],
+    }
+
 def _horizon_group_summary(
     *,
     group: HorizonGroup,
@@ -263,6 +456,8 @@ def _horizon_group_summary(
     macro = _best_label(group_outputs, "macro_risk_context")
     algo = _best_label(group_outputs, "algorithmic_participant_footprint")
     technical = _best_label(group_outputs, "human_technical_structure")
+    family_labels = _family_label_map(group_outputs)
+    scenario_lite = _scenario_signal_summary(family_labels, blockers, warnings)
     primary = _primary_label(group_outputs, blockers)
     trigger = PredictionTriggerEligibility(
         trigger_eligibility_state="blocked",
@@ -281,6 +476,9 @@ def _horizon_group_summary(
             "opportunity_participation": opportunity,
             "macro_risk_context": macro,
             "algorithmic_participant_footprint": algo,
+            "invalidation_state": scenario_lite["invalidation_state"],
+            "scenario_switch_hint": scenario_lite["scenario_switch_hint"],
+            "evidence_conflict_state": scenario_lite["evidence_conflict_state"],
         },
     )
     narrative = _group_narrative(group, primary, trend, regime, caution, confidence)
@@ -298,8 +496,8 @@ def _horizon_group_summary(
         confidence=confidence,
         caution_level=caution,
         score=score,
-        invalidation_state="not_evaluated_ps_g_lite",
-        scenario_switch_hint="not_evaluated_ps_g_lite",
+        invalidation_state=scenario_lite["invalidation_state"],
+        scenario_switch_hint=scenario_lite["scenario_switch_hint"],
         lifetime=_lifetime(now_dt, group),
         trigger_eligibility=trigger,
         human_narrative_ja=narrative,
@@ -321,6 +519,7 @@ def _horizon_group_summary(
             "output_count": len(group_outputs),
             "blockers": list(blockers),
             "warnings": list(warnings),
+            "scenario_lite": scenario_lite,
         },
         blockers=blockers,
         warnings=warnings,
@@ -345,28 +544,33 @@ def _scenario_core(
     first_usable = next((outlook for outlook in outlooks if outlook.usable), None)
     current_regime = first_usable.regime_state if first_usable else "unknown"
     health = "blocked" if blockers else ("caution" if warnings else "stable")
+    core_signals = _aggregate_core_signals(outlooks)
+    first_balance = next((dict(outlook.gpt_review_digest.get("scenario_lite", {})).get("continuation_vs_reversal_balance") for outlook in outlooks if outlook.gpt_review_digest.get("scenario_lite")), {"state": "unknown"})
+    evidence_weighting = next((dict(outlook.gpt_review_digest.get("scenario_lite", {})).get("evidence_weighting_summary") for outlook in outlooks if outlook.gpt_review_digest.get("scenario_lite")), {"state": "deterministic_family_label_weighting_v1"})
     return ScenarioCoreOutput(
         scenario_id=f"{LOGIC_VERSION}:scenario:{run_id}",
         generated_at=generated_at,
         current_regime_state=current_regime,
         current_hypothesis_health=health,
         outlooks=outlooks,
-        continuation_vs_reversal_balance={"state": "not_evaluated_ps_g_lite"},
-        turning_point_risk="not_evaluated_ps_g_lite",
-        invalidation_state="not_evaluated_ps_g_lite",
-        rewrite_state="not_evaluated_ps_g_lite",
-        scenario_switch_hint="not_evaluated_ps_g_lite",
-        evidence_weighting_summary={"state": "rule_based_v0_unweighted"},
-        evidence_conflict_state="basic_bundle_only_ps_g_lite",
+        continuation_vs_reversal_balance=first_balance if isinstance(first_balance, Mapping) else {"state": "unknown"},
+        turning_point_risk=core_signals["turning_point_risk"],
+        invalidation_state=core_signals["invalidation_state"],
+        rewrite_state=core_signals["rewrite_state"],
+        scenario_switch_hint=core_signals["scenario_switch_hint"],
+        evidence_weighting_summary=evidence_weighting if isinstance(evidence_weighting, Mapping) else {"state": "deterministic_family_label_weighting_v1"},
+        evidence_conflict_state=core_signals["evidence_conflict_state"],
         scenario_trace={
             "logic_version": LOGIC_VERSION,
             "families": [family.value for family in INITIAL_FAMILIES],
             "horizons_sec": sorted({int(output.horizon.horizon_sec) for output in outputs}),
             "output_count": len(outputs),
+            "what_to_watch_next": core_signals["what_to_watch_next"],
+            "conflict_reasons": core_signals["conflict_reasons"],
         },
         trigger_eligibility_state="blocked",
         human_narrative_ja="\n".join(outlook.human_narrative_ja for outlook in outlooks),
-        gpt_review_digest={"logic_version": LOGIC_VERSION, "outlook_count": len(outlooks), "blockers": list(blockers), "warnings": list(warnings)},
+        gpt_review_digest={"logic_version": LOGIC_VERSION, "scenario_core_lite_version": "ps_h1.v1", "outlook_count": len(outlooks), "blockers": list(blockers), "warnings": list(warnings), "what_to_watch_next": core_signals["what_to_watch_next"], "conflict_reasons": core_signals["conflict_reasons"]},
         blockers=blockers,
         warnings=warnings,
     )
