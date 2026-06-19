@@ -32,7 +32,8 @@ def test_ps_f5_files_compile_and_import() -> None:
     assert "liquidity_execution_quality" in families
     assert "breakout_false_break" in families
     assert "opportunity_participation" in families
-    assert len(families) == 9
+    assert "macro_risk_context" in families
+    assert len(families) == 10
 
 
 def main() -> int:

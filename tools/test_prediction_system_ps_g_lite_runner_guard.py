@@ -72,17 +72,19 @@ def test_ps_g_lite_runner_builds_prediction_system_result() -> None:
     data = result.to_dict()
     assert data["run_identity"]["system_version"] == "prediction_system.ps_g_lite.v1"
     assert data["system_input"]["requested_horizons_sec"] == [300, 600, 900]
-    assert len(data["outputs"]) == 27
+    assert len(data["outputs"]) == 30
     assert data["inference_bundle"]["source_quality_summary"]["horizon_coverage"]["horizons_present_sec"] == [300, 600, 900]
-    assert data["forecast_batch"]["record_count"] == 27
+    assert data["forecast_batch"]["record_count"] == 30
     assert "reversal_zone" in data["inference_bundle"]["families_present"]
     assert "liquidity_execution_quality" in data["inference_bundle"]["families_present"]
     assert "breakout_false_break" in data["inference_bundle"]["families_present"]
     assert "opportunity_participation" in data["inference_bundle"]["families_present"]
+    assert "macro_risk_context" in data["inference_bundle"]["families_present"]
     assert data["scenario_core"]["outlooks"][0]["reversal_risk"] != "not_implemented_ps_g_lite"
     assert data["scenario_core"]["outlooks"][0]["liquidity_execution_quality"] != "not_implemented_ps_g_lite"
     assert data["scenario_core"]["outlooks"][0]["breakout_false_break_risk"] != "not_implemented_ps_g_lite"
     assert "opportunity_participation" in data["scenario_core"]["outlooks"][0]["gpt_review_digest"]["family_labels"]
+    assert "macro_risk_context" in data["scenario_core"]["outlooks"][0]["gpt_review_digest"]["family_labels"]
     assert data["scenario_core"]["outlooks"][0]["horizon_group"] == "short_horizon"
     assert data["scenario_core"]["outlooks"][0]["display_label_ja"] == "短期"
     assert "短期" in data["human_narrative_ja"]
@@ -105,7 +107,7 @@ def test_ps_g_lite_runner_handles_missing_inputs_without_exception() -> None:
     result = build_prediction_system_result(requested_horizon_groups=(HorizonGroup.SHORT_HORIZON,), now=now)
     data = result.to_dict()
     assert data["outputs"]
-    assert data["forecast_batch"]["record_count"] == 27
+    assert data["forecast_batch"]["record_count"] == 30
     assert data["warnings"]
     assert data["read_only"] is True
     assert data["non_executing"] is True

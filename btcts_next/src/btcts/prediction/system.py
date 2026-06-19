@@ -197,7 +197,7 @@ def _caution(outputs: Tuple[PredictionOutput, ...], blockers: Tuple[str, ...], w
     labels = {output.primary_label for output in outputs}
     if blockers:
         return "blocked"
-    if warnings or labels.intersection({"elevated_risk", "divergent_warning", "volatile_or_divergent", "poor_liquidity", "liquidity_unknown", "false_break_risk", "opportunity_blocked"}):
+    if warnings or labels.intersection({"elevated_risk", "divergent_warning", "volatile_or_divergent", "poor_liquidity", "liquidity_unknown", "false_break_risk", "opportunity_blocked", "macro_risk_watch"}):
         return "high"
     if labels.intersection({"compression_watch", "rejection_structure", "range_boundary_structure", "reversal_watch", "reaction_zone_watch", "vwap_reversion_watch", "liquidity_caution", "breakout_watch", "breakout_candidate", "wait_for_confirmation", "opportunity_watch"}):
         return "medium"
@@ -260,6 +260,7 @@ def _horizon_group_summary(
     breakout = _best_label(group_outputs, "breakout_false_break")
     opportunity = _best_label(group_outputs, "opportunity_participation")
     cross = _best_label(group_outputs, "cross_venue_confirmation")
+    macro = _best_label(group_outputs, "macro_risk_context")
     technical = _best_label(group_outputs, "human_technical_structure")
     primary = _primary_label(group_outputs, blockers)
     trigger = PredictionTriggerEligibility(
@@ -277,6 +278,7 @@ def _horizon_group_summary(
             "caution_level": caution,
             "liquidity_execution_quality": liquidity,
             "opportunity_participation": opportunity,
+            "macro_risk_context": macro,
         },
     )
     narrative = _group_narrative(group, primary, trend, regime, caution, confidence)
@@ -310,6 +312,7 @@ def _horizon_group_summary(
                 "breakout_false_break": breakout,
                 "opportunity_participation": opportunity,
                 "cross_venue_confirmation": cross,
+                "macro_risk_context": macro,
                 "human_technical_structure": technical,
             },
             "output_count": len(group_outputs),

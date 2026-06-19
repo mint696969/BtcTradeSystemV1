@@ -1,5 +1,5 @@
-# path: ./tools/test_prediction_system_ps_f6_breakout_close_guard.py
-# desc: Close guard for PS-F6 breakout_false_break deterministic v1 syntax and importability.
+# path: ./tools/test_prediction_system_ps_f9_macro_close_guard.py
+# desc: Close guard for PS-F9 macro_risk_context deterministic v1 syntax and importability.
 
 from __future__ import annotations
 
@@ -16,12 +16,12 @@ if str(SRC) not in sys.path:
 FILES = [
     ROOT / "btcts_next" / "src" / "btcts" / "prediction" / "rule_based_v0.py",
     ROOT / "btcts_next" / "src" / "btcts" / "prediction" / "system.py",
-    ROOT / "tools" / "test_prediction_system_ps_f6_breakout_guard.py",
-    ROOT / "tools" / "test_prediction_system_ps_f6_breakout_close_guard.py",
+    ROOT / "tools" / "test_prediction_system_ps_f9_macro_guard.py",
+    ROOT / "tools" / "test_prediction_system_ps_f9_macro_close_guard.py",
 ]
 
 
-def test_ps_f6_files_compile_and_import() -> None:
+def test_ps_f9_files_compile_and_import() -> None:
     for path in FILES:
         if not path.exists():
             raise AssertionError(f"missing file: {path}")
@@ -37,8 +37,8 @@ def test_ps_f6_files_compile_and_import() -> None:
 
 
 def main() -> int:
-    test_ps_f6_files_compile_and_import()
-    print("[OK] Prediction System PS-F6 breakout_false_break close guard passed")
+    test_ps_f9_files_compile_and_import()
+    print("[OK] Prediction System PS-F9 macro_risk_context close guard passed")
     return 0
 
 

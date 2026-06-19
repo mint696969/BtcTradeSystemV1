@@ -22,6 +22,7 @@ INITIAL_FAMILIES: Tuple[PredictionFamily, ...] = (
     PredictionFamily.BREAKOUT_FALSE_BREAK,
     PredictionFamily.OPPORTUNITY_PARTICIPATION,
     PredictionFamily.CROSS_VENUE_CONFIRMATION,
+    PredictionFamily.MACRO_RISK_CONTEXT,
     PredictionFamily.HUMAN_TECHNICAL_STRUCTURE,
 )
 
@@ -433,6 +434,56 @@ def _cross_venue_confirmation(cross: CrossVenueReferenceSummary | None) -> tuple
     return label, score, drivers, tuple(), warnings, {"cross_venue": cross.to_dict()}
 
 
+def _macro_risk_context(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
+    drivers: list[str] = []
+    warnings: list[str] = []
+    values: Dict[str, Any] = {
+        "proxy_kind": "summary_based_macro_risk_proxy_v1",
+        "primary_direction_owner": False,
+        "note": "context/warning only; no live macro collection and no short-horizon direction ownership",
+    }
+    score = 0.40
+    technical_usable = bool(technical and technical.usable)
+    cross_usable = bool(cross and cross.usable)
+    if technical_usable and technical is not None:
+        vol_state = technical.volatility.state
+        values["volatility_state"] = vol_state
+        if vol_state == "expanding":
+            score += 0.16
+            warnings.append("macro_proxy_elevated_due_to_expanding_volatility")
+        elif vol_state == "normal":
+            drivers.append("volatility_normal")
+        elif vol_state == "compressed":
+            drivers.append("volatility_compressed")
+    else:
+        values["volatility_state"] = "unknown"
+        warnings.append("technical_summary_missing_for_macro_proxy")
+
+    if cross_usable and cross is not None:
+        values["cross_venue_agreement_state"] = cross.agreement_state
+        values["max_deviation_pct"] = cross.max_deviation_pct
+        if cross.agreement_state == "divergent":
+            score += 0.18
+            warnings.append("macro_proxy_cross_venue_divergence")
+        elif cross.agreement_state == "confirmed":
+            drivers.append("cross_venue_confirmed")
+        if cross.spot_fx_basis.premium_discount_state in ("fx_premium", "fx_discount"):
+            score += 0.04
+            warnings.append(f"macro_proxy_spot_fx_basis_{cross.spot_fx_basis.premium_discount_state}")
+    else:
+        values["cross_venue_agreement_state"] = "unknown"
+        warnings.append("cross_venue_summary_missing_for_macro_proxy")
+
+    score = max(0.0, min(1.0, score))
+    if warnings:
+        label = "macro_risk_watch"
+    elif drivers:
+        label = "macro_context_neutral"
+    else:
+        label = "macro_context_unavailable"
+    return label, round(score, 6), tuple(drivers or ("macro_proxy_context_only",)), tuple(), tuple(dict.fromkeys(warnings)), values
+
+
 def _human_technical_structure(technical: HumanTechnicalSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     if technical is None or not technical.usable:
         return "unknown", None, tuple(), ("human_technical_summary_missing_or_blocked",), tuple(), {}
@@ -470,6 +521,7 @@ def build_rule_based_v0_outputs(
     lq_label, lq_score, lq_drivers, lq_blockers, lq_warnings, lq_values = _liquidity_execution_quality(technical_summary, cross_venue_summary)
     bf_label, bf_score, bf_drivers, bf_blockers, bf_warnings, bf_values = _breakout_false_break(technical_summary, cross_venue_summary)
     cv_label, cv_score, cv_drivers, cv_blockers, cv_warnings, cv_values = _cross_venue_confirmation(cross_venue_summary)
+    mc_label, mc_score, mc_drivers, mc_blockers, mc_warnings, mc_values = _macro_risk_context(technical_summary, cross_venue_summary)
     op_label, op_score, op_drivers, op_blockers, op_warnings, op_values = _opportunity_participation(
         trend_label=tb_label,
         reversal_label=rz_label,
@@ -488,5 +540,6 @@ def build_rule_based_v0_outputs(
         _output(family=PredictionFamily.BREAKOUT_FALSE_BREAK, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=bf_label, score=bf_score, drivers=bf_drivers, blockers=bf_blockers, warnings=bf_warnings, values=bf_values),
         _output(family=PredictionFamily.OPPORTUNITY_PARTICIPATION, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=op_label, score=op_score, drivers=op_drivers, blockers=op_blockers, warnings=op_warnings, values=op_values),
         _output(family=PredictionFamily.CROSS_VENUE_CONFIRMATION, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=cv_label, score=cv_score, drivers=cv_drivers, blockers=cv_blockers, warnings=cv_warnings, values=cv_values),
+        _output(family=PredictionFamily.MACRO_RISK_CONTEXT, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=mc_label, score=mc_score, drivers=mc_drivers, blockers=mc_blockers, warnings=mc_warnings, values=mc_values),
         _output(family=PredictionFamily.HUMAN_TECHNICAL_STRUCTURE, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=ht_label, score=ht_score, drivers=ht_drivers, blockers=ht_blockers, warnings=ht_warnings, values=ht_values),
     )

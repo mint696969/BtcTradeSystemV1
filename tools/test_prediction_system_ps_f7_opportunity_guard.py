@@ -113,13 +113,13 @@ def test_prediction_system_runner_surfaces_opportunity_in_digest() -> None:
         now=now,
     )
     data = result.to_dict()
-    assert len(data["outputs"]) == 27
-    assert data["forecast_batch"]["record_count"] == 27
+    assert len(data["outputs"]) == 30
+    assert data["forecast_batch"]["record_count"] == 30
     assert "opportunity_participation" in data["inference_bundle"]["families_present"]
     outlook = data["scenario_core"]["outlooks"][0]
     assert "opportunity_participation" in outlook["gpt_review_digest"]["family_labels"]
     assert outlook["trigger_eligibility"]["machine_fields"]["opportunity_participation"] in {"participation_candidate", "opportunity_watch", "wait_for_confirmation", "no_edge", "opportunity_blocked", "unknown"}
-    assert data["gpt_review_digest"]["family_count"] == 9
+    assert data["gpt_review_digest"]["family_count"] == 10
     assert data["read_only"] is True
     assert data["non_executing"] is True
     assert data["would_send_to_broker"] is False
