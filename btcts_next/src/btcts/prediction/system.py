@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/prediction/system.py
-# desc: Standalone Prediction System PS-G-lite runner over existing 5-family rule_based_v0 logic. Non-executing; no Collector, broker, mode, or append behavior.
+# desc: Standalone Prediction System PS-G-lite runner over current rule_based_v0 family logic. Non-executing; no Collector, broker, mode, or append behavior.
 
 from __future__ import annotations
 
@@ -199,7 +199,7 @@ def _caution(outputs: Tuple[PredictionOutput, ...], blockers: Tuple[str, ...], w
         return "blocked"
     if warnings or labels.intersection({"elevated_risk", "divergent_warning", "volatile_or_divergent"}):
         return "high"
-    if labels.intersection({"compression_watch", "rejection_structure", "range_boundary_structure"}):
+    if labels.intersection({"compression_watch", "rejection_structure", "range_boundary_structure", "reversal_watch", "reaction_zone_watch", "vwap_reversion_watch"}):
         return "medium"
     return "low"
 
@@ -254,6 +254,7 @@ def _horizon_group_summary(
     caution = _caution(group_outputs, blockers, warnings)
     regime = _best_label(group_outputs, "market_regime")
     trend = _best_label(group_outputs, "trend_bias")
+    reversal = _best_label(group_outputs, "reversal_zone")
     volatility = _best_label(group_outputs, "volatility_risk")
     cross = _best_label(group_outputs, "cross_venue_confirmation")
     technical = _best_label(group_outputs, "human_technical_structure")
@@ -281,7 +282,7 @@ def _horizon_group_summary(
         primary_label=primary,
         regime_state=regime,
         trend_bias=trend,
-        reversal_risk="not_implemented_ps_g_lite",
+        reversal_risk=reversal,
         breakout_false_break_risk="not_implemented_ps_g_lite",
         volatility_risk=volatility,
         liquidity_execution_quality="not_implemented_ps_g_lite",
@@ -298,6 +299,7 @@ def _horizon_group_summary(
             "family_labels": {
                 "market_regime": regime,
                 "trend_bias": trend,
+                "reversal_zone": reversal,
                 "volatility_risk": volatility,
                 "cross_venue_confirmation": cross,
                 "human_technical_structure": technical,
@@ -371,7 +373,7 @@ def build_prediction_system_result(
 ) -> PredictionSystemResult:
     """Build a standalone, non-executing PredictionSystemResult from already-provided inputs.
 
-    This PS-G-lite runner intentionally uses only existing 5-family rule_based_v0 logic.
+    This PS-G-lite runner intentionally uses only current rule_based_v0 family logic.
     It does not collect data, write artifacts, import Collector runtime, or publish trigger decisions.
     """
     now_dt = _now(now)

@@ -16,6 +16,7 @@ LOGIC_VERSION = "prediction_rule_based_v0.s128.v1"
 INITIAL_FAMILIES: Tuple[PredictionFamily, ...] = (
     PredictionFamily.MARKET_REGIME,
     PredictionFamily.TREND_BIAS,
+    PredictionFamily.REVERSAL_ZONE,
     PredictionFamily.VOLATILITY_RISK,
     PredictionFamily.CROSS_VENUE_CONFIRMATION,
     PredictionFamily.HUMAN_TECHNICAL_STRUCTURE,
@@ -131,6 +132,48 @@ def _trend_bias(technical: HumanTechnicalSummary | None) -> tuple[str, float | N
     return label, score, tuple(drivers), tuple(), {"ma": ma.to_dict(), "vwap": vwap.to_dict()}
 
 
+def _reversal_zone(technical: HumanTechnicalSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
+    if technical is None or not technical.usable:
+        return "unknown", None, tuple(), ("human_technical_summary_missing_or_blocked",), tuple(), {}
+    rb = technical.range_boundary
+    wick = technical.wick_body
+    vwap = technical.vwap_relation
+    drivers: list[str] = []
+    warnings: list[str] = []
+    values = {
+        "range_boundary": rb.to_dict(),
+        "wick_body": wick.to_dict(),
+        "vwap_relation": vwap.to_dict(),
+        "support_zones": [zone.to_dict() for zone in technical.support_zones],
+        "resistance_zones": [zone.to_dict() for zone in technical.resistance_zones],
+    }
+    if rb.close_position in ("near_range_high", "near_range_low"):
+        drivers.append(f"range_boundary_{rb.close_position}")
+    if wick.wick_signal in ("upper_wick_rejection", "lower_wick_rejection"):
+        drivers.append(f"wick_{wick.wick_signal}")
+    if vwap.relation in ("above_vwap", "below_vwap", "near_vwap"):
+        drivers.append(f"vwap_{vwap.relation}")
+
+    if rb.close_position == "near_range_high" and wick.wick_signal == "upper_wick_rejection":
+        label = "reversal_watch"
+        score = 0.72
+        warnings.append("upper_range_reversal_watch")
+    elif rb.close_position == "near_range_low" and wick.wick_signal == "lower_wick_rejection":
+        label = "reversal_watch"
+        score = 0.72
+        warnings.append("lower_range_reversal_watch")
+    elif rb.close_position in ("near_range_high", "near_range_low"):
+        label = "reaction_zone_watch"
+        score = 0.58
+    elif vwap.relation == "near_vwap" and wick.wick_signal in ("upper_wick_rejection", "lower_wick_rejection", "mixed_wick_body"):
+        label = "vwap_reversion_watch"
+        score = 0.50
+    else:
+        label = "low_reversal_signal"
+        score = 0.32
+    return label, score, tuple(drivers or ("no_strong_reversal_driver",)), tuple(), tuple(warnings), values
+
+
 def _volatility_risk(technical: HumanTechnicalSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     if technical is None or not technical.usable:
         return "unknown", None, tuple(), ("human_technical_summary_missing_or_blocked",), {}
@@ -199,12 +242,14 @@ def build_rule_based_v0_outputs(
     generated_at = _generated_at(now)
     mr_label, mr_score, mr_drivers, mr_blockers, mr_values = _market_regime(technical_summary, cross_venue_summary)
     tb_label, tb_score, tb_drivers, tb_blockers, tb_values = _trend_bias(technical_summary)
+    rz_label, rz_score, rz_drivers, rz_blockers, rz_warnings, rz_values = _reversal_zone(technical_summary)
     vr_label, vr_score, vr_drivers, vr_blockers, vr_values = _volatility_risk(technical_summary)
     cv_label, cv_score, cv_drivers, cv_blockers, cv_warnings, cv_values = _cross_venue_confirmation(cross_venue_summary)
     ht_label, ht_score, ht_drivers, ht_blockers, ht_warnings, ht_values = _human_technical_structure(technical_summary)
     return (
         _output(family=PredictionFamily.MARKET_REGIME, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=mr_label, score=mr_score, drivers=mr_drivers, blockers=mr_blockers, values=mr_values),
         _output(family=PredictionFamily.TREND_BIAS, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=tb_label, score=tb_score, drivers=tb_drivers, blockers=tb_blockers, values=tb_values),
+        _output(family=PredictionFamily.REVERSAL_ZONE, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=rz_label, score=rz_score, drivers=rz_drivers, blockers=rz_blockers, warnings=rz_warnings, values=rz_values),
         _output(family=PredictionFamily.VOLATILITY_RISK, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=vr_label, score=vr_score, drivers=vr_drivers, blockers=vr_blockers, values=vr_values),
         _output(family=PredictionFamily.CROSS_VENUE_CONFIRMATION, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=cv_label, score=cv_score, drivers=cv_drivers, blockers=cv_blockers, warnings=cv_warnings, values=cv_values),
         _output(family=PredictionFamily.HUMAN_TECHNICAL_STRUCTURE, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=ht_label, score=ht_score, drivers=ht_drivers, blockers=ht_blockers, warnings=ht_warnings, values=ht_values),
