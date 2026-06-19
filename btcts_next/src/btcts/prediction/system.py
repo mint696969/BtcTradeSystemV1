@@ -936,6 +936,7 @@ def build_prediction_system_result(
             "provider_reliability_version": "ps_d1.v1",
             "provider_reliability_context_only": provider_registry.context_only,
             "liquidity_feature_depth_context_version": "ps_e2.v1" if feature_depth_snapshot is not None else None,
+            "orderbook_breakout_algo_context_version": "ps_e3.v1" if feature_depth_snapshot is not None else None,
             "feature_depth_context_only": bool(feature_depth_snapshot.context_only) if feature_depth_snapshot is not None else None,
             "feature_depth_primary_direction_owner": bool(feature_depth_snapshot.primary_direction_owner) if feature_depth_snapshot is not None else None,
             "provider_count": provider_registry.provider_count,

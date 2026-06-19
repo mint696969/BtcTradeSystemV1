@@ -318,9 +318,66 @@ def _liquidity_execution_quality(technical: HumanTechnicalSummary | None, cross:
     return label, round(score, 6), tuple(drivers or ("liquidity_proxy_no_strong_driver",)), tuple(blockers), tuple(dict.fromkeys(warnings)), values
 
 
-def _breakout_false_break(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
+
+def _apply_feature_depth_context_for_family(
+    *,
+    target_family: str,
+    values: Dict[str, Any],
+    drivers: list[str],
+    warnings: list[str],
+    feature_depth_snapshot: FeatureDepthSnapshot | None,
+) -> None:
+    if feature_depth_snapshot is None:
+        return
+    snapshot = feature_depth_snapshot.to_dict()
+    orderbook = dict(snapshot.get("orderbook", {}))
+    tradeflow = dict(snapshot.get("tradeflow", {}))
+    values["feature_depth_context"] = {
+        "version": "ps_e3.v1",
+        "target_family": target_family,
+        "feature_depth_state": snapshot.get("feature_depth_state"),
+        "context_only": bool(snapshot.get("context_only", True)),
+        "primary_direction_owner": bool(snapshot.get("primary_direction_owner", False)),
+        "usable_for_primary_short_horizon": bool(snapshot.get("usable_for_primary_short_horizon", False)),
+        "orderbook_state": orderbook.get("state"),
+        "orderbook_average_spread_bps": orderbook.get("average_spread_bps"),
+        "orderbook_max_abs_imbalance_ratio": orderbook.get("max_abs_imbalance_ratio"),
+        "orderbook_spread_warning": bool(orderbook.get("spread_warning", False)),
+        "orderbook_thin_book_warning": bool(orderbook.get("thin_book_warning", False)),
+        "tradeflow_state": tradeflow.get("state"),
+        "tradeflow_buy_sell_imbalance_ratio": tradeflow.get("buy_sell_imbalance_ratio"),
+        "tradeflow_aggressive_flow_ratio": tradeflow.get("aggressive_flow_ratio"),
+        "tradeflow_burst_warning": bool(tradeflow.get("burst_warning", False)),
+    }
+    values["feature_depth_input_ref_count"] = len(snapshot.get("input_refs", []))
+    if target_family == "breakout_false_break":
+        drivers.append("breakout_false_break_feature_depth_context_supplied")
+    elif target_family == "algorithmic_participant_footprint":
+        drivers.append("algorithmic_participant_footprint_feature_depth_context_supplied")
+    else:
+        drivers.append(f"{target_family}_feature_depth_context_supplied")
+    if not bool(snapshot.get("context_only", True)):
+        warnings.append(f"{target_family}_feature_depth_not_context_only_ignored")
+    if bool(snapshot.get("primary_direction_owner", False)) or bool(snapshot.get("usable_for_primary_short_horizon", False)):
+        warnings.append(f"{target_family}_feature_depth_primary_direction_disabled")
+    if snapshot.get("feature_depth_state") in ("unavailable", "warning_context"):
+        warnings.append(f"{target_family}_feature_depth_{snapshot.get('feature_depth_state')}")
+    if orderbook.get("spread_warning"):
+        warnings.append(f"{target_family}_orderbook_spread_warning")
+    if orderbook.get("thin_book_warning"):
+        warnings.append(f"{target_family}_orderbook_thin_book_warning")
+    if tradeflow.get("burst_warning"):
+        warnings.append(f"{target_family}_tradeflow_burst_warning")
+    for item in list(snapshot.get("warnings", []))[:4]:
+        warnings.append(f"{target_family}_feature_depth_warning:{item}")
+
+def _breakout_false_break(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None, feature_depth_snapshot: FeatureDepthSnapshot | None = None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     if technical is None or not technical.usable:
-        return "unknown", None, tuple(), ("human_technical_summary_missing_or_blocked",), tuple(), {}
+        drivers: list[str] = []
+        warnings: list[str] = []
+        values: Dict[str, Any] = {"proxy_kind": "technical_cross_venue_breakout_proxy_v1", "note": "feature_depth_snapshot is context/warning only when technical summary is missing"}
+        _apply_feature_depth_context_for_family(target_family="breakout_false_break", values=values, drivers=drivers, warnings=warnings, feature_depth_snapshot=feature_depth_snapshot)
+        return "unknown", None, tuple(drivers), ("human_technical_summary_missing_or_blocked",), tuple(dict.fromkeys(warnings)), values
     rb = technical.range_boundary
     wick = technical.wick_body
     ma = technical.moving_average
@@ -370,6 +427,8 @@ def _breakout_false_break(technical: HumanTechnicalSummary | None, cross: CrossV
     if cross_state == "missing_or_blocked":
         score -= 0.08
         warnings.append("cross_venue_missing_for_breakout_confirmation")
+
+    _apply_feature_depth_context_for_family(target_family="breakout_false_break", values=values, drivers=drivers, warnings=warnings, feature_depth_snapshot=feature_depth_snapshot)
 
     score = max(0.0, min(1.0, score))
     if rejection and near_boundary:
@@ -533,7 +592,7 @@ def _macro_risk_context(technical: HumanTechnicalSummary | None, cross: CrossVen
     return label, round(score, 6), tuple(drivers or ("macro_proxy_context_only",)), tuple(), tuple(dict.fromkeys(warnings)), values
 
 
-def _algorithmic_participant_footprint(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
+def _algorithmic_participant_footprint(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None, feature_depth_snapshot: FeatureDepthSnapshot | None = None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     drivers: list[str] = []
     warnings: list[str] = []
     blockers: list[str] = []
@@ -546,7 +605,8 @@ def _algorithmic_participant_footprint(technical: HumanTechnicalSummary | None, 
     cross_usable = bool(cross and cross.usable)
     if not technical_usable and not cross_usable:
         blockers.append("algorithmic_footprint_proxy_inputs_missing_or_blocked")
-        return "algorithmic_footprint_unavailable", None, tuple(), tuple(blockers), tuple(), values
+        _apply_feature_depth_context_for_family(target_family="algorithmic_participant_footprint", values=values, drivers=drivers, warnings=warnings, feature_depth_snapshot=feature_depth_snapshot)
+        return "algorithmic_footprint_unavailable", None, tuple(drivers), tuple(blockers), tuple(dict.fromkeys(warnings)), values
 
     score = 0.36
     if technical_usable and technical is not None:
@@ -592,6 +652,8 @@ def _algorithmic_participant_footprint(technical: HumanTechnicalSummary | None, 
     else:
         values["cross_venue_agreement_state"] = "unknown"
         warnings.append("cross_venue_summary_missing_for_algorithmic_footprint_proxy")
+
+    _apply_feature_depth_context_for_family(target_family="algorithmic_participant_footprint", values=values, drivers=drivers, warnings=warnings, feature_depth_snapshot=feature_depth_snapshot)
 
     score = max(0.0, min(1.0, score))
     activity_watch_warnings = {
@@ -647,10 +709,10 @@ def build_rule_based_v0_outputs(
     rz_label, rz_score, rz_drivers, rz_blockers, rz_warnings, rz_values = _reversal_zone(technical_summary)
     vr_label, vr_score, vr_drivers, vr_blockers, vr_values = _volatility_risk(technical_summary)
     lq_label, lq_score, lq_drivers, lq_blockers, lq_warnings, lq_values = _liquidity_execution_quality(technical_summary, cross_venue_summary, feature_depth_snapshot)
-    bf_label, bf_score, bf_drivers, bf_blockers, bf_warnings, bf_values = _breakout_false_break(technical_summary, cross_venue_summary)
+    bf_label, bf_score, bf_drivers, bf_blockers, bf_warnings, bf_values = _breakout_false_break(technical_summary, cross_venue_summary, feature_depth_snapshot)
     cv_label, cv_score, cv_drivers, cv_blockers, cv_warnings, cv_values = _cross_venue_confirmation(cross_venue_summary)
     mc_label, mc_score, mc_drivers, mc_blockers, mc_warnings, mc_values = _macro_risk_context(technical_summary, cross_venue_summary)
-    af_label, af_score, af_drivers, af_blockers, af_warnings, af_values = _algorithmic_participant_footprint(technical_summary, cross_venue_summary)
+    af_label, af_score, af_drivers, af_blockers, af_warnings, af_values = _algorithmic_participant_footprint(technical_summary, cross_venue_summary, feature_depth_snapshot)
     op_label, op_score, op_drivers, op_blockers, op_warnings, op_values = _opportunity_participation(
         trend_label=tb_label,
         reversal_label=rz_label,
