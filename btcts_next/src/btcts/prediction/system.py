@@ -197,9 +197,9 @@ def _caution(outputs: Tuple[PredictionOutput, ...], blockers: Tuple[str, ...], w
     labels = {output.primary_label for output in outputs}
     if blockers:
         return "blocked"
-    if warnings or labels.intersection({"elevated_risk", "divergent_warning", "volatile_or_divergent", "poor_liquidity", "liquidity_unknown"}):
+    if warnings or labels.intersection({"elevated_risk", "divergent_warning", "volatile_or_divergent", "poor_liquidity", "liquidity_unknown", "false_break_risk"}):
         return "high"
-    if labels.intersection({"compression_watch", "rejection_structure", "range_boundary_structure", "reversal_watch", "reaction_zone_watch", "vwap_reversion_watch", "liquidity_caution"}):
+    if labels.intersection({"compression_watch", "rejection_structure", "range_boundary_structure", "reversal_watch", "reaction_zone_watch", "vwap_reversion_watch", "liquidity_caution", "breakout_watch", "breakout_candidate"}):
         return "medium"
     return "low"
 
@@ -257,6 +257,7 @@ def _horizon_group_summary(
     reversal = _best_label(group_outputs, "reversal_zone")
     volatility = _best_label(group_outputs, "volatility_risk")
     liquidity = _best_label(group_outputs, "liquidity_execution_quality")
+    breakout = _best_label(group_outputs, "breakout_false_break")
     cross = _best_label(group_outputs, "cross_venue_confirmation")
     technical = _best_label(group_outputs, "human_technical_structure")
     primary = _primary_label(group_outputs, blockers)
@@ -285,7 +286,7 @@ def _horizon_group_summary(
         regime_state=regime,
         trend_bias=trend,
         reversal_risk=reversal,
-        breakout_false_break_risk="not_implemented_ps_g_lite",
+        breakout_false_break_risk=breakout,
         volatility_risk=volatility,
         liquidity_execution_quality=liquidity,
         confidence=confidence,
@@ -304,6 +305,7 @@ def _horizon_group_summary(
                 "reversal_zone": reversal,
                 "volatility_risk": volatility,
                 "liquidity_execution_quality": liquidity,
+                "breakout_false_break": breakout,
                 "cross_venue_confirmation": cross,
                 "human_technical_structure": technical,
             },

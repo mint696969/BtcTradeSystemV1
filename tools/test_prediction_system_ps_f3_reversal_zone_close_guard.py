@@ -30,7 +30,8 @@ def test_ps_f3_files_compile_and_import() -> None:
     families = [family.value for family in rule.INITIAL_FAMILIES]
     assert "reversal_zone" in families
     assert "liquidity_execution_quality" in families
-    assert len(families) == 7
+    assert "breakout_false_break" in families
+    assert len(families) == 8
 
 
 def main() -> int:

@@ -19,6 +19,7 @@ INITIAL_FAMILIES: Tuple[PredictionFamily, ...] = (
     PredictionFamily.REVERSAL_ZONE,
     PredictionFamily.VOLATILITY_RISK,
     PredictionFamily.LIQUIDITY_EXECUTION_QUALITY,
+    PredictionFamily.BREAKOUT_FALSE_BREAK,
     PredictionFamily.CROSS_VENUE_CONFIRMATION,
     PredictionFamily.HUMAN_TECHNICAL_STRUCTURE,
 )
@@ -266,6 +267,73 @@ def _liquidity_execution_quality(technical: HumanTechnicalSummary | None, cross:
     return label, round(score, 6), tuple(drivers or ("liquidity_proxy_no_strong_driver",)), tuple(blockers), tuple(dict.fromkeys(warnings)), values
 
 
+def _breakout_false_break(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
+    if technical is None or not technical.usable:
+        return "unknown", None, tuple(), ("human_technical_summary_missing_or_blocked",), tuple(), {}
+    rb = technical.range_boundary
+    wick = technical.wick_body
+    ma = technical.moving_average
+    vwap = technical.vwap_relation
+    cross_state = cross.agreement_state if cross and cross.usable else "missing_or_blocked"
+    drivers: list[str] = []
+    warnings: list[str] = []
+    score = 0.35
+    values: Dict[str, Any] = {
+        "proxy_kind": "technical_cross_venue_breakout_proxy_v1",
+        "range_close_position": rb.close_position,
+        "wick_signal": wick.wick_signal,
+        "ma_slope_label": ma.slope_label,
+        "ma_cross_state": ma.cross_state,
+        "vwap_relation": vwap.relation,
+        "cross_venue_agreement_state": cross_state,
+    }
+
+    near_boundary = rb.close_position in ("near_range_high", "near_range_low")
+    directional = ma.slope_label in ("rising", "falling") and ma.cross_state in ("short_above_long", "short_below_long")
+    strong_body = wick.wick_signal == "strong_body"
+    rejection = wick.wick_signal in ("upper_wick_rejection", "lower_wick_rejection")
+    cross_confirmed = cross_state == "confirmed"
+    cross_divergent = cross_state == "divergent"
+
+    if near_boundary:
+        score += 0.12
+        drivers.append(f"range_boundary_{rb.close_position}")
+    if directional:
+        score += 0.10
+        drivers.append(f"ma_directional_{ma.slope_label}_{ma.cross_state}")
+    if strong_body:
+        score += 0.10
+        drivers.append("strong_body_near_breakout")
+    if vwap.relation in ("above_vwap", "below_vwap"):
+        score += 0.04
+        drivers.append(f"vwap_{vwap.relation}")
+    if cross_confirmed:
+        score += 0.08
+        drivers.append("cross_venue_confirmed")
+    if cross_divergent:
+        score -= 0.12
+        warnings.append("cross_venue_divergence_false_break_caution")
+    if rejection and near_boundary:
+        score -= 0.16
+        warnings.append("wick_rejection_near_boundary_false_break_risk")
+    if cross_state == "missing_or_blocked":
+        score -= 0.08
+        warnings.append("cross_venue_missing_for_breakout_confirmation")
+
+    score = max(0.0, min(1.0, score))
+    if rejection and near_boundary:
+        label = "false_break_risk"
+    elif near_boundary and directional and cross_confirmed and score >= 0.58:
+        label = "breakout_candidate"
+    elif near_boundary and score >= 0.48:
+        label = "breakout_watch"
+    elif rb.close_position == "mid_range":
+        label = "range_continuation"
+    else:
+        label = "no_breakout_signal"
+    return label, round(score, 6), tuple(drivers or ("no_strong_breakout_driver",)), tuple(), tuple(dict.fromkeys(warnings)), values
+
+
 def _cross_venue_confirmation(cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     if cross is None or not cross.usable:
         return "unknown", None, tuple(), ("cross_venue_summary_missing_or_blocked",), tuple(), {}
@@ -318,6 +386,7 @@ def build_rule_based_v0_outputs(
     rz_label, rz_score, rz_drivers, rz_blockers, rz_warnings, rz_values = _reversal_zone(technical_summary)
     vr_label, vr_score, vr_drivers, vr_blockers, vr_values = _volatility_risk(technical_summary)
     lq_label, lq_score, lq_drivers, lq_blockers, lq_warnings, lq_values = _liquidity_execution_quality(technical_summary, cross_venue_summary)
+    bf_label, bf_score, bf_drivers, bf_blockers, bf_warnings, bf_values = _breakout_false_break(technical_summary, cross_venue_summary)
     cv_label, cv_score, cv_drivers, cv_blockers, cv_warnings, cv_values = _cross_venue_confirmation(cross_venue_summary)
     ht_label, ht_score, ht_drivers, ht_blockers, ht_warnings, ht_values = _human_technical_structure(technical_summary)
     return (
@@ -326,6 +395,7 @@ def build_rule_based_v0_outputs(
         _output(family=PredictionFamily.REVERSAL_ZONE, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=rz_label, score=rz_score, drivers=rz_drivers, blockers=rz_blockers, warnings=rz_warnings, values=rz_values),
         _output(family=PredictionFamily.VOLATILITY_RISK, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=vr_label, score=vr_score, drivers=vr_drivers, blockers=vr_blockers, values=vr_values),
         _output(family=PredictionFamily.LIQUIDITY_EXECUTION_QUALITY, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=lq_label, score=lq_score, drivers=lq_drivers, blockers=lq_blockers, warnings=lq_warnings, values=lq_values),
+        _output(family=PredictionFamily.BREAKOUT_FALSE_BREAK, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=bf_label, score=bf_score, drivers=bf_drivers, blockers=bf_blockers, warnings=bf_warnings, values=bf_values),
         _output(family=PredictionFamily.CROSS_VENUE_CONFIRMATION, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=cv_label, score=cv_score, drivers=cv_drivers, blockers=cv_blockers, warnings=cv_warnings, values=cv_values),
         _output(family=PredictionFamily.HUMAN_TECHNICAL_STRUCTURE, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=ht_label, score=ht_score, drivers=ht_drivers, blockers=ht_blockers, warnings=ht_warnings, values=ht_values),
     )
