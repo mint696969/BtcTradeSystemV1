@@ -8,6 +8,7 @@ from typing import Any, Dict, Tuple
 
 from .contracts import PredictionConfidence, PredictionFamily, PredictionOutput, SourceIdentity
 from .cross_venue import CrossVenueReferenceSummary
+from .feature_depth import FeatureDepthSnapshot
 from .horizons import horizon_by_seconds
 from .parameter_sets import default_prediction_parameter_set_for_family
 from .technical import HumanTechnicalSummary
@@ -198,19 +199,64 @@ def _volatility_risk(technical: HumanTechnicalSummary | None) -> tuple[str, floa
     return label, score, (f"volatility_state_{vol.state}",), tuple(), vol.to_dict()
 
 
-def _liquidity_execution_quality(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
+
+def _apply_liquidity_feature_depth_context(
+    *,
+    values: Dict[str, Any],
+    drivers: list[str],
+    warnings: list[str],
+    feature_depth_snapshot: FeatureDepthSnapshot | None,
+) -> None:
+    if feature_depth_snapshot is None:
+        return
+    snapshot = feature_depth_snapshot.to_dict()
+    orderbook = dict(snapshot.get("orderbook", {}))
+    tradeflow = dict(snapshot.get("tradeflow", {}))
+    values["feature_depth_context"] = {
+        "version": "ps_e2.v1",
+        "feature_depth_state": snapshot.get("feature_depth_state"),
+        "context_only": bool(snapshot.get("context_only", True)),
+        "primary_direction_owner": bool(snapshot.get("primary_direction_owner", False)),
+        "usable_for_primary_short_horizon": bool(snapshot.get("usable_for_primary_short_horizon", False)),
+        "orderbook_state": orderbook.get("state"),
+        "orderbook_average_spread_bps": orderbook.get("average_spread_bps"),
+        "orderbook_spread_warning": bool(orderbook.get("spread_warning", False)),
+        "orderbook_thin_book_warning": bool(orderbook.get("thin_book_warning", False)),
+        "tradeflow_state": tradeflow.get("state"),
+        "tradeflow_buy_sell_imbalance_ratio": tradeflow.get("buy_sell_imbalance_ratio"),
+        "tradeflow_burst_warning": bool(tradeflow.get("burst_warning", False)),
+    }
+    values["feature_depth_input_ref_count"] = len(snapshot.get("input_refs", []))
+    drivers.append("liquidity_feature_depth_context_supplied")
+    if not bool(snapshot.get("context_only", True)):
+        warnings.append("feature_depth_not_context_only_ignored_for_primary_direction")
+    if bool(snapshot.get("primary_direction_owner", False)) or bool(snapshot.get("usable_for_primary_short_horizon", False)):
+        warnings.append("feature_depth_primary_direction_disabled_in_ps_e2")
+    if snapshot.get("feature_depth_state") in ("unavailable", "warning_context"):
+        warnings.append(f"feature_depth_{snapshot.get('feature_depth_state')}")
+    if orderbook.get("spread_warning"):
+        warnings.append("feature_depth_orderbook_spread_warning")
+    if orderbook.get("thin_book_warning"):
+        warnings.append("feature_depth_orderbook_thin_book_warning")
+    if tradeflow.get("burst_warning"):
+        warnings.append("feature_depth_tradeflow_burst_warning")
+    for item in list(snapshot.get("warnings", []))[:4]:
+        warnings.append(f"feature_depth_warning:{item}")
+
+def _liquidity_execution_quality(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None, feature_depth_snapshot: FeatureDepthSnapshot | None = None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     drivers: list[str] = []
     blockers: list[str] = []
     warnings: list[str] = []
     values: Dict[str, Any] = {
         "proxy_kind": "summary_based_liquidity_proxy_v1",
-        "note": "uses technical volatility and cross-venue summary until orderbook liquidity features are wired",
+        "note": "uses technical volatility and cross-venue summary; optional feature_depth_snapshot is context/warning only",
     }
     technical_usable = bool(technical and technical.usable)
     cross_usable = bool(cross and cross.usable)
     if not technical_usable and not cross_usable:
         blockers.append("liquidity_proxy_inputs_missing_or_blocked")
-        return "liquidity_unknown", None, tuple(), tuple(blockers), tuple(), values
+        _apply_liquidity_feature_depth_context(values=values, drivers=drivers, warnings=warnings, feature_depth_snapshot=feature_depth_snapshot)
+        return "liquidity_unknown", None, tuple(drivers or ("liquidity_proxy_no_strong_driver",)), tuple(blockers), tuple(dict.fromkeys(warnings)), values
 
     score = 0.62
     if technical_usable and technical is not None:
@@ -257,6 +303,8 @@ def _liquidity_execution_quality(technical: HumanTechnicalSummary | None, cross:
     else:
         score -= 0.15
         warnings.append("cross_venue_summary_missing_for_liquidity_proxy")
+
+    _apply_liquidity_feature_depth_context(values=values, drivers=drivers, warnings=warnings, feature_depth_snapshot=feature_depth_snapshot)
 
     score = max(0.0, min(1.0, score))
     if score >= 0.64 and not warnings:
@@ -591,13 +639,14 @@ def build_rule_based_v0_outputs(
     cross_venue_summary: CrossVenueReferenceSummary | None = None,
     horizon_sec: int = 300,
     now: datetime | None = None,
+    feature_depth_snapshot: FeatureDepthSnapshot | None = None,
 ) -> Tuple[PredictionOutput, ...]:
     generated_at = _generated_at(now)
     mr_label, mr_score, mr_drivers, mr_blockers, mr_values = _market_regime(technical_summary, cross_venue_summary)
     tb_label, tb_score, tb_drivers, tb_blockers, tb_values = _trend_bias(technical_summary)
     rz_label, rz_score, rz_drivers, rz_blockers, rz_warnings, rz_values = _reversal_zone(technical_summary)
     vr_label, vr_score, vr_drivers, vr_blockers, vr_values = _volatility_risk(technical_summary)
-    lq_label, lq_score, lq_drivers, lq_blockers, lq_warnings, lq_values = _liquidity_execution_quality(technical_summary, cross_venue_summary)
+    lq_label, lq_score, lq_drivers, lq_blockers, lq_warnings, lq_values = _liquidity_execution_quality(technical_summary, cross_venue_summary, feature_depth_snapshot)
     bf_label, bf_score, bf_drivers, bf_blockers, bf_warnings, bf_values = _breakout_false_break(technical_summary, cross_venue_summary)
     cv_label, cv_score, cv_drivers, cv_blockers, cv_warnings, cv_values = _cross_venue_confirmation(cross_venue_summary)
     mc_label, mc_score, mc_drivers, mc_blockers, mc_warnings, mc_values = _macro_risk_context(technical_summary, cross_venue_summary)

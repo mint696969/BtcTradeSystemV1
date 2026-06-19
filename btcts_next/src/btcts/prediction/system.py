@@ -10,6 +10,7 @@ from typing import Any, Iterable, Mapping, Sequence, Tuple
 from .bundle_assembly import build_inference_bundle_from_outputs
 from .contracts import PredictionOutput
 from .cross_venue import CrossVenueReferenceSummary, build_cross_venue_reference_summary
+from .feature_depth import FeatureDepthSnapshot
 from .forecast_ledger import ForecastLedgerBatch, build_forecast_ledger_records_from_bundle
 from .ohlcv import OHLCVAggregationDiagnostics, OHLCVCandle, TIMEFRAME_SECONDS, aggregate_ohlcv_from_rows
 from .rule_based_v0 import INITIAL_FAMILIES, build_rule_based_v0_outputs
@@ -164,6 +165,7 @@ def _build_outputs(
     cross_venue_summary: CrossVenueReferenceSummary | None,
     horizons_sec: Tuple[int, ...],
     now_dt: datetime,
+    feature_depth_snapshot: FeatureDepthSnapshot | None = None,
 ) -> tuple[Tuple[PredictionOutput, ...], Mapping[int, HumanTechnicalSummary | None]]:
     outputs: list[PredictionOutput] = []
     technical_by_horizon: dict[int, HumanTechnicalSummary | None] = {}
@@ -176,6 +178,7 @@ def _build_outputs(
                 cross_venue_summary=cross_venue_summary,
                 horizon_sec=int(horizon_sec),
                 now=now_dt,
+                feature_depth_snapshot=feature_depth_snapshot,
             )
         )
     return tuple(outputs), technical_by_horizon
@@ -839,6 +842,7 @@ def build_prediction_system_result(
     requested_horizon_groups: Iterable[HorizonGroup | str] | None = None,
     requested_horizons_sec: Iterable[int] | None = None,
     previous_prediction_run_id: str | None = None,
+    feature_depth_snapshot: FeatureDepthSnapshot | None = None,
     now: datetime | None = None,
     market_uid: str = "BTC_JPY:bitFlyer",
     run_reason: str = "ps_g_lite_multi_horizon_runner",
@@ -860,7 +864,7 @@ def build_prediction_system_result(
     cross = _build_cross_venue(venue_snapshots=venue_snapshots, source_quality_by_id=source_quality_by_id, now_dt=now_dt)
     provider_registry = build_provider_reliability_registry(source_quality_by_id=dict(source_quality_by_id or {}), observed_source_ids=observed_source_ids, now=now_dt)
     provider_registry_summary = provider_registry.to_dict()
-    outputs, technical_by_horizon = _build_outputs(candles=built_candles, cross_venue_summary=cross, horizons_sec=horizons_sec, now_dt=now_dt)
+    outputs, technical_by_horizon = _build_outputs(candles=built_candles, cross_venue_summary=cross, horizons_sec=horizons_sec, now_dt=now_dt, feature_depth_snapshot=feature_depth_snapshot)
 
     source_quality_summary: dict[str, Any] = {
         "logic_version": LOGIC_VERSION,
@@ -895,6 +899,7 @@ def build_prediction_system_result(
             "venue_snapshot_supplied": venue_snapshots is not None,
             "horizons_sec": list(horizons_sec),
             "families": [family.value for family in INITIAL_FAMILIES],
+            "feature_depth_snapshot_supplied": feature_depth_snapshot is not None,
         },
         previous_prediction_run_id=previous_prediction_run_id,
         diagnostics={"logic_version": LOGIC_VERSION, "ps_g_lite": True},
@@ -930,6 +935,9 @@ def build_prediction_system_result(
             "has_revision": revision.has_revision,
             "provider_reliability_version": "ps_d1.v1",
             "provider_reliability_context_only": provider_registry.context_only,
+            "liquidity_feature_depth_context_version": "ps_e2.v1" if feature_depth_snapshot is not None else None,
+            "feature_depth_context_only": bool(feature_depth_snapshot.context_only) if feature_depth_snapshot is not None else None,
+            "feature_depth_primary_direction_owner": bool(feature_depth_snapshot.primary_direction_owner) if feature_depth_snapshot is not None else None,
             "provider_count": provider_registry.provider_count,
             "usable_provider_count": provider_registry.usable_provider_count,
             "unknown_provider_source_count": len(provider_registry.unknown_source_ids),
