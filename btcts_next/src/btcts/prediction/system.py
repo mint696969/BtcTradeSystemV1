@@ -217,13 +217,65 @@ def _primary_label(outputs: Tuple[PredictionOutput, ...], blockers: Tuple[str, .
     return regime if regime != "unknown" else trend
 
 
-def _lifetime(now_dt: datetime, group: HorizonGroup) -> PredictionLifetime:
+def _refresh_decision_from_scenario_lite(scenario_lite: Mapping[str, Any] | None) -> dict[str, Any]:
+    data = dict(scenario_lite or {})
+    invalidation = str(data.get("invalidation_state") or "unknown")
+    conflict = str(data.get("evidence_conflict_state") or "unknown")
+    switch_hint = str(data.get("scenario_switch_hint") or "unknown")
+    turning = str(data.get("turning_point_risk") or "unknown")
+    if invalidation == "blocked_inputs":
+        return {
+            "refresh_required": True,
+            "refresh_reason": "blocked_prediction_inputs",
+            "refresh_trigger": "input_recovery_or_manual_refresh",
+            "state": "refresh_required_blocked",
+        }
+    if invalidation == "active_invalidation_watch":
+        return {
+            "refresh_required": True,
+            "refresh_reason": "active_invalidation_watch",
+            "refresh_trigger": "scenario_switch_or_reversal_resolution",
+            "state": "refresh_required_invalidation_watch",
+        }
+    if switch_hint.startswith("watch_for_scenario_switch"):
+        return {
+            "refresh_required": True,
+            "refresh_reason": "scenario_switch_watch",
+            "refresh_trigger": "scenario_switch_confirmation",
+            "state": "refresh_required_switch_watch",
+        }
+    if conflict == "conflicting_evidence":
+        return {
+            "refresh_required": True,
+            "refresh_reason": "conflicting_evidence_watch",
+            "refresh_trigger": "evidence_reconfirmation",
+            "state": "refresh_required_conflict_watch",
+        }
+    if turning == "high":
+        return {
+            "refresh_required": True,
+            "refresh_reason": "high_turning_point_risk",
+            "refresh_trigger": "turning_point_resolution",
+            "state": "refresh_required_turning_point_watch",
+        }
+    return {
+        "refresh_required": False,
+        "refresh_reason": None,
+        "refresh_trigger": None,
+        "state": "current_until_stale_after",
+    }
+
+
+def _lifetime(now_dt: datetime, group: HorizonGroup, scenario_lite: Mapping[str, Any] | None = None) -> PredictionLifetime:
     stale_after = int(_STALE_AFTER_SEC_BY_GROUP[group])
+    refresh = _refresh_decision_from_scenario_lite(scenario_lite)
     return PredictionLifetime(
         valid_from=_iso(now_dt),
         valid_until=_iso(now_dt + timedelta(seconds=stale_after)),
         stale_after_sec=stale_after,
-        refresh_required=False,
+        refresh_required=bool(refresh["refresh_required"]),
+        refresh_reason=refresh["refresh_reason"],
+        refresh_trigger=refresh["refresh_trigger"],
     )
 
 
@@ -593,6 +645,8 @@ def _horizon_group_summary(
     primary = _primary_label(group_outputs, blockers)
     evidence_refs = _scenario_evidence_refs(group=group, group_horizons=group_horizons, outputs=group_outputs, family_labels=family_labels, scenario_lite=scenario_lite)
     trace_detail = _scenario_trace_detail(group=group, group_horizons=group_horizons, primary_label=primary, family_labels=family_labels, scenario_lite=scenario_lite, evidence_refs=evidence_refs)
+    lifetime_refresh = _refresh_decision_from_scenario_lite(scenario_lite)
+    lifetime = _lifetime(now_dt, group, scenario_lite)
     trigger = PredictionTriggerEligibility(
         trigger_eligibility_state="blocked",
         reason="standalone_prediction_output_not_enabled_for_trigger",
@@ -613,6 +667,9 @@ def _horizon_group_summary(
             "invalidation_state": scenario_lite["invalidation_state"],
             "scenario_switch_hint": scenario_lite["scenario_switch_hint"],
             "evidence_conflict_state": scenario_lite["evidence_conflict_state"],
+            "lifetime_refresh_required": lifetime.refresh_required,
+            "lifetime_refresh_reason": lifetime.refresh_reason,
+            "lifetime_refresh_trigger": lifetime.refresh_trigger,
         },
     )
     narrative = _group_narrative(group, primary, trend, regime, caution, confidence)
@@ -632,7 +689,7 @@ def _horizon_group_summary(
         score=score,
         invalidation_state=scenario_lite["invalidation_state"],
         scenario_switch_hint=scenario_lite["scenario_switch_hint"],
-        lifetime=_lifetime(now_dt, group),
+        lifetime=lifetime,
         trigger_eligibility=trigger,
         evidence_refs=evidence_refs,
         human_narrative_ja=narrative,
@@ -657,6 +714,7 @@ def _horizon_group_summary(
             "scenario_lite": scenario_lite,
             "scenario_trace_detail": trace_detail,
             "evidence_ref_count": len(evidence_refs),
+            "lifetime_refresh": lifetime_refresh,
         },
         blockers=blockers,
         warnings=warnings,
@@ -684,6 +742,8 @@ def _scenario_core(
     core_signals = _aggregate_core_signals(outlooks)
     outlook_traces = [dict(outlook.gpt_review_digest.get("scenario_trace_detail", {})) for outlook in outlooks if outlook.gpt_review_digest.get("scenario_trace_detail")]
     evidence_ref_count = sum(len(outlook.evidence_refs) for outlook in outlooks)
+    refresh_required_count = sum(1 for outlook in outlooks if outlook.lifetime and outlook.lifetime.refresh_required)
+    lifetime_state = "refresh_required" if refresh_required_count else "current_until_stale_after"
     first_balance = next((dict(outlook.gpt_review_digest.get("scenario_lite", {})).get("continuation_vs_reversal_balance") for outlook in outlooks if outlook.gpt_review_digest.get("scenario_lite")), {"state": "unknown"})
     evidence_weighting = next((dict(outlook.gpt_review_digest.get("scenario_lite", {})).get("evidence_weighting_summary") for outlook in outlooks if outlook.gpt_review_digest.get("scenario_lite")), {"state": "deterministic_family_label_weighting_v1"})
     return ScenarioCoreOutput(
@@ -708,14 +768,55 @@ def _scenario_core(
             "conflict_reasons": core_signals["conflict_reasons"],
             "outlook_traces": outlook_traces,
             "evidence_ref_count": evidence_ref_count,
+            "refresh_required_count": refresh_required_count,
+            "prediction_lifetime_state": lifetime_state,
         },
         trigger_eligibility_state="blocked",
         human_narrative_ja="\n".join(outlook.human_narrative_ja for outlook in outlooks),
-        gpt_review_digest={"logic_version": LOGIC_VERSION, "scenario_core_lite_version": "ps_h1.v1", "scenario_trace_detail_version": "ps_h2.v1", "outlook_count": len(outlooks), "evidence_ref_count": evidence_ref_count, "blockers": list(blockers), "warnings": list(warnings), "what_to_watch_next": core_signals["what_to_watch_next"], "conflict_reasons": core_signals["conflict_reasons"]},
+        gpt_review_digest={"logic_version": LOGIC_VERSION, "scenario_core_lite_version": "ps_h1.v1", "scenario_trace_detail_version": "ps_h2.v1", "lifetime_refresh_version": "ps_i1.v1", "outlook_count": len(outlooks), "evidence_ref_count": evidence_ref_count, "refresh_required_count": refresh_required_count, "prediction_lifetime_state": lifetime_state, "blockers": list(blockers), "warnings": list(warnings), "what_to_watch_next": core_signals["what_to_watch_next"], "conflict_reasons": core_signals["conflict_reasons"]},
         blockers=blockers,
         warnings=warnings,
     )
 
+
+
+def _build_revision_summary(
+    *,
+    previous_prediction_run_id: str | None,
+    scenario: ScenarioCoreOutput,
+    horizons_sec: Tuple[int, ...],
+) -> PredictionRevisionSummary:
+    if not previous_prediction_run_id:
+        return PredictionRevisionSummary()
+    first_outlook = next((outlook for outlook in scenario.outlooks if outlook.usable), None)
+    new_primary = first_outlook.primary_label if first_outlook else None
+    new_confidence = first_outlook.confidence if first_outlook else None
+    return PredictionRevisionSummary(
+        previous_prediction_run_id=previous_prediction_run_id,
+        revision_reason="previous_run_supplied_revision_lite_no_previous_snapshot",
+        revision_trigger=scenario.scenario_switch_hint or "manual_or_scheduled_reprediction",
+        changed_families=tuple(family.value for family in INITIAL_FAMILIES),
+        changed_horizons_sec=tuple(sorted(int(item) for item in horizons_sec)),
+        previous_primary_label=None,
+        new_primary_label=new_primary,
+        previous_confidence=None,
+        new_confidence=new_confidence,
+        previous_invalidation_state=None,
+        new_invalidation_state=scenario.invalidation_state,
+        change_summary_for_human="前回予測IDは指定されています。PS-I1では前回結果本体との差分比較は未実装ですが、現行シナリオの更新状態・失効監視・再予測理由を revision-lite として記録します。",
+        change_summary_for_gpt={
+            "revision_lite_version": "ps_i1.v1",
+            "previous_prediction_run_id": previous_prediction_run_id,
+            "new_primary_label": new_primary,
+            "new_confidence": new_confidence,
+            "new_invalidation_state": scenario.invalidation_state,
+            "scenario_switch_hint": scenario.scenario_switch_hint,
+            "evidence_conflict_state": scenario.evidence_conflict_state,
+            "horizons_sec": sorted(int(item) for item in horizons_sec),
+            "families": [family.value for family in INITIAL_FAMILIES],
+            "full_previous_run_diff_available": False,
+        },
+    )
 
 def build_prediction_system_result(
     *,
@@ -790,9 +891,8 @@ def build_prediction_system_result(
         previous_prediction_run_id=previous_prediction_run_id,
         run_reason=run_reason,
     )
-    revision = PredictionRevisionSummary(previous_prediction_run_id=previous_prediction_run_id)
-    if previous_prediction_run_id:
-        revision = replace(revision, revision_reason="previous_run_supplied_no_diff_engine_yet", change_summary_for_human="前回予測IDは指定されていますが、PS-G-liteでは差分比較はまだ未実装です。")
+    revision = _build_revision_summary(previous_prediction_run_id=previous_prediction_run_id, scenario=scenario, horizons_sec=horizons_sec)
+    prediction_lifetime_state = str(scenario.gpt_review_digest.get("prediction_lifetime_state", "current_until_stale_after"))
 
     return PredictionSystemResult(
         run_identity=run_identity,
@@ -808,6 +908,10 @@ def build_prediction_system_result(
             "family_count": len(INITIAL_FAMILIES),
             "output_count": len(outputs),
             "forecast_record_count": forecast_batch.record_count if isinstance(forecast_batch, ForecastLedgerBatch) else 0,
+            "prediction_lifetime_state": prediction_lifetime_state,
+            "refresh_required_count": scenario.gpt_review_digest.get("refresh_required_count", 0),
+            "revision_lite_version": "ps_i1.v1",
+            "has_revision": revision.has_revision,
             "blockers": list(dict.fromkeys(blockers)),
             "warnings": list(dict.fromkeys(warnings)),
         },
