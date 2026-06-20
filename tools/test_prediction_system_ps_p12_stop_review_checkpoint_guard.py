@@ -21,6 +21,13 @@ P9 = ROOT / "tools" / "test_prediction_system_ps_p9_calibration_review_builder_s
 P8 = ROOT / "tools" / "test_prediction_system_ps_p8_calibration_review_contract_design_guard.py"
 
 
+def _compile_without_repo_pycache(path: Path) -> None:
+    cache_dir = ROOT / "tmp" / "py_compile_cache" / path.parent.relative_to(ROOT)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = path.name.replace(".", "_") + ".pyc"
+    py_compile.compile(str(path), cfile=str(cache_dir / safe_name), doraise=True)
+
+
 def test_ps_p12_checkpoint_doc_records_stop_review_decision() -> None:
     assert DOC.exists(), DOC
     text = DOC.read_text(encoding="utf-8")
@@ -97,7 +104,7 @@ def test_ps_p12_previous_guard_anchors_and_compile() -> None:
     assert "test_ps_p9_advisory_notes_are_generated_without_behavior_change" in P9.read_text(encoding="utf-8")
     assert "test_ps_p8_design_doc_records_calibration_review_contract_shape" in P8.read_text(encoding="utf-8")
     for path in (EVAL, CAL, INIT, SYSTEM, RULE, FORECAST, P11, P10, P9, P8, Path(__file__)):
-        py_compile.compile(str(path), doraise=True)
+        _compile_without_repo_pycache(path)
 
 
 def main() -> int:

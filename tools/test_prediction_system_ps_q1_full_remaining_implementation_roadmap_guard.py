@@ -20,6 +20,13 @@ CAL = ROOT / "btcts_next" / "src" / "btcts" / "prediction" / "calibration_review
 EVAL = ROOT / "btcts_next" / "src" / "btcts" / "prediction" / "evaluation.py"
 
 
+def _compile_without_repo_pycache(path: Path) -> None:
+    cache_dir = ROOT / "tmp" / "py_compile_cache" / path.parent.relative_to(ROOT)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = path.name.replace(".", "_") + ".pyc"
+    py_compile.compile(str(path), cfile=str(cache_dir / safe_name), doraise=True)
+
+
 def test_ps_q1_doc_corrects_remaining_roadmap_scope() -> None:
     assert DOC.exists(), DOC
     text = DOC.read_text(encoding="utf-8")
@@ -91,7 +98,7 @@ def test_ps_q1_anchors_existing_roadmap_and_compiles() -> None:
     assert "Stop before production calibration behavior change." in P12.read_text(encoding="utf-8")
     assert "test_ps_p12_checkpoint_doc_records_stop_review_decision" in P12_GUARD.read_text(encoding="utf-8")
     for path in (SYSTEM, SYSTEM_CONTRACT, SOURCE_QUALITY, FEATURE_DEPTH, CAL, EVAL, P12_GUARD, Path(__file__)):
-        py_compile.compile(str(path), doraise=True)
+        _compile_without_repo_pycache(path)
 
 
 def test_ps_q1_static_boundaries_still_hold() -> None:

@@ -144,6 +144,13 @@ def _assert_safety_flags_false(data: dict[str, object]) -> None:
             assert data[key] is False, key
 
 
+def _compile_without_repo_pycache(path: Path) -> None:
+    cache_dir = ROOT / "tmp" / "py_compile_cache" / path.parent.relative_to(ROOT)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = path.name.replace(".", "_") + ".pyc"
+    py_compile.compile(str(path), cfile=str(cache_dir / safe_name), doraise=True)
+
+
 def test_ps_q1b_doc_records_option_b_completion_boundary() -> None:
     assert DOC.exists(), DOC
     text = DOC.read_text(encoding="utf-8")
@@ -269,7 +276,7 @@ def test_ps_q1b_previous_anchors_static_boundaries_and_compile() -> None:
     assert not hits, hits
 
     for path in (EVAL, CAL, SYSTEM, RULE, FORECAST, Q1_GUARD, P12_GUARD, P11_GUARD, Path(__file__)):
-        py_compile.compile(str(path), doraise=True)
+        _compile_without_repo_pycache(path)
 
 
 def main() -> int:
