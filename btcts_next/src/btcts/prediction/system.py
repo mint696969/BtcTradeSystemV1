@@ -382,6 +382,122 @@ def _apply_tier0_source_quality_gate_to_outputs(
         )
     return tuple(out)
 
+
+
+def _context_profile_source_cap_packets_for_family(
+    *,
+    family: str,
+    horizon_sec: int | None,
+    source_artifact_coverage_summary: Mapping[str, Any] | None,
+) -> Tuple[dict[str, Any], ...]:
+    """Return profile/family-specific source cap packets for missing minimum sources."""
+    summary = dict(source_artifact_coverage_summary or {})
+    observed = {str(item) for item in summary.get("observed_required_source_ids", [])}
+    horizon_groups = tuple(
+        group.value
+        for group, horizons in DEFAULT_HORIZONS_BY_GROUP.items()
+        if horizon_sec is not None and int(horizon_sec) in {int(item) for item in horizons}
+    )
+    packets: list[dict[str, Any]] = []
+    for raw in summary.get("context_evidence_profiles", []):
+        if not isinstance(raw, Mapping):
+            continue
+        applies_to_horizon_groups = tuple(str(item) for item in raw.get("applies_to_horizon_groups", []))
+        if horizon_groups and not any(group in applies_to_horizon_groups for group in horizon_groups):
+            continue
+        applies_to_families = tuple(str(item) for item in raw.get("applies_to_families", []))
+        if family not in applies_to_families:
+            continue
+        minimum_sources = tuple(str(item) for item in raw.get("minimum_required_sources", []))
+        missing_sources = tuple(source_id for source_id in minimum_sources if source_id not in observed)
+        if not missing_sources:
+            continue
+        profile_ceiling_raw = raw.get("signal_strength_ceiling")
+        try:
+            profile_ceiling = int(profile_ceiling_raw) if profile_ceiling_raw is not None else 99
+        except (TypeError, ValueError):
+            profile_ceiling = 99
+        cap_percent = min(59, max(0, profile_ceiling))
+        packets.append(
+            {
+                "ledger_version": "prediction_source_contribution_ledger.ps_q3b.v1",
+                "source_id": str(raw.get("evidence_profile_id") or "unknown_context_profile"),
+                "source_family": "context_evidence_profile_minimum_source_gate",
+                "evidence_profile_id": str(raw.get("evidence_profile_id") or "unknown_context_profile"),
+                "evidence_profile_version": str(raw.get("evidence_profile_version") or summary.get("evidence_profile_version") or "unknown"),
+                "family": family,
+                "effect": "family_profile_minimum_sources_missing_cap",
+                "cap_score": round(cap_percent / 99.0, 6) if cap_percent > 0 else 0.0,
+                "cap_percent": cap_percent,
+                "minimum_required_sources": list(minimum_sources),
+                "observed_minimum_required_sources": [source_id for source_id in minimum_sources if source_id in observed],
+                "missing_minimum_required_sources": list(missing_sources),
+                "missing_source_behavior": raw.get("missing_source_behavior"),
+                "applies_to_cards": list(raw.get("applies_to_cards", [])),
+                "applies_to_families": list(applies_to_families),
+                "applies_to_horizon_groups": list(applies_to_horizon_groups),
+                "matched_horizon_groups": list(horizon_groups),
+                "horizon_sec": horizon_sec,
+                "signal_strength_cap_reason": "context_profile_family_minimum_sources_missing",
+            }
+        )
+    return tuple(packets)
+
+
+def _apply_context_profile_source_caps_to_outputs(
+    outputs: Tuple[PredictionOutput, ...],
+    source_artifact_coverage_summary: Mapping[str, Any] | None,
+) -> Tuple[PredictionOutput, ...]:
+    """Apply context-profile minimum-source caps only to families selected by the matching profile."""
+    out: list[PredictionOutput] = []
+    for output in outputs:
+        family = output.family.value
+        packets = _context_profile_source_cap_packets_for_family(family=family, horizon_sec=int(output.horizon.horizon_sec), source_artifact_coverage_summary=source_artifact_coverage_summary)
+        if not packets:
+            out.append(output)
+            continue
+        original_score = output.score
+        capped_score = original_score
+        cap_applied = False
+        cap_percent = min(int(packet.get("cap_percent", 59)) for packet in packets)
+        cap_score = round(cap_percent / 99.0, 6) if cap_percent > 0 else 0.0
+        if original_score is not None and float(original_score) > cap_score:
+            capped_score = cap_score
+            cap_applied = True
+        values = dict(output.values)
+        existing_ledger = list(values.get("source_contribution_ledger", [])) if isinstance(values.get("source_contribution_ledger", []), list) else []
+        annotated_packets: list[dict[str, Any]] = []
+        for packet in packets:
+            data = dict(packet)
+            data["original_score"] = original_score
+            data["capped_score"] = capped_score
+            data["cap_applied"] = cap_applied
+            annotated_packets.append(data)
+        insert_at = len(existing_ledger)
+        if existing_ledger and isinstance(existing_ledger[-1], Mapping) and existing_ledger[-1].get("source_id") == "tier0_source_quality_gate":
+            insert_at = len(existing_ledger) - 1
+        existing_ledger[insert_at:insert_at] = annotated_packets
+        values["source_contribution_ledger"] = existing_ledger
+        values["context_profile_source_caps"] = annotated_packets
+        values["context_profile_source_cap_applied"] = cap_applied
+        values["context_profile_source_cap_percent"] = cap_percent
+        values["context_profile_signal_strength_cap_reason"] = "context_profile_family_minimum_sources_missing"
+        values["estimated_signal_strength_percent"] = _signal_strength_percent_from_score(capped_score)
+        values["estimated_reference_hit_rate_percent"] = values["estimated_signal_strength_percent"]
+        warnings = tuple(dict.fromkeys(tuple(output.warnings) + ("context_profile_family_minimum_sources_missing",)))
+        if cap_applied:
+            warnings = tuple(dict.fromkeys(warnings + ("context_profile_family_signal_strength_capped",)))
+        out.append(
+            replace(
+                output,
+                score=capped_score,
+                confidence=_confidence_from_score(capped_score, output.blockers),
+                warnings=warnings,
+                values=values,
+            )
+        )
+    return tuple(out)
+
 def _build_cross_venue(
     *,
     venue_snapshots: Iterable[Mapping[str, Any]] | None,
@@ -1276,6 +1392,7 @@ def build_prediction_system_result(
     tier0_source_quality_gate_summary = _tier0_source_quality_gate_summary(source_quality_by_id=source_quality_by_id, provider_registry_summary=provider_registry_summary, observed_required_source_ids=source_artifact_coverage.observed_required_source_ids)
     outputs, technical_by_horizon = _build_outputs(candles=built_candles, cross_venue_summary=cross, horizons_sec=horizons_sec, now_dt=now_dt, feature_depth_snapshot=feature_depth_snapshot)
     outputs = _apply_tier0_source_quality_gate_to_outputs(outputs, tier0_source_quality_gate_summary)
+    outputs = _apply_context_profile_source_caps_to_outputs(outputs, source_artifact_coverage_summary)
 
     source_quality_summary: dict[str, Any] = {
         "logic_version": LOGIC_VERSION,
