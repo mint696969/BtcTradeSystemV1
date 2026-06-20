@@ -29,6 +29,7 @@ EXPECTED_ORDER = [
     "prediction_latest_payload_loader_authorization_widget",
     "prediction_latest_payload_loader_authorization_registry_summary_widget",
     "prediction_authorization_handoff_status_widget",
+    "prediction_supplemental_handoff_readiness_summary_widget",
 ]
 FORBIDDEN_IMPORT_PREFIXES = (
     "btcts.prediction",
@@ -132,18 +133,21 @@ def test_ps_q7i_static_boundaries_and_markers() -> None:
 
 def test_ps_q7i_default_registry_includes_status_widget_after_summary() -> None:
     registry = build_prediction_warroom_supplemental_widget_registry(display_packet=build_prediction_warroom_sample_display_packet()).to_dict()
-    assert registry["supplemental_index_count"] == 5
-    assert registry["supplemental_widget_group_count"] == 5
+    assert registry["supplemental_index_count"] == 6
+    assert registry["supplemental_widget_group_count"] == 6
     assert registry["supplemental_widget_group_order"] == EXPECTED_ORDER
-    assert len(registry["auto_refresh_groups"]) == 5
-    assert len(registry["widget_groups"]) == 5
+    assert len(registry["auto_refresh_groups"]) == 6
+    assert len(registry["widget_groups"]) == 6
     widgets = {item["widget_group_id"]: item for item in registry["widget_groups"]}
     status = widgets["prediction_authorization_handoff_status_widget"]
+    readiness = widgets["prediction_supplemental_handoff_readiness_summary_widget"]
     assert status["attach_after_widget_group_id"] == "prediction_latest_payload_loader_authorization_registry_summary_widget"
     assert status["payload"]["status_state"] == "ready_authorization_handoff_status_visible_loader_disabled"
     assert status["payload"]["summary_metrics"]["total_widget_group_count"] == 11
     assert status["payload"]["summary_metrics"]["visibility_group_count"] == 6
     assert status["payload"]["authorization_chain"]["authorization_chain_ready"] is True
+    assert readiness["attach_after_widget_group_id"] == "prediction_authorization_handoff_status_widget"
+    assert readiness["payload"]["readiness_state"] == "ready_supplemental_handoff_visible_loader_disabled"
     assert registry["integration_contract"]["authorization_handoff_status_widget_contract"] == "prediction_warroom_authorization_handoff_status_widget_groups.ps_q7h.v1"
     for payload in (registry, registry["boundaries"], registry["integration_contract"], *registry["widget_groups"], *registry["auto_refresh_groups"]):
         _assert_safe(payload)
@@ -153,6 +157,7 @@ def test_ps_q7i_include_flag_can_disable_status_widget_only() -> None:
     registry = build_prediction_warroom_supplemental_widget_registry(
         display_packet=build_prediction_warroom_sample_display_packet(),
         include_authorization_handoff_status=False,
+        include_supplemental_handoff_readiness=False,
     ).to_dict()
     assert registry["supplemental_widget_group_order"] == [
         "source_quality_explanation_widgets",
@@ -167,6 +172,7 @@ def test_ps_q7i_include_flag_can_disable_status_widget_only() -> None:
         include_latest_payload_dry_run=False,
         include_latest_payload_loader_authorization=False,
         include_latest_payload_loader_authorization_registry_summary=False,
+        include_supplemental_handoff_readiness=False,
     ).to_dict()
     assert only_status["supplemental_widget_group_order"] == ["prediction_authorization_handoff_status_widget"]
     assert only_status["supplemental_index_count"] == 1
@@ -177,8 +183,8 @@ def test_ps_q7i_preflight_accepts_status_widget_and_blocks_bad_attach() -> None:
     registry = build_prediction_warroom_supplemental_widget_registry(display_packet=build_prediction_warroom_sample_display_packet()).to_dict()
     report = validate_prediction_warroom_supplemental_widget_registry_schema(registry).to_dict()
     assert report["valid"] is True
-    assert report["supplemental_index_count"] == 5
-    assert report["supplemental_widget_group_count"] == 5
+    assert report["supplemental_index_count"] == 6
+    assert report["supplemental_widget_group_count"] == 6
     assert "prediction_warroom_authorization_handoff_status_widget_groups.ps_q7h.v1" in report["checked_contracts"]
     registry["widget_groups"][4]["attach_after_widget_group_id"] = "prediction_latest_payload_loader_authorization_widget"
     blocked = validate_prediction_warroom_supplemental_widget_registry_schema(registry).to_dict()
@@ -186,18 +192,19 @@ def test_ps_q7i_preflight_accepts_status_widget_and_blocks_bad_attach() -> None:
     assert "unexpected_attach_after_widget_group_id" in {item["issue_code"] for item in blocked["issues"]}
 
 
-def test_ps_q7i_handoff_bundle_and_catalog_counts_update_to_eleven() -> None:
+def test_ps_q7i_handoff_bundle_and_catalog_counts_update_after_q7l() -> None:
     bundle = build_prediction_warroom_supplemental_handoff_bundle().to_dict()
     assert bundle["handoff_index"]["base_widget_group_count"] == 6
-    assert bundle["handoff_index"]["supplemental_widget_group_count"] == 5
-    assert bundle["handoff_index"]["total_widget_group_count"] == 11
-    assert bundle["handoff_index"]["combined_widget_group_order"][-5:] == EXPECTED_ORDER
+    assert bundle["handoff_index"]["supplemental_widget_group_count"] == 6
+    assert bundle["handoff_index"]["total_widget_group_count"] == 12
+    assert bundle["handoff_index"]["combined_widget_group_order"][-6:] == EXPECTED_ORDER
     entry = build_prediction_warroom_handoff_catalog_visibility_entry().to_dict()
-    assert entry["visibility_group_count"] == 6
-    assert entry["supplemental_widget_group_count"] == 5
-    assert entry["total_widget_group_count"] == 11
+    assert entry["visibility_group_count"] == 7
+    assert entry["supplemental_widget_group_count"] == 6
+    assert entry["total_widget_group_count"] == 12
     visibility = {item["visibility_group_id"]: item for item in entry["visibility_groups"]}
     assert visibility["prediction_warroom_authorization_handoff_status_visibility"]["widget_group_ids"] == ["prediction_authorization_handoff_status_widget"]
+    assert visibility["prediction_warroom_supplemental_handoff_readiness_visibility"]["widget_group_ids"] == ["prediction_supplemental_handoff_readiness_summary_widget"]
     assert visibility["prediction_warroom_authorization_handoff_status_visibility"]["attach_after_widget_group_id"] == "prediction_latest_payload_loader_authorization_registry_summary_widget"
     for payload in (bundle, entry, visibility["prediction_warroom_authorization_handoff_status_visibility"]):
         _assert_safe(payload)
@@ -208,7 +215,7 @@ def test_ps_q7i_q7h_standalone_index_remains_display_only() -> None:
     assert index["index_version"] == "prediction_warroom_authorization_handoff_status_widget_groups.ps_q7h.v1"
     assert index["attach_after_widget_group_id"] == "prediction_latest_payload_loader_authorization_registry_summary_widget"
     assert index["widget_groups"][0]["attach_after_widget_group_id"] == "prediction_latest_payload_loader_authorization_registry_summary_widget"
-    assert index["widget_groups"][0]["payload"]["summary_metrics"]["total_widget_group_count"] == 11
+    assert index["widget_groups"][0]["payload"]["summary_metrics"]["total_widget_group_count"] == 12
     assert index["integration_contract"]["does_not_register_into_q6f_registry_in_this_slice"] is True
     for payload in (index, index["widget_groups"][0], index["widget_groups"][0]["payload"], index["auto_refresh_groups"][0], index["integration_contract"]):
         _assert_safe(payload)
@@ -219,7 +226,7 @@ def main() -> int:
     test_ps_q7i_default_registry_includes_status_widget_after_summary()
     test_ps_q7i_include_flag_can_disable_status_widget_only()
     test_ps_q7i_preflight_accepts_status_widget_and_blocks_bad_attach()
-    test_ps_q7i_handoff_bundle_and_catalog_counts_update_to_eleven()
+    test_ps_q7i_handoff_bundle_and_catalog_counts_update_after_q7l()
     test_ps_q7i_q7h_standalone_index_remains_display_only()
     print("[OK] Prediction System PS-Q7I authorization handoff status registry registration guard passed")
     return 0

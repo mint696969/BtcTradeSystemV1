@@ -24,6 +24,7 @@ EXPECTED_ORDER = [
     "prediction_latest_payload_loader_authorization_widget",
     "prediction_latest_payload_loader_authorization_registry_summary_widget",
     "prediction_authorization_handoff_status_widget",
+    "prediction_supplemental_handoff_readiness_summary_widget",
 ]
 FORBIDDEN_IMPORT_PREFIXES = (
     "btcts.prediction",
@@ -120,7 +121,7 @@ def test_ps_q7j_static_boundaries_and_markers() -> None:
     assert "does_not_register_widgets" in text
 
 
-def test_ps_q7j_default_summary_is_ready_for_registered_five_widget_chain() -> None:
+def test_ps_q7j_default_summary_is_ready_for_registered_six_widget_chain() -> None:
     summary = build_prediction_warroom_supplemental_handoff_readiness_summary().to_dict()
     assert summary["summary_version"] == "prediction_warroom_supplemental_handoff_readiness_summary.ps_q7j.v1"
     assert summary["readiness_state"] == "ready_supplemental_handoff_visible_loader_disabled"
@@ -128,12 +129,12 @@ def test_ps_q7j_default_summary_is_ready_for_registered_five_widget_chain() -> N
     assert summary["handoff_state"] == "ready_for_read_only_warroom_handoff"
     metrics = summary["readiness_metrics"]
     assert metrics["base_widget_group_count"] == 6
-    assert metrics["supplemental_widget_group_count"] == 5
-    assert metrics["total_widget_group_count"] == 11
-    assert metrics["visibility_group_count"] == 6
+    assert metrics["supplemental_widget_group_count"] == 6
+    assert metrics["total_widget_group_count"] == 12
+    assert metrics["visibility_group_count"] == 7
     assert metrics["counts_ok"] is True
     assert metrics["chain_ready"] is True
-    assert metrics["ready_widget_count"] == 5
+    assert metrics["ready_widget_count"] == 6
     assert metrics["blocker_count"] == 0
     assert [item["widget_group_id"] for item in summary["supplemental_chain_readiness"]] == EXPECTED_ORDER
     assert all(item["ready"] is True for item in summary["supplemental_chain_readiness"])
@@ -146,9 +147,9 @@ def test_ps_q7j_index_is_compact_and_safe() -> None:
     index = build_prediction_warroom_supplemental_handoff_readiness_summary_index()
     assert index["summary_index_version"] == "prediction_warroom_supplemental_handoff_readiness_summary.ps_q7j.v1"
     assert index["readiness_state"] == "ready_supplemental_handoff_visible_loader_disabled"
-    assert index["readiness_metrics"]["total_widget_group_count"] == 11
-    assert index["readiness_metrics"]["expected_supplemental_chain_length"] == 5
-    assert len(index["supplemental_chain_readiness"]) == 5
+    assert index["readiness_metrics"]["total_widget_group_count"] == 12
+    assert index["readiness_metrics"]["expected_supplemental_chain_length"] == 6
+    assert len(index["supplemental_chain_readiness"]) == 6
     assert index["readiness_blockers"] == []
     for payload in (index, index["boundaries"], index["integration_contract"], *index["supplemental_chain_readiness"]):
         _assert_safe(payload)
@@ -169,10 +170,10 @@ def test_ps_q7j_blocked_catalog_hides_readiness_without_enabling_loader() -> Non
 
 def test_ps_q7j_missing_status_widget_blocks_chain() -> None:
     entry = build_prediction_warroom_handoff_catalog_visibility_entry().to_dict()
-    entry["combined_widget_group_order"] = [item for item in entry["combined_widget_group_order"] if item != "prediction_authorization_handoff_status_widget"]
+    entry["combined_widget_group_order"] = [item for item in entry["combined_widget_group_order"] if item not in {"prediction_authorization_handoff_status_widget", "prediction_supplemental_handoff_readiness_summary_widget"}]
     entry["visibility_groups"] = [
         {**item, "widget_group_ids": []}
-        if item["visibility_group_id"] == "prediction_warroom_authorization_handoff_status_visibility"
+        if item["visibility_group_id"] in {"prediction_warroom_authorization_handoff_status_visibility", "prediction_warroom_supplemental_handoff_readiness_visibility"}
         else item
         for item in entry["visibility_groups"]
     ]
@@ -204,7 +205,7 @@ def test_ps_q7j_bad_attach_blocks_chain() -> None:
 
 def main() -> int:
     test_ps_q7j_static_boundaries_and_markers()
-    test_ps_q7j_default_summary_is_ready_for_registered_five_widget_chain()
+    test_ps_q7j_default_summary_is_ready_for_registered_six_widget_chain()
     test_ps_q7j_index_is_compact_and_safe()
     test_ps_q7j_blocked_catalog_hides_readiness_without_enabling_loader()
     test_ps_q7j_missing_status_widget_blocks_chain()

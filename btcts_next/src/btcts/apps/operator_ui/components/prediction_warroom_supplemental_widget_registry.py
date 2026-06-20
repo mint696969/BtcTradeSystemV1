@@ -29,6 +29,10 @@ AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_VERSION = "prediction_warroom_authoriz
 AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID = "prediction_authorization_handoff_status_widget"
 AUTHORIZATION_HANDOFF_STATUS_ATTACH_AFTER_WIDGET_GROUP_ID = "prediction_latest_payload_loader_authorization_registry_summary_widget"
 AUTHORIZATION_HANDOFF_STATUS_CATALOG_VERSION = "prediction_warroom_authorization_handoff_status_catalog.ps_q7g.v1"
+SUPPLEMENTAL_HANDOFF_READINESS_WIDGET_GROUP_VERSION = "prediction_warroom_supplemental_handoff_readiness_widget_groups.ps_q7k.v1"
+SUPPLEMENTAL_HANDOFF_READINESS_WIDGET_GROUP_ID = "prediction_supplemental_handoff_readiness_summary_widget"
+SUPPLEMENTAL_HANDOFF_READINESS_ATTACH_AFTER_WIDGET_GROUP_ID = "prediction_authorization_handoff_status_widget"
+SUPPLEMENTAL_HANDOFF_READINESS_SUMMARY_VERSION = "prediction_warroom_supplemental_handoff_readiness_summary.ps_q7j.v1"
 BASE_WIDGET_GROUP_COUNT = 6
 
 
@@ -445,6 +449,134 @@ def _authorization_handoff_status_catalog_stub(*, packet: Mapping[str, Any], gro
     }
 
 
+def _supplemental_handoff_readiness_summary_stub(*, packet: Mapping[str, Any], groups: list[Mapping[str, Any]]) -> Mapping[str, Any]:
+    current_order = [str(group.get("widget_group_id") or "") for group in groups]
+    order_with_readiness = [*current_order, SUPPLEMENTAL_HANDOFF_READINESS_WIDGET_GROUP_ID]
+    expected_chain = (
+        "source_quality_explanation_widgets",
+        "prediction_latest_payload_dry_run_status_widget",
+        "prediction_latest_payload_loader_authorization_widget",
+        AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_ID,
+        AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID,
+        SUPPLEMENTAL_HANDOFF_READINESS_WIDGET_GROUP_ID,
+    )
+    visibility_by_widget = {
+        "source_quality_explanation_widgets": ("prediction_warroom_source_explanation_visibility", "source_quality_widget", "source_quality_explanation"),
+        "prediction_latest_payload_dry_run_status_widget": ("prediction_warroom_latest_payload_dry_run_visibility", "warning_refresh_widget", "latest_payload_dry_run_status"),
+        "prediction_latest_payload_loader_authorization_widget": ("prediction_warroom_loader_authorization_visibility", "prediction_latest_payload_dry_run_status_widget", "loader_authorization_status"),
+        AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_ID: ("prediction_warroom_loader_authorization_registry_summary_visibility", "prediction_latest_payload_loader_authorization_widget", "loader_authorization_registry_summary"),
+        AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID: ("prediction_warroom_authorization_handoff_status_visibility", AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_ID, "authorization_handoff_status"),
+        SUPPLEMENTAL_HANDOFF_READINESS_WIDGET_GROUP_ID: ("prediction_warroom_supplemental_handoff_readiness_visibility", AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID, "supplemental_handoff_readiness_summary"),
+    }
+    safe = {
+        "read_only": True,
+        "non_executing": True,
+        "summary_only": True,
+        "readiness_metadata_only": True,
+        "display_only": True,
+        "render_intent_only": True,
+        "not_loaded_as_runtime_display_source": True,
+        "approval_granted_by_this_contract": False,
+        "authorization_granted_by_this_contract": False,
+        "actual_loader_execution_allowed": False,
+        "actual_file_read_allowed_by_this_contract": False,
+        "actual_payload_decode_allowed_by_this_contract": False,
+        "would_load_hot_latest_artifacts": False,
+        "would_read_runtime_file": False,
+        "would_collect_public_source": False,
+        "would_write_runtime_artifact": False,
+        "would_write_collector_state": False,
+        "would_send_to_broker": False,
+        "broker_execution_requested": False,
+        "mode_apply_requested": False,
+        "command_ledger_append_requested": False,
+        "approval_append_requested": False,
+    }
+    rows = []
+    blockers = []
+    previous_index = None
+    for widget_group_id in expected_chain:
+        visibility_group_id, attach_after, chain_role = visibility_by_widget[widget_group_id]
+        present = widget_group_id in order_with_readiness
+        order_index = order_with_readiness.index(widget_group_id) + BASE_WIDGET_GROUP_COUNT if present else None
+        order_after_previous_ok = previous_index is None or (order_index is not None and order_index > previous_index)
+        ready = present and order_after_previous_ok
+        if not present:
+            blockers.append({"issue_code": "widget_missing_from_combined_order", "severity": "blocker", "widget_group_id": widget_group_id, "visibility_group_id": visibility_group_id, **safe})
+        if not order_after_previous_ok:
+            blockers.append({"issue_code": "supplemental_chain_order_mismatch", "severity": "blocker", "widget_group_id": widget_group_id, "visibility_group_id": visibility_group_id, **safe})
+        if order_index is not None:
+            previous_index = order_index
+        rows.append({
+            "widget_group_id": widget_group_id,
+            "visibility_group_id": visibility_group_id,
+            "chain_role": chain_role,
+            "expected_attach_after_widget_group_id": attach_after,
+            "actual_attach_after_widget_group_id": attach_after,
+            "present_in_combined_order": present,
+            "present_in_visibility_group": present,
+            "attach_after_ok": present,
+            "order_index": order_index,
+            "order_after_previous_ok": order_after_previous_ok,
+            "ready": ready,
+            **safe,
+        })
+    supplemental_count = len(order_with_readiness)
+    visibility_count = 1 + sum(1 for widget_id in expected_chain if widget_id in order_with_readiness)
+    total_count = BASE_WIDGET_GROUP_COUNT + supplemental_count
+    counts_ok = supplemental_count == 6 and total_count == 12 and visibility_count == 7
+    chain_ready = all(row["ready"] for row in rows)
+    visible = counts_ok and chain_ready and not blockers
+    metrics = {
+        "base_widget_group_count": BASE_WIDGET_GROUP_COUNT,
+        "supplemental_widget_group_count": supplemental_count,
+        "total_widget_group_count": total_count,
+        "visibility_group_count": visibility_count,
+        "expected_base_widget_group_count": BASE_WIDGET_GROUP_COUNT,
+        "expected_supplemental_widget_group_count": 6,
+        "expected_total_widget_group_count": 12,
+        "expected_visibility_group_count": 7,
+        "counts_ok": counts_ok,
+        "chain_ready": chain_ready,
+        "ready_widget_count": sum(1 for row in rows if row["ready"] is True),
+        "expected_supplemental_chain_length": len(expected_chain),
+        "blocker_count": len(blockers),
+        "warning_count": 0,
+        "preflight_visible_read_only": visible,
+        "approval_granted_by_this_contract": False,
+        "authorization_granted_by_this_contract": False,
+        "actual_loader_execution_allowed": False,
+        "actual_file_read_allowed_by_this_contract": False,
+        "actual_payload_decode_allowed_by_this_contract": False,
+    }
+    return {
+        "summary_version": SUPPLEMENTAL_HANDOFF_READINESS_SUMMARY_VERSION,
+        "summary_id": "prediction_warroom_supplemental_handoff_readiness_summary",
+        "summary_kind": "prediction_warroom_registered_supplemental_handoff_readiness_summary",
+        "readiness_state": "ready_supplemental_handoff_visible_loader_disabled" if visible else "blocked_supplemental_handoff_readiness_loader_disabled",
+        "visibility_state": "visible_read_only" if visible else "hidden_blocked_by_preflight",
+        "handoff_state": "ready_for_read_only_warroom_handoff" if visible else "blocked_before_read_only_warroom_handoff",
+        "prediction_run_id": _text_or_none(packet.get("prediction_run_id")),
+        "source_handoff_catalog_version": "prediction_warroom_handoff_catalog_visibility.ps_q6i.v1",
+        "readiness_metrics": metrics,
+        "supplemental_chain_readiness": tuple(rows),
+        "readiness_blockers": tuple(blockers),
+        "readiness_warnings": (),
+        "operator_guidance_ja": (
+            "このsummary stubはQ7L registry登録用の表示要約で、承認記録・loader実行・hot/latest読取・payload decodeは行いません。",
+            "実loaderや承認書込を進める場合は、別slice・別guard・別commitで扱ってください。",
+        ),
+        "integration_contract": {
+            "contract_version": SUPPLEMENTAL_HANDOFF_READINESS_SUMMARY_VERSION,
+            "integration_kind": "display_only_supplemental_handoff_readiness_summary_stub_for_q7l_registry",
+            "does_not_register_widgets": True,
+            **safe,
+        },
+        "boundaries": safe,
+        **safe,
+    }
+
+
 def build_prediction_warroom_supplemental_widget_registry(
     *,
     display_packet: Mapping[str, Any] | Any | None = None,
@@ -458,6 +590,7 @@ def build_prediction_warroom_supplemental_widget_registry(
     include_latest_payload_loader_authorization: bool = True,
     include_latest_payload_loader_authorization_registry_summary: bool = True,
     include_authorization_handoff_status: bool = True,
+    include_supplemental_handoff_readiness: bool = True,
 ) -> PredictionWarRoomSupplementalWidgetRegistryPacket:
     """Build a composite supplemental widget registry without rendering, filesystem reads, or runtime side effects."""
     packet = _as_mapping(display_packet)
@@ -536,6 +669,23 @@ def build_prediction_warroom_supplemental_widget_registry(
             groups=groups,
             refresh_groups=refresh_groups,
         )
+    if include_supplemental_handoff_readiness:
+        from .prediction_warroom_supplemental_handoff_readiness_widget_groups import (
+            build_prediction_warroom_supplemental_handoff_readiness_widget_group_index,
+        )
+
+        readiness_index = build_prediction_warroom_supplemental_handoff_readiness_widget_group_index(
+            readiness_summary=_supplemental_handoff_readiness_summary_stub(packet=packet, groups=groups),
+            hot_latest_root_hint=hot_latest_root_hint,
+        ).to_dict()
+        _append_index(
+            index=readiness_index,
+            source_kind="supplemental_handoff_readiness_widget_group",
+            attach_default=SUPPLEMENTAL_HANDOFF_READINESS_ATTACH_AFTER_WIDGET_GROUP_ID,
+            indexes=indexes,
+            groups=groups,
+            refresh_groups=refresh_groups,
+        )
     order = tuple(str(group.get("widget_group_id") or "unknown") for group in groups)
     boundaries = {
         "read_only": True,
@@ -565,6 +715,7 @@ def build_prediction_warroom_supplemental_widget_registry(
         "latest_payload_loader_authorization_widget_contract": AUTHORIZATION_WIDGET_GROUP_VERSION,
         "latest_payload_loader_authorization_registry_summary_widget_contract": AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_VERSION,
         "authorization_handoff_status_widget_contract": AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_VERSION,
+        "supplemental_handoff_readiness_widget_contract": SUPPLEMENTAL_HANDOFF_READINESS_WIDGET_GROUP_VERSION,
         "integration_kind": "composite_supplemental_widget_registry",
         "supplemental_index_count": len(indexes),
         "supplemental_widget_group_count": len(groups),

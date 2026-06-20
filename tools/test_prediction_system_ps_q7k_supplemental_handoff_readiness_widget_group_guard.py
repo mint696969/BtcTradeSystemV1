@@ -140,10 +140,10 @@ def test_ps_q7k_default_packet_wraps_q7j_summary() -> None:
     assert payload["source_readiness_summary_version"] == "prediction_warroom_supplemental_handoff_readiness_summary.ps_q7j.v1"
     assert payload["readiness_state"] == "ready_supplemental_handoff_visible_loader_disabled"
     assert payload["attach_after_widget_group_id"] == "prediction_authorization_handoff_status_widget"
-    assert payload["readiness_metrics"]["total_widget_group_count"] == 11
-    assert payload["readiness_metrics"]["ready_widget_count"] == 5
+    assert payload["readiness_metrics"]["total_widget_group_count"] == 12
+    assert payload["readiness_metrics"]["ready_widget_count"] == 6
     assert payload["readiness_metrics"]["blocker_count"] == 0
-    assert len(payload["supplemental_chain_readiness"]) == 5
+    assert len(payload["supplemental_chain_readiness"]) == 6
     _assert_q4b_packet_safe(group)
     _assert_safe(payload)
 

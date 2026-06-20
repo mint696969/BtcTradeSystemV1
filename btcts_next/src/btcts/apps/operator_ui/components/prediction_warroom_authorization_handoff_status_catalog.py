@@ -20,9 +20,9 @@ AUTHORIZATION_REGISTRY_SUMMARY_VISIBILITY_GROUP_ID = "prediction_warroom_loader_
 AUTHORIZATION_EXPECTED_ATTACH_AFTER_WIDGET_GROUP_ID = "prediction_latest_payload_dry_run_status_widget"
 AUTHORIZATION_REGISTRY_SUMMARY_EXPECTED_ATTACH_AFTER_WIDGET_GROUP_ID = "prediction_latest_payload_loader_authorization_widget"
 EXPECTED_BASE_WIDGET_GROUP_COUNT = 6
-EXPECTED_SUPPLEMENTAL_WIDGET_GROUP_COUNT = 5
-EXPECTED_TOTAL_WIDGET_GROUP_COUNT = 11
-EXPECTED_VISIBILITY_GROUP_COUNT = 6
+EXPECTED_SUPPLEMENTAL_WIDGET_GROUP_COUNT = 6
+EXPECTED_TOTAL_WIDGET_GROUP_COUNT = 12
+EXPECTED_VISIBILITY_GROUP_COUNT = 7
 
 
 @dataclass(frozen=True)
@@ -267,7 +267,7 @@ def build_prediction_warroom_authorization_handoff_status_catalog(
         "authorization_registry_summary_attach_after_widget_group_id": summary_group.get("attach_after_widget_group_id"),
         "expected_authorization_attach_after_widget_group_id": AUTHORIZATION_EXPECTED_ATTACH_AFTER_WIDGET_GROUP_ID,
         "expected_authorization_registry_summary_attach_after_widget_group_id": AUTHORIZATION_REGISTRY_SUMMARY_EXPECTED_ATTACH_AFTER_WIDGET_GROUP_ID,
-        "combined_widget_group_order_tail": combined_order[-5:],
+        "combined_widget_group_order_tail": combined_order[-6:],
         "authorization_chain_ready": visible and counts_ok and authorization_present and summary_present and attach_ok,
         **_safe_flags(),
     }

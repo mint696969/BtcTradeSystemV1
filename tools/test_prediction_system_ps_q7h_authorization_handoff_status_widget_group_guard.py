@@ -140,7 +140,7 @@ def test_ps_q7h_default_packet_wraps_q7g_catalog() -> None:
     assert payload["source_authorization_handoff_status_catalog_version"] == "prediction_warroom_authorization_handoff_status_catalog.ps_q7g.v1"
     assert payload["status_state"] == "ready_authorization_handoff_status_visible_loader_disabled"
     assert payload["attach_after_widget_group_id"] == "prediction_latest_payload_loader_authorization_registry_summary_widget"
-    assert payload["summary_metrics"]["total_widget_group_count"] == 11
+    assert payload["summary_metrics"]["total_widget_group_count"] == 12
     assert payload["summary_metrics"]["authorization_chain_order_ok"] is True
     assert payload["authorization_chain"]["authorization_chain_ready"] is True
     _assert_q4b_packet_safe(group)

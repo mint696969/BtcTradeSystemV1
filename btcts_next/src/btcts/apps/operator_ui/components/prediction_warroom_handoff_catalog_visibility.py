@@ -18,6 +18,7 @@ LATEST_PAYLOAD_DRY_RUN_VISIBILITY_ID = "prediction_warroom_latest_payload_dry_ru
 LOADER_AUTHORIZATION_VISIBILITY_ID = "prediction_warroom_loader_authorization_visibility"
 LOADER_AUTHORIZATION_REGISTRY_SUMMARY_VISIBILITY_ID = "prediction_warroom_loader_authorization_registry_summary_visibility"
 AUTHORIZATION_HANDOFF_STATUS_VISIBILITY_ID = "prediction_warroom_authorization_handoff_status_visibility"
+SUPPLEMENTAL_HANDOFF_READINESS_VISIBILITY_ID = "prediction_warroom_supplemental_handoff_readiness_visibility"
 
 
 @dataclass(frozen=True)
@@ -175,6 +176,7 @@ def _build_visibility_groups(handoff_index: Mapping[str, Any]) -> Tuple[Mapping[
     loader_authorization = tuple(item for item in supplemental_order if item == "prediction_latest_payload_loader_authorization_widget")
     loader_authorization_summary = tuple(item for item in supplemental_order if item == "prediction_latest_payload_loader_authorization_registry_summary_widget")
     authorization_handoff_status = tuple(item for item in supplemental_order if item == "prediction_authorization_handoff_status_widget")
+    supplemental_handoff_readiness = tuple(item for item in supplemental_order if item == "prediction_supplemental_handoff_readiness_summary_widget")
     return (
         _visibility_group(
             visibility_group_id=BASE_WIDGET_GROUP_VISIBILITY_ID,
@@ -235,6 +237,16 @@ def _build_visibility_groups(handoff_index: Mapping[str, Any]) -> Tuple[Mapping[
             ui_mount_hint="warroom_prediction:supplemental:authorization_handoff_status",
             refresh_policy="use_q6f_supplemental_auto_refresh_group",
             order_strategy="append_after_authorization_registry_summary_widget",
+        ),
+        _visibility_group(
+            visibility_group_id=SUPPLEMENTAL_HANDOFF_READINESS_VISIBILITY_ID,
+            visibility_label_ja="supplemental handoff readiness widget",
+            visibility_kind="supplemental_handoff_readiness_summary",
+            widget_group_ids=supplemental_handoff_readiness,
+            attach_after_widget_group_id="prediction_authorization_handoff_status_widget",
+            ui_mount_hint="warroom_prediction:supplemental:handoff_readiness_summary",
+            refresh_policy="use_q6f_supplemental_auto_refresh_group",
+            order_strategy="append_after_authorization_handoff_status_widget",
         ),
     )
 

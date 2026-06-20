@@ -105,8 +105,8 @@ def test_ps_q6h_default_bundle_is_ready_and_contains_expected_sections() -> None
     assert bundle["supplemental_registry_preflight_report"]["valid"] is True
     assert bundle["supplemental_registry_preflight_report"]["preflight_state"] == "ready_for_warroom_supplemental_handoff"
     assert bundle["handoff_index"]["base_widget_group_count"] == 6
-    assert bundle["handoff_index"]["supplemental_widget_group_count"] == 5
-    assert bundle["handoff_index"]["total_widget_group_count"] == 11
+    assert bundle["handoff_index"]["supplemental_widget_group_count"] == 6
+    assert bundle["handoff_index"]["total_widget_group_count"] == 12
 
 
 def test_ps_q6h_combined_order_appends_supplemental_after_base() -> None:
@@ -120,8 +120,8 @@ def test_ps_q6h_combined_order_appends_supplemental_after_base() -> None:
         "evidence_ledger_widget",
         "warning_refresh_widget",
     ]
-    assert order[-5:] == ["source_quality_explanation_widgets", "prediction_latest_payload_dry_run_status_widget", "prediction_latest_payload_loader_authorization_widget", "prediction_latest_payload_loader_authorization_registry_summary_widget", "prediction_authorization_handoff_status_widget"]
-    assert bundle["supplemental_widget_registry"]["supplemental_widget_group_order"] == ["source_quality_explanation_widgets", "prediction_latest_payload_dry_run_status_widget", "prediction_latest_payload_loader_authorization_widget", "prediction_latest_payload_loader_authorization_registry_summary_widget", "prediction_authorization_handoff_status_widget"]
+    assert order[-6:] == ["source_quality_explanation_widgets", "prediction_latest_payload_dry_run_status_widget", "prediction_latest_payload_loader_authorization_widget", "prediction_latest_payload_loader_authorization_registry_summary_widget", "prediction_authorization_handoff_status_widget", "prediction_supplemental_handoff_readiness_summary_widget"]
+    assert bundle["supplemental_widget_registry"]["supplemental_widget_group_order"] == ["source_quality_explanation_widgets", "prediction_latest_payload_dry_run_status_widget", "prediction_latest_payload_loader_authorization_widget", "prediction_latest_payload_loader_authorization_registry_summary_widget", "prediction_authorization_handoff_status_widget", "prediction_supplemental_handoff_readiness_summary_widget"]
 
 
 def test_ps_q6h_bundle_and_index_are_safe() -> None:
@@ -142,7 +142,7 @@ def test_ps_q6h_bundle_and_index_are_safe() -> None:
         assert payload["would_send_to_broker"] is False
     assert index["handoff_state"] == "ready_for_read_only_warroom_handoff"
     assert index["preflight_valid"] is True
-    assert index["total_widget_group_count"] == 11
+    assert index["total_widget_group_count"] == 12
 
 
 def test_ps_q6h_candidate_metadata_flows_to_bundle_without_enabling_loader() -> None:

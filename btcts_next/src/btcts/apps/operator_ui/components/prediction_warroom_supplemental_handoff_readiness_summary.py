@@ -14,9 +14,9 @@ from .prediction_warroom_handoff_catalog_visibility import (
 SUPPLEMENTAL_HANDOFF_READINESS_SUMMARY_VERSION = "prediction_warroom_supplemental_handoff_readiness_summary.ps_q7j.v1"
 SUPPLEMENTAL_HANDOFF_READINESS_SUMMARY_ID = "prediction_warroom_supplemental_handoff_readiness_summary"
 EXPECTED_BASE_WIDGET_GROUP_COUNT = 6
-EXPECTED_SUPPLEMENTAL_WIDGET_GROUP_COUNT = 5
-EXPECTED_TOTAL_WIDGET_GROUP_COUNT = 11
-EXPECTED_VISIBILITY_GROUP_COUNT = 6
+EXPECTED_SUPPLEMENTAL_WIDGET_GROUP_COUNT = 6
+EXPECTED_TOTAL_WIDGET_GROUP_COUNT = 12
+EXPECTED_VISIBILITY_GROUP_COUNT = 7
 EXPECTED_SUPPLEMENTAL_WIDGET_GROUP_CHAIN: Tuple[Mapping[str, Any], ...] = (
     {
         "widget_group_id": "source_quality_explanation_widgets",
@@ -47,6 +47,12 @@ EXPECTED_SUPPLEMENTAL_WIDGET_GROUP_CHAIN: Tuple[Mapping[str, Any], ...] = (
         "visibility_group_id": "prediction_warroom_authorization_handoff_status_visibility",
         "expected_attach_after_widget_group_id": "prediction_latest_payload_loader_authorization_registry_summary_widget",
         "chain_role": "authorization_handoff_status",
+    },
+    {
+        "widget_group_id": "prediction_supplemental_handoff_readiness_summary_widget",
+        "visibility_group_id": "prediction_warroom_supplemental_handoff_readiness_visibility",
+        "expected_attach_after_widget_group_id": "prediction_authorization_handoff_status_widget",
+        "chain_role": "supplemental_handoff_readiness_summary",
     },
 )
 
