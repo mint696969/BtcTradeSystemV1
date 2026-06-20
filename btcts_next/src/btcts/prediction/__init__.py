@@ -67,6 +67,7 @@ from .system_contract import (
     build_default_horizon_group_summaries,
     default_horizon_group_summary,
 )
+from .warroom_display_packet import PredictionWarRoomDisplayPacket, build_prediction_warroom_display_packet
 from .technical import (
     CandleWickBodySummary,
     HumanTechnicalSummary,
@@ -152,6 +153,7 @@ __all__ = [
     "PredictionParameterSetBase",
     "PredictionParameterSetStatus",
     "PredictionPreArmedReadinessSnapshot",
+    "PredictionWarRoomDisplayPacket",
     "build_provider_reliability_registry",
     "ProviderReliabilityStatus",
     "ProviderReliabilityRegistry",
@@ -191,6 +193,7 @@ __all__ = [
     "build_prediction_evaluation_report",
     "build_prediction_prearmed_readiness_snapshot",
     "build_prediction_system_result",
+    "build_prediction_warroom_display_packet",
     "build_replay_validation_result",
     "build_rule_based_v0_outputs",
     "default_prediction_parameter_set_for_family",
