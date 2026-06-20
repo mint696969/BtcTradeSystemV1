@@ -36,6 +36,18 @@ from .prearmed_readiness import PredictionPreArmedReadinessSnapshot, build_predi
 from .replay_validation import ReplayValidationResult, ReplayValidationScenario, build_replay_validation_result
 from .rule_based_v0 import build_rule_based_v0_outputs
 from .shadow_adapter import AutoTradeInferenceSnapshot, AutoTradeShadowSignalPreview, build_autotrade_shadow_signal_preview
+from .source_artifact_coverage import (
+    ContextEvidenceProfile,
+    DirectionOwnership,
+    EvidenceTier,
+    ReferenceSourceRegistryEntry,
+    SourceArtifactContract,
+    SourceArtifactCoverageReport,
+    SourceEffect,
+    build_default_context_evidence_profiles,
+    build_default_reference_source_registry,
+    build_source_artifact_coverage_report,
+)
 from .source_quality import ContinuityState, ProviderReliabilityRegistry, ProviderReliabilityStatus, SourceQualityStatus, SourceTrustState, assess_source_quality, build_provider_reliability_registry
 from .system import build_prediction_system_result
 from .system_contract import (
@@ -74,6 +86,16 @@ __all__ = [
     "CONTEXT_HORIZONS_SEC",
     "CandleWickBodySummary",
     "ContinuityState",
+    "ContextEvidenceProfile",
+    "DirectionOwnership",
+    "EvidenceTier",
+    "ReferenceSourceRegistryEntry",
+    "SourceArtifactContract",
+    "SourceArtifactCoverageReport",
+    "SourceEffect",
+    "build_default_context_evidence_profiles",
+    "build_default_reference_source_registry",
+    "build_source_artifact_coverage_report",
     "CrossVenueConfirmationParameterSet",
     "CrossVenueReferenceSummary",
     "DISPLAY_LABEL_JA_BY_GROUP",

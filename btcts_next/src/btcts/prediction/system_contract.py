@@ -318,6 +318,10 @@ class PredictionSystemInput:
     previous_prediction_run_id: str | None = None
     calibration_context_refs: Tuple[str, ...] = ()
     raw_input_refs: Tuple[str, ...] = ()
+    source_registry_version: str | None = None
+    reference_source_registry_ids: Tuple[str, ...] = ()
+    evidence_profile_ids: Tuple[str, ...] = ()
+    source_artifact_coverage_summary: Mapping[str, Any] = field(default_factory=dict)
     diagnostics: Mapping[str, Any] = field(default_factory=dict)
     read_only: bool = True
     non_executing: bool = True
@@ -338,6 +342,10 @@ class PredictionSystemInput:
             "previous_prediction_run_id": self.previous_prediction_run_id,
             "calibration_context_refs": list(self.calibration_context_refs),
             "raw_input_refs": list(self.raw_input_refs),
+            "source_registry_version": self.source_registry_version,
+            "reference_source_registry_ids": list(self.reference_source_registry_ids),
+            "evidence_profile_ids": list(self.evidence_profile_ids),
+            "source_artifact_coverage_summary": dict(self.source_artifact_coverage_summary),
             "diagnostics": dict(self.diagnostics),
             "read_only": self.read_only,
             "non_executing": self.non_executing,
