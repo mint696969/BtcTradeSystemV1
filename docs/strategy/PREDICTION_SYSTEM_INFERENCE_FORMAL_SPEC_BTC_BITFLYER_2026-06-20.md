@@ -3,9 +3,9 @@
 
 # Prediction System Inference Formal Spec
 
-Updated: 2026-06-20 JST  
-Profile: BtcTradeSystem  
-Status: canonical inference goal / implementation guardrail  
+Updated: 2026-06-20 JST
+Profile: BtcTradeSystem
+Status: canonical inference goal / implementation guardrail
 Scope: BTC / bitFlyer first, standalone Prediction System, non-executing
 
 ## 1. Canonical final goal
@@ -936,4 +936,60 @@ python .\tools\test_<focused_guard>.py
 python .\tools\test_<close_guard>.py
 git status --short
 ```
+
+## 19. PS-Q8F implementation checkpoint and next-thread boundary
+
+Updated: 2026-06-21 JST
+Checkpoint commit: `a601442b`
+Checkpoint state: `PS-Q8F human_observation_passed`
+Working tree at checkpoint: clean
+
+This checkpoint records the safe thread boundary after the first WarRoom-visible Prediction System UI insertion.
+
+Completed by this checkpoint:
+
+```text
+PS-Q8A: UI mount catalog for the 12 Prediction WarRoom widget groups.
+PS-Q8B: display-only UI mount presenter packet.
+PS-Q8C: guarded WarRoom page insertion contract.
+PS-Q8D: initial-collapsed read-only Prediction WarRoom mount review section inserted into warroom_page.py.
+PS-Q8E: manual visual/UX verification contract.
+PS-Q8F: human observation recorded as passed.
+```
+
+Human-observed WarRoom state:
+
+```text
+Prediction WarRoom mount review section is visible in WarRoom.
+The section is initially collapsed.
+After manual expansion, compact line is visible.
+Compact line shows ready:true, entries:12, zones:3, blocked:0, render:false, page_mutation:false.
+Zone summary rows are visible: overview=1, primary_live=4, operator_support=7.
+Mount entry rows are visible.
+No runtime operation, approval, authorization grant, loader control, file-read control, payload-decode control, AutoTrade control, or broker/private API control is visible in this section.
+```
+
+Important limitation:
+
+```text
+The visible PS-Q8F section is a mount/readiness review, not the live/current prediction card display.
+Actual latest payload read is not implemented.
+Actual payload decode is not implemented.
+Actual schema validation of a hot/latest payload is not implemented.
+Actual WarRoom prediction cards from current latest payload are not implemented.
+AutoTrade trigger candidate advisory display is not implemented.
+AutoTrade trigger execution/integration is not implemented.
+```
+
+Next safe implementation boundary:
+
+```text
+PS-Q9A: latest payload actual-read preflight final contract.
+```
+
+PS-Q9A must still be contract/preflight only. It should decide the exact artifact candidates, allowed path scope, freshness/size/schema requirements, blocked/warning behavior, and operator-visible readiness before any actual file read is enabled.
+
+Do not begin PS-Q9B actual read until PS-Q9A is committed and guarded.
+
+PS-Q9B, when eventually reached, must be a minimal read-only loader for explicitly allowed JSON artifacts only. It must not connect AutoTrade, broker/private APIs, command ledger append, approval/grant mutation, Collector runtime loops, or Prediction core collection ownership.
 
