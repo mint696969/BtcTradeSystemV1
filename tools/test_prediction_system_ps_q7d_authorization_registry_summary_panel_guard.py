@@ -113,16 +113,16 @@ def test_ps_q7d_static_boundaries_and_markers() -> None:
     assert "ready_authorization_widget_visible_loader_disabled" in text
 
 
-def test_ps_q7d_default_panel_summarizes_q7c_registration() -> None:
+def test_ps_q7d_default_panel_summarizes_q7f_registration() -> None:
     panel = build_prediction_warroom_loader_authorization_registry_summary_panel().to_dict()
     assert panel["panel_version"] == "prediction_warroom_loader_authorization_registry_summary_panel.ps_q7d.v1"
     assert panel["panel_id"] == "prediction_latest_payload_loader_authorization_registry_summary_panel"
     assert panel["panel_state"] == "ready_authorization_widget_visible_loader_disabled"
     assert panel["visibility_state"] == "visible_read_only"
     assert panel["summary_metrics"]["base_widget_group_count"] == 6
-    assert panel["summary_metrics"]["supplemental_widget_group_count"] == 3
-    assert panel["summary_metrics"]["total_widget_group_count"] == 9
-    assert panel["summary_metrics"]["visibility_group_count"] == 4
+    assert panel["summary_metrics"]["supplemental_widget_group_count"] == 4
+    assert panel["summary_metrics"]["total_widget_group_count"] == 10
+    assert panel["summary_metrics"]["visibility_group_count"] == 5
     assert panel["summary_metrics"]["authorization_widget_present"] is True
     assert panel["summary_metrics"]["authorization_attach_ok"] is True
     assert panel["authorization_visibility_summary"]["visibility_group_id"] == "prediction_warroom_loader_authorization_visibility"
@@ -182,7 +182,7 @@ def test_ps_q7d_bad_attach_blocks_summary() -> None:
 
 def main() -> int:
     test_ps_q7d_static_boundaries_and_markers()
-    test_ps_q7d_default_panel_summarizes_q7c_registration()
+    test_ps_q7d_default_panel_summarizes_q7f_registration()
     test_ps_q7d_index_is_compact_and_safe()
     test_ps_q7d_blocked_catalog_hides_panel_without_enabling_loader()
     test_ps_q7d_missing_authorization_visibility_blocks_summary()

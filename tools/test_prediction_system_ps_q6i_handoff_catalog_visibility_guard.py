@@ -117,12 +117,12 @@ def test_ps_q6i_default_entry_is_visible_and_indexes_q6h_bundle() -> None:
     assert entry["handoff_bundle_version"] == "prediction_warroom_supplemental_handoff_bundle.ps_q6h.v1"
     assert entry["handoff_state"] == "ready_for_read_only_warroom_handoff"
     assert entry["consumer_hint"] == "WarRoom"
-    assert entry["visibility_group_count"] == 4
+    assert entry["visibility_group_count"] == 5
     assert entry["base_widget_group_count"] == 6
-    assert entry["supplemental_widget_group_count"] == 3
-    assert entry["total_widget_group_count"] == 9
-    assert len(entry["combined_widget_group_order"]) == 9
-    assert entry["combined_widget_group_order"][-3:] == ["source_quality_explanation_widgets", "prediction_latest_payload_dry_run_status_widget", "prediction_latest_payload_loader_authorization_widget"]
+    assert entry["supplemental_widget_group_count"] == 4
+    assert entry["total_widget_group_count"] == 10
+    assert len(entry["combined_widget_group_order"]) == 10
+    assert entry["combined_widget_group_order"][-4:] == ["source_quality_explanation_widgets", "prediction_latest_payload_dry_run_status_widget", "prediction_latest_payload_loader_authorization_widget", "prediction_latest_payload_loader_authorization_registry_summary_widget"]
 
 
 def test_ps_q6i_visibility_groups_have_expected_mount_and_attach_contracts() -> None:
@@ -137,6 +137,8 @@ def test_ps_q6i_visibility_groups_have_expected_mount_and_attach_contracts() -> 
     assert groups["prediction_warroom_latest_payload_dry_run_visibility"]["attach_after_widget_group_id"] == "warning_refresh_widget"
     assert groups["prediction_warroom_loader_authorization_visibility"]["widget_group_ids"] == ["prediction_latest_payload_loader_authorization_widget"]
     assert groups["prediction_warroom_loader_authorization_visibility"]["attach_after_widget_group_id"] == "prediction_latest_payload_dry_run_status_widget"
+    assert groups["prediction_warroom_loader_authorization_registry_summary_visibility"]["widget_group_ids"] == ["prediction_latest_payload_loader_authorization_registry_summary_widget"]
+    assert groups["prediction_warroom_loader_authorization_registry_summary_visibility"]["attach_after_widget_group_id"] == "prediction_latest_payload_loader_authorization_widget"
     for group in groups.values():
         _assert_safe(group)
         assert group["visibility_state_when_handoff_ready"] == "visible_read_only"
@@ -155,7 +157,7 @@ def test_ps_q6i_entry_index_and_contract_are_safe() -> None:
     assert entry["integration_contract"]["requires_payload_decode"] is False
     assert entry["integration_contract"]["requires_streamlit_rendering"] is False
     assert index["visibility_state"] == "visible_read_only"
-    assert index["total_widget_group_count"] == 9
+    assert index["total_widget_group_count"] == 10
 
 
 def test_ps_q6i_blocked_bundle_hides_catalog_entry_without_side_effects() -> None:
@@ -166,7 +168,7 @@ def test_ps_q6i_blocked_bundle_hides_catalog_entry_without_side_effects() -> Non
     assert entry["visibility_state"] == "hidden_blocked_by_preflight"
     assert entry["handoff_state"] == "blocked_before_read_only_warroom_handoff"
     assert entry["base_widget_group_count"] == 6
-    assert entry["supplemental_widget_group_count"] == 3
+    assert entry["supplemental_widget_group_count"] == 4
     _assert_safe(entry)
     _assert_safe(entry["integration_contract"])
 
@@ -187,7 +189,7 @@ def test_ps_q6i_candidate_metadata_keeps_catalog_visible_without_loader() -> Non
         )
     ).to_dict()
     assert entry["visibility_state"] == "visible_read_only"
-    assert entry["total_widget_group_count"] == 9
+    assert entry["total_widget_group_count"] == 10
     _assert_safe(entry)
 
 

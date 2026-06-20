@@ -21,6 +21,7 @@ from .prediction_warroom_supplemental_widget_registry import (
 from .prediction_warroom_widget_groups import WIDGET_GROUP_PACKET_VERSION, build_prediction_warroom_widget_group_packet_index
 
 SUPPLEMENTAL_WIDGET_REGISTRY_PREFLIGHT_VERSION = "prediction_warroom_supplemental_widget_registry_preflight.ps_q6g.v1"
+AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_VERSION = "prediction_warroom_loader_authorization_registry_summary_widget_groups.ps_q7e.v1"
 
 _DANGEROUS_FALSE_FIELDS = (
     "actual_loader_execution_allowed",
@@ -52,8 +53,9 @@ _EXPECTED_ATTACH_POINTS = {
     "source_quality_explanation_widgets": "source_quality_widget",
     "prediction_latest_payload_dry_run_status_widget": "warning_refresh_widget",
     "prediction_latest_payload_loader_authorization_widget": "prediction_latest_payload_dry_run_status_widget",
+    "prediction_latest_payload_loader_authorization_registry_summary_widget": "prediction_latest_payload_loader_authorization_widget",
 }
-_EXPECTED_INDEX_VERSIONS = {EXPLANATION_WIDGET_GROUP_VERSION, DRY_RUN_WIDGET_GROUP_VERSION, AUTHORIZATION_WIDGET_GROUP_VERSION}
+_EXPECTED_INDEX_VERSIONS = {EXPLANATION_WIDGET_GROUP_VERSION, DRY_RUN_WIDGET_GROUP_VERSION, AUTHORIZATION_WIDGET_GROUP_VERSION, AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_VERSION}
 
 
 @dataclass(frozen=True)
@@ -381,7 +383,7 @@ def validate_prediction_warroom_supplemental_widget_registry_schema(
         registry=registry,
         issues=issues,
         checked_sections=("registry", "supplemental_indexes", "widget_groups", "auto_refresh_groups", "integration_contract", "boundaries"),
-        checked_contracts=(SUPPLEMENTAL_WIDGET_REGISTRY_VERSION, EXPLANATION_WIDGET_GROUP_VERSION, DRY_RUN_WIDGET_GROUP_VERSION, AUTHORIZATION_WIDGET_GROUP_VERSION, WIDGET_GROUP_PACKET_VERSION),
+        checked_contracts=(SUPPLEMENTAL_WIDGET_REGISTRY_VERSION, EXPLANATION_WIDGET_GROUP_VERSION, DRY_RUN_WIDGET_GROUP_VERSION, AUTHORIZATION_WIDGET_GROUP_VERSION, AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_VERSION, WIDGET_GROUP_PACKET_VERSION),
     )
 
 
@@ -417,5 +419,5 @@ def build_prediction_warroom_supplemental_widget_registry_preflight_report(
         registry=registry,
         issues=issues,
         checked_sections=("base_display_packet", "base_q4b_widget_group_index", "supplemental_registry", "supplemental_widget_groups"),
-        checked_contracts=(SUPPLEMENTAL_WIDGET_REGISTRY_VERSION, EXPLANATION_WIDGET_GROUP_VERSION, DRY_RUN_WIDGET_GROUP_VERSION, WIDGET_GROUP_PACKET_VERSION, BASE_PAYLOAD_VALIDATOR_VERSION),
+        checked_contracts=(SUPPLEMENTAL_WIDGET_REGISTRY_VERSION, EXPLANATION_WIDGET_GROUP_VERSION, DRY_RUN_WIDGET_GROUP_VERSION, AUTHORIZATION_WIDGET_GROUP_VERSION, AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_VERSION, WIDGET_GROUP_PACKET_VERSION, BASE_PAYLOAD_VALIDATOR_VERSION),
     )

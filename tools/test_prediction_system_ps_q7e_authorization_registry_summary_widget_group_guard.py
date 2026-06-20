@@ -140,7 +140,7 @@ def test_ps_q7e_default_packet_wraps_q7d_panel() -> None:
     assert payload["source_summary_panel_version"] == "prediction_warroom_loader_authorization_registry_summary_panel.ps_q7d.v1"
     assert payload["panel_state"] == "ready_authorization_widget_visible_loader_disabled"
     assert payload["attach_after_widget_group_id"] == "prediction_latest_payload_loader_authorization_widget"
-    assert payload["summary_metrics"]["total_widget_group_count"] == 9
+    assert payload["summary_metrics"]["total_widget_group_count"] == 10
     assert payload["summary_metrics"]["authorization_widget_present"] is True
     _assert_q4b_packet_safe(group)
     _assert_safe(payload)
