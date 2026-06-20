@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
 from .bundle_assembly import build_inference_bundle_from_outputs
-from .contracts import PredictionOutput
+from .contracts import PredictionConfidence, PredictionOutput
 from .cross_venue import CrossVenueReferenceSummary, build_cross_venue_reference_summary
 from .feature_depth import FeatureDepthSnapshot
 from .forecast_ledger import ForecastLedgerBatch, build_forecast_ledger_records_from_bundle
@@ -291,6 +291,96 @@ def _tier0_source_quality_gate_warning_codes(tier0_gate_summary: Mapping[str, An
     if tier0_gate_summary.get("blocked_source_ids"):
         warnings.append("tier0_source_quality_blocked_sources_present")
     return tuple(dict.fromkeys(warnings))
+
+
+
+def _confidence_from_score(score: float | None, blockers: Tuple[str, ...] = ()) -> PredictionConfidence:
+    if blockers or score is None:
+        return PredictionConfidence.UNKNOWN
+    if score >= 0.70:
+        return PredictionConfidence.HIGH
+    if score >= 0.45:
+        return PredictionConfidence.MEDIUM
+    return PredictionConfidence.LOW
+
+
+def _signal_strength_percent_from_score(score: float | None) -> int:
+    if score is None:
+        return 0
+    return max(1, min(99, int(round(float(score) * 99))))
+
+
+def _apply_tier0_source_quality_gate_to_outputs(
+    outputs: Tuple[PredictionOutput, ...],
+    tier0_gate_summary: Mapping[str, Any],
+) -> Tuple[PredictionOutput, ...]:
+    """Apply Tier 0 source quality gate as per-family caps and source contribution ledger metadata."""
+    gate_state = str(tier0_gate_summary.get("gate_state") or "unknown")
+    cap_reason = tier0_gate_summary.get("signal_strength_cap_reason")
+    if gate_state == "passed":
+        cap_score = None
+        effect = "none"
+    elif gate_state == "warning_context_only":
+        cap_score = 0.49
+        effect = "cap_to_warning_context"
+    elif gate_state == "blocked":
+        cap_score = 0.24
+        effect = "cap_to_low_reference_only"
+    else:
+        cap_score = 0.49
+        effect = "cap_to_unknown_quality_context"
+    out: list[PredictionOutput] = []
+    for output in outputs:
+        original_score = output.score
+        capped_score = original_score
+        cap_applied = False
+        if cap_score is not None and original_score is not None and float(original_score) > cap_score:
+            capped_score = round(cap_score, 6)
+            cap_applied = True
+        values = dict(output.values)
+        existing_ledger = list(values.get("source_contribution_ledger", [])) if isinstance(values.get("source_contribution_ledger", []), list) else []
+        existing_ledger.append(
+            {
+                "ledger_version": "prediction_source_contribution_ledger.ps_q3a.v1",
+                "source_id": "tier0_source_quality_gate",
+                "source_family": "source_quality_freshness_integrity_gate",
+                "evidence_tier": "tier_0_source_quality_freshness_integrity_gate",
+                "gate_state": gate_state,
+                "effect": effect,
+                "original_score": original_score,
+                "capped_score": capped_score,
+                "cap_applied": cap_applied,
+                "signal_strength_cap_reason": cap_reason,
+                "blocked_source_ids": list(tier0_gate_summary.get("blocked_source_ids", [])),
+                "missing_quality_status_source_ids": list(tier0_gate_summary.get("missing_quality_status_source_ids", [])),
+                "warnings": list(tier0_gate_summary.get("warnings", [])),
+                "blockers": list(tier0_gate_summary.get("blockers", [])),
+            }
+        )
+        values["source_contribution_ledger"] = existing_ledger
+        values["tier0_source_quality_gate"] = dict(tier0_gate_summary)
+        values["source_quality_gate_state"] = gate_state
+        values["source_quality_gate_effect"] = effect
+        values["signal_strength_cap_reason"] = cap_reason
+        values["estimated_signal_strength_percent"] = _signal_strength_percent_from_score(capped_score)
+        values["estimated_reference_hit_rate_percent"] = values["estimated_signal_strength_percent"]
+        warnings = tuple(output.warnings)
+        if gate_state != "passed":
+            warnings = tuple(dict.fromkeys(warnings + ("tier0_source_quality_gate_not_passed",)))
+            if cap_reason:
+                warnings = tuple(dict.fromkeys(warnings + (str(cap_reason),)))
+            if cap_applied:
+                warnings = tuple(dict.fromkeys(warnings + ("tier0_source_quality_signal_strength_capped",)))
+        out.append(
+            replace(
+                output,
+                score=capped_score,
+                confidence=_confidence_from_score(capped_score, output.blockers),
+                warnings=warnings,
+                values=values,
+            )
+        )
+    return tuple(out)
 
 def _build_cross_venue(
     *,
@@ -1185,6 +1275,7 @@ def build_prediction_system_result(
     source_artifact_coverage_summary = source_artifact_coverage.to_dict()
     tier0_source_quality_gate_summary = _tier0_source_quality_gate_summary(source_quality_by_id=source_quality_by_id, provider_registry_summary=provider_registry_summary, observed_required_source_ids=source_artifact_coverage.observed_required_source_ids)
     outputs, technical_by_horizon = _build_outputs(candles=built_candles, cross_venue_summary=cross, horizons_sec=horizons_sec, now_dt=now_dt, feature_depth_snapshot=feature_depth_snapshot)
+    outputs = _apply_tier0_source_quality_gate_to_outputs(outputs, tier0_source_quality_gate_summary)
 
     source_quality_summary: dict[str, Any] = {
         "logic_version": LOGIC_VERSION,
