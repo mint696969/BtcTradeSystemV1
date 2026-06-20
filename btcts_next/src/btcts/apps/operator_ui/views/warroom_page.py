@@ -35,6 +35,9 @@ from btcts.apps.operator_ui.components.evidence_presentation_panel import (
 from btcts.apps.operator_ui.components.evidence_presentation_lowering_bridge import (
     lower_warroom_session_state_evidence_presentation_for_ui,
 )
+from btcts.apps.operator_ui.components.prediction_warroom_ui_mount_presenter import (
+    build_prediction_warroom_ui_mount_presenter_packet,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -235,6 +238,74 @@ def _render_warroom_evidence_presentation() -> None:
     evidence_payload = _warroom_evidence_presentation_payload()
     render_evidence_presentation_panel(evidence_payload, expanded=False)
 
+
+
+
+def _prediction_warroom_mount_review_zone_rows(packet: dict) -> list[dict]:
+    """Return compact read-only zone rows for the Prediction WarRoom mount review."""
+    rows: list[dict] = []
+    for item in packet.get("zone_sections") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "zone_id": item.get("zone_id"),
+                "entry_count": item.get("entry_count"),
+                "ready_entry_count": item.get("ready_entry_count"),
+                "blocked_entry_count": item.get("blocked_entry_count"),
+                "section_state": item.get("section_state"),
+                "render": "false",
+                "page_mutation": "false",
+            }
+        )
+    return rows
+
+
+def _prediction_warroom_mount_review_entry_rows(packet: dict) -> list[dict]:
+    """Return compact read-only mount rows for the Prediction WarRoom mount review."""
+    rows: list[dict] = []
+    for item in packet.get("mount_entry_rows") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "widget_group_id": item.get("widget_group_id"),
+                "zone": item.get("mount_zone_id"),
+                "kind": item.get("widget_group_kind"),
+                "mount_state": item.get("mount_state"),
+                "attach_after": item.get("attach_after_widget_group_id"),
+                "ui_mount_hint": item.get("ui_mount_hint"),
+                "render": "false",
+            }
+        )
+    return rows
+
+
+def _render_prediction_warroom_ui_mount_review_section() -> None:
+    """Render Q8B presenter packet as a folded, read-only WarRoom review section only."""
+    packet = build_prediction_warroom_ui_mount_presenter_packet().to_dict()
+    st.caption(
+        "Prediction WarRoom mount review is display-only: "
+        "no loader, no approval, no file read, no payload decode, no runtime action."
+    )
+    _render_warroom_reading_caption(
+        str(packet.get("compact_line") or "prediction_warroom_ui_mount_presenter unavailable"),
+        max_height_px=90,
+    )
+    metrics = packet.get("presenter_metrics") if isinstance(packet.get("presenter_metrics"), dict) else {}
+    st.caption(
+        "mount rows={rows} / zones={zones} / blocked={blocked} / render=false".format(
+            rows=metrics.get("mount_entry_row_count", packet.get("mount_entry_row_count")),
+            zones=metrics.get("zone_section_count", packet.get("zone_section_count")),
+            blocked=metrics.get("blocked_entry_row_count", packet.get("blocked_entry_row_count")),
+        )
+    )
+    zone_rows = _prediction_warroom_mount_review_zone_rows(packet)
+    if zone_rows:
+        st.dataframe(zone_rows, width="stretch", hide_index=True)
+    entry_rows = _prediction_warroom_mount_review_entry_rows(packet)
+    if entry_rows:
+        st.dataframe(entry_rows, width="stretch", hide_index=True)
 
 def _render_fragmentable_warroom_widget(
     widget_id: str,
@@ -440,6 +511,9 @@ def _render_warroom_page_body() -> None:
             warroom_widget_slot("evidence_presentation_panel")
         ):
             _render_warroom_evidence_presentation()
+
+    with live_shell.render_folded_section("Prediction WarRoom mount review", expanded=False):
+        _render_prediction_warroom_ui_mount_review_section()
 
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         if _warroom_diagnostics_enabled(

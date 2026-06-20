@@ -120,7 +120,10 @@ def test_ps_q8c_static_boundaries_and_markers() -> None:
     assert "does_not_mutate_warroom_page" in text
     page_text = WARROOM_PAGE.read_text(encoding="utf-8")
     assert "prediction_warroom_page_insertion_contract" not in page_text
-    assert "prediction_warroom_ui_mount_review_section" not in page_text
+    # Q8D may insert the folded review section after this contract slice.
+    if "prediction_warroom_ui_mount_review_section" in page_text:
+        assert 'render_folded_section("Prediction WarRoom mount review", expanded=False)' in page_text
+        assert "_render_prediction_warroom_ui_mount_review_section" in page_text
 
 
 def test_ps_q8c_default_contract_is_ready_but_does_not_insert() -> None:
