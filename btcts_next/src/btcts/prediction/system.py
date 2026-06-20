@@ -684,16 +684,70 @@ def _scenario_trace_detail(
         "conflicting_evidence_refs": [item.evidence_ref_id for item in evidence_refs if item.evidence_kind in ("conflicting_evidence", "risk_or_blocker_evidence", "context_risk_evidence", "footprint_warning_evidence", "participation_filter_evidence")],
     }
 
+
+
+def _context_evidence_profile_packets(group: HorizonGroup, source_artifact_coverage_summary: Mapping[str, Any] | None) -> Tuple[dict[str, Any], ...]:
+    """Select context-specific evidence profiles for this horizon group and evaluate required source inputs."""
+    summary = dict(source_artifact_coverage_summary or {})
+    observed = {str(item) for item in summary.get("observed_required_source_ids", [])}
+    profiles = summary.get("context_evidence_profiles", [])
+    packets: list[dict[str, Any]] = []
+    for raw in profiles:
+        if not isinstance(raw, Mapping):
+            continue
+        applies_to_horizon_groups = tuple(str(item) for item in raw.get("applies_to_horizon_groups", []))
+        if group.value not in applies_to_horizon_groups:
+            continue
+        minimum_required_sources = tuple(str(item) for item in raw.get("minimum_required_sources", []))
+        missing_minimum_required_sources = tuple(source_id for source_id in minimum_required_sources if source_id not in observed)
+        packets.append(
+            {
+                "evidence_profile_id": str(raw.get("evidence_profile_id") or "unknown"),
+                "evidence_profile_version": str(raw.get("evidence_profile_version") or summary.get("evidence_profile_version") or "unknown"),
+                "horizon_group": group.value,
+                "applies_to_cards": list(raw.get("applies_to_cards", [])),
+                "applies_to_families": list(raw.get("applies_to_families", [])),
+                "primary_evidence_tiers": list(raw.get("primary_evidence_tiers", [])),
+                "secondary_evidence_tiers": list(raw.get("secondary_evidence_tiers", [])),
+                "caution_only_tiers": list(raw.get("caution_only_tiers", [])),
+                "cap_only_tiers": list(raw.get("cap_only_tiers", [])),
+                "veto_tiers": list(raw.get("veto_tiers", [])),
+                "minimum_required_sources": list(minimum_required_sources),
+                "observed_minimum_required_sources": [source_id for source_id in minimum_required_sources if source_id in observed],
+                "missing_minimum_required_sources": list(missing_minimum_required_sources),
+                "missing_source_behavior": raw.get("missing_source_behavior"),
+                "conflict_resolution_policy": raw.get("conflict_resolution_policy"),
+                "signal_strength_floor": raw.get("signal_strength_floor"),
+                "signal_strength_ceiling": raw.get("signal_strength_ceiling"),
+                "signal_strength_cap_reason": "context_evidence_profile_minimum_sources_missing" if missing_minimum_required_sources else None,
+                "warroom_explanation_template_id": raw.get("warroom_explanation_template_id"),
+            }
+        )
+    return tuple(packets)
+
+
+def _context_evidence_profile_warning_codes(context_profile_packets: Tuple[Mapping[str, Any], ...]) -> Tuple[str, ...]:
+    warnings: list[str] = []
+    for packet in context_profile_packets:
+        if packet.get("missing_minimum_required_sources"):
+            warnings.append("context_evidence_profile_minimum_sources_missing")
+            warnings.append(f"context_evidence_profile_missing:{packet.get('evidence_profile_id', 'unknown')}")
+    return tuple(dict.fromkeys(warnings))
+
 def _horizon_group_summary(
     *,
     group: HorizonGroup,
     group_horizons: Tuple[int, ...],
     outputs: Tuple[PredictionOutput, ...],
     now_dt: datetime,
+    source_artifact_coverage_summary: Mapping[str, Any] | None = None,
 ) -> HorizonGroupSummary:
     group_outputs = tuple(output for output in outputs if int(output.horizon.horizon_sec) in set(group_horizons))
     blockers = tuple(dict.fromkeys(blocker for output in group_outputs for blocker in output.blockers))
     warnings = tuple(dict.fromkeys(warning for output in group_outputs for warning in output.warnings))
+    context_profile_packets = _context_evidence_profile_packets(group, source_artifact_coverage_summary)
+    context_profile_warning_codes = _context_evidence_profile_warning_codes(context_profile_packets)
+    warnings = tuple(dict.fromkeys(warnings + context_profile_warning_codes))
     score = _average_score(group_outputs)
     confidence = _confidence(score, blockers)
     caution = _caution(group_outputs, blockers, warnings)
@@ -710,9 +764,18 @@ def _horizon_group_summary(
     technical = _best_label(group_outputs, "human_technical_structure")
     family_labels = _family_label_map(group_outputs)
     scenario_lite = _scenario_signal_summary(family_labels, blockers, warnings)
+    if context_profile_warning_codes:
+        scenario_lite = dict(scenario_lite)
+        scenario_lite["evidence_conflict_state"] = "context_evidence_profile_input_incomplete" if scenario_lite.get("evidence_conflict_state") != "conflicting_evidence" else scenario_lite.get("evidence_conflict_state")
+        scenario_lite["conflict_reasons"] = list(dict.fromkeys(list(scenario_lite.get("conflict_reasons", [])) + ["context_evidence_profile_minimum_sources_missing"]))
+        scenario_lite["what_to_watch_next"] = list(dict.fromkeys(list(scenario_lite.get("what_to_watch_next", [])) + ["restore_context_evidence_profile_minimum_sources"]))
+        weighting = dict(scenario_lite.get("evidence_weighting_summary", {}))
+        weighting["context_profile_signal_strength_cap_reasons"] = list(dict.fromkeys(str(packet.get("signal_strength_cap_reason")) for packet in context_profile_packets if packet.get("signal_strength_cap_reason")))
+        scenario_lite["evidence_weighting_summary"] = weighting
     primary = _primary_label(group_outputs, blockers)
     evidence_refs = _scenario_evidence_refs(group=group, group_horizons=group_horizons, outputs=group_outputs, family_labels=family_labels, scenario_lite=scenario_lite)
     trace_detail = _scenario_trace_detail(group=group, group_horizons=group_horizons, primary_label=primary, family_labels=family_labels, scenario_lite=scenario_lite, evidence_refs=evidence_refs)
+    trace_detail["context_evidence_profiles"] = [dict(packet) for packet in context_profile_packets]
     lifetime_refresh = _refresh_decision_from_scenario_lite(scenario_lite)
     lifetime = _lifetime(now_dt, group, scenario_lite)
     trigger = PredictionTriggerEligibility(
@@ -781,6 +844,9 @@ def _horizon_group_summary(
             "warnings": list(warnings),
             "scenario_lite": scenario_lite,
             "scenario_trace_detail": trace_detail,
+            "context_evidence_profiles": [dict(packet) for packet in context_profile_packets],
+            "selected_context_evidence_profile_ids": [str(packet.get("evidence_profile_id")) for packet in context_profile_packets],
+            "context_profile_signal_strength_cap_reasons": list(dict.fromkeys(str(packet.get("signal_strength_cap_reason")) for packet in context_profile_packets if packet.get("signal_strength_cap_reason"))),
             "evidence_ref_count": len(evidence_refs),
             "lifetime_refresh": lifetime_refresh,
         },
@@ -797,9 +863,10 @@ def _scenario_core(
     horizons_by_group: Mapping[HorizonGroup, Tuple[int, ...]],
     outputs: Tuple[PredictionOutput, ...],
     now_dt: datetime,
+    source_artifact_coverage_summary: Mapping[str, Any] | None = None,
 ) -> ScenarioCoreOutput:
     outlooks = tuple(
-        _horizon_group_summary(group=group, group_horizons=horizons_by_group.get(group, ()), outputs=outputs, now_dt=now_dt)
+        _horizon_group_summary(group=group, group_horizons=horizons_by_group.get(group, ()), outputs=outputs, now_dt=now_dt, source_artifact_coverage_summary=source_artifact_coverage_summary)
         for group in groups
     )
     blockers = tuple(dict.fromkeys(blocker for outlook in outlooks for blocker in outlook.blockers))
@@ -809,6 +876,9 @@ def _scenario_core(
     health = "blocked" if blockers else ("caution" if warnings else "stable")
     core_signals = _aggregate_core_signals(outlooks)
     outlook_traces = [dict(outlook.gpt_review_digest.get("scenario_trace_detail", {})) for outlook in outlooks if outlook.gpt_review_digest.get("scenario_trace_detail")]
+    context_profile_packets = [dict(packet) for outlook in outlooks for packet in outlook.gpt_review_digest.get("context_evidence_profiles", [])]
+    selected_context_profile_ids = list(dict.fromkeys(str(item.get("evidence_profile_id")) for item in context_profile_packets if item.get("evidence_profile_id")))
+    context_profile_cap_reasons = list(dict.fromkeys(str(item.get("signal_strength_cap_reason")) for item in context_profile_packets if item.get("signal_strength_cap_reason")))
     evidence_ref_count = sum(len(outlook.evidence_refs) for outlook in outlooks)
     refresh_required_count = sum(1 for outlook in outlooks if outlook.lifetime and outlook.lifetime.refresh_required)
     lifetime_state = "refresh_required" if refresh_required_count else "current_until_stale_after"
@@ -838,10 +908,13 @@ def _scenario_core(
             "evidence_ref_count": evidence_ref_count,
             "refresh_required_count": refresh_required_count,
             "prediction_lifetime_state": lifetime_state,
+            "context_evidence_profiles": context_profile_packets,
+            "selected_context_evidence_profile_ids": selected_context_profile_ids,
+            "context_profile_signal_strength_cap_reasons": context_profile_cap_reasons,
         },
         trigger_eligibility_state="blocked",
         human_narrative_ja="\n".join(outlook.human_narrative_ja for outlook in outlooks),
-        gpt_review_digest={"logic_version": LOGIC_VERSION, "scenario_core_lite_version": "ps_h1.v1", "scenario_trace_detail_version": "ps_h2.v1", "lifetime_refresh_version": "ps_i1.v1", "outlook_count": len(outlooks), "evidence_ref_count": evidence_ref_count, "refresh_required_count": refresh_required_count, "prediction_lifetime_state": lifetime_state, "blockers": list(blockers), "warnings": list(warnings), "what_to_watch_next": core_signals["what_to_watch_next"], "conflict_reasons": core_signals["conflict_reasons"]},
+        gpt_review_digest={"logic_version": LOGIC_VERSION, "scenario_core_lite_version": "ps_h1.v1", "scenario_trace_detail_version": "ps_h2.v1", "context_evidence_profile_version": dict(source_artifact_coverage_summary or {}).get("evidence_profile_version"), "lifetime_refresh_version": "ps_i1.v1", "outlook_count": len(outlooks), "evidence_ref_count": evidence_ref_count, "refresh_required_count": refresh_required_count, "prediction_lifetime_state": lifetime_state, "selected_context_evidence_profile_ids": selected_context_profile_ids, "context_profile_signal_strength_cap_reasons": context_profile_cap_reasons, "blockers": list(blockers), "warnings": list(warnings), "what_to_watch_next": core_signals["what_to_watch_next"], "conflict_reasons": core_signals["conflict_reasons"]},
         blockers=blockers,
         warnings=warnings,
     )
@@ -1038,7 +1111,7 @@ def build_prediction_system_result(
     }
     bundle = build_inference_bundle_from_outputs(outputs, now=now_dt, source_quality_summary=source_quality_summary)
     forecast_batch = build_forecast_ledger_records_from_bundle(bundle, now=now_dt)
-    scenario = _scenario_core(run_id=run_id, generated_at=generated_at, groups=groups, horizons_by_group=horizons_by_group, outputs=outputs, now_dt=now_dt)
+    scenario = _scenario_core(run_id=run_id, generated_at=generated_at, groups=groups, horizons_by_group=horizons_by_group, outputs=outputs, now_dt=now_dt, source_artifact_coverage_summary=source_artifact_coverage_summary)
 
     coverage_warnings: list[str] = []
     if source_artifact_coverage.input_coverage_state != "complete_inputs":
@@ -1135,6 +1208,9 @@ def build_prediction_system_result(
             "source_artifact_signal_strength_cap_reason": source_artifact_coverage.signal_strength_cap_reason,
             "source_artifact_observed_required_source_count": len(source_artifact_coverage.observed_required_source_ids),
             "source_artifact_missing_observed_required_source_count": len(source_artifact_coverage.missing_observed_required_source_ids),
+            "context_evidence_profile_version": source_artifact_coverage.evidence_profile_version,
+            "selected_context_evidence_profile_ids": scenario.gpt_review_digest.get("selected_context_evidence_profile_ids", []),
+            "context_profile_signal_strength_cap_reasons": scenario.gpt_review_digest.get("context_profile_signal_strength_cap_reasons", []),
             "liquidity_feature_depth_context_version": "ps_e2.v1" if feature_depth_snapshot is not None else None,
             "orderbook_breakout_algo_context_version": "ps_e3.v1" if feature_depth_snapshot is not None else None,
             "opportunity_tradeflow_context_version": "ps_e4.v1" if feature_depth_snapshot is not None else None,
