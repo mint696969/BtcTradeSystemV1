@@ -113,16 +113,16 @@ def test_ps_q7g_static_boundaries_and_markers() -> None:
     assert "does_not_register_widgets" in text
 
 
-def test_ps_q7g_default_catalog_summarizes_q7f_handoff() -> None:
+def test_ps_q7g_default_catalog_summarizes_q7i_handoff() -> None:
     catalog = build_prediction_warroom_authorization_handoff_status_catalog().to_dict()
     assert catalog["catalog_version"] == "prediction_warroom_authorization_handoff_status_catalog.ps_q7g.v1"
     assert catalog["status_state"] == "ready_authorization_handoff_status_visible_loader_disabled"
     assert catalog["visibility_state"] == "visible_read_only"
     assert catalog["handoff_state"] == "ready_for_read_only_warroom_handoff"
     assert catalog["summary_metrics"]["base_widget_group_count"] == 6
-    assert catalog["summary_metrics"]["supplemental_widget_group_count"] == 4
-    assert catalog["summary_metrics"]["total_widget_group_count"] == 10
-    assert catalog["summary_metrics"]["visibility_group_count"] == 5
+    assert catalog["summary_metrics"]["supplemental_widget_group_count"] == 5
+    assert catalog["summary_metrics"]["total_widget_group_count"] == 11
+    assert catalog["summary_metrics"]["visibility_group_count"] == 6
     assert catalog["summary_metrics"]["counts_ok"] is True
     assert catalog["summary_metrics"]["authorization_widget_present"] is True
     assert catalog["summary_metrics"]["authorization_registry_summary_widget_present"] is True
@@ -133,6 +133,7 @@ def test_ps_q7g_default_catalog_summarizes_q7f_handoff() -> None:
         "prediction_latest_payload_dry_run_status_widget",
         "prediction_latest_payload_loader_authorization_widget",
         "prediction_latest_payload_loader_authorization_registry_summary_widget",
+        "prediction_authorization_handoff_status_widget",
     ]
     for payload in (catalog, catalog["boundaries"], catalog["integration_contract"], catalog["authorization_chain"], *catalog["visibility_group_summaries"]):
         _assert_safe(payload)
@@ -142,7 +143,7 @@ def test_ps_q7g_index_is_compact_and_safe() -> None:
     index = build_prediction_warroom_authorization_handoff_status_catalog_index()
     assert index["catalog_index_version"] == "prediction_warroom_authorization_handoff_status_catalog.ps_q7g.v1"
     assert index["status_state"] == "ready_authorization_handoff_status_visible_loader_disabled"
-    assert index["summary_metrics"]["total_widget_group_count"] == 10
+    assert index["summary_metrics"]["total_widget_group_count"] == 11
     assert index["authorization_chain"]["authorization_registry_summary_attach_after_widget_group_id"] == "prediction_latest_payload_loader_authorization_widget"
     assert len(index["visibility_group_summaries"]) == 2
     for payload in (index, index["boundaries"], index["integration_contract"], index["authorization_chain"], *index["visibility_group_summaries"]):
@@ -188,7 +189,7 @@ def test_ps_q7g_bad_summary_attach_blocks_status() -> None:
 
 def main() -> int:
     test_ps_q7g_static_boundaries_and_markers()
-    test_ps_q7g_default_catalog_summarizes_q7f_handoff()
+    test_ps_q7g_default_catalog_summarizes_q7i_handoff()
     test_ps_q7g_index_is_compact_and_safe()
     test_ps_q7g_blocked_bundle_hides_status_without_enabling_loader()
     test_ps_q7g_missing_summary_visibility_blocks_status()

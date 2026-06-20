@@ -120,9 +120,9 @@ def test_ps_q7d_default_panel_summarizes_q7f_registration() -> None:
     assert panel["panel_state"] == "ready_authorization_widget_visible_loader_disabled"
     assert panel["visibility_state"] == "visible_read_only"
     assert panel["summary_metrics"]["base_widget_group_count"] == 6
-    assert panel["summary_metrics"]["supplemental_widget_group_count"] == 4
-    assert panel["summary_metrics"]["total_widget_group_count"] == 10
-    assert panel["summary_metrics"]["visibility_group_count"] == 5
+    assert panel["summary_metrics"]["supplemental_widget_group_count"] == 5
+    assert panel["summary_metrics"]["total_widget_group_count"] == 11
+    assert panel["summary_metrics"]["visibility_group_count"] == 6
     assert panel["summary_metrics"]["authorization_widget_present"] is True
     assert panel["summary_metrics"]["authorization_attach_ok"] is True
     assert panel["authorization_visibility_summary"]["visibility_group_id"] == "prediction_warroom_loader_authorization_visibility"

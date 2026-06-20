@@ -25,6 +25,10 @@ AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_VERSION = "prediction_warroom_loader
 AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_ID = "prediction_latest_payload_loader_authorization_registry_summary_widget"
 AUTHORIZATION_REGISTRY_SUMMARY_ATTACH_AFTER_WIDGET_GROUP_ID = "prediction_latest_payload_loader_authorization_widget"
 AUTHORIZATION_REGISTRY_SUMMARY_PANEL_VERSION = "prediction_warroom_loader_authorization_registry_summary_panel.ps_q7d.v1"
+AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_VERSION = "prediction_warroom_authorization_handoff_status_widget_groups.ps_q7h.v1"
+AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID = "prediction_authorization_handoff_status_widget"
+AUTHORIZATION_HANDOFF_STATUS_ATTACH_AFTER_WIDGET_GROUP_ID = "prediction_latest_payload_loader_authorization_registry_summary_widget"
+AUTHORIZATION_HANDOFF_STATUS_CATALOG_VERSION = "prediction_warroom_authorization_handoff_status_catalog.ps_q7g.v1"
 BASE_WIDGET_GROUP_COUNT = 6
 
 
@@ -330,6 +334,117 @@ def _authorization_registry_summary_panel_stub(*, packet: Mapping[str, Any], gro
     }
 
 
+def _authorization_handoff_status_catalog_stub(*, packet: Mapping[str, Any], groups: list[Mapping[str, Any]]) -> Mapping[str, Any]:
+    current_order = [str(group.get("widget_group_id") or "") for group in groups]
+    order_with_status = [*current_order, AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID]
+    source_present = "source_quality_explanation_widgets" in order_with_status
+    dry_run_present = "prediction_latest_payload_dry_run_status_widget" in order_with_status
+    authorization_present = "prediction_latest_payload_loader_authorization_widget" in order_with_status
+    summary_present = AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_ID in order_with_status
+    status_present = AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID in order_with_status
+    visibility_count = 1 + sum(1 for present in (source_present, dry_run_present, authorization_present, summary_present, status_present) if present)
+    supplemental_count = len(order_with_status)
+    total_count = BASE_WIDGET_GROUP_COUNT + supplemental_count
+    visible = authorization_present and summary_present and status_present
+    safe = {
+        "read_only": True,
+        "non_executing": True,
+        "catalog_only": True,
+        "status_only": True,
+        "visibility_metadata_only": True,
+        "display_only": True,
+        "render_intent_only": True,
+        "not_loaded_as_runtime_display_source": True,
+        "approval_granted_by_this_contract": False,
+        "authorization_granted_by_this_contract": False,
+        "actual_loader_execution_allowed": False,
+        "actual_file_read_allowed_by_this_contract": False,
+        "actual_payload_decode_allowed_by_this_contract": False,
+        "would_load_hot_latest_artifacts": False,
+        "would_read_runtime_file": False,
+        "would_collect_public_source": False,
+        "would_write_runtime_artifact": False,
+        "would_write_collector_state": False,
+        "would_send_to_broker": False,
+        "broker_execution_requested": False,
+        "mode_apply_requested": False,
+        "command_ledger_append_requested": False,
+        "approval_append_requested": False,
+    }
+    summary_metrics = {
+        "base_widget_group_count": BASE_WIDGET_GROUP_COUNT,
+        "supplemental_widget_group_count": supplemental_count,
+        "total_widget_group_count": total_count,
+        "visibility_group_count": visibility_count,
+        "counts_ok": visible and supplemental_count == 5 and total_count == 11 and visibility_count == 6,
+        "authorization_widget_present": authorization_present,
+        "authorization_registry_summary_widget_present": summary_present,
+        "authorization_handoff_status_widget_present": status_present,
+        "authorization_attach_ok": authorization_present,
+        "authorization_registry_summary_attach_ok": summary_present,
+        "authorization_handoff_status_attach_ok": status_present,
+        "authorization_widget_order_index": order_with_status.index("prediction_latest_payload_loader_authorization_widget") + BASE_WIDGET_GROUP_COUNT if authorization_present else None,
+        "authorization_registry_summary_widget_order_index": order_with_status.index(AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_ID) + BASE_WIDGET_GROUP_COUNT if summary_present else None,
+        "authorization_handoff_status_widget_order_index": order_with_status.index(AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID) + BASE_WIDGET_GROUP_COUNT if status_present else None,
+        "authorization_chain_order_ok": authorization_present and summary_present and status_present and order_with_status.index("prediction_latest_payload_loader_authorization_widget") < order_with_status.index(AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_ID) < order_with_status.index(AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID),
+        "preflight_visible_read_only": visible,
+        "approval_granted_by_this_contract": False,
+        "authorization_granted_by_this_contract": False,
+        "actual_loader_execution_allowed": False,
+        "actual_file_read_allowed_by_this_contract": False,
+        "actual_payload_decode_allowed_by_this_contract": False,
+    }
+    return {
+        "catalog_version": AUTHORIZATION_HANDOFF_STATUS_CATALOG_VERSION,
+        "catalog_id": "prediction_warroom_authorization_handoff_status_catalog",
+        "catalog_kind": "prediction_warroom_authorization_supplemental_handoff_status_catalog",
+        "status_state": "ready_authorization_handoff_status_visible_loader_disabled" if visible else "blocked_authorization_handoff_status_loader_disabled",
+        "visibility_state": "visible_read_only" if visible else "hidden_blocked_by_preflight",
+        "handoff_state": "ready_for_read_only_warroom_handoff" if visible else "blocked_before_read_only_warroom_handoff",
+        "prediction_run_id": _text_or_none(packet.get("prediction_run_id")),
+        "source_handoff_catalog_version": "prediction_warroom_handoff_catalog_visibility.ps_q6i.v1",
+        "summary_metrics": summary_metrics,
+        "authorization_chain": {
+            "authorization_widget_group_id": "prediction_latest_payload_loader_authorization_widget",
+            "authorization_registry_summary_widget_group_id": AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_ID,
+            "authorization_handoff_status_widget_group_id": AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID,
+            "authorization_attach_after_widget_group_id": "prediction_latest_payload_dry_run_status_widget",
+            "authorization_registry_summary_attach_after_widget_group_id": AUTHORIZATION_REGISTRY_SUMMARY_ATTACH_AFTER_WIDGET_GROUP_ID,
+            "authorization_handoff_status_attach_after_widget_group_id": AUTHORIZATION_HANDOFF_STATUS_ATTACH_AFTER_WIDGET_GROUP_ID,
+            "combined_widget_group_order_tail": order_with_status[-5:],
+            "authorization_chain_ready": visible,
+            **safe,
+        },
+        "visibility_group_summaries": (
+            {
+                "visibility_group_id": "prediction_warroom_authorization_handoff_status_visibility",
+                "visibility_kind": "supplemental_authorization_handoff_status",
+                "widget_group_ids": [AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_ID] if status_present else [],
+                "widget_group_count": 1 if status_present else 0,
+                "attach_after_widget_group_id": AUTHORIZATION_HANDOFF_STATUS_ATTACH_AFTER_WIDGET_GROUP_ID,
+                "expected_attach_after_widget_group_id": AUTHORIZATION_HANDOFF_STATUS_ATTACH_AFTER_WIDGET_GROUP_ID,
+                "attach_after_ok": status_present,
+                "ui_mount_hint": "warroom_prediction:supplemental:authorization_handoff_status",
+                "refresh_policy": "use_q6f_supplemental_auto_refresh_group",
+                "order_strategy": "append_after_authorization_registry_summary_widget",
+                **safe,
+            },
+        ),
+        "operator_guidance_ja": (
+            "このcatalog stubはQ7I registry登録用の表示要約で、承認記録・loader実行・hot/latest読取・payload decodeは行いません。",
+            "実loaderや承認書込を進める場合は、別slice・別guard・別commitで扱ってください。",
+        ),
+        "integration_contract": {
+            "contract_version": AUTHORIZATION_HANDOFF_STATUS_CATALOG_VERSION,
+            "integration_kind": "display_only_authorization_handoff_status_catalog_stub_for_q7i_registry",
+            "does_not_register_widgets": True,
+            **safe,
+        },
+        "boundaries": safe,
+        **safe,
+    }
+
+
 def build_prediction_warroom_supplemental_widget_registry(
     *,
     display_packet: Mapping[str, Any] | Any | None = None,
@@ -342,6 +457,7 @@ def build_prediction_warroom_supplemental_widget_registry(
     include_latest_payload_dry_run: bool = True,
     include_latest_payload_loader_authorization: bool = True,
     include_latest_payload_loader_authorization_registry_summary: bool = True,
+    include_authorization_handoff_status: bool = True,
 ) -> PredictionWarRoomSupplementalWidgetRegistryPacket:
     """Build a composite supplemental widget registry without rendering, filesystem reads, or runtime side effects."""
     packet = _as_mapping(display_packet)
@@ -403,6 +519,23 @@ def build_prediction_warroom_supplemental_widget_registry(
             groups=groups,
             refresh_groups=refresh_groups,
         )
+    if include_authorization_handoff_status:
+        from .prediction_warroom_authorization_handoff_status_widget_groups import (
+            build_prediction_warroom_authorization_handoff_status_widget_group_index,
+        )
+
+        status_index = build_prediction_warroom_authorization_handoff_status_widget_group_index(
+            status_catalog=_authorization_handoff_status_catalog_stub(packet=packet, groups=groups),
+            hot_latest_root_hint=hot_latest_root_hint,
+        ).to_dict()
+        _append_index(
+            index=status_index,
+            source_kind="authorization_handoff_status_widget_group",
+            attach_default=AUTHORIZATION_HANDOFF_STATUS_ATTACH_AFTER_WIDGET_GROUP_ID,
+            indexes=indexes,
+            groups=groups,
+            refresh_groups=refresh_groups,
+        )
     order = tuple(str(group.get("widget_group_id") or "unknown") for group in groups)
     boundaries = {
         "read_only": True,
@@ -431,6 +564,7 @@ def build_prediction_warroom_supplemental_widget_registry(
         "latest_payload_dry_run_widget_contract": DRY_RUN_WIDGET_GROUP_VERSION,
         "latest_payload_loader_authorization_widget_contract": AUTHORIZATION_WIDGET_GROUP_VERSION,
         "latest_payload_loader_authorization_registry_summary_widget_contract": AUTHORIZATION_REGISTRY_SUMMARY_WIDGET_GROUP_VERSION,
+        "authorization_handoff_status_widget_contract": AUTHORIZATION_HANDOFF_STATUS_WIDGET_GROUP_VERSION,
         "integration_kind": "composite_supplemental_widget_registry",
         "supplemental_index_count": len(indexes),
         "supplemental_widget_group_count": len(groups),

@@ -104,9 +104,9 @@ def test_ps_q6g_default_sample_preflight_is_valid_and_safe() -> None:
     assert report["preflight_state"] == "ready_for_warroom_supplemental_handoff"
     assert report["valid"] is True
     assert report["blocker_count"] == 0
-    assert report["supplemental_index_count"] == 4
-    assert report["supplemental_widget_group_count"] == 4
-    assert report["auto_refresh_group_count"] == 4
+    assert report["supplemental_index_count"] == 5
+    assert report["supplemental_widget_group_count"] == 5
+    assert report["auto_refresh_group_count"] == 5
     assert "prediction_warroom_supplemental_widget_registry.ps_q6f.v1" in report["checked_contracts"]
     assert "prediction_warroom_widget_groups.ps_q4b.v1" in report["checked_contracts"]
     assert report["actual_loader_execution_allowed"] is False
@@ -124,7 +124,7 @@ def test_ps_q6g_schema_validator_accepts_valid_registry() -> None:
     report = validate_prediction_warroom_supplemental_widget_registry_schema(registry).to_dict()
     assert report["valid"] is True
     assert report["preflight_state"] == "ready_for_warroom_supplemental_handoff"
-    assert report["supplemental_widget_group_count"] == 4
+    assert report["supplemental_widget_group_count"] == 5
     assert report["blocker_count"] == 0
 
 
