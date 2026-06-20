@@ -189,6 +189,12 @@ class SourceArtifactCoverageReport:
     required_source_ids: Tuple[str, ...] = ()
     covered_source_ids: Tuple[str, ...] = ()
     missing_required_source_ids: Tuple[str, ...] = ()
+    observed_source_ids: Tuple[str, ...] = ()
+    observed_required_source_ids: Tuple[str, ...] = ()
+    missing_observed_required_source_ids: Tuple[str, ...] = ()
+    active_context_profile_ids: Tuple[str, ...] = ()
+    input_coverage_state: str = "unknown"
+    signal_strength_cap_reason: str | None = None
     registry_entries: Tuple[ReferenceSourceRegistryEntry, ...] = ()
     context_evidence_profiles: Tuple[ContextEvidenceProfile, ...] = ()
     coverage_state: str = "unknown"
@@ -210,6 +216,12 @@ class SourceArtifactCoverageReport:
         return round(len(self.covered_source_ids) / len(self.required_source_ids), 6)
 
     @property
+    def input_coverage_ratio(self) -> float:
+        if not self.required_source_ids:
+            return 1.0
+        return round(len(self.observed_required_source_ids) / len(self.required_source_ids), 6)
+
+    @property
     def usable(self) -> bool:
         return not self.blockers
 
@@ -221,8 +233,15 @@ class SourceArtifactCoverageReport:
             "required_source_ids": list(self.required_source_ids),
             "covered_source_ids": list(self.covered_source_ids),
             "missing_required_source_ids": list(self.missing_required_source_ids),
+            "observed_source_ids": list(self.observed_source_ids),
+            "observed_required_source_ids": list(self.observed_required_source_ids),
+            "missing_observed_required_source_ids": list(self.missing_observed_required_source_ids),
+            "active_context_profile_ids": list(self.active_context_profile_ids),
             "coverage_ratio": self.coverage_ratio,
+            "input_coverage_ratio": self.input_coverage_ratio,
             "coverage_state": self.coverage_state,
+            "input_coverage_state": self.input_coverage_state,
+            "signal_strength_cap_reason": self.signal_strength_cap_reason,
             "registry_entries": [item.to_dict() for item in self.registry_entries],
             "context_evidence_profiles": [item.to_dict() for item in self.context_evidence_profiles],
             "blockers": list(self.blockers),
@@ -414,12 +433,18 @@ def build_source_artifact_coverage_report(
     registry_entries: Tuple[ReferenceSourceRegistryEntry, ...] | None = None,
     context_evidence_profiles: Tuple[ContextEvidenceProfile, ...] | None = None,
     required_source_ids: Tuple[str, ...] = REQUIRED_SOURCE_IDS,
+    observed_source_ids: Tuple[str, ...] = (),
+    active_context_profile_ids: Tuple[str, ...] = (),
     now: datetime | None = None,
 ) -> SourceArtifactCoverageReport:
     entries = tuple(registry_entries or build_default_reference_source_registry())
     profiles = tuple(context_evidence_profiles or build_default_context_evidence_profiles())
     covered = tuple(dict.fromkeys(entry.source_id for entry in entries))
     missing = tuple(source_id for source_id in required_source_ids if source_id not in set(covered))
+    observed = tuple(dict.fromkeys(str(source_id) for source_id in observed_source_ids if str(source_id).strip()))
+    observed_required = tuple(source_id for source_id in required_source_ids if source_id in set(observed))
+    missing_observed = tuple(source_id for source_id in required_source_ids if source_id not in set(observed_required))
+    active_profiles = tuple(dict.fromkeys(active_context_profile_ids or tuple(profile.evidence_profile_id for profile in profiles)))
     blockers: list[str] = []
     warnings: list[str] = []
     if missing:
@@ -434,12 +459,22 @@ def build_source_artifact_coverage_report(
         blockers.append("broker_or_autotrade_allowed_in_prediction_contract")
     if any(entry.direction_ownership == DirectionOwnership.PRIMARY_CANDIDATE for entry in entries):
         warnings.append("primary_candidate_source_requires_future_human_review")
+    if missing_observed:
+        warnings.append("runtime_source_input_coverage_incomplete")
+    input_coverage_state = "complete_inputs" if not missing_observed else "incomplete_inputs"
+    signal_strength_cap_reason = "required_runtime_source_inputs_missing" if missing_observed else None
     coverage_state = "complete_contract" if not blockers else "incomplete_contract"
     return SourceArtifactCoverageReport(
         generated_at=_iso_now(now),
         required_source_ids=tuple(required_source_ids),
         covered_source_ids=covered,
         missing_required_source_ids=missing,
+        observed_source_ids=observed,
+        observed_required_source_ids=observed_required,
+        missing_observed_required_source_ids=missing_observed,
+        active_context_profile_ids=active_profiles,
+        input_coverage_state=input_coverage_state,
+        signal_strength_cap_reason=signal_strength_cap_reason,
         registry_entries=entries,
         context_evidence_profiles=profiles,
         coverage_state=coverage_state,

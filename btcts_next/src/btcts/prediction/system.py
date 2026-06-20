@@ -14,6 +14,7 @@ from .feature_depth import FeatureDepthSnapshot
 from .forecast_ledger import ForecastLedgerBatch, build_forecast_ledger_records_from_bundle
 from .ohlcv import OHLCVAggregationDiagnostics, OHLCVCandle, TIMEFRAME_SECONDS, aggregate_ohlcv_from_rows
 from .rule_based_v0 import INITIAL_FAMILIES, build_rule_based_v0_outputs
+from .source_artifact_coverage import build_source_artifact_coverage_report
 from .source_quality import SourceQualityStatus, build_provider_reliability_registry
 from .system_contract import (
     DEFAULT_HORIZON_GROUPS,
@@ -146,6 +147,58 @@ def _observed_source_ids(venue_snapshots: Iterable[Mapping[str, Any]] | None) ->
             source_id = str(item.get("source_id") or item.get("source") or "").strip()
             if source_id:
                 out.append(source_id)
+    return tuple(dict.fromkeys(out))
+
+
+
+def _ohlcv_contract_id(timeframe_sec: int) -> str | None:
+    mapping = {
+        60: "ohlcv_1m",
+        300: "ohlcv_5m",
+        600: "ohlcv_10m",
+        900: "ohlcv_15m",
+        1800: "ohlcv_30m",
+        3600: "ohlcv_1h",
+        14400: "ohlcv_4h",
+        86400: "ohlcv_1d",
+    }
+    return mapping.get(int(timeframe_sec))
+
+
+def _coverage_source_ids_from_inputs(
+    *,
+    candles: Tuple[OHLCVCandle, ...],
+    venue_snapshots: Iterable[Mapping[str, Any]] | None,
+    source_quality_by_id: Mapping[str, SourceQualityStatus] | None,
+    feature_depth_snapshot: FeatureDepthSnapshot | None,
+) -> Tuple[str, ...]:
+    """Map already-provided inputs into PS-Q2 source/artifact contract IDs without collecting data."""
+    out: list[str] = []
+    if source_quality_by_id:
+        out.append("provider_source_reliability_state")
+        for source_id in source_quality_by_id:
+            text = str(source_id).strip()
+            if text:
+                out.append(text)
+    for candle in candles:
+        contract_id = _ohlcv_contract_id(int(candle.timeframe.timeframe_sec))
+        if contract_id:
+            out.append(contract_id)
+    if venue_snapshots is not None:
+        for raw in venue_snapshots:
+            if not isinstance(raw, Mapping):
+                continue
+            venue = str(raw.get("venue") or "").lower()
+            symbol = str(raw.get("symbol") or "").upper()
+            role = str(raw.get("market_role") or "").lower()
+            if "bitflyer" in venue and (role == "bitflyer_spot" or symbol == "BTC_JPY"):
+                out.append("bitflyer_spot_ticker")
+            elif "bitflyer" in venue and (role == "bitflyer_fx" or symbol == "FX_BTC_JPY"):
+                out.append("bitflyer_fx_ticker")
+            elif venue:
+                out.append("global_spot_reference")
+    if feature_depth_snapshot is not None:
+        out.extend(("bitflyer_board_summary", "bitflyer_trades"))
     return tuple(dict.fromkeys(out))
 
 def _build_cross_venue(
@@ -842,6 +895,7 @@ def _scenario_review_summary(
     revision: PredictionRevisionSummary,
     provider_registry_summary: Mapping[str, Any],
     feature_depth_snapshot: FeatureDepthSnapshot | None,
+    source_artifact_coverage_summary: Mapping[str, Any] | None,
     blockers: Tuple[str, ...],
     warnings: Tuple[str, ...],
 ) -> dict[str, Any]:
@@ -896,6 +950,7 @@ def _scenario_review_summary(
             "rewrite_state": scenario.rewrite_state,
             "scenario_switch_hint": scenario.scenario_switch_hint,
         },
+        "source_artifact_coverage": dict(source_artifact_coverage_summary or {}),
         "context_versions": {
             "scenario_core_lite_version": "ps_h1.v1",
             "scenario_trace_detail_version": "ps_h2.v1",
@@ -961,6 +1016,9 @@ def build_prediction_system_result(
     cross = _build_cross_venue(venue_snapshots=venue_snapshots, source_quality_by_id=source_quality_by_id, now_dt=now_dt)
     provider_registry = build_provider_reliability_registry(source_quality_by_id=dict(source_quality_by_id or {}), observed_source_ids=observed_source_ids, now=now_dt)
     provider_registry_summary = provider_registry.to_dict()
+    coverage_observed_source_ids = _coverage_source_ids_from_inputs(candles=built_candles, venue_snapshots=venue_snapshots, source_quality_by_id=source_quality_by_id, feature_depth_snapshot=feature_depth_snapshot)
+    source_artifact_coverage = build_source_artifact_coverage_report(observed_source_ids=coverage_observed_source_ids, now=now_dt)
+    source_artifact_coverage_summary = source_artifact_coverage.to_dict()
     outputs, technical_by_horizon = _build_outputs(candles=built_candles, cross_venue_summary=cross, horizons_sec=horizons_sec, now_dt=now_dt, feature_depth_snapshot=feature_depth_snapshot)
 
     source_quality_summary: dict[str, Any] = {
@@ -970,13 +1028,48 @@ def build_prediction_system_result(
         "cross_venue_summary": cross.to_dict() if cross else None,
         "technical_timeframes": {str(h): (summary.timeframe_sec if summary else None) for h, summary in technical_by_horizon.items()},
         "provider_reliability_registry": provider_registry_summary,
+        "source_artifact_coverage": {
+            "coverage_state": source_artifact_coverage.coverage_state,
+            "input_coverage_state": source_artifact_coverage.input_coverage_state,
+            "input_coverage_ratio": source_artifact_coverage.input_coverage_ratio,
+            "signal_strength_cap_reason": source_artifact_coverage.signal_strength_cap_reason,
+            "missing_observed_required_source_count": len(source_artifact_coverage.missing_observed_required_source_ids),
+        },
     }
     bundle = build_inference_bundle_from_outputs(outputs, now=now_dt, source_quality_summary=source_quality_summary)
     forecast_batch = build_forecast_ledger_records_from_bundle(bundle, now=now_dt)
     scenario = _scenario_core(run_id=run_id, generated_at=generated_at, groups=groups, horizons_by_group=horizons_by_group, outputs=outputs, now_dt=now_dt)
 
+    coverage_warnings: list[str] = []
+    if source_artifact_coverage.input_coverage_state != "complete_inputs":
+        coverage_warnings.append("source_artifact_input_coverage_incomplete")
+    if source_artifact_coverage.signal_strength_cap_reason:
+        coverage_warnings.append(str(source_artifact_coverage.signal_strength_cap_reason))
+    if coverage_warnings:
+        scenario_trace = dict(scenario.scenario_trace)
+        watch_next = list(scenario_trace.get("what_to_watch_next", []))
+        watch_next.append("restore_missing_source_artifact_inputs")
+        scenario_trace["what_to_watch_next"] = list(dict.fromkeys(str(item) for item in watch_next))
+        scenario_trace["source_artifact_coverage"] = {
+            "coverage_state": source_artifact_coverage.coverage_state,
+            "input_coverage_state": source_artifact_coverage.input_coverage_state,
+            "input_coverage_ratio": source_artifact_coverage.input_coverage_ratio,
+            "signal_strength_cap_reason": source_artifact_coverage.signal_strength_cap_reason,
+            "missing_observed_required_source_ids": list(source_artifact_coverage.missing_observed_required_source_ids),
+        }
+        digest = dict(scenario.gpt_review_digest)
+        digest["source_artifact_coverage"] = dict(scenario_trace["source_artifact_coverage"])
+        scenario = replace(
+            scenario,
+            evidence_conflict_state="source_artifact_input_coverage_incomplete" if scenario.evidence_conflict_state != "conflicting_evidence" else scenario.evidence_conflict_state,
+            scenario_trace=scenario_trace,
+            gpt_review_digest=digest,
+            warnings=tuple(dict.fromkeys(tuple(scenario.warnings) + tuple(coverage_warnings))),
+        )
+
     blockers = list(bundle.blockers)
     warnings = list(bundle.warnings)
+    warnings.extend(coverage_warnings)
     warnings.extend(candle_warnings)
     if not built_candles:
         warnings.append("prediction_system_candles_missing_or_unusable")
@@ -990,6 +1083,10 @@ def build_prediction_system_result(
         requested_horizon_groups=groups,
         requested_horizons_sec=horizons_sec,
         provider_quality_summary={"source_quality_count": len(source_quality_by_id or {}), "observed_source_ids": list(observed_source_ids), "provider_reliability_registry": provider_registry_summary},
+        source_registry_version=source_artifact_coverage.registry_version,
+        reference_source_registry_ids=source_artifact_coverage.covered_source_ids,
+        evidence_profile_ids=source_artifact_coverage.active_context_profile_ids,
+        source_artifact_coverage_summary=source_artifact_coverage_summary,
         feature_snapshot={
             "row_count": _input_rows_count(rows),
             "candle_count": len(built_candles),
@@ -1032,6 +1129,12 @@ def build_prediction_system_result(
             "has_revision": revision.has_revision,
             "provider_reliability_version": "ps_d1.v1",
             "provider_reliability_context_only": provider_registry.context_only,
+            "source_artifact_coverage_version": source_artifact_coverage.registry_version,
+            "source_artifact_input_coverage_state": source_artifact_coverage.input_coverage_state,
+            "source_artifact_input_coverage_ratio": source_artifact_coverage.input_coverage_ratio,
+            "source_artifact_signal_strength_cap_reason": source_artifact_coverage.signal_strength_cap_reason,
+            "source_artifact_observed_required_source_count": len(source_artifact_coverage.observed_required_source_ids),
+            "source_artifact_missing_observed_required_source_count": len(source_artifact_coverage.missing_observed_required_source_ids),
             "liquidity_feature_depth_context_version": "ps_e2.v1" if feature_depth_snapshot is not None else None,
             "orderbook_breakout_algo_context_version": "ps_e3.v1" if feature_depth_snapshot is not None else None,
             "opportunity_tradeflow_context_version": "ps_e4.v1" if feature_depth_snapshot is not None else None,
@@ -1047,6 +1150,7 @@ def build_prediction_system_result(
                 revision=revision,
                 provider_registry_summary=provider_registry_summary,
                 feature_depth_snapshot=feature_depth_snapshot,
+                source_artifact_coverage_summary=source_artifact_coverage_summary,
                 blockers=tuple(dict.fromkeys(blockers)),
                 warnings=tuple(dict.fromkeys(warnings)),
             ),
