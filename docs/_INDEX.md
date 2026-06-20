@@ -66,6 +66,9 @@ Project Chimera の設計・仕様はここから参照します。
 - Strategy Genome System  
   docs/strategy/STRATEGY_SYSTEM.md
 
+- Prediction System Inference Formal Spec
+  docs/strategy/PREDICTION_SYSTEM_INFERENCE_FORMAL_SPEC_BTC_BITFLYER_2026-06-20.md
+
 ---
 
 # 3. UI System
