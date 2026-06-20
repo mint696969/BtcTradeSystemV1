@@ -201,6 +201,97 @@ def _coverage_source_ids_from_inputs(
         out.extend(("bitflyer_board_summary", "bitflyer_trades"))
     return tuple(dict.fromkeys(out))
 
+
+
+def _tier0_source_quality_gate_summary(
+    *,
+    source_quality_by_id: Mapping[str, SourceQualityStatus] | None,
+    provider_registry_summary: Mapping[str, Any],
+    observed_required_source_ids: Tuple[str, ...],
+) -> dict[str, Any]:
+    """Summarize Tier 0 source quality/freshness gate effects from already-provided quality status only."""
+    quality_by_key = dict(source_quality_by_id or {})
+    quality_by_source_id: dict[str, SourceQualityStatus] = {}
+    for key, status in quality_by_key.items():
+        quality_by_source_id[str(key)] = status
+        quality_by_source_id[str(status.source_id)] = status
+    observed = tuple(dict.fromkeys(str(source_id) for source_id in observed_required_source_ids if str(source_id).strip()))
+    missing_quality_status_source_ids = tuple(source_id for source_id in observed if source_id not in quality_by_source_id)
+    blocked_source_ids: list[str] = []
+    degraded_source_ids: list[str] = []
+    source_blockers: list[str] = []
+    source_warnings: list[str] = []
+    source_statuses: list[dict[str, Any]] = []
+    for source_id, status in sorted(quality_by_source_id.items()):
+        if source_id != str(status.source_id):
+            continue
+        status_dict = status.to_dict()
+        source_statuses.append(status_dict)
+        if not status.usable or status.blockers:
+            blocked_source_ids.append(str(status.source_id))
+            source_blockers.extend(str(item) for item in status.blockers)
+        if status.warnings:
+            degraded_source_ids.append(str(status.source_id))
+            source_warnings.extend(str(item) for item in status.warnings)
+    provider_blockers_raw = tuple(str(item) for item in provider_registry_summary.get("blockers", []))
+    provider_warnings = tuple(str(item) for item in provider_registry_summary.get("warnings", []))
+    provider_missing_quality_blockers = tuple(
+        item for item in provider_blockers_raw if item in {"provider_has_no_usable_sources"}
+    )
+    provider_hard_blockers = tuple(
+        item for item in provider_blockers_raw if item not in set(provider_missing_quality_blockers)
+    )
+    blockers = tuple(dict.fromkeys(list(source_blockers) + list(provider_hard_blockers)))
+    warnings = tuple(dict.fromkeys(list(source_warnings) + list(provider_warnings) + list(provider_missing_quality_blockers)))
+    if blocked_source_ids or blockers:
+        gate_state = "blocked"
+        signal_strength_cap_reason = "tier0_source_quality_blocked"
+    elif missing_quality_status_source_ids or degraded_source_ids or warnings:
+        gate_state = "warning_context_only"
+        signal_strength_cap_reason = "tier0_source_quality_missing_or_degraded"
+    else:
+        gate_state = "passed"
+        signal_strength_cap_reason = None
+    return {
+        "gate_version": "prediction_tier0_source_quality_gate.ps_q2d.v1",
+        "gate_state": gate_state,
+        "signal_strength_cap_reason": signal_strength_cap_reason,
+        "observed_required_source_ids": list(observed),
+        "missing_quality_status_source_ids": list(missing_quality_status_source_ids),
+        "blocked_source_ids": list(dict.fromkeys(blocked_source_ids)),
+        "degraded_source_ids": list(dict.fromkeys(degraded_source_ids)),
+        "blockers": list(blockers),
+        "warnings": list(warnings),
+        "source_statuses": source_statuses,
+        "provider_registry_state": {
+            "provider_count": provider_registry_summary.get("provider_count"),
+            "usable_provider_count": provider_registry_summary.get("usable_provider_count"),
+            "unknown_source_ids": list(provider_registry_summary.get("unknown_source_ids", [])),
+            "context_only": provider_registry_summary.get("context_only"),
+            "primary_direction_owner_allowed": provider_registry_summary.get("primary_direction_owner_allowed"),
+        },
+        "read_only": True,
+        "non_executing": True,
+        "would_collect_public_source": False,
+        "would_write_runtime_artifact": False,
+        "would_send_to_broker": False,
+    }
+
+
+def _tier0_source_quality_gate_warning_codes(tier0_gate_summary: Mapping[str, Any]) -> Tuple[str, ...]:
+    gate_state = str(tier0_gate_summary.get("gate_state") or "unknown")
+    if gate_state == "passed":
+        return tuple()
+    warnings = ["tier0_source_quality_gate_not_passed"]
+    cap_reason = tier0_gate_summary.get("signal_strength_cap_reason")
+    if cap_reason:
+        warnings.append(str(cap_reason))
+    if tier0_gate_summary.get("missing_quality_status_source_ids"):
+        warnings.append("tier0_source_quality_status_missing")
+    if tier0_gate_summary.get("blocked_source_ids"):
+        warnings.append("tier0_source_quality_blocked_sources_present")
+    return tuple(dict.fromkeys(warnings))
+
 def _build_cross_venue(
     *,
     venue_snapshots: Iterable[Mapping[str, Any]] | None,
@@ -1092,6 +1183,7 @@ def build_prediction_system_result(
     coverage_observed_source_ids = _coverage_source_ids_from_inputs(candles=built_candles, venue_snapshots=venue_snapshots, source_quality_by_id=source_quality_by_id, feature_depth_snapshot=feature_depth_snapshot)
     source_artifact_coverage = build_source_artifact_coverage_report(observed_source_ids=coverage_observed_source_ids, now=now_dt)
     source_artifact_coverage_summary = source_artifact_coverage.to_dict()
+    tier0_source_quality_gate_summary = _tier0_source_quality_gate_summary(source_quality_by_id=source_quality_by_id, provider_registry_summary=provider_registry_summary, observed_required_source_ids=source_artifact_coverage.observed_required_source_ids)
     outputs, technical_by_horizon = _build_outputs(candles=built_candles, cross_venue_summary=cross, horizons_sec=horizons_sec, now_dt=now_dt, feature_depth_snapshot=feature_depth_snapshot)
 
     source_quality_summary: dict[str, Any] = {
@@ -1118,6 +1210,8 @@ def build_prediction_system_result(
         coverage_warnings.append("source_artifact_input_coverage_incomplete")
     if source_artifact_coverage.signal_strength_cap_reason:
         coverage_warnings.append(str(source_artifact_coverage.signal_strength_cap_reason))
+    tier0_warnings = list(_tier0_source_quality_gate_warning_codes(tier0_source_quality_gate_summary))
+    coverage_warnings.extend(tier0_warnings)
     if coverage_warnings:
         scenario_trace = dict(scenario.scenario_trace)
         watch_next = list(scenario_trace.get("what_to_watch_next", []))
@@ -1130,8 +1224,10 @@ def build_prediction_system_result(
             "signal_strength_cap_reason": source_artifact_coverage.signal_strength_cap_reason,
             "missing_observed_required_source_ids": list(source_artifact_coverage.missing_observed_required_source_ids),
         }
+        scenario_trace["tier0_source_quality_gate"] = dict(tier0_source_quality_gate_summary)
         digest = dict(scenario.gpt_review_digest)
         digest["source_artifact_coverage"] = dict(scenario_trace["source_artifact_coverage"])
+        digest["tier0_source_quality_gate"] = dict(tier0_source_quality_gate_summary)
         scenario = replace(
             scenario,
             evidence_conflict_state="source_artifact_input_coverage_incomplete" if scenario.evidence_conflict_state != "conflicting_evidence" else scenario.evidence_conflict_state,
@@ -1155,7 +1251,7 @@ def build_prediction_system_result(
         market_uid=market_uid,
         requested_horizon_groups=groups,
         requested_horizons_sec=horizons_sec,
-        provider_quality_summary={"source_quality_count": len(source_quality_by_id or {}), "observed_source_ids": list(observed_source_ids), "provider_reliability_registry": provider_registry_summary},
+        provider_quality_summary={"source_quality_count": len(source_quality_by_id or {}), "observed_source_ids": list(observed_source_ids), "provider_reliability_registry": provider_registry_summary, "tier0_source_quality_gate": tier0_source_quality_gate_summary},
         source_registry_version=source_artifact_coverage.registry_version,
         reference_source_registry_ids=source_artifact_coverage.covered_source_ids,
         evidence_profile_ids=source_artifact_coverage.active_context_profile_ids,
@@ -1211,6 +1307,9 @@ def build_prediction_system_result(
             "context_evidence_profile_version": source_artifact_coverage.evidence_profile_version,
             "selected_context_evidence_profile_ids": scenario.gpt_review_digest.get("selected_context_evidence_profile_ids", []),
             "context_profile_signal_strength_cap_reasons": scenario.gpt_review_digest.get("context_profile_signal_strength_cap_reasons", []),
+            "tier0_source_quality_gate_state": tier0_source_quality_gate_summary.get("gate_state"),
+            "tier0_source_quality_signal_strength_cap_reason": tier0_source_quality_gate_summary.get("signal_strength_cap_reason"),
+            "tier0_source_quality_gate": tier0_source_quality_gate_summary,
             "liquidity_feature_depth_context_version": "ps_e2.v1" if feature_depth_snapshot is not None else None,
             "orderbook_breakout_algo_context_version": "ps_e3.v1" if feature_depth_snapshot is not None else None,
             "opportunity_tradeflow_context_version": "ps_e4.v1" if feature_depth_snapshot is not None else None,
