@@ -105,8 +105,8 @@ def test_ps_q6h_default_bundle_is_ready_and_contains_expected_sections() -> None
     assert bundle["supplemental_registry_preflight_report"]["valid"] is True
     assert bundle["supplemental_registry_preflight_report"]["preflight_state"] == "ready_for_warroom_supplemental_handoff"
     assert bundle["handoff_index"]["base_widget_group_count"] == 6
-    assert bundle["handoff_index"]["supplemental_widget_group_count"] == 2
-    assert bundle["handoff_index"]["total_widget_group_count"] == 8
+    assert bundle["handoff_index"]["supplemental_widget_group_count"] == 3
+    assert bundle["handoff_index"]["total_widget_group_count"] == 9
 
 
 def test_ps_q6h_combined_order_appends_supplemental_after_base() -> None:
@@ -120,8 +120,8 @@ def test_ps_q6h_combined_order_appends_supplemental_after_base() -> None:
         "evidence_ledger_widget",
         "warning_refresh_widget",
     ]
-    assert order[-2:] == ["source_quality_explanation_widgets", "prediction_latest_payload_dry_run_status_widget"]
-    assert bundle["supplemental_widget_registry"]["supplemental_widget_group_order"] == ["source_quality_explanation_widgets", "prediction_latest_payload_dry_run_status_widget"]
+    assert order[-3:] == ["source_quality_explanation_widgets", "prediction_latest_payload_dry_run_status_widget", "prediction_latest_payload_loader_authorization_widget"]
+    assert bundle["supplemental_widget_registry"]["supplemental_widget_group_order"] == ["source_quality_explanation_widgets", "prediction_latest_payload_dry_run_status_widget", "prediction_latest_payload_loader_authorization_widget"]
 
 
 def test_ps_q6h_bundle_and_index_are_safe() -> None:
@@ -142,7 +142,7 @@ def test_ps_q6h_bundle_and_index_are_safe() -> None:
         assert payload["would_send_to_broker"] is False
     assert index["handoff_state"] == "ready_for_read_only_warroom_handoff"
     assert index["preflight_valid"] is True
-    assert index["total_widget_group_count"] == 8
+    assert index["total_widget_group_count"] == 9
 
 
 def test_ps_q6h_candidate_metadata_flows_to_bundle_without_enabling_loader() -> None:

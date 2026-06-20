@@ -14,6 +14,10 @@ from .prediction_warroom_latest_payload_dry_run_widget_groups import (
     DRY_RUN_WIDGET_GROUP_VERSION,
     build_prediction_warroom_latest_payload_dry_run_widget_group_index,
 )
+from .prediction_warroom_latest_payload_loader_authorization_widget_groups import (
+    AUTHORIZATION_WIDGET_GROUP_VERSION,
+    build_prediction_warroom_latest_payload_loader_authorization_widget_group_index,
+)
 from .prediction_warroom_widget_groups import WIDGET_GROUP_PACKET_VERSION
 
 SUPPLEMENTAL_WIDGET_REGISTRY_VERSION = "prediction_warroom_supplemental_widget_registry.ps_q6f.v1"
@@ -188,11 +192,26 @@ def _safe_auto_refresh_group(item: Mapping[str, Any], *, source_kind: str, attac
         {
             "source_kind": source_kind,
             "attach_after_widget_group_id": group.get("attach_after_widget_group_id") or attach_after,
+            "read_only": True,
+            "non_executing": True,
+            "display_only": True,
+            "render_intent_only": True,
+            "not_loaded_as_runtime_display_source": True,
+            "approval_granted_by_this_contract": False,
+            "authorization_granted_by_this_contract": False,
             "actual_loader_execution_allowed": False,
             "actual_file_read_allowed_by_this_contract": False,
+            "actual_payload_decode_allowed_by_this_contract": False,
+            "would_load_hot_latest_artifacts": False,
             "would_read_runtime_file": False,
+            "would_collect_public_source": False,
             "would_write_runtime_artifact": False,
+            "would_write_collector_state": False,
             "would_send_to_broker": False,
+            "broker_execution_requested": False,
+            "mode_apply_requested": False,
+            "command_ledger_append_requested": False,
+            "approval_append_requested": False,
         }
     )
     return group
@@ -222,8 +241,11 @@ def build_prediction_warroom_supplemental_widget_registry(
     simulation_packet: Mapping[str, Any] | Any | None = None,
     artifact_metadata_inputs: Iterable[Mapping[str, Any]] | None = None,
     hot_latest_root_hint: str = "D:\\btc_ts_hot",
+    latest_payload_loader_authorization_request: Mapping[str, Any] | Any | None = None,
+    latest_payload_loader_permission_contract: Mapping[str, Any] | Any | None = None,
     include_source_quality_explanations: bool = True,
     include_latest_payload_dry_run: bool = True,
+    include_latest_payload_loader_authorization: bool = True,
 ) -> PredictionWarRoomSupplementalWidgetRegistryPacket:
     """Build a composite supplemental widget registry without rendering, filesystem reads, or runtime side effects."""
     packet = _as_mapping(display_packet)
@@ -254,6 +276,20 @@ def build_prediction_warroom_supplemental_widget_registry(
             groups=groups,
             refresh_groups=refresh_groups,
         )
+    if include_latest_payload_loader_authorization:
+        authorization_index = build_prediction_warroom_latest_payload_loader_authorization_widget_group_index(
+            authorization_request=latest_payload_loader_authorization_request,
+            permission_contract=latest_payload_loader_permission_contract,
+            hot_latest_root_hint=hot_latest_root_hint,
+        ).to_dict()
+        _append_index(
+            index=authorization_index,
+            source_kind="latest_payload_loader_authorization_widget_group",
+            attach_default="prediction_latest_payload_dry_run_status_widget",
+            indexes=indexes,
+            groups=groups,
+            refresh_groups=refresh_groups,
+        )
     order = tuple(str(group.get("widget_group_id") or "unknown") for group in groups)
     boundaries = {
         "read_only": True,
@@ -280,6 +316,7 @@ def build_prediction_warroom_supplemental_widget_registry(
         "base_widget_group_contract": WIDGET_GROUP_PACKET_VERSION,
         "source_quality_explanation_widget_contract": EXPLANATION_WIDGET_GROUP_VERSION,
         "latest_payload_dry_run_widget_contract": DRY_RUN_WIDGET_GROUP_VERSION,
+        "latest_payload_loader_authorization_widget_contract": AUTHORIZATION_WIDGET_GROUP_VERSION,
         "integration_kind": "composite_supplemental_widget_registry",
         "supplemental_index_count": len(indexes),
         "supplemental_widget_group_count": len(groups),
@@ -290,10 +327,26 @@ def build_prediction_warroom_supplemental_widget_registry(
         "requires_payload_decode": False,
         "requires_streamlit_rendering": False,
         "safe_to_render_without_side_effects": True,
-        "actual_loader_execution_allowed": False,
-        "actual_file_read_allowed_by_this_contract": False,
         "read_only": True,
         "non_executing": True,
+        "display_only": True,
+        "render_intent_only": True,
+        "not_loaded_as_runtime_display_source": True,
+        "approval_granted_by_this_contract": False,
+        "authorization_granted_by_this_contract": False,
+        "actual_loader_execution_allowed": False,
+        "actual_file_read_allowed_by_this_contract": False,
+        "actual_payload_decode_allowed_by_this_contract": False,
+        "would_load_hot_latest_artifacts": False,
+        "would_read_runtime_file": False,
+        "would_collect_public_source": False,
+        "would_write_runtime_artifact": False,
+        "would_write_collector_state": False,
+        "would_send_to_broker": False,
+        "broker_execution_requested": False,
+        "mode_apply_requested": False,
+        "command_ledger_append_requested": False,
+        "approval_append_requested": False,
     }
     return PredictionWarRoomSupplementalWidgetRegistryPacket(
         registry_version=SUPPLEMENTAL_WIDGET_REGISTRY_VERSION,

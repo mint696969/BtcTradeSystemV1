@@ -15,6 +15,7 @@ HANDOFF_CATALOG_VISIBILITY_VERSION = "prediction_warroom_handoff_catalog_visibil
 BASE_WIDGET_GROUP_VISIBILITY_ID = "prediction_warroom_base_widget_groups_visibility"
 SOURCE_EXPLANATION_VISIBILITY_ID = "prediction_warroom_source_explanation_visibility"
 LATEST_PAYLOAD_DRY_RUN_VISIBILITY_ID = "prediction_warroom_latest_payload_dry_run_visibility"
+LOADER_AUTHORIZATION_VISIBILITY_ID = "prediction_warroom_loader_authorization_visibility"
 
 
 @dataclass(frozen=True)
@@ -169,6 +170,7 @@ def _build_visibility_groups(handoff_index: Mapping[str, Any]) -> Tuple[Mapping[
     supplemental_order = tuple(str(item) for item in _list(handoff_index.get("supplemental_widget_group_order")))
     source_explanation = tuple(item for item in supplemental_order if item == "source_quality_explanation_widgets")
     latest_payload = tuple(item for item in supplemental_order if item == "prediction_latest_payload_dry_run_status_widget")
+    loader_authorization = tuple(item for item in supplemental_order if item == "prediction_latest_payload_loader_authorization_widget")
     return (
         _visibility_group(
             visibility_group_id=BASE_WIDGET_GROUP_VISIBILITY_ID,
@@ -199,6 +201,16 @@ def _build_visibility_groups(handoff_index: Mapping[str, Any]) -> Tuple[Mapping[
             ui_mount_hint="warroom_prediction:supplemental:latest_payload_dry_run_status",
             refresh_policy="use_q6f_supplemental_auto_refresh_group",
             order_strategy="append_after_warning_refresh_widget",
+        ),
+        _visibility_group(
+            visibility_group_id=LOADER_AUTHORIZATION_VISIBILITY_ID,
+            visibility_label_ja="最新payload loader承認状態widget",
+            visibility_kind="supplemental_latest_payload_loader_authorization_status",
+            widget_group_ids=loader_authorization,
+            attach_after_widget_group_id="prediction_latest_payload_dry_run_status_widget",
+            ui_mount_hint="warroom_prediction:supplemental:latest_payload_loader_authorization_status",
+            refresh_policy="use_q6f_supplemental_auto_refresh_group",
+            order_strategy="append_after_latest_payload_dry_run_status_widget",
         ),
     )
 

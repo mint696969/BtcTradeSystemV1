@@ -8,6 +8,7 @@ from typing import Any, Dict, Iterable, Mapping, Tuple
 
 from .prediction_warroom_explanation_widget_groups import EXPLANATION_WIDGET_GROUP_VERSION
 from .prediction_warroom_latest_payload_dry_run_widget_groups import DRY_RUN_WIDGET_GROUP_VERSION
+from .prediction_warroom_latest_payload_loader_authorization_widget_groups import AUTHORIZATION_WIDGET_GROUP_VERSION
 from .prediction_warroom_payload_schema_validator import (
     VALIDATOR_VERSION as BASE_PAYLOAD_VALIDATOR_VERSION,
     validate_prediction_warroom_payload_contract_bundle,
@@ -35,6 +36,8 @@ _DANGEROUS_FALSE_FIELDS = (
     "mode_apply_requested",
     "command_ledger_append_requested",
     "approval_append_requested",
+    "approval_granted_by_this_contract",
+    "authorization_granted_by_this_contract",
     "trigger_enabled",
     "autotrade_trigger_enabled",
 )
@@ -48,8 +51,9 @@ _SAFE_TRUE_FIELDS = (
 _EXPECTED_ATTACH_POINTS = {
     "source_quality_explanation_widgets": "source_quality_widget",
     "prediction_latest_payload_dry_run_status_widget": "warning_refresh_widget",
+    "prediction_latest_payload_loader_authorization_widget": "prediction_latest_payload_dry_run_status_widget",
 }
-_EXPECTED_INDEX_VERSIONS = {EXPLANATION_WIDGET_GROUP_VERSION, DRY_RUN_WIDGET_GROUP_VERSION}
+_EXPECTED_INDEX_VERSIONS = {EXPLANATION_WIDGET_GROUP_VERSION, DRY_RUN_WIDGET_GROUP_VERSION, AUTHORIZATION_WIDGET_GROUP_VERSION}
 
 
 @dataclass(frozen=True)
@@ -377,7 +381,7 @@ def validate_prediction_warroom_supplemental_widget_registry_schema(
         registry=registry,
         issues=issues,
         checked_sections=("registry", "supplemental_indexes", "widget_groups", "auto_refresh_groups", "integration_contract", "boundaries"),
-        checked_contracts=(SUPPLEMENTAL_WIDGET_REGISTRY_VERSION, EXPLANATION_WIDGET_GROUP_VERSION, DRY_RUN_WIDGET_GROUP_VERSION, WIDGET_GROUP_PACKET_VERSION),
+        checked_contracts=(SUPPLEMENTAL_WIDGET_REGISTRY_VERSION, EXPLANATION_WIDGET_GROUP_VERSION, DRY_RUN_WIDGET_GROUP_VERSION, AUTHORIZATION_WIDGET_GROUP_VERSION, WIDGET_GROUP_PACKET_VERSION),
     )
 
 

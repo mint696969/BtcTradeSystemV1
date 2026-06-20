@@ -104,9 +104,9 @@ def test_ps_q6g_default_sample_preflight_is_valid_and_safe() -> None:
     assert report["preflight_state"] == "ready_for_warroom_supplemental_handoff"
     assert report["valid"] is True
     assert report["blocker_count"] == 0
-    assert report["supplemental_index_count"] == 2
-    assert report["supplemental_widget_group_count"] == 2
-    assert report["auto_refresh_group_count"] == 2
+    assert report["supplemental_index_count"] == 3
+    assert report["supplemental_widget_group_count"] == 3
+    assert report["auto_refresh_group_count"] == 3
     assert "prediction_warroom_supplemental_widget_registry.ps_q6f.v1" in report["checked_contracts"]
     assert "prediction_warroom_widget_groups.ps_q4b.v1" in report["checked_contracts"]
     assert report["actual_loader_execution_allowed"] is False
@@ -124,14 +124,14 @@ def test_ps_q6g_schema_validator_accepts_valid_registry() -> None:
     report = validate_prediction_warroom_supplemental_widget_registry_schema(registry).to_dict()
     assert report["valid"] is True
     assert report["preflight_state"] == "ready_for_warroom_supplemental_handoff"
-    assert report["supplemental_widget_group_count"] == 2
+    assert report["supplemental_widget_group_count"] == 3
     assert report["blocker_count"] == 0
 
 
 def test_ps_q6g_schema_validator_blocks_wrong_counts_and_order() -> None:
     registry = build_prediction_warroom_supplemental_widget_registry(display_packet=_sample_display_packet()).to_dict()
     registry["supplemental_widget_group_count"] = 99
-    registry["supplemental_widget_group_order"] = ["prediction_latest_payload_dry_run_status_widget", "source_quality_explanation_widgets"]
+    registry["supplemental_widget_group_order"] = ["prediction_latest_payload_loader_authorization_widget", "prediction_latest_payload_dry_run_status_widget", "source_quality_explanation_widgets"]
     report = validate_prediction_warroom_supplemental_widget_registry_schema(registry).to_dict()
     codes = {item["issue_code"] for item in report["issues"]}
     assert report["valid"] is False
