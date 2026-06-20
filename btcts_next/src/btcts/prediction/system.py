@@ -1031,6 +1031,149 @@ def _context_evidence_profile_warning_codes(context_profile_packets: Tuple[Mappi
             warnings.append(f"context_evidence_profile_missing:{packet.get('evidence_profile_id', 'unknown')}")
     return tuple(dict.fromkeys(warnings))
 
+
+
+def _signal_strength_band(percent: int) -> dict[str, Any]:
+    value = max(0, min(99, int(percent)))
+    if value == 0:
+        return {"band": "unavailable", "label_ja": "予測不能", "range": "0"}
+    if value <= 24:
+        return {"band": "very_low_reference", "label_ja": "参考度かなり低い", "range": "1-24"}
+    if value <= 49:
+        return {"band": "low_reference", "label_ja": "参考度低い", "range": "25-49"}
+    if value <= 69:
+        return {"band": "useful_reference", "label_ja": "参考になる", "range": "50-69"}
+    if value <= 84:
+        return {"band": "strong_reference", "label_ja": "強めに参考", "range": "70-84"}
+    if value <= 94:
+        return {"band": "very_strong_reference", "label_ja": "かなり強い参考", "range": "85-94"}
+    return {"band": "maximum_reference_not_certainty", "label_ja": "最大級だが絶対ではない", "range": "95-99"}
+
+
+def _output_signal_percent(output: PredictionOutput, key: str, fallback_score: bool = True) -> int | None:
+    raw = output.values.get(key)
+    if raw is not None:
+        try:
+            return max(0, min(99, int(raw)))
+        except (TypeError, ValueError):
+            pass
+    if fallback_score and output.score is not None:
+        return _signal_strength_percent_from_score(output.score)
+    return None
+
+
+def _signal_strength_summary_from_outputs(
+    outputs: Tuple[PredictionOutput, ...],
+    *,
+    blockers: Tuple[str, ...],
+    warnings: Tuple[str, ...],
+) -> dict[str, Any]:
+    scored = tuple(output for output in outputs if output.score is not None and not output.blockers)
+    unavailable_reasons: list[str] = []
+    if blockers:
+        unavailable_reasons.extend(str(item) for item in blockers)
+    if not scored:
+        unavailable_reasons.append("no_scored_family_outputs")
+    signal_values = tuple(
+        value for value in (_output_signal_percent(output, "estimated_signal_strength_percent") for output in scored) if value is not None
+    )
+    reference_values = tuple(
+        value for value in (_output_signal_percent(output, "estimated_reference_hit_rate_percent") for output in scored) if value is not None
+    )
+    if blockers or not signal_values:
+        estimated_signal = 0
+    else:
+        estimated_signal = max(1, min(99, int(round(sum(signal_values) / len(signal_values)))))
+    if blockers or not reference_values:
+        estimated_reference = 0
+    else:
+        estimated_reference = max(1, min(99, int(round(sum(reference_values) / len(reference_values)))))
+    band = _signal_strength_band(estimated_signal)
+    cap_reasons: list[str] = []
+    source_quality_gate_states: list[str] = []
+    family_breakdown: list[dict[str, Any]] = []
+    capped_count = 0
+    for output in outputs:
+        values = dict(output.values)
+        signal = _output_signal_percent(output, "estimated_signal_strength_percent")
+        reference = _output_signal_percent(output, "estimated_reference_hit_rate_percent")
+        reasons = [
+            values.get("signal_strength_cap_reason"),
+            values.get("context_profile_signal_strength_cap_reason"),
+        ]
+        for reason in reasons:
+            if reason:
+                cap_reasons.append(str(reason))
+        if values.get("context_profile_source_cap_applied") or "tier0_source_quality_signal_strength_capped" in output.warnings:
+            capped_count += 1
+        if values.get("source_quality_gate_state"):
+            source_quality_gate_states.append(str(values.get("source_quality_gate_state")))
+        family_breakdown.append(
+            {
+                "family": output.family.value,
+                "horizon_sec": int(output.horizon.horizon_sec),
+                "primary_label": output.primary_label,
+                "score": output.score,
+                "estimated_signal_strength_percent": signal,
+                "estimated_reference_hit_rate_percent": reference,
+                "signal_strength_cap_reasons": [str(reason) for reason in reasons if reason],
+                "blockers": list(output.blockers),
+                "warnings": list(output.warnings),
+            }
+        )
+    return {
+        "summary_version": "prediction_signal_strength_bands.ps_q3c.v1",
+        "estimated_signal_strength_percent": estimated_signal,
+        "estimated_reference_hit_rate_percent": estimated_reference,
+        "signal_strength_band": band["band"],
+        "signal_strength_band_label_ja": band["label_ja"],
+        "signal_strength_band_range": band["range"],
+        "max_family_signal_strength_percent": max(signal_values) if signal_values else 0,
+        "average_family_signal_strength_percent": estimated_signal,
+        "contributing_family_count": len(scored),
+        "family_output_count": len(outputs),
+        "capped_family_count": capped_count,
+        "signal_strength_cap_reasons": list(dict.fromkeys(cap_reasons)),
+        "source_quality_gate_states": list(dict.fromkeys(source_quality_gate_states)),
+        "prediction_unavailable_reasons": list(dict.fromkeys(unavailable_reasons)),
+        "warnings": list(warnings),
+        "blockers": list(blockers),
+        "family_breakdown": family_breakdown,
+        "read_only": True,
+        "non_executing": True,
+        "would_send_to_broker": False,
+    }
+
+
+def _scenario_signal_strength_summary_from_outlooks(outlooks: Tuple[HorizonGroupSummary, ...]) -> dict[str, Any]:
+    horizon_summaries = [dict(outlook.gpt_review_digest.get("signal_strength_summary", {})) for outlook in outlooks]
+    horizon_summaries = [summary for summary in horizon_summaries if summary]
+    signal_values = [int(summary.get("estimated_signal_strength_percent", 0) or 0) for summary in horizon_summaries]
+    reference_values = [int(summary.get("estimated_reference_hit_rate_percent", 0) or 0) for summary in horizon_summaries]
+    estimated_signal = max(signal_values) if signal_values else 0
+    estimated_reference = max(reference_values) if reference_values else 0
+    band = _signal_strength_band(estimated_signal)
+    cap_reasons: list[str] = []
+    unavailable: list[str] = []
+    for summary in horizon_summaries:
+        cap_reasons.extend(str(item) for item in summary.get("signal_strength_cap_reasons", []))
+        unavailable.extend(str(item) for item in summary.get("prediction_unavailable_reasons", []))
+    return {
+        "summary_version": "prediction_signal_strength_bands.ps_q3c.v1",
+        "estimated_signal_strength_percent": estimated_signal,
+        "estimated_reference_hit_rate_percent": estimated_reference,
+        "signal_strength_band": band["band"],
+        "signal_strength_band_label_ja": band["label_ja"],
+        "signal_strength_band_range": band["range"],
+        "horizon_group_count": len(horizon_summaries),
+        "signal_strength_cap_reasons": list(dict.fromkeys(cap_reasons)),
+        "prediction_unavailable_reasons": list(dict.fromkeys(unavailable)),
+        "horizon_summaries": horizon_summaries,
+        "read_only": True,
+        "non_executing": True,
+        "would_send_to_broker": False,
+    }
+
 def _horizon_group_summary(
     *,
     group: HorizonGroup,
@@ -1101,6 +1244,7 @@ def _horizon_group_summary(
         },
     )
     narrative = _group_narrative(group, primary, trend, regime, caution, confidence)
+    signal_strength_summary = _signal_strength_summary_from_outputs(group_outputs, blockers=blockers, warnings=warnings)
     return HorizonGroupSummary(
         horizon_group=group,
         display_label_ja=DISPLAY_LABEL_JA_BY_GROUP[group],
@@ -1137,6 +1281,11 @@ def _horizon_group_summary(
                 "human_technical_structure": technical,
             },
             "output_count": len(group_outputs),
+            "signal_strength_summary": signal_strength_summary,
+            "estimated_signal_strength_percent": signal_strength_summary["estimated_signal_strength_percent"],
+            "estimated_reference_hit_rate_percent": signal_strength_summary["estimated_reference_hit_rate_percent"],
+            "signal_strength_band": signal_strength_summary["signal_strength_band"],
+            "signal_strength_band_label_ja": signal_strength_summary["signal_strength_band_label_ja"],
             "blockers": list(blockers),
             "warnings": list(warnings),
             "scenario_lite": scenario_lite,
@@ -1485,6 +1634,7 @@ def build_prediction_system_result(
     )
     revision = _build_revision_summary(previous_prediction_run_id=previous_prediction_run_id, scenario=scenario, horizons_sec=horizons_sec)
     prediction_lifetime_state = str(scenario.gpt_review_digest.get("prediction_lifetime_state", "current_until_stale_after"))
+    top_signal_strength_summary = _scenario_signal_strength_summary_from_outlooks(scenario.outlooks)
 
     return PredictionSystemResult(
         run_identity=run_identity,
@@ -1497,6 +1647,11 @@ def build_prediction_system_result(
         human_narrative_ja=scenario.human_narrative_ja,
         gpt_review_digest={
             "logic_version": LOGIC_VERSION,
+            "signal_strength_summary": top_signal_strength_summary,
+            "estimated_signal_strength_percent": top_signal_strength_summary["estimated_signal_strength_percent"],
+            "estimated_reference_hit_rate_percent": top_signal_strength_summary["estimated_reference_hit_rate_percent"],
+            "signal_strength_band": top_signal_strength_summary["signal_strength_band"],
+            "signal_strength_band_label_ja": top_signal_strength_summary["signal_strength_band_label_ja"],
             "family_count": len(INITIAL_FAMILIES),
             "output_count": len(outputs),
             "forecast_record_count": forecast_batch.record_count if isinstance(forecast_batch, ForecastLedgerBatch) else 0,
