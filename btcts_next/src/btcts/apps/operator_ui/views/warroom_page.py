@@ -44,6 +44,9 @@ from btcts.apps.operator_ui.components.prediction_warroom_lowered_display_packet
 from btcts.apps.operator_ui.components.prediction_warroom_actual_review_packet_live_session_seed_page_mount import (
     apply_prediction_warroom_actual_review_packet_live_session_seed_page_mount,
 )
+from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_source_review_panel import (
+    render_prediction_warroom_latest_prediction_source_review_panel,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -315,7 +318,8 @@ def _render_prediction_warroom_ui_mount_review_section() -> None:
 
 
 def _render_prediction_warroom_lowered_display_packet_visibility_review_section() -> None:
-    """Render PS-Q9G lowered display-packet visibility review as a folded read-only section only."""
+    """Render PS-Q12B latest prediction source status, then PS-Q9G review packet visibility."""
+    render_prediction_warroom_latest_prediction_source_review_panel()
     apply_prediction_warroom_actual_review_packet_live_session_seed_page_mount(session_state=st.session_state)
     render_prediction_warroom_lowered_display_packet_visibility_review_panel()
 
@@ -466,7 +470,8 @@ def _render_warroom_page_body() -> None:
     with live_shell.render_folded_section("Prediction WarRoom real payload review", expanded=True):
         st.caption(
             "Prediction WarRoom real payload review is top/default-expanded and read-only: "
-            "no loader, no file read, no payload decode, no approval, no AutoTrade, no broker."
+            "PS-Q12B may read/decode D-hot latest prediction JSON through PS-Q12A, "
+            "but no runtime write, no approval, no ledger, no AutoTrade, no broker."
         )
         _render_prediction_warroom_lowered_display_packet_visibility_review_section()
 
