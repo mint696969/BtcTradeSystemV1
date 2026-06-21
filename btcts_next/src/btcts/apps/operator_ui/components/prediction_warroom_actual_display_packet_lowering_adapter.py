@@ -159,6 +159,14 @@ def _first_value(payload: Mapping[str, Any], *keys: str, default: Any = None) ->
     return default
 
 
+def _percent_from_any(value: Any, *, default: int = 0) -> int:
+    if isinstance(value, int):
+        return max(0, min(99, value))
+    if isinstance(value, float):
+        return max(0, min(99, int(round(value * 100 if 0 <= value <= 1 else value))))
+    return max(0, min(99, default))
+
+
 def _safe_boundaries() -> dict[str, Any]:
     return {
         "read_only": True,
@@ -202,13 +210,9 @@ def _ui_contract() -> dict[str, Any]:
 
 
 def _normalize_signal_summary(value: Mapping[str, Any]) -> dict[str, Any]:
-    percent = value.get("estimated_signal_strength_percent")
-    ref_percent = value.get("estimated_reference_hit_rate_percent", percent)
-    if not isinstance(percent, int):
-        percent = 0
-    if not isinstance(ref_percent, int):
-        ref_percent = percent
-    band = str(value.get("signal_strength_band") or "unknown")
+    percent = _percent_from_any(value.get("estimated_signal_strength_percent", value.get("score", 0)))
+    ref_percent = _percent_from_any(value.get("estimated_reference_hit_rate_percent", percent), default=percent)
+    band = str(value.get("signal_strength_band") or value.get("confidence") or value.get("current_hypothesis_health") or "unknown")
     return {
         "summary_version": str(value.get("summary_version") or "prediction_signal_strength_bands.ps_q9e.v1"),
         "estimated_signal_strength_percent": max(0, min(99, int(percent))),
@@ -224,10 +228,8 @@ def _normalize_signal_summary(value: Mapping[str, Any]) -> dict[str, Any]:
 
 def _normalize_horizon_card(raw: Any, primary: Mapping[str, Any]) -> dict[str, Any]:
     item = _as_mapping(raw)
-    percent = item.get("estimated_signal_strength_percent", primary.get("estimated_signal_strength_percent"))
-    if not isinstance(percent, int):
-        percent = 0
-    band = str(item.get("signal_strength_band") or primary.get("signal_strength_band") or "unknown")
+    percent = _percent_from_any(item.get("estimated_signal_strength_percent", item.get("score", primary.get("estimated_signal_strength_percent", 0))))
+    band = str(item.get("signal_strength_band") or item.get("confidence") or primary.get("signal_strength_band") or "unknown")
     return {
         "card_version": str(item.get("card_version") or "prediction_warroom_horizon_card.ps_q9e.v1"),
         "horizon_group": str(item.get("horizon_group") or item.get("group") or "unknown"),
@@ -250,15 +252,14 @@ def _normalize_horizon_card(raw: Any, primary: Mapping[str, Any]) -> dict[str, A
 
 def _normalize_family_card(raw: Any, primary: Mapping[str, Any]) -> dict[str, Any]:
     item = _as_mapping(raw)
-    percent = item.get("estimated_signal_strength_percent", primary.get("estimated_signal_strength_percent"))
-    if not isinstance(percent, int):
-        percent = 0
+    horizon = _as_mapping(item.get("horizon"))
+    percent = _percent_from_any(item.get("estimated_signal_strength_percent", item.get("score", primary.get("estimated_signal_strength_percent", 0))))
     return {
         "card_version": str(item.get("card_version") or "prediction_warroom_family_card.ps_q9e.v1"),
         "family": str(item.get("family") or "unknown"),
-        "horizon_sec": int(item.get("horizon_sec") or 0),
+        "horizon_sec": int(item.get("horizon_sec") or horizon.get("horizon_sec") or 0),
         "primary_label": str(item.get("primary_label") or item.get("label") or "unknown"),
-        "estimated_signal_strength_percent": max(0, min(99, int(percent))),
+        "estimated_signal_strength_percent": percent,
         "source_quality_gate_state": str(item.get("source_quality_gate_state") or "unknown"),
         "context_profile_source_caps": _list(item.get("context_profile_source_caps")),
         "source_contribution_ledger": _list(item.get("source_contribution_ledger")),
@@ -305,15 +306,29 @@ def _normalize_warning_panel(raw: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _warning_panel_from_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
+    explicit = _first_mapping(payload, "warning_panel", "risk_warnings")
+    if explicit:
+        return _normalize_warning_panel(explicit)
+    return _normalize_warning_panel(
+        {
+            "blockers": _list(payload.get("blockers")),
+            "warnings": _list(payload.get("warnings")),
+            "scenario_blockers": _list(_get_path(payload, "scenario_core.blockers")),
+            "scenario_warnings": _list(_get_path(payload, "scenario_core.warnings")),
+        }
+    )
+
+
 def _build_display_packet(payload: Mapping[str, Any]) -> dict[str, Any]:
-    prediction_run_id = str(_first_value(payload, "prediction_run_id", "run_id", "metadata.prediction_run_id", default="unknown_prediction_run"))
-    generated_at = str(_first_value(payload, "generated_at", "created_at", "metadata.generated_at", "as_of", default="unknown_generated_at"))
-    market_uid = str(_first_value(payload, "market_uid", "market.market_uid", "symbol", "instrument", default="unknown_market"))
-    primary = _normalize_signal_summary(_first_mapping(payload, "primary_signal_summary", "signal_strength_summary", "summary.primary_signal_summary"))
-    horizon_cards = [_normalize_horizon_card(item, primary) for item in _first_list(payload, "horizon_cards", "horizons", "horizon_predictions")]
-    family_cards = [_normalize_family_card(item, primary) for item in _first_list(payload, "family_cards", "family_predictions", "predictions")]
-    source_quality_panel = _normalize_source_quality_panel(_first_mapping(payload, "source_quality_panel", "source_quality", "quality"))
-    warning_panel = _normalize_warning_panel(_first_mapping(payload, "warning_panel", "warnings", "risk_warnings"))
+    prediction_run_id = str(_first_value(payload, "prediction_run_id", "run_id", "metadata.prediction_run_id", "run_identity.prediction_run_id", default="unknown_prediction_run"))
+    generated_at = str(_first_value(payload, "generated_at", "created_at", "metadata.generated_at", "as_of", "run_identity.generated_at", "scenario_core.generated_at", default="unknown_generated_at"))
+    market_uid = str(_first_value(payload, "market_uid", "market.market_uid", "symbol", "instrument", "run_identity.market_uid", "system_input.market_uid", default="unknown_market"))
+    primary = _normalize_signal_summary(_first_mapping(payload, "primary_signal_summary", "signal_strength_summary", "summary.primary_signal_summary", "gpt_review_digest", "scenario_core.gpt_review_digest", "scenario_core"))
+    horizon_cards = [_normalize_horizon_card(item, primary) for item in _first_list(payload, "horizon_cards", "horizons", "horizon_predictions", "scenario_core.outlooks")]
+    family_cards = [_normalize_family_card(item, primary) for item in _first_list(payload, "family_cards", "family_predictions", "predictions", "outputs", "inference_bundle.outputs")]
+    source_quality_panel = _normalize_source_quality_panel(_first_mapping(payload, "source_quality_panel", "source_quality", "quality", "system_input.source_artifact_coverage_summary", "system_input.provider_quality_summary", "system_input.diagnostics"))
+    warning_panel = _warning_panel_from_payload(payload)
     return {
         "packet_version": DISPLAY_PACKET_VERSION,
         "packet_id": f"{DISPLAY_PACKET_VERSION}:{prediction_run_id}",

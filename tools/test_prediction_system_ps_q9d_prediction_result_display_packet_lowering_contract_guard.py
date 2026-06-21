@@ -123,6 +123,43 @@ def _payload() -> dict:
     }
 
 
+def _actual_prediction_system_result_payload() -> dict:
+    return {
+        "run_identity": {
+            "prediction_run_id": "prediction_system.ps_g_lite.v1:BTC_JPY:bitFlyer:2026-06-21T11:42:43Z",
+            "generated_at": "2026-06-21T11:42:43Z",
+            "market_uid": "BTC_JPY:bitFlyer",
+        },
+        "system_input": {
+            "market_uid": "BTC_JPY:bitFlyer",
+            "source_artifact_coverage_summary": {"coverage_state": "partial", "required_runtime_source_inputs_missing": True},
+            "diagnostics": {"logic_version": "prediction_system.ps_g_lite.v1"},
+        },
+        "scenario_core": {
+            "scenario_id": "scenario-1",
+            "generated_at": "2026-06-21T11:42:43Z",
+            "current_hypothesis_health": "low",
+            "outlooks": [
+                {"horizon_group": "nowcast", "display_label_ja": "現在", "score": 0.12, "warnings": ["sample_warning"]},
+                {"horizon_group": "short_horizon", "display_label_ja": "短期", "score": 0.22},
+            ],
+            "gpt_review_digest": {"score": 0.12, "confidence": "low"},
+            "warnings": ["scenario_warning"],
+        },
+        "outputs": [
+            {"family": "trend_bias", "horizon": {"horizon_sec": 300}, "primary_label": "unknown", "score": 0.12, "warnings": []},
+            {"family": "liquidity_execution_quality", "horizon": {"horizon_sec": 60}, "primary_label": "poor", "score": 0.08, "warnings": ["liquidity_poor_liquidity"]},
+        ],
+        "gpt_review_digest": {"score": 0.12, "confidence": "low"},
+        "blockers": [],
+        "warnings": ["orderbook_snapshot_missing_exchange_ts_context_only", "prediction_result_warnings_present:16"],
+        "read_only": True,
+        "non_executing": True,
+        "would_send_to_broker": False,
+        "broker_execution_requested": False,
+    }
+
+
 def _assert_no_side_effect_flags(packet: dict) -> None:
     false_keys = (
         "actual_display_packet_generation_enabled",
@@ -255,6 +292,31 @@ def test_ps_q9d_bad_signal_or_card_shape_blocks_before_lowering() -> None:
     _assert_no_side_effect_flags(packet)
 
 
+def test_ps_q9d_actual_prediction_system_result_shape_is_ready_for_q9e() -> None:
+    payload = _actual_prediction_system_result_payload()
+    panel = {
+        "panel_version": "prediction_warroom_loaded_payload_schema_validation_result_panel.ps_q9c.v1",
+        "blocker_count": 0,
+        "warning_reasons": ["schema_validation_deferred_to_ps_q9c"],
+    }
+    packet = build_prediction_warroom_prediction_result_display_packet_lowering_contract(
+        prediction_result_payload=payload,
+        validation_panel=panel,
+    ).to_dict()
+    assert packet["ready_for_ps_q9e_actual_display_packet_lowering"] is True
+    assert packet["blocker_count"] == 0
+    checks = {item["display_field"]: item for item in packet["field_checks"]}
+    assert checks["prediction_run_id"]["matched_source_path"] == "run_identity.prediction_run_id"
+    assert checks["generated_at"]["matched_source_path"] == "run_identity.generated_at"
+    assert checks["market_uid"]["matched_source_path"] == "run_identity.market_uid"
+    assert checks["primary_signal_summary"]["matched_source_path"] in {"gpt_review_digest", "scenario_core.gpt_review_digest", "scenario_core"}
+    assert checks["horizon_cards"]["matched_source_path"] == "scenario_core.outlooks"
+    assert checks["family_cards"]["matched_source_path"] == "outputs"
+    assert checks["source_quality_panel"]["matched_source_path"].startswith("system_input.")
+    assert checks["warning_panel"]["matched_source_path"] == "warnings"
+    _assert_no_side_effect_flags(packet)
+
+
 def test_ps_q9d_validation_panel_blockers_block_lowering() -> None:
     panel = {
         "panel_version": "prediction_warroom_loaded_payload_schema_validation_result_panel.ps_q9c.v1",
@@ -294,6 +356,7 @@ def main() -> int:
     test_ps_q9d_valid_payload_is_ready_for_ps_q9e_but_still_contract_only()
     test_ps_q9d_nested_source_aliases_can_satisfy_contract()
     test_ps_q9d_bad_signal_or_card_shape_blocks_before_lowering()
+    test_ps_q9d_actual_prediction_system_result_shape_is_ready_for_q9e()
     test_ps_q9d_validation_panel_blockers_block_lowering()
     test_ps_q9d_handoff_summary_keeps_next_boundary()
     print("[OK] Prediction System PS-Q9D prediction result display-packet lowering contract guard passed")

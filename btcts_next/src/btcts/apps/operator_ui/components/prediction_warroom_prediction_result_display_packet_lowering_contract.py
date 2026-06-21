@@ -42,42 +42,42 @@ LOWERING_SEQUENCE = (
 FIELD_MAPPING_RULES = (
     {
         "display_field": "prediction_run_id",
-        "source_paths": ("prediction_run_id", "run_id", "metadata.prediction_run_id"),
+        "source_paths": ("prediction_run_id", "run_id", "metadata.prediction_run_id", "run_identity.prediction_run_id"),
         "required": True,
     },
     {
         "display_field": "generated_at",
-        "source_paths": ("generated_at", "created_at", "metadata.generated_at", "as_of"),
+        "source_paths": ("generated_at", "created_at", "metadata.generated_at", "as_of", "run_identity.generated_at", "scenario_core.generated_at"),
         "required": True,
     },
     {
         "display_field": "market_uid",
-        "source_paths": ("market_uid", "market.market_uid", "symbol", "instrument"),
+        "source_paths": ("market_uid", "market.market_uid", "symbol", "instrument", "run_identity.market_uid", "system_input.market_uid"),
         "required": True,
     },
     {
         "display_field": "primary_signal_summary",
-        "source_paths": ("primary_signal_summary", "signal_strength_summary", "summary.primary_signal_summary"),
+        "source_paths": ("primary_signal_summary", "signal_strength_summary", "summary.primary_signal_summary", "gpt_review_digest", "scenario_core.gpt_review_digest", "scenario_core"),
         "required": True,
     },
     {
         "display_field": "horizon_cards",
-        "source_paths": ("horizon_cards", "horizons", "horizon_predictions"),
+        "source_paths": ("horizon_cards", "horizons", "horizon_predictions", "scenario_core.outlooks"),
         "required": True,
     },
     {
         "display_field": "family_cards",
-        "source_paths": ("family_cards", "family_predictions", "predictions"),
+        "source_paths": ("family_cards", "family_predictions", "predictions", "outputs", "inference_bundle.outputs"),
         "required": True,
     },
     {
         "display_field": "source_quality_panel",
-        "source_paths": ("source_quality_panel", "source_quality", "quality"),
+        "source_paths": ("source_quality_panel", "source_quality", "quality", "system_input.source_artifact_coverage_summary", "system_input.provider_quality_summary", "system_input.diagnostics"),
         "required": True,
     },
     {
         "display_field": "warning_panel",
-        "source_paths": ("warning_panel", "warnings", "risk_warnings"),
+        "source_paths": ("warning_panel", "warnings", "risk_warnings", "blockers", "scenario_core.warnings", "scenario_core.blockers"),
         "required": True,
     },
 )
@@ -276,7 +276,12 @@ def _is_non_empty(value: Any) -> bool:
 def _signal_percent_ready(value: Any) -> bool:
     if isinstance(value, Mapping):
         raw = value.get("estimated_signal_strength_percent")
-        return isinstance(raw, int) and 0 <= raw <= 99
+        if isinstance(raw, int):
+            return 0 <= raw <= 99
+        # Actual PredictionSystemResult payloads may expose primary display context
+        # through scenario_core / gpt_review_digest without a display-percent yet.
+        # PS-Q9E is responsible for clamping/synthesizing a safe display percent.
+        return bool(value)
     return False
 
 

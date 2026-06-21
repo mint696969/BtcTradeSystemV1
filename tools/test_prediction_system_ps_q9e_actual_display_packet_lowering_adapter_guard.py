@@ -121,6 +121,43 @@ def _payload() -> dict:
     }
 
 
+def _actual_prediction_system_result_payload() -> dict:
+    return {
+        "run_identity": {
+            "prediction_run_id": "prediction_system.ps_g_lite.v1:BTC_JPY:bitFlyer:2026-06-21T11:42:43Z",
+            "generated_at": "2026-06-21T11:42:43Z",
+            "market_uid": "BTC_JPY:bitFlyer",
+        },
+        "system_input": {
+            "market_uid": "BTC_JPY:bitFlyer",
+            "source_artifact_coverage_summary": {"coverage_state": "partial", "required_runtime_source_inputs_missing": True},
+            "diagnostics": {"logic_version": "prediction_system.ps_g_lite.v1"},
+        },
+        "scenario_core": {
+            "scenario_id": "scenario-1",
+            "generated_at": "2026-06-21T11:42:43Z",
+            "current_hypothesis_health": "low",
+            "outlooks": [
+                {"horizon_group": "nowcast", "display_label_ja": "現在", "score": 0.12, "warnings": ["sample_warning"]},
+                {"horizon_group": "short_horizon", "display_label_ja": "短期", "score": 0.22},
+            ],
+            "gpt_review_digest": {"score": 0.12, "confidence": "low"},
+            "warnings": ["scenario_warning"],
+        },
+        "outputs": [
+            {"family": "trend_bias", "horizon": {"horizon_sec": 300}, "primary_label": "unknown", "score": 0.12, "warnings": []},
+            {"family": "liquidity_execution_quality", "horizon": {"horizon_sec": 60}, "primary_label": "poor", "score": 0.08, "warnings": ["liquidity_poor_liquidity"]},
+        ],
+        "gpt_review_digest": {"score": 0.12, "confidence": "low"},
+        "blockers": [],
+        "warnings": ["orderbook_snapshot_missing_exchange_ts_context_only", "prediction_result_warnings_present:16"],
+        "read_only": True,
+        "non_executing": True,
+        "would_send_to_broker": False,
+        "broker_execution_requested": False,
+    }
+
+
 def _assert_no_side_effect_flags(packet: dict) -> None:
     false_keys = (
         "warroom_card_rendering_enabled",
@@ -223,6 +260,30 @@ def test_ps_q9e_nested_q9d_aliases_are_used_by_actual_lowering() -> None:
     _assert_no_side_effect_flags(packet)
 
 
+def test_ps_q9e_lowers_actual_prediction_system_result_shape_in_memory() -> None:
+    packet = build_prediction_warroom_actual_display_packet_lowering_result(
+        prediction_result_payload=_actual_prediction_system_result_payload(),
+        validation_panel={
+            "panel_version": "prediction_warroom_loaded_payload_schema_validation_result_panel.ps_q9c.v1",
+            "blocker_count": 0,
+            "warning_reasons": ["schema_validation_deferred_to_ps_q9c"],
+        },
+    ).to_dict()
+    assert packet["adapter_state"] == "display_packet_lowered_and_validated_in_memory"
+    assert packet["display_packet_generated"] is True
+    assert packet["display_packet_validated"] is True
+    assert packet["display_packet_valid"] is True
+    display_packet = packet["display_packet"]
+    assert display_packet["prediction_run_id"].startswith("prediction_system.ps_g_lite.v1:")
+    assert display_packet["market_uid"] == "BTC_JPY:bitFlyer"
+    assert display_packet["horizon_cards"]
+    assert display_packet["family_cards"]
+    assert display_packet["warning_panel"]["warnings"]
+    assert display_packet["boundaries"]["autotrade_trigger_enabled"] is False
+    assert display_packet["boundaries"]["would_send_to_broker"] is False
+    _assert_no_side_effect_flags(packet)
+
+
 def test_ps_q9e_bad_payload_blocks_before_generation_via_q9d() -> None:
     payload = _payload()
     payload["primary_signal_summary"] = {"estimated_signal_strength_percent": 100}
@@ -272,6 +333,7 @@ def main() -> int:
     test_ps_q9e_lowers_valid_payload_and_q5c_validates_display_packet()
     test_ps_q9e_sample_display_packet_can_roundtrip_as_source_payload()
     test_ps_q9e_nested_q9d_aliases_are_used_by_actual_lowering()
+    test_ps_q9e_lowers_actual_prediction_system_result_shape_in_memory()
     test_ps_q9e_bad_payload_blocks_before_generation_via_q9d()
     test_ps_q9e_validation_panel_blockers_block_before_generation()
     test_ps_q9e_handoff_summary_keeps_ui_mount_separate()
