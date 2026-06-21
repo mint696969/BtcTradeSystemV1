@@ -77,8 +77,9 @@ FORBIDDEN_PAGE_HELPER_TOKENS = FORBIDDEN_PANEL_TOKENS + (
 REQUIRED_PAGE_MARKERS = (
     "render_prediction_warroom_lowered_display_packet_visibility_review_panel",
     "def _render_prediction_warroom_lowered_display_packet_visibility_review_section() -> None:",
-    "Prediction WarRoom lowered display packet review",
-    "with live_shell.render_folded_section(\"Prediction WarRoom lowered display packet review\", expanded=False):",
+    "Prediction WarRoom real payload review",
+    "with live_shell.render_folded_section(\"Prediction WarRoom real payload review\", expanded=True):",
+    "Prediction WarRoom real payload review is top/default-expanded and read-only",
 )
 
 
@@ -115,16 +116,17 @@ def test_ps_q9g_panel_static_boundaries_and_markers() -> None:
     assert "no loader, no file read, no payload decode" in text
 
 
-def test_ps_q9g_warroom_page_has_folded_review_section_after_q8_mount_review() -> None:
+def test_ps_q9g_warroom_page_has_top_default_expanded_review_section_after_q9v() -> None:
     text = WARROOM_PAGE.read_text(encoding="utf-8")
     for marker in REQUIRED_PAGE_MARKERS:
         assert marker in text, marker
-    q8_marker = 'with live_shell.render_folded_section("Prediction WarRoom mount review", expanded=False):'
-    q9_marker = 'with live_shell.render_folded_section("Prediction WarRoom lowered display packet review", expanded=False):'
-    diagnostics_marker = 'get_text(lang, "ui_slot_diagnostics_title")'
-    assert text.count(q9_marker) == 1
+    top_marker = 'with live_shell.render_folded_section("Prediction WarRoom real payload review", expanded=True):'
+    old_bottom_marker = 'with live_shell.render_folded_section("Prediction WarRoom lowered display packet review", expanded=False):'
+    overview_marker = 'with live_shell.zone_container(\n        label=get_text(lang, "ui_label_overview")'
+    assert text.count(top_marker) == 1
+    assert old_bottom_marker not in text
     assert text.count("_render_prediction_warroom_lowered_display_packet_visibility_review_section") == 2
-    assert text.index(q8_marker) < text.index(q9_marker) < text.index(diagnostics_marker)
+    assert text.index(top_marker) < text.index(overview_marker)
     helper_text = _function_source(text, "_render_prediction_warroom_lowered_display_packet_visibility_review_section")
     for token in FORBIDDEN_PAGE_HELPER_TOKENS:
         assert token not in helper_text, token
@@ -154,7 +156,7 @@ def test_ps_q9g_panel_version_is_stable() -> None:
 
 def main() -> int:
     test_ps_q9g_panel_static_boundaries_and_markers()
-    test_ps_q9g_warroom_page_has_folded_review_section_after_q8_mount_review()
+    test_ps_q9g_warroom_page_has_top_default_expanded_review_section_after_q9v()
     test_ps_q9g_rows_are_read_only_and_review_only()
     test_ps_q9g_panel_version_is_stable()
     print("[OK] Prediction System PS-Q9G guarded lowered display-packet UI mount guard passed")
