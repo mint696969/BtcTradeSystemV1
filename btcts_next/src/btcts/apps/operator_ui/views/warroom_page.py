@@ -459,6 +459,13 @@ def _render_warroom_page_body() -> None:
             get_text(lang, "warroom_caption")
         )
 
+    with live_shell.render_folded_section("Prediction WarRoom real payload review", expanded=True):
+        st.caption(
+            "Prediction WarRoom real payload review is top/default-expanded and read-only: "
+            "no loader, no file read, no payload decode, no approval, no AutoTrade, no broker."
+        )
+        _render_prediction_warroom_lowered_display_packet_visibility_review_section()
+
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_overview"),
         zone_kind="overview",
@@ -524,8 +531,6 @@ def _render_warroom_page_body() -> None:
     with live_shell.render_folded_section("Prediction WarRoom mount review", expanded=False):
         _render_prediction_warroom_ui_mount_review_section()
 
-    with live_shell.render_folded_section("Prediction WarRoom lowered display packet review", expanded=False):
-        _render_prediction_warroom_lowered_display_packet_visibility_review_section()
 
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         if _warroom_diagnostics_enabled(
