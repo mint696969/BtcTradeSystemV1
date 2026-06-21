@@ -208,6 +208,33 @@ def main() -> int:
     assert raised_output.diagnostics["operator_review_handoff_manual_only"] is True
     assert raised_output.diagnostics["operator_review_handoff_read_only"] is True
     assert raised_output.diagnostics["operator_review_handoff_non_executing"] is True
+    raised_summary = raised_output.scenario_trace["advisory_packet_summary"]
+    assert raised_summary["trace_type"] == "prediction_advisory_packet_summary"
+    assert raised_summary["summary_status"] == "ready_for_operator_review"
+    assert raised_summary["review_priority"] == "medium"
+    assert raised_summary["review_route"] == "watch_path_review"
+    assert raised_summary["next_action_label"] == "monitor_watch_path"
+    assert raised_summary["next_action_family"] == "monitor"
+    assert raised_summary["manual_review_only"] is True
+    assert raised_summary["advisory_read_only"] is True
+    assert raised_summary["non_executing"] is True
+    assert raised_summary["would_send_to_broker"] is False
+    assert raised_summary["would_append_ledger"] is False
+    assert raised_summary["would_write_runtime_artifact"] is False
+    assert raised_summary["execution_surface"] == "none"
+    assert raised_summary["runtime_write_surface"] == "none"
+    assert raised_output.diagnostics["advisory_packet_summary_status"] == (
+        "ready_for_operator_review"
+    )
+    assert raised_output.diagnostics[
+        "advisory_packet_summary_next_action_label"
+    ] == "monitor_watch_path"
+    assert raised_output.diagnostics[
+        "advisory_packet_summary_next_action_family"
+    ] == "monitor"
+    assert raised_output.diagnostics["advisory_packet_summary_manual_only"] is True
+    assert raised_output.diagnostics["advisory_packet_summary_read_only"] is True
+    assert raised_output.diagnostics["advisory_packet_summary_non_executing"] is True
     replay_feedback_effect = raised_output.scenario_trace["replay_feedback_effect"]
     assert replay_feedback_effect["caution_adjustment"] == 0
     assert replay_feedback_effect["caution_policy"] == "none"
@@ -314,6 +341,14 @@ def main() -> int:
     assert lowered_output.diagnostics["operator_review_handoff_route"] == (
         "optional_review"
     )
+    lowered_summary = lowered_output.scenario_trace["advisory_packet_summary"]
+    assert lowered_summary["summary_status"] == "optional_operator_review"
+    assert lowered_summary["next_action_label"] == "optional_no_action_review"
+    assert lowered_summary["next_action_family"] == "optional"
+    assert lowered_summary["non_executing"] is True
+    assert lowered_output.diagnostics[
+        "advisory_packet_summary_next_action_label"
+    ] == "optional_no_action_review"
     assert lowered_output.diagnostics["invalidation_rewrite_state"] == (
         "rewrite_not_required"
     )
@@ -367,6 +402,12 @@ def main() -> int:
     assert transition_handoff["review_priority"] == "high"
     assert transition_handoff["review_route"] == "priority_switch_review"
     assert transition_handoff["operator_review_required"] is True
+    transition_summary = transition_output.scenario_trace[
+        "advisory_packet_summary"
+    ]
+    assert transition_summary["next_action_label"] == "review_switch_plan"
+    assert transition_summary["next_action_family"] == "review_switch"
+    assert transition_summary["would_write_runtime_artifact"] is False
 
     reversal_input = build_prediction_system_input(
         PredictionSystemBuildInput(
@@ -469,6 +510,17 @@ def main() -> int:
     assert reversal_output.diagnostics["operator_review_handoff_route"] == (
         "priority_switch_review"
     )
+    reversal_summary = reversal_output.scenario_trace[
+        "advisory_packet_summary"
+    ]
+    assert reversal_summary["summary_status"] == "ready_for_operator_review"
+    assert reversal_summary["next_action_label"] == "review_switch_plan"
+    assert reversal_summary["next_action_family"] == "review_switch"
+    assert reversal_summary["manual_review_only"] is True
+    assert reversal_summary["would_send_to_broker"] is False
+    assert reversal_output.diagnostics[
+        "advisory_packet_summary_next_action_label"
+    ] == "review_switch_plan"
     assert reversal_output.diagnostics["replay_feedback_scenario_trace_focus"] == (
         "switch_reason:watch_reversal_path"
     )

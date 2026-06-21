@@ -1379,6 +1379,85 @@ def _build_operator_review_handoff_shape(
     }
 
 
+def _resolve_advisory_next_action_label(
+    *,
+    operator_review_handoff_shape: dict[str, Any],
+) -> tuple[str, str]:
+    review_route = safe_str(
+        operator_review_handoff_shape.get("review_route")
+    ) or "unknown"
+    if review_route == "priority_switch_review":
+        return ("review_switch_plan", "review_switch")
+    if review_route == "priority_operator_review":
+        return ("review_priority_advisory", "review_priority")
+    if review_route == "watch_path_review":
+        return ("monitor_watch_path", "monitor")
+    if review_route == "standard_operator_review":
+        return ("review_advisory_packet", "review")
+    if review_route == "optional_review":
+        return ("optional_no_action_review", "optional")
+    return ("manual_review_required", "review_unknown")
+
+
+def _build_advisory_packet_summary(
+    *,
+    advisory_output_packet_candidate: dict[str, Any],
+    operator_review_handoff_shape: dict[str, Any],
+) -> dict[str, Any]:
+    next_action_label, next_action_family = _resolve_advisory_next_action_label(
+        operator_review_handoff_shape=operator_review_handoff_shape
+    )
+    summary_status = safe_str(
+        operator_review_handoff_shape.get("handoff_status")
+    ) or "unknown"
+    review_priority = safe_str(
+        operator_review_handoff_shape.get("review_priority")
+    ) or "unknown"
+    review_route = safe_str(
+        operator_review_handoff_shape.get("review_route")
+    ) or "unknown"
+
+    summary_lines = (
+        f"status:{summary_status}",
+        f"priority:{review_priority}",
+        f"route:{review_route}",
+        f"next_action:{next_action_label}",
+        f"switch:{advisory_output_packet_candidate.get('scenario_switch_hint')}",
+        f"runtime_write:{operator_review_handoff_shape.get('runtime_write_surface')}",
+    )
+
+    return {
+        "trace_type": "prediction_advisory_packet_summary",
+        "trace_version": "phase3.v1alpha1",
+        "summary_status": summary_status,
+        "review_priority": review_priority,
+        "review_route": review_route,
+        "next_action_label": next_action_label,
+        "next_action_family": next_action_family,
+        "summary_lines": summary_lines,
+        "manual_review_only": True,
+        "advisory_read_only": True,
+        "non_executing": True,
+        "would_send_to_broker": False,
+        "would_append_ledger": False,
+        "would_write_runtime_artifact": False,
+        "execution_surface": "none",
+        "runtime_write_surface": "none",
+        "source_packet_status": advisory_output_packet_candidate.get(
+            "packet_status"
+        ),
+        "source_handoff_status": operator_review_handoff_shape.get(
+            "handoff_status"
+        ),
+        "source_handoff_route": operator_review_handoff_shape.get(
+            "review_route"
+        ),
+        "operator_action_contract": tuple(
+            operator_review_handoff_shape.get("operator_action_contract") or ()
+        ),
+    }
+
+
 def _build_scenario_trace(
     *,
     prediction_input: PredictionSystemInput | None,
@@ -1393,6 +1472,7 @@ def _build_scenario_trace(
     trace_contract_summary: dict[str, Any],
     advisory_output_packet_candidate: dict[str, Any],
     operator_review_handoff_shape: dict[str, Any],
+    advisory_packet_summary: dict[str, Any],
     replay_feedback_caution_adjustment: int,
     replay_feedback_caution_adjustment_policy: str,
     replay_feedback_invalidation_adjustment: int,
@@ -1420,6 +1500,7 @@ def _build_scenario_trace(
             "operator_review_handoff_shape": dict(
                 operator_review_handoff_shape
             ),
+            "advisory_packet_summary": dict(advisory_packet_summary),
             "replay_feedback_effect": {
                 "caution_adjustment": replay_feedback_caution_adjustment,
                 "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1470,6 +1551,7 @@ def _build_scenario_trace(
         "operator_review_handoff_shape": dict(
             operator_review_handoff_shape
         ),
+        "advisory_packet_summary": dict(advisory_packet_summary),
         "replay_feedback_effect": {
             "caution_adjustment": replay_feedback_caution_adjustment,
             "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1665,6 +1747,10 @@ def build_prediction_scenario_output(
         scenario_switch_trace=scenario_switch_trace,
         invalidation_rewrite_trace=invalidation_rewrite_trace,
     )
+    advisory_packet_summary = _build_advisory_packet_summary(
+        advisory_output_packet_candidate=advisory_output_packet_candidate,
+        operator_review_handoff_shape=operator_review_handoff_shape,
+    )
 
     if prediction_input is None:
         return PredictionScenarioOutput(
@@ -1689,6 +1775,7 @@ def build_prediction_scenario_output(
                 trace_contract_summary=trace_contract_summary,
                 advisory_output_packet_candidate=advisory_output_packet_candidate,
                 operator_review_handoff_shape=operator_review_handoff_shape,
+                advisory_packet_summary=advisory_packet_summary,
                 replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
                 replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
                 replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1777,6 +1864,24 @@ def build_prediction_scenario_output(
                 "operator_review_handoff_non_executing": (
                     operator_review_handoff_shape["non_executing"]
                 ),
+                "advisory_packet_summary_status": (
+                    advisory_packet_summary["summary_status"]
+                ),
+                "advisory_packet_summary_next_action_label": (
+                    advisory_packet_summary["next_action_label"]
+                ),
+                "advisory_packet_summary_next_action_family": (
+                    advisory_packet_summary["next_action_family"]
+                ),
+                "advisory_packet_summary_manual_only": (
+                    advisory_packet_summary["manual_review_only"]
+                ),
+                "advisory_packet_summary_read_only": (
+                    advisory_packet_summary["advisory_read_only"]
+                ),
+                "advisory_packet_summary_non_executing": (
+                    advisory_packet_summary["non_executing"]
+                ),
                 "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
                 "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
                 "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
@@ -1817,6 +1922,7 @@ def build_prediction_scenario_output(
             trace_contract_summary=trace_contract_summary,
             advisory_output_packet_candidate=advisory_output_packet_candidate,
             operator_review_handoff_shape=operator_review_handoff_shape,
+            advisory_packet_summary=advisory_packet_summary,
             replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
             replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
             replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1912,6 +2018,24 @@ def build_prediction_scenario_output(
             ),
             "operator_review_handoff_non_executing": (
                 operator_review_handoff_shape["non_executing"]
+            ),
+            "advisory_packet_summary_status": (
+                advisory_packet_summary["summary_status"]
+            ),
+            "advisory_packet_summary_next_action_label": (
+                advisory_packet_summary["next_action_label"]
+            ),
+            "advisory_packet_summary_next_action_family": (
+                advisory_packet_summary["next_action_family"]
+            ),
+            "advisory_packet_summary_manual_only": (
+                advisory_packet_summary["manual_review_only"]
+            ),
+            "advisory_packet_summary_read_only": (
+                advisory_packet_summary["advisory_read_only"]
+            ),
+            "advisory_packet_summary_non_executing": (
+                advisory_packet_summary["non_executing"]
             ),
             "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
             "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
