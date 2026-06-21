@@ -179,6 +179,35 @@ def main() -> int:
     ] is True
     assert raised_output.diagnostics["advisory_output_packet_read_only"] is True
     assert raised_output.diagnostics["advisory_output_packet_non_executing"] is True
+    raised_handoff = raised_output.scenario_trace[
+        "operator_review_handoff_shape"
+    ]
+    assert raised_handoff["trace_type"] == (
+        "prediction_operator_review_handoff_shape"
+    )
+    assert raised_handoff["handoff_status"] == "ready_for_operator_review"
+    assert raised_handoff["review_priority"] == "medium"
+    assert raised_handoff["review_route"] == "watch_path_review"
+    assert raised_handoff["manual_review_only"] is True
+    assert raised_handoff["advisory_read_only"] is True
+    assert raised_handoff["non_executing"] is True
+    assert raised_handoff["would_send_to_broker"] is False
+    assert raised_handoff["would_append_ledger"] is False
+    assert raised_handoff["would_write_runtime_artifact"] is False
+    assert raised_handoff["execution_surface"] == "none"
+    assert raised_handoff["runtime_write_surface"] == "none"
+    assert raised_output.diagnostics["operator_review_handoff_status"] == (
+        "ready_for_operator_review"
+    )
+    assert raised_output.diagnostics["operator_review_handoff_priority"] == (
+        "medium"
+    )
+    assert raised_output.diagnostics["operator_review_handoff_route"] == (
+        "watch_path_review"
+    )
+    assert raised_output.diagnostics["operator_review_handoff_manual_only"] is True
+    assert raised_output.diagnostics["operator_review_handoff_read_only"] is True
+    assert raised_output.diagnostics["operator_review_handoff_non_executing"] is True
     replay_feedback_effect = raised_output.scenario_trace["replay_feedback_effect"]
     assert replay_feedback_effect["caution_adjustment"] == 0
     assert replay_feedback_effect["caution_policy"] == "none"
@@ -268,6 +297,23 @@ def main() -> int:
     assert lowered_output.diagnostics[
         "advisory_output_packet_operator_review_required"
     ] is False
+    lowered_handoff = lowered_output.scenario_trace[
+        "operator_review_handoff_shape"
+    ]
+    assert lowered_handoff["handoff_status"] == "optional_operator_review"
+    assert lowered_handoff["review_priority"] == "normal"
+    assert lowered_handoff["review_route"] == "optional_review"
+    assert lowered_handoff["manual_review_only"] is True
+    assert lowered_handoff["non_executing"] is True
+    assert lowered_output.diagnostics["operator_review_handoff_status"] == (
+        "optional_operator_review"
+    )
+    assert lowered_output.diagnostics["operator_review_handoff_priority"] == (
+        "normal"
+    )
+    assert lowered_output.diagnostics["operator_review_handoff_route"] == (
+        "optional_review"
+    )
     assert lowered_output.diagnostics["invalidation_rewrite_state"] == (
         "rewrite_not_required"
     )
@@ -315,6 +361,12 @@ def main() -> int:
     assert transition_packet["review_priority"] == "high"
     assert transition_packet["operator_review_required"] is True
     assert transition_packet["would_write_runtime_artifact"] is False
+    transition_handoff = transition_output.scenario_trace[
+        "operator_review_handoff_shape"
+    ]
+    assert transition_handoff["review_priority"] == "high"
+    assert transition_handoff["review_route"] == "priority_switch_review"
+    assert transition_handoff["operator_review_required"] is True
 
     reversal_input = build_prediction_system_input(
         PredictionSystemBuildInput(
@@ -406,6 +458,17 @@ def main() -> int:
     assert reversal_output.diagnostics[
         "advisory_output_packet_review_priority"
     ] == "high"
+    reversal_handoff = reversal_output.scenario_trace[
+        "operator_review_handoff_shape"
+    ]
+    assert reversal_handoff["handoff_status"] == "ready_for_operator_review"
+    assert reversal_handoff["review_priority"] == "high"
+    assert reversal_handoff["review_route"] == "priority_switch_review"
+    assert reversal_handoff["manual_review_only"] is True
+    assert reversal_handoff["would_send_to_broker"] is False
+    assert reversal_output.diagnostics["operator_review_handoff_route"] == (
+        "priority_switch_review"
+    )
     assert reversal_output.diagnostics["replay_feedback_scenario_trace_focus"] == (
         "switch_reason:watch_reversal_path"
     )
