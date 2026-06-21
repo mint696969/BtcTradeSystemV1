@@ -1458,6 +1458,92 @@ def _build_advisory_packet_summary(
     }
 
 
+def _build_scenario_core_closeout_candidate(
+    *,
+    trace_contract_summary: dict[str, Any],
+    advisory_output_packet_candidate: dict[str, Any],
+    operator_review_handoff_shape: dict[str, Any],
+    advisory_packet_summary: dict[str, Any],
+) -> dict[str, Any]:
+    consolidated_trace_names = (
+        "evidence_weighting_trace",
+        "invalidation_rewrite_trace",
+        "scenario_switch_trace",
+        "trace_contract_summary",
+        "advisory_output_packet_candidate",
+        "operator_review_handoff_shape",
+        "advisory_packet_summary",
+    )
+    summary_contract_complete = (
+        trace_contract_summary.get("contract_status") == "complete"
+        and advisory_output_packet_candidate.get("packet_status")
+        == "candidate_ready"
+        and operator_review_handoff_shape.get("manual_review_only") is True
+        and advisory_packet_summary.get("trace_type")
+        == "prediction_advisory_packet_summary"
+        and advisory_packet_summary.get("manual_review_only") is True
+        and advisory_packet_summary.get("advisory_read_only") is True
+        and advisory_packet_summary.get("non_executing") is True
+        and advisory_packet_summary.get("would_send_to_broker") is False
+        and advisory_packet_summary.get("would_append_ledger") is False
+        and advisory_packet_summary.get("would_write_runtime_artifact") is False
+        and advisory_packet_summary.get("execution_surface") == "none"
+        and advisory_packet_summary.get("runtime_write_surface") == "none"
+    )
+    summary_contract_status = (
+        "complete" if summary_contract_complete else "incomplete"
+    )
+    closeout_status = (
+        "ready_for_thread_closeout"
+        if summary_contract_complete
+        else "blocked_incomplete_summary_contract"
+    )
+
+    return {
+        "trace_type": "prediction_scenario_core_closeout_candidate",
+        "trace_version": "phase3.v1alpha1",
+        "closeout_status": closeout_status,
+        "summary_contract_status": summary_contract_status,
+        "consolidated_trace_count": len(consolidated_trace_names),
+        "consolidated_trace_names": consolidated_trace_names,
+        "source_trace_contract_status": trace_contract_summary.get(
+            "contract_status"
+        ),
+        "source_packet_status": advisory_output_packet_candidate.get(
+            "packet_status"
+        ),
+        "source_handoff_status": operator_review_handoff_shape.get(
+            "handoff_status"
+        ),
+        "source_summary_status": advisory_packet_summary.get(
+            "summary_status"
+        ),
+        "source_next_action_label": advisory_packet_summary.get(
+            "next_action_label"
+        ),
+        "source_next_action_family": advisory_packet_summary.get(
+            "next_action_family"
+        ),
+        "manual_review_only": True,
+        "advisory_read_only": True,
+        "non_executing": True,
+        "would_send_to_broker": False,
+        "would_append_ledger": False,
+        "would_write_runtime_artifact": False,
+        "execution_surface": "none",
+        "runtime_write_surface": "none",
+        "closeout_boundary": (
+            "scenario_core_read_only_closeout_candidate",
+            "no_auto_trade",
+            "no_broker_send",
+            "no_mode_apply",
+            "no_order_place",
+            "no_ledger_append",
+            "no_runtime_write",
+        ),
+    }
+
+
 def _build_scenario_trace(
     *,
     prediction_input: PredictionSystemInput | None,
@@ -1473,6 +1559,7 @@ def _build_scenario_trace(
     advisory_output_packet_candidate: dict[str, Any],
     operator_review_handoff_shape: dict[str, Any],
     advisory_packet_summary: dict[str, Any],
+    scenario_core_closeout_candidate: dict[str, Any],
     replay_feedback_caution_adjustment: int,
     replay_feedback_caution_adjustment_policy: str,
     replay_feedback_invalidation_adjustment: int,
@@ -1501,6 +1588,9 @@ def _build_scenario_trace(
                 operator_review_handoff_shape
             ),
             "advisory_packet_summary": dict(advisory_packet_summary),
+            "scenario_core_closeout_candidate": dict(
+                scenario_core_closeout_candidate
+            ),
             "replay_feedback_effect": {
                 "caution_adjustment": replay_feedback_caution_adjustment,
                 "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1552,6 +1642,9 @@ def _build_scenario_trace(
             operator_review_handoff_shape
         ),
         "advisory_packet_summary": dict(advisory_packet_summary),
+        "scenario_core_closeout_candidate": dict(
+            scenario_core_closeout_candidate
+        ),
         "replay_feedback_effect": {
             "caution_adjustment": replay_feedback_caution_adjustment,
             "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1751,6 +1844,12 @@ def build_prediction_scenario_output(
         advisory_output_packet_candidate=advisory_output_packet_candidate,
         operator_review_handoff_shape=operator_review_handoff_shape,
     )
+    scenario_core_closeout_candidate = _build_scenario_core_closeout_candidate(
+        trace_contract_summary=trace_contract_summary,
+        advisory_output_packet_candidate=advisory_output_packet_candidate,
+        operator_review_handoff_shape=operator_review_handoff_shape,
+        advisory_packet_summary=advisory_packet_summary,
+    )
 
     if prediction_input is None:
         return PredictionScenarioOutput(
@@ -1776,6 +1875,7 @@ def build_prediction_scenario_output(
                 advisory_output_packet_candidate=advisory_output_packet_candidate,
                 operator_review_handoff_shape=operator_review_handoff_shape,
                 advisory_packet_summary=advisory_packet_summary,
+                scenario_core_closeout_candidate=scenario_core_closeout_candidate,
                 replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
                 replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
                 replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1882,6 +1982,21 @@ def build_prediction_scenario_output(
                 "advisory_packet_summary_non_executing": (
                     advisory_packet_summary["non_executing"]
                 ),
+                "scenario_core_closeout_status": (
+                    scenario_core_closeout_candidate["closeout_status"]
+                ),
+                "scenario_core_closeout_summary_contract_status": (
+                    scenario_core_closeout_candidate["summary_contract_status"]
+                ),
+                "scenario_core_closeout_trace_count": (
+                    scenario_core_closeout_candidate["consolidated_trace_count"]
+                ),
+                "scenario_core_closeout_read_only": (
+                    scenario_core_closeout_candidate["advisory_read_only"]
+                ),
+                "scenario_core_closeout_non_executing": (
+                    scenario_core_closeout_candidate["non_executing"]
+                ),
                 "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
                 "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
                 "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
@@ -1923,6 +2038,7 @@ def build_prediction_scenario_output(
             advisory_output_packet_candidate=advisory_output_packet_candidate,
             operator_review_handoff_shape=operator_review_handoff_shape,
             advisory_packet_summary=advisory_packet_summary,
+            scenario_core_closeout_candidate=scenario_core_closeout_candidate,
             replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
             replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
             replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -2036,6 +2152,21 @@ def build_prediction_scenario_output(
             ),
             "advisory_packet_summary_non_executing": (
                 advisory_packet_summary["non_executing"]
+            ),
+            "scenario_core_closeout_status": (
+                scenario_core_closeout_candidate["closeout_status"]
+            ),
+            "scenario_core_closeout_summary_contract_status": (
+                scenario_core_closeout_candidate["summary_contract_status"]
+            ),
+            "scenario_core_closeout_trace_count": (
+                scenario_core_closeout_candidate["consolidated_trace_count"]
+            ),
+            "scenario_core_closeout_read_only": (
+                scenario_core_closeout_candidate["advisory_read_only"]
+            ),
+            "scenario_core_closeout_non_executing": (
+                scenario_core_closeout_candidate["non_executing"]
             ),
             "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
             "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],

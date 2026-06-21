@@ -235,6 +235,33 @@ def main() -> int:
     assert raised_output.diagnostics["advisory_packet_summary_manual_only"] is True
     assert raised_output.diagnostics["advisory_packet_summary_read_only"] is True
     assert raised_output.diagnostics["advisory_packet_summary_non_executing"] is True
+    raised_closeout = raised_output.scenario_trace[
+        "scenario_core_closeout_candidate"
+    ]
+    assert raised_closeout["trace_type"] == (
+        "prediction_scenario_core_closeout_candidate"
+    )
+    assert raised_closeout["closeout_status"] == "ready_for_thread_closeout"
+    assert raised_closeout["summary_contract_status"] == "complete"
+    assert raised_closeout["consolidated_trace_count"] == 7
+    assert raised_closeout["source_next_action_label"] == "monitor_watch_path"
+    assert raised_closeout["manual_review_only"] is True
+    assert raised_closeout["advisory_read_only"] is True
+    assert raised_closeout["non_executing"] is True
+    assert raised_closeout["would_send_to_broker"] is False
+    assert raised_closeout["would_append_ledger"] is False
+    assert raised_closeout["would_write_runtime_artifact"] is False
+    assert raised_closeout["execution_surface"] == "none"
+    assert raised_closeout["runtime_write_surface"] == "none"
+    assert raised_output.diagnostics["scenario_core_closeout_status"] == (
+        "ready_for_thread_closeout"
+    )
+    assert raised_output.diagnostics[
+        "scenario_core_closeout_summary_contract_status"
+    ] == "complete"
+    assert raised_output.diagnostics["scenario_core_closeout_trace_count"] == 7
+    assert raised_output.diagnostics["scenario_core_closeout_read_only"] is True
+    assert raised_output.diagnostics["scenario_core_closeout_non_executing"] is True
     replay_feedback_effect = raised_output.scenario_trace["replay_feedback_effect"]
     assert replay_feedback_effect["caution_adjustment"] == 0
     assert replay_feedback_effect["caution_policy"] == "none"
@@ -349,6 +376,18 @@ def main() -> int:
     assert lowered_output.diagnostics[
         "advisory_packet_summary_next_action_label"
     ] == "optional_no_action_review"
+    lowered_closeout = lowered_output.scenario_trace[
+        "scenario_core_closeout_candidate"
+    ]
+    assert lowered_closeout["closeout_status"] == "ready_for_thread_closeout"
+    assert lowered_closeout["summary_contract_status"] == "complete"
+    assert lowered_closeout["source_next_action_label"] == (
+        "optional_no_action_review"
+    )
+    assert lowered_closeout["non_executing"] is True
+    assert lowered_output.diagnostics["scenario_core_closeout_status"] == (
+        "ready_for_thread_closeout"
+    )
     assert lowered_output.diagnostics["invalidation_rewrite_state"] == (
         "rewrite_not_required"
     )
@@ -408,6 +447,12 @@ def main() -> int:
     assert transition_summary["next_action_label"] == "review_switch_plan"
     assert transition_summary["next_action_family"] == "review_switch"
     assert transition_summary["would_write_runtime_artifact"] is False
+    transition_closeout = transition_output.scenario_trace[
+        "scenario_core_closeout_candidate"
+    ]
+    assert transition_closeout["closeout_status"] == "ready_for_thread_closeout"
+    assert transition_closeout["source_next_action_label"] == "review_switch_plan"
+    assert transition_closeout["would_write_runtime_artifact"] is False
 
     reversal_input = build_prediction_system_input(
         PredictionSystemBuildInput(
@@ -521,6 +566,17 @@ def main() -> int:
     assert reversal_output.diagnostics[
         "advisory_packet_summary_next_action_label"
     ] == "review_switch_plan"
+    reversal_closeout = reversal_output.scenario_trace[
+        "scenario_core_closeout_candidate"
+    ]
+    assert reversal_closeout["closeout_status"] == "ready_for_thread_closeout"
+    assert reversal_closeout["summary_contract_status"] == "complete"
+    assert reversal_closeout["source_next_action_label"] == "review_switch_plan"
+    assert reversal_closeout["manual_review_only"] is True
+    assert reversal_closeout["would_send_to_broker"] is False
+    assert reversal_output.diagnostics["scenario_core_closeout_status"] == (
+        "ready_for_thread_closeout"
+    )
     assert reversal_output.diagnostics["replay_feedback_scenario_trace_focus"] == (
         "switch_reason:watch_reversal_path"
     )
