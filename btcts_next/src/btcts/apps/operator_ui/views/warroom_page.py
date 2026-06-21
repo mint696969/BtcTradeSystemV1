@@ -38,6 +38,9 @@ from btcts.apps.operator_ui.components.evidence_presentation_lowering_bridge imp
 from btcts.apps.operator_ui.components.prediction_warroom_ui_mount_presenter import (
     build_prediction_warroom_ui_mount_presenter_packet,
 )
+from btcts.apps.operator_ui.components.prediction_warroom_lowered_display_packet_visibility_review_panel import (
+    render_prediction_warroom_lowered_display_packet_visibility_review_panel,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -307,6 +310,12 @@ def _render_prediction_warroom_ui_mount_review_section() -> None:
     if entry_rows:
         st.dataframe(entry_rows, width="stretch", hide_index=True)
 
+
+def _render_prediction_warroom_lowered_display_packet_visibility_review_section() -> None:
+    """Render PS-Q9G lowered display-packet visibility review as a folded read-only section only."""
+    render_prediction_warroom_lowered_display_packet_visibility_review_panel()
+
+
 def _render_fragmentable_warroom_widget(
     widget_id: str,
     render_body: Callable[[], None],
@@ -514,6 +523,9 @@ def _render_warroom_page_body() -> None:
 
     with live_shell.render_folded_section("Prediction WarRoom mount review", expanded=False):
         _render_prediction_warroom_ui_mount_review_section()
+
+    with live_shell.render_folded_section("Prediction WarRoom lowered display packet review", expanded=False):
+        _render_prediction_warroom_lowered_display_packet_visibility_review_section()
 
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         if _warroom_diagnostics_enabled(
