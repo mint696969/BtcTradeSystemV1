@@ -16,6 +16,7 @@ from .prediction_warroom_lowered_display_packet_visibility_review_source_handoff
 
 PREDICTION_WARROOM_LOWERED_DISPLAY_PACKET_VISIBILITY_REVIEW_PANEL_VERSION = "prediction_warroom_lowered_display_packet_visibility_review_panel.ps_q9g.v1"
 PANEL_OPERATOR_READABILITY_VERSION = "prediction_warroom_lowered_display_packet_visibility_readability.ps_q9k.v1"
+PANEL_PREDICTION_COMPACT_SUMMARY_VERSION = "prediction_warroom_prediction_compact_summary.ps_q9l.v1"
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
@@ -93,6 +94,125 @@ def _operator_focus_ja(widget_group_id: Any) -> str:
         "warning_refresh_widget": "警告と更新要否を確認",
     }
     return focus_by_id.get(str(widget_group_id), "表示候補を確認")
+
+
+def _widget_payload_by_id(packet: Mapping[str, Any], widget_group_id: str) -> Mapping[str, Any]:
+    widget_index = _as_mapping(packet.get("widget_group_index"))
+    for raw in _list(widget_index.get("widget_groups")):
+        group = _as_mapping(raw)
+        if group.get("widget_group_id") == widget_group_id:
+            return _as_mapping(group.get("payload"))
+    return {}
+
+
+def _first_mapping_item(value: Any) -> Mapping[str, Any]:
+    items = _list(value)
+    if not items:
+        return {}
+    return _as_mapping(items[0])
+
+
+def _prediction_compact_summary_card_rows(packet: Mapping[str, Any]) -> list[dict[str, Any]]:
+    primary_payload = _widget_payload_by_id(packet, "primary_signal_widget")
+    horizon_payload = _widget_payload_by_id(packet, "horizon_scenario_widgets")
+    source_payload = _widget_payload_by_id(packet, "source_quality_widget")
+    warning_payload = _widget_payload_by_id(packet, "warning_refresh_widget")
+    primary = _as_mapping(primary_payload.get("primary_signal_summary"))
+    horizon = _first_mapping_item(horizon_payload.get("horizon_cards"))
+    source_quality = _as_mapping(source_payload.get("source_quality_panel"))
+    quality_gate = _as_mapping(source_quality.get("tier0_source_quality_gate"))
+    source_coverage = _as_mapping(source_quality.get("source_artifact_coverage"))
+    warning_panel = _as_mapping(warning_payload.get("warning_panel"))
+    headline = str(primary_payload.get("headline_ja") or "not_available")
+    signal_percent = int(primary.get("estimated_signal_strength_percent") or 0)
+    signal_label = str(primary.get("signal_strength_band_label_ja") or primary.get("signal_strength_band") or "unknown")
+    gate_state = str(quality_gate.get("gate_state") or source_quality.get("source_quality_gate_state") or "unknown")
+    coverage_state = str(source_coverage.get("input_coverage_state") or source_quality.get("source_artifact_input_coverage_state") or "unknown")
+    scenario_lite = _as_mapping(horizon.get("scenario_lite"))
+    horizon_group = str(horizon.get("horizon_group") or "unknown")
+    primary_label = str(
+        horizon.get("primary_label")
+        or horizon.get("trend_bias")
+        or scenario_lite.get("scenario_balance_state")
+        or "unknown"
+    )
+    confidence = str(
+        horizon.get("confidence")
+        or horizon.get("caution_level")
+        or scenario_lite.get("turning_point_risk")
+        or "unknown"
+    )
+    warning_count = len(_list(warning_panel.get("warnings")))
+    blocker_count = len(_list(warning_panel.get("blockers")))
+    base = {
+        "read_only": True,
+        "execution": "false",
+        "autotrade": "false",
+        "broker": "false",
+        "source": "already_lowered_review_payload_only",
+    }
+    return [
+        {
+            **base,
+            "card_id": "prediction_headline",
+            "label_ja": "予測ヘッドライン",
+            "state": headline,
+            "operator_note_ja": "最初に読む短い予測要約",
+            "market_uid": primary_payload.get("market_uid"),
+            "prediction_run_id": primary_payload.get("prediction_run_id"),
+            "generated_at": primary_payload.get("generated_at"),
+        },
+        {
+            **base,
+            "card_id": "signal_strength",
+            "label_ja": "シグナル強度",
+            "state": f"{signal_percent}% / {signal_label}",
+            "operator_note_ja": "主要シグナルの強さと参考度を確認",
+            "market_uid": primary_payload.get("market_uid"),
+            "prediction_run_id": primary_payload.get("prediction_run_id"),
+            "generated_at": primary_payload.get("generated_at"),
+        },
+        {
+            **base,
+            "card_id": "source_quality",
+            "label_ja": "情報源品質",
+            "state": f"{gate_state} / {coverage_state}",
+            "operator_note_ja": "ソース品質ゲートと入力カバー率を確認",
+            "market_uid": primary_payload.get("market_uid"),
+            "prediction_run_id": primary_payload.get("prediction_run_id"),
+            "generated_at": primary_payload.get("generated_at"),
+        },
+        {
+            **base,
+            "card_id": "horizon_scenario",
+            "label_ja": "時間軸シナリオ",
+            "state": f"{horizon_group} / {primary_label} / {confidence}",
+            "operator_note_ja": "時間軸・方向・確信度を確認",
+            "market_uid": primary_payload.get("market_uid"),
+            "prediction_run_id": primary_payload.get("prediction_run_id"),
+            "generated_at": primary_payload.get("generated_at"),
+        },
+        {
+            **base,
+            "card_id": "warning_state",
+            "label_ja": "警告状態",
+            "state": f"warnings={warning_count};blockers={blocker_count}",
+            "operator_note_ja": "参考度を制限する警告を確認",
+            "market_uid": primary_payload.get("market_uid"),
+            "prediction_run_id": primary_payload.get("prediction_run_id"),
+            "generated_at": primary_payload.get("generated_at"),
+        },
+        {
+            **base,
+            "card_id": "execution_boundary",
+            "label_ja": "実行境界",
+            "state": "review_only_no_execution",
+            "operator_note_ja": "確認のみ。承認・台帳追記・AutoTrade・broker 操作はしない",
+            "market_uid": primary_payload.get("market_uid"),
+            "prediction_run_id": primary_payload.get("prediction_run_id"),
+            "generated_at": primary_payload.get("generated_at"),
+        },
+    ]
 
 
 def _operator_readiness_card_rows(packet: Mapping[str, Any], source_handoff: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -199,6 +319,10 @@ def render_prediction_warroom_lowered_display_packet_visibility_review_panel(
             fallback=source_handoff.get("fallback_used"),
         )
     )
+    compact_summary_rows = _prediction_compact_summary_card_rows(packet)
+    if compact_summary_rows:
+        st.caption("prediction_compact_summary_cards=" + PANEL_PREDICTION_COMPACT_SUMMARY_VERSION)
+        st.dataframe(compact_summary_rows, width="stretch", hide_index=True)
     operator_rows = _operator_readiness_card_rows(packet, source_handoff)
     if operator_rows:
         st.caption("operator_readability_cards=" + PANEL_OPERATOR_READABILITY_VERSION)
