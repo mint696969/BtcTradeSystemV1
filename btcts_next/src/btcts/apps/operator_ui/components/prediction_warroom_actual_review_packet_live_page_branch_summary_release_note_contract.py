@@ -39,6 +39,10 @@ BRANCH_SUMMARY_RELEASE_NOTE_SEQUENCE = (
 BRANCH_SUMMARY_RELEASE_NOTE_TITLE = "Prediction WarRoom actual review-packet mounted observation lane Q10R-Q10V"
 BRANCH_SUMMARY_RELEASE_NOTE_STATUS = "ready_for_operator_review_handoff_not_execution"
 
+BRANCH_SUMMARY_RELEASE_NOTE_COMMIT_LINEAGE = MOUNTED_OBSERVATION_LANE_COMMIT_LINEAGE + (
+    "1ad3bef0 docs: add actual review packet live page readiness exit contract",
+)
+
 BRANCH_SUMMARY_RELEASE_NOTE_COMPLETED_ITEMS = (
     "Q10R mounted the local-only Q10P seed gate before the existing Q9G WarRoom panel.",
     "Q10S fixed passive and seeded live/local observation acceptance markers.",
@@ -57,7 +61,7 @@ class PredictionWarRoomActualReviewPacketLivePageBranchSummaryReleaseNoteContrac
     release_note_status: str = BRANCH_SUMMARY_RELEASE_NOTE_STATUS
     release_note_sequence: Tuple[str, ...] = BRANCH_SUMMARY_RELEASE_NOTE_SEQUENCE
     completed_items: Tuple[str, ...] = BRANCH_SUMMARY_RELEASE_NOTE_COMPLETED_ITEMS
-    commit_lineage: Tuple[str, ...] = MOUNTED_OBSERVATION_LANE_COMMIT_LINEAGE
+    commit_lineage: Tuple[str, ...] = BRANCH_SUMMARY_RELEASE_NOTE_COMMIT_LINEAGE
     ready_capabilities: Tuple[str, ...] = MOUNTED_OBSERVATION_LANE_READY_CAPABILITIES
     not_done_items: Tuple[str, ...] = MOUNTED_OBSERVATION_LANE_NOT_DONE_ITEMS
     q10r_page_mount_version: str = ACTUAL_REVIEW_PACKET_LIVE_SESSION_SEED_PAGE_MOUNT_VERSION

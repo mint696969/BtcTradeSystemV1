@@ -11,6 +11,7 @@ ensure_btcts_on_syspath()
 
 from btcts.apps.operator_ui.components.prediction_warroom_actual_review_packet_live_page_branch_summary_release_note_contract import (
     ACTUAL_REVIEW_PACKET_LIVE_PAGE_BRANCH_SUMMARY_RELEASE_NOTE_CONTRACT_VERSION,
+    BRANCH_SUMMARY_RELEASE_NOTE_COMMIT_LINEAGE,
     BRANCH_SUMMARY_RELEASE_NOTE_COMPLETED_ITEMS,
     BRANCH_SUMMARY_RELEASE_NOTE_STATUS,
     BRANCH_SUMMARY_RELEASE_NOTE_TITLE,
@@ -117,7 +118,7 @@ def test_ps_q10w_ready_state_packages_branch_summary() -> None:
     assert packet["release_note_title"] == BRANCH_SUMMARY_RELEASE_NOTE_TITLE
     assert packet["release_note_status"] == BRANCH_SUMMARY_RELEASE_NOTE_STATUS
     assert tuple(packet["completed_items"]) == BRANCH_SUMMARY_RELEASE_NOTE_COMPLETED_ITEMS
-    assert tuple(packet["commit_lineage"]) == MOUNTED_OBSERVATION_LANE_COMMIT_LINEAGE
+    assert tuple(packet["commit_lineage"]) == BRANCH_SUMMARY_RELEASE_NOTE_COMMIT_LINEAGE
     assert tuple(packet["ready_capabilities"]) == MOUNTED_OBSERVATION_LANE_READY_CAPABILITIES
     assert tuple(packet["not_done_items"]) == MOUNTED_OBSERVATION_LANE_NOT_DONE_ITEMS
     assert packet["q10v_readiness_exit_contract_version"] == ACTUAL_REVIEW_PACKET_LIVE_PAGE_READINESS_EXIT_CONTRACT_VERSION
@@ -165,6 +166,9 @@ def test_ps_q10w_rejects_unsafe_runtime_or_scope_requests() -> None:
 def test_ps_q10w_release_note_text_is_exact() -> None:
     assert BRANCH_SUMMARY_RELEASE_NOTE_TITLE == "Prediction WarRoom actual review-packet mounted observation lane Q10R-Q10V"
     assert BRANCH_SUMMARY_RELEASE_NOTE_STATUS == "ready_for_operator_review_handoff_not_execution"
+    assert BRANCH_SUMMARY_RELEASE_NOTE_COMMIT_LINEAGE == MOUNTED_OBSERVATION_LANE_COMMIT_LINEAGE + (
+        "1ad3bef0 docs: add actual review packet live page readiness exit contract",
+    )
     assert BRANCH_SUMMARY_RELEASE_NOTE_COMPLETED_ITEMS == (
         "Q10R mounted the local-only Q10P seed gate before the existing Q9G WarRoom panel.",
         "Q10S fixed passive and seeded live/local observation acceptance markers.",
