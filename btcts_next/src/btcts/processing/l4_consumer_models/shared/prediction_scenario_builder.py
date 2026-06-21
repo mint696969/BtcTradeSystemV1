@@ -869,6 +869,155 @@ def _build_evidence_weighting_summary(
     }
 
 
+def _resolve_rewrite_state(invalidation_state: str) -> str:
+    if invalidation_state in {"invalidated", "scenario_switch_required"}:
+        return "rewrite_required"
+    if invalidation_state == "degraded":
+        return "rewrite_prepared"
+    if invalidation_state == "caution_increase":
+        return "rewrite_watch"
+    if invalidation_state == "stable":
+        return "rewrite_not_required"
+    return "unknown"
+
+
+def _resolve_rewrite_priority(
+    *,
+    invalidation_state: str,
+    scenario_switch_hint: str,
+) -> str:
+    if invalidation_state in {"invalidated", "scenario_switch_required"}:
+        return "high"
+    if scenario_switch_hint in {
+        "execute_transition_switch",
+        "prepare_reversal_switch",
+        "rebuild_after_instability",
+        "exit_primary_bias",
+    }:
+        return "high"
+    if invalidation_state in {"degraded", "caution_increase"}:
+        return "medium"
+    if scenario_switch_hint in {
+        "tighten_primary_watch",
+        "watch_reversal_path",
+        "prepare_transition_switch",
+        "reduce_participation",
+    }:
+        return "medium"
+    if invalidation_state == "stable":
+        return "normal"
+    return "unknown"
+
+
+def _resolve_evidence_weighting_state(
+    evidence_weighting_summary: dict[str, Any],
+) -> str:
+    active_weight_total = safe_float(
+        evidence_weighting_summary.get("active_weight_total")
+    )
+    missing_weight_total = safe_float(
+        evidence_weighting_summary.get("missing_weight_total")
+    )
+    caution_family_count = _safe_int(
+        evidence_weighting_summary.get("caution_family_count")
+    )
+
+    active_weight_total = active_weight_total if active_weight_total is not None else 0.0
+    missing_weight_total = (
+        missing_weight_total if missing_weight_total is not None else 0.0
+    )
+    caution_family_count = caution_family_count if caution_family_count is not None else 0
+
+    if active_weight_total < 0.60 or missing_weight_total >= 0.25:
+        return "weak_evidence"
+    if caution_family_count > 0:
+        return "caution_evidence"
+    if active_weight_total < 0.80 or missing_weight_total > 0.0:
+        return "partial_evidence"
+    return "sufficient_evidence"
+
+
+def _resolve_replay_feedback_rewrite_effect(
+    replay_feedback_invalidation_adjustment: int,
+) -> str:
+    if replay_feedback_invalidation_adjustment > 0:
+        return "raise_rewrite_sensitivity"
+    if replay_feedback_invalidation_adjustment < 0:
+        return "lower_rewrite_sensitivity"
+    return "neutral"
+
+
+def _resolve_trace_focus_rewrite_action(
+    replay_feedback_trace_focus_material: dict[str, Any],
+) -> str:
+    direction = safe_str(
+        replay_feedback_trace_focus_material.get("direction")
+    ) or "neutral"
+    if direction == "switch_bias":
+        return "prioritize_switch_reason_review"
+    if direction == "fragility_bias":
+        return "prioritize_fragility_rewrite_review"
+    if direction == "watch_bias":
+        return "prioritize_watch_path_review"
+    if direction == "context_bias":
+        return "include_context_in_rewrite_review"
+    return "none"
+
+
+def _build_invalidation_rewrite_trace(
+    *,
+    current_regime_state: str,
+    current_hypothesis_health: str,
+    invalidation_state: str,
+    invalidation_signals: tuple[str, ...],
+    scenario_switch_hint: str,
+    evidence_weighting_summary: dict[str, Any],
+    replay_feedback_invalidation_adjustment: int,
+    replay_feedback_invalidation_policy: str,
+    replay_feedback_invalidation_score: float,
+    replay_feedback_trace_focus_material: dict[str, Any],
+) -> dict[str, Any]:
+    rewrite_state = _resolve_rewrite_state(invalidation_state)
+    rewrite_priority = _resolve_rewrite_priority(
+        invalidation_state=invalidation_state,
+        scenario_switch_hint=scenario_switch_hint,
+    )
+    evidence_weighting_state = _resolve_evidence_weighting_state(
+        evidence_weighting_summary
+    )
+
+    return {
+        "trace_type": "prediction_invalidation_rewrite_trace",
+        "trace_version": "phase3.v1alpha1",
+        "current_regime_state": current_regime_state,
+        "current_hypothesis_health": current_hypothesis_health,
+        "invalidation_state": invalidation_state,
+        "invalidation_signal_count": len(invalidation_signals),
+        "invalidation_signals": invalidation_signals,
+        "rewrite_state": rewrite_state,
+        "rewrite_priority": rewrite_priority,
+        "rewrite_reason": scenario_switch_hint,
+        "evidence_weighting_state": evidence_weighting_state,
+        "evidence_weighting_summary": dict(evidence_weighting_summary),
+        "replay_feedback_rewrite_effect": (
+            _resolve_replay_feedback_rewrite_effect(
+                replay_feedback_invalidation_adjustment
+            )
+        ),
+        "replay_feedback_invalidation_adjustment": (
+            replay_feedback_invalidation_adjustment
+        ),
+        "replay_feedback_invalidation_policy": (
+            replay_feedback_invalidation_policy
+        ),
+        "replay_feedback_invalidation_score": replay_feedback_invalidation_score,
+        "trace_focus_rewrite_action": _resolve_trace_focus_rewrite_action(
+            replay_feedback_trace_focus_material
+        ),
+        "trace_focus_material": dict(replay_feedback_trace_focus_material),
+    }
+
+
 def _build_scenario_trace(
     *,
     prediction_input: PredictionSystemInput | None,
@@ -878,6 +1027,7 @@ def _build_scenario_trace(
     invalidation_state: str,
     scenario_switch_hint: str,
     evidence_weighting_trace: dict[str, Any],
+    invalidation_rewrite_trace: dict[str, Any],
     replay_feedback_caution_adjustment: int,
     replay_feedback_caution_adjustment_policy: str,
     replay_feedback_invalidation_adjustment: int,
@@ -896,6 +1046,7 @@ def _build_scenario_trace(
             "invalidation_path": invalidation_state,
             "switch_reason": scenario_switch_hint,
             "evidence_weighting_trace": dict(evidence_weighting_trace),
+            "invalidation_rewrite_trace": dict(invalidation_rewrite_trace),
             "replay_feedback_effect": {
                 "caution_adjustment": replay_feedback_caution_adjustment,
                 "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -937,6 +1088,7 @@ def _build_scenario_trace(
         "invalidation_path": invalidation_state,
         "switch_reason": scenario_switch_hint,
         "evidence_weighting_trace": dict(evidence_weighting_trace),
+        "invalidation_rewrite_trace": dict(invalidation_rewrite_trace),
         "replay_feedback_effect": {
             "caution_adjustment": replay_feedback_caution_adjustment,
             "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1086,6 +1238,20 @@ def build_prediction_scenario_output(
         invalidation_state=invalidation_state,
         replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
     )
+    invalidation_rewrite_trace = _build_invalidation_rewrite_trace(
+        current_regime_state=current_regime_state,
+        current_hypothesis_health=current_hypothesis_health,
+        invalidation_state=invalidation_state,
+        invalidation_signals=invalidation_signals,
+        scenario_switch_hint=scenario_switch_hint,
+        evidence_weighting_summary=evidence_weighting_summary,
+        replay_feedback_invalidation_adjustment=(
+            replay_feedback_invalidation_adjustment
+        ),
+        replay_feedback_invalidation_policy=replay_feedback_invalidation_policy,
+        replay_feedback_invalidation_score=replay_feedback_invalidation_score,
+        replay_feedback_trace_focus_material=replay_feedback_trace_focus_material,
+    )
 
     if prediction_input is None:
         return PredictionScenarioOutput(
@@ -1105,6 +1271,7 @@ def build_prediction_scenario_output(
                 invalidation_state=invalidation_state,
                 scenario_switch_hint=scenario_switch_hint,
                 evidence_weighting_trace=evidence_weighting_trace,
+                invalidation_rewrite_trace=invalidation_rewrite_trace,
                 replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
                 replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
                 replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1131,6 +1298,15 @@ def build_prediction_scenario_output(
                 "evidence_weighting_primary_family": evidence_weighting_summary[
                     "primary_family"
                 ],
+                "invalidation_rewrite_state": invalidation_rewrite_trace[
+                    "rewrite_state"
+                ],
+                "invalidation_rewrite_priority": invalidation_rewrite_trace[
+                    "rewrite_priority"
+                ],
+                "invalidation_rewrite_evidence_weighting_state": (
+                    invalidation_rewrite_trace["evidence_weighting_state"]
+                ),
                 "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
                 "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
                 "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
@@ -1166,6 +1342,7 @@ def build_prediction_scenario_output(
             invalidation_state=invalidation_state,
             scenario_switch_hint=scenario_switch_hint,
             evidence_weighting_trace=evidence_weighting_trace,
+            invalidation_rewrite_trace=invalidation_rewrite_trace,
             replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
             replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
             replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1202,6 +1379,15 @@ def build_prediction_scenario_output(
             "evidence_weighting_primary_family": evidence_weighting_summary[
                 "primary_family"
             ],
+            "invalidation_rewrite_state": invalidation_rewrite_trace[
+                "rewrite_state"
+            ],
+            "invalidation_rewrite_priority": invalidation_rewrite_trace[
+                "rewrite_priority"
+            ],
+            "invalidation_rewrite_evidence_weighting_state": (
+                invalidation_rewrite_trace["evidence_weighting_state"]
+            ),
             "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
             "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
             "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],

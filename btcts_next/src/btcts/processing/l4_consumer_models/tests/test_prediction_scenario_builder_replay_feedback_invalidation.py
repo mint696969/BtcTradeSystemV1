@@ -94,6 +94,25 @@ def main() -> int:
     )
     assert raised_output.scenario_trace["invalidation_path"] == "caution_increase"
     assert raised_output.scenario_trace["switch_reason"] == "tighten_primary_watch"
+    raised_rewrite_trace = raised_output.scenario_trace[
+        "invalidation_rewrite_trace"
+    ]
+    assert raised_rewrite_trace["trace_type"] == (
+        "prediction_invalidation_rewrite_trace"
+    )
+    assert raised_rewrite_trace["rewrite_state"] == "rewrite_watch"
+    assert raised_rewrite_trace["rewrite_priority"] == "medium"
+    assert raised_rewrite_trace["rewrite_reason"] == "tighten_primary_watch"
+    assert raised_rewrite_trace["evidence_weighting_state"] == (
+        "sufficient_evidence"
+    )
+    assert raised_rewrite_trace["replay_feedback_rewrite_effect"] == (
+        "raise_rewrite_sensitivity"
+    )
+    assert raised_rewrite_trace["invalidation_signal_count"] == 2
+    assert raised_rewrite_trace["invalidation_signal_count"] == len(
+        raised_output.invalidation_signals
+    )
     replay_feedback_effect = raised_output.scenario_trace["replay_feedback_effect"]
     assert replay_feedback_effect["caution_adjustment"] == 0
     assert replay_feedback_effect["caution_policy"] == "none"
@@ -111,6 +130,11 @@ def main() -> int:
         "raise_twice"
     )
     assert raised_output.diagnostics["replay_feedback_invalidation_score"] == 4.0
+    assert raised_output.diagnostics["invalidation_rewrite_state"] == "rewrite_watch"
+    assert raised_output.diagnostics["invalidation_rewrite_priority"] == "medium"
+    assert raised_output.diagnostics[
+        "invalidation_rewrite_evidence_weighting_state"
+    ] == "sufficient_evidence"
     assert raised_output.diagnostics["replay_feedback_scenario_trace_focus"] == "unknown"
     assert raised_output.diagnostics["replay_feedback_trace_focus_kind"] == "none"
     assert raised_output.diagnostics["replay_feedback_trace_focus_direction"] == "neutral"
@@ -143,6 +167,17 @@ def main() -> int:
     assert lowered_output.current_hypothesis_health == "stable"
     assert lowered_output.invalidation_state == "stable"
     assert lowered_output.scenario_switch_hint == "hold_primary"
+    lowered_rewrite_trace = lowered_output.scenario_trace[
+        "invalidation_rewrite_trace"
+    ]
+    assert lowered_rewrite_trace["rewrite_state"] == "rewrite_not_required"
+    assert lowered_rewrite_trace["rewrite_priority"] == "normal"
+    assert lowered_rewrite_trace["replay_feedback_rewrite_effect"] == (
+        "lower_rewrite_sensitivity"
+    )
+    assert lowered_output.diagnostics["invalidation_rewrite_state"] == (
+        "rewrite_not_required"
+    )
     assert lowered_output.diagnostics["replay_feedback_invalidation_adjustment"] == -1
     assert lowered_output.diagnostics["replay_feedback_invalidation_adjustment_policy"] == (
         "lower_once"
@@ -165,6 +200,12 @@ def main() -> int:
     assert transition_output.scenario_switch_hint == "execute_transition_switch"
     assert transition_output.scenario_trace["regime_decision"] == "summary_reanchor_required"
     assert transition_output.scenario_trace["switch_reason"] == "execute_transition_switch"
+    transition_rewrite_trace = transition_output.scenario_trace[
+        "invalidation_rewrite_trace"
+    ]
+    assert transition_rewrite_trace["rewrite_state"] == "rewrite_required"
+    assert transition_rewrite_trace["rewrite_priority"] == "high"
+    assert transition_rewrite_trace["replay_feedback_rewrite_effect"] == "neutral"
 
     reversal_input = build_prediction_system_input(
         PredictionSystemBuildInput(
@@ -208,6 +249,17 @@ def main() -> int:
         "direction": "switch_bias",
         "strength": 1.0,
     }
+    reversal_rewrite_trace = reversal_output.scenario_trace[
+        "invalidation_rewrite_trace"
+    ]
+    assert reversal_rewrite_trace["rewrite_state"] == "rewrite_prepared"
+    assert reversal_rewrite_trace["rewrite_priority"] == "high"
+    assert reversal_rewrite_trace["trace_focus_rewrite_action"] == (
+        "prioritize_switch_reason_review"
+    )
+    assert reversal_rewrite_trace["trace_focus_material"]["direction"] == (
+        "switch_bias"
+    )
     assert reversal_output.diagnostics["replay_feedback_scenario_trace_focus"] == (
         "switch_reason:watch_reversal_path"
     )
