@@ -158,3 +158,31 @@ btcts_next/src/btcts/replay/prediction_calibration_review.py
 ```text
 Start from Prediction System / Scenario Prediction Core strengthening after Q10R-Q10W WarRoom read-only observation lane closeout. The WarRoom actual review-packet lane is ready for operator review handoff, not execution. Do not resume AutoTrade, broker/mode/order, approval/ledger, or UI actual-read work without explicit human approval.
 ```
+
+---
+
+## 2026-06-22 PS-Q11 Scenario Core closeout update
+
+```text
+Head: f5ba61a4
+Closeout spec: docs/strategy/PREDICTION_SYSTEM_PS_Q11_SCENARIO_CORE_CLOSEOUT_2026-06-22.md
+Completed: PS-Q11A-PS-Q11H Scenario Prediction Core strengthening.
+State: ready_for_thread_closeout_read_only_non_executing.
+Next: closeout review before any new implementation thread.
+```
+
+PS-Q11 supersedes the earlier "next-thread first task" section as completed work. Scenario Core now emits read-only/non-executing evidence weighting, invalidation/rewrite, scenario switch, trace contract, advisory packet, operator handoff, advisory summary, and closeout candidate traces.
+
+Explicitly still not enabled:
+
+```text
+AutoTrade execution
+broker integration
+mode apply
+order placement
+approval/decision/command ledger append
+WarRoom UI actual-read controls
+WarRoom UI runtime file read
+WarRoom UI payload decode
+runtime artifact write
+```

@@ -180,3 +180,19 @@ approval/ledger append
 AutoTrade trigger
 broker/private API path
 ```
+
+---
+
+## 2026-06-22 PS-Q11 Scenario Core closeout
+
+```text
+Head: f5ba61a4
+Closeout spec: docs/strategy/PREDICTION_SYSTEM_PS_Q11_SCENARIO_CORE_CLOSEOUT_2026-06-22.md
+Completed: PS-Q11A-PS-Q11H Scenario Prediction Core strengthening.
+State: ready_for_thread_closeout_read_only_non_executing.
+Next: closeout review before any new implementation thread.
+```
+
+The previous required next-thread mainline, "Prediction System / Scenario Prediction Core strengthening", has reached a PS-Q11 closeout candidate. The current Scenario Core output remains advisory/operator-review only and explicitly non-executing.
+
+Do not treat this closeout as approval to resume AutoTrade. Any next implementation must be separately scoped and must not add broker/mode/order, approval/ledger, WarRoom actual-read, payload decode, or runtime artifact write paths without explicit human approval.
