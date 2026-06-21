@@ -146,6 +146,25 @@ def main() -> int:
     assert scenario_output.scenario_trace["caution_path"] == "medium"
     assert scenario_output.scenario_trace["invalidation_path"] == "caution_increase"
     assert scenario_output.scenario_trace["switch_reason"] == "watch_reversal_path"
+    evidence_weighting_trace = scenario_output.scenario_trace[
+        "evidence_weighting_trace"
+    ]
+    assert evidence_weighting_trace["trace_type"] == (
+        "prediction_evidence_weighting_trace"
+    )
+    assert evidence_weighting_trace["family_count"] == 5
+    assert evidence_weighting_trace["active_weight_total"] == 0.9
+    assert evidence_weighting_trace["missing_weight_total"] == 0.0
+    assert evidence_weighting_trace["caution_family_count"] == 0
+    assert evidence_weighting_trace["primary_family"] == "market_summary_anchor"
+    assert evidence_weighting_trace["family_weight_rows"][0] == {
+        "family": "market_summary_anchor",
+        "configured_weight": 0.4,
+        "state": "active",
+        "required": True,
+        "reason_refs": ("market_summary_present",),
+        "caution_refs": (),
+    }
     replay_feedback_effect = scenario_output.scenario_trace["replay_feedback_effect"]
     assert replay_feedback_effect["caution_adjustment"] == 1
     assert replay_feedback_effect["caution_policy"] == "raise_once_high_priority"
@@ -191,6 +210,13 @@ def main() -> int:
         "caution_flags": (),
         "market_summary_anchor_present": True,
     }
+    assert scenario_output.evidence["evidence_weighting_summary"] == {
+        "family_count": 5,
+        "active_weight_total": 0.9,
+        "missing_weight_total": 0.0,
+        "caution_family_count": 0,
+        "primary_family": "market_summary_anchor",
+    }
 
     assert scenario_output.evidence_trace == prediction_input.evidence_trace
     assert scenario_output.diagnostics["builder_type"] == "prediction_scenario_output"
@@ -209,6 +235,11 @@ def main() -> int:
         "none"
     )
     assert scenario_output.diagnostics["replay_feedback_invalidation_score"] == 0.0
+    assert scenario_output.diagnostics["evidence_weighting_active_weight_total"] == 0.9
+    assert scenario_output.diagnostics["evidence_weighting_missing_weight_total"] == 0.0
+    assert scenario_output.diagnostics["evidence_weighting_primary_family"] == (
+        "market_summary_anchor"
+    )
     assert scenario_output.diagnostics["replay_feedback_scenario_trace_focus"] == "unknown"
     assert scenario_output.diagnostics["replay_feedback_trace_focus_kind"] == "none"
     assert scenario_output.diagnostics["replay_feedback_trace_focus_direction"] == "neutral"
@@ -240,6 +271,14 @@ def main() -> int:
         "caution_flags": (),
         "market_summary_anchor_present": False,
     }
+    assert blocked.evidence["evidence_weighting_summary"] == {
+        "family_count": 0,
+        "active_weight_total": 0.0,
+        "missing_weight_total": 0.0,
+        "caution_family_count": 0,
+        "primary_family": None,
+    }
+    assert blocked.scenario_trace["evidence_weighting_trace"]["family_count"] == 0
     assert blocked.diagnostics["builder_type"] == "prediction_scenario_output"
     assert blocked.diagnostics["active_family_count"] == 0
     assert blocked.diagnostics["missing_family_count"] == 0

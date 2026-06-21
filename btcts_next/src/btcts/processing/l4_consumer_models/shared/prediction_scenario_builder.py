@@ -717,6 +717,158 @@ def _build_evidence_trace_summary(
     }
 
 
+def _build_evidence_weighting_trace(
+    prediction_input: PredictionSystemInput | None,
+) -> dict[str, Any]:
+    if prediction_input is None:
+        return {
+            "trace_type": "prediction_evidence_weighting_trace",
+            "trace_version": "phase3.v1alpha1",
+            "family_weight_rows": (),
+            "family_count": 0,
+            "active_weight_total": 0.0,
+            "missing_weight_total": 0.0,
+            "caution_family_count": 0,
+            "primary_family": None,
+        }
+
+    bundle = prediction_input.evidence_bundle
+    evidence_trace = prediction_input.evidence_trace
+    replay_feedback = dict(bundle.external_context.get("replay_feedback") or {})
+
+    family_specs: tuple[tuple[str, float, bool, bool, tuple[str, ...]], ...] = (
+        (
+            "market_summary_anchor",
+            0.40,
+            bundle.market_summary is not None,
+            True,
+            (
+                "market_summary_present"
+                if bundle.market_summary is not None
+                else "market_summary_absent",
+            ),
+        ),
+        (
+            "liquidity_board_history",
+            0.20,
+            bool(bundle.liquidity_board_history),
+            True,
+            (
+                "liquidity_board_history_present"
+                if bundle.liquidity_board_history
+                else "liquidity_board_history_absent",
+            ),
+        ),
+        (
+            "regime_turning_point",
+            0.25,
+            bool(bundle.regime_turning_point),
+            True,
+            (
+                "regime_turning_point_present"
+                if bundle.regime_turning_point
+                else "regime_turning_point_absent",
+            ),
+        ),
+        (
+            "health_digest_caution",
+            0.10,
+            bundle.health_digest is not None,
+            False,
+            (
+                "health_digest_present"
+                if bundle.health_digest is not None
+                else "health_digest_absent_optional",
+            ),
+        ),
+        (
+            "replay_feedback",
+            0.05,
+            bool(replay_feedback),
+            False,
+            (
+                "replay_feedback_present"
+                if replay_feedback
+                else "replay_feedback_absent_optional",
+            ),
+        ),
+    )
+
+    rows: list[dict[str, Any]] = []
+    active_weight_total = 0.0
+    missing_weight_total = 0.0
+    caution_family_count = 0
+
+    for family, configured_weight, present, required, reason_refs in family_specs:
+        caution_refs = tuple(
+            flag
+            for flag in evidence_trace.caution_flags
+            if flag.startswith(family) or family.split("_", 1)[0] in flag
+        )
+        if present:
+            state = "active_caution" if caution_refs else "active"
+            active_weight_total += configured_weight
+        elif required:
+            state = "missing"
+            missing_weight_total += configured_weight
+        else:
+            state = "inactive_optional"
+
+        if caution_refs:
+            caution_family_count += 1
+
+        rows.append(
+            {
+                "family": family,
+                "configured_weight": configured_weight,
+                "state": state,
+                "required": required,
+                "reason_refs": reason_refs,
+                "caution_refs": caution_refs,
+            }
+        )
+
+    active_rows = [row for row in rows if str(row["state"]).startswith("active")]
+    primary_family = None
+    if active_rows:
+        primary_family = max(
+            active_rows,
+            key=lambda row: float(row["configured_weight"]),
+        )["family"]
+
+    return {
+        "trace_type": "prediction_evidence_weighting_trace",
+        "trace_version": "phase3.v1alpha1",
+        "family_weight_rows": tuple(rows),
+        "family_count": len(rows),
+        "active_weight_total": round(active_weight_total, 2),
+        "missing_weight_total": round(missing_weight_total, 2),
+        "caution_family_count": caution_family_count,
+        "primary_family": primary_family,
+    }
+
+
+def _build_evidence_weighting_summary(
+    evidence_weighting_trace: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "family_count": evidence_weighting_trace.get("family_count", 0),
+        "active_weight_total": evidence_weighting_trace.get(
+            "active_weight_total",
+            0.0,
+        ),
+        "missing_weight_total": evidence_weighting_trace.get(
+            "missing_weight_total",
+            0.0,
+        ),
+        "caution_family_count": evidence_weighting_trace.get(
+            "caution_family_count",
+            0,
+        ),
+        "primary_family": evidence_weighting_trace.get("primary_family"),
+    }
+
+
 def _build_scenario_trace(
     *,
     prediction_input: PredictionSystemInput | None,
@@ -725,6 +877,7 @@ def _build_scenario_trace(
     current_caution_level: str,
     invalidation_state: str,
     scenario_switch_hint: str,
+    evidence_weighting_trace: dict[str, Any],
     replay_feedback_caution_adjustment: int,
     replay_feedback_caution_adjustment_policy: str,
     replay_feedback_invalidation_adjustment: int,
@@ -742,6 +895,7 @@ def _build_scenario_trace(
             "caution_path": current_caution_level,
             "invalidation_path": invalidation_state,
             "switch_reason": scenario_switch_hint,
+            "evidence_weighting_trace": dict(evidence_weighting_trace),
             "replay_feedback_effect": {
                 "caution_adjustment": replay_feedback_caution_adjustment,
                 "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -782,6 +936,7 @@ def _build_scenario_trace(
         "caution_path": current_caution_level,
         "invalidation_path": invalidation_state,
         "switch_reason": scenario_switch_hint,
+        "evidence_weighting_trace": dict(evidence_weighting_trace),
         "replay_feedback_effect": {
             "caution_adjustment": replay_feedback_caution_adjustment,
             "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -822,6 +977,10 @@ def _build_replay_feedback_summary(
 
 
 def _build_evidence(prediction_input: PredictionSystemInput | None) -> dict[str, Any]:
+    evidence_weighting_trace = _build_evidence_weighting_trace(prediction_input)
+    evidence_weighting_summary = _build_evidence_weighting_summary(
+        evidence_weighting_trace
+    )
     if prediction_input is None:
         return {
             "market_summary_present": False,
@@ -831,6 +990,7 @@ def _build_evidence(prediction_input: PredictionSystemInput | None) -> dict[str,
             "replay_feedback_present": False,
             "replay_feedback_summary": None,
             "evidence_trace_summary": _build_evidence_trace_summary(prediction_input),
+            "evidence_weighting_summary": evidence_weighting_summary,
         }
 
     bundle = prediction_input.evidence_bundle
@@ -857,6 +1017,7 @@ def _build_evidence(prediction_input: PredictionSystemInput | None) -> dict[str,
         "transition_sign": safe_str(regime_turning_point.get("transition_sign")),
         "turning_point_risk": safe_str(regime_turning_point.get("turning_point_risk")),
         "evidence_trace_summary": _build_evidence_trace_summary(prediction_input),
+        "evidence_weighting_summary": evidence_weighting_summary,
     }
 
 
@@ -899,6 +1060,10 @@ def build_prediction_scenario_output(
     replay_feedback_trace_focus_material = (
         _resolve_replay_feedback_trace_focus_material(prediction_input)
     )
+    evidence_weighting_trace = _build_evidence_weighting_trace(prediction_input)
+    evidence_weighting_summary = _build_evidence_weighting_summary(
+        evidence_weighting_trace
+    )
 
     current_confidence = _resolve_current_confidence(
         prediction_input=prediction_input,
@@ -939,6 +1104,7 @@ def build_prediction_scenario_output(
                 current_caution_level=current_caution_level,
                 invalidation_state=invalidation_state,
                 scenario_switch_hint=scenario_switch_hint,
+                evidence_weighting_trace=evidence_weighting_trace,
                 replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
                 replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
                 replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -956,6 +1122,15 @@ def build_prediction_scenario_output(
                 "replay_feedback_invalidation_adjustment": replay_feedback_invalidation_adjustment,
                 "replay_feedback_invalidation_adjustment_policy": replay_feedback_invalidation_policy,
                 "replay_feedback_invalidation_score": replay_feedback_invalidation_score,
+                "evidence_weighting_active_weight_total": evidence_weighting_summary[
+                    "active_weight_total"
+                ],
+                "evidence_weighting_missing_weight_total": evidence_weighting_summary[
+                    "missing_weight_total"
+                ],
+                "evidence_weighting_primary_family": evidence_weighting_summary[
+                    "primary_family"
+                ],
                 "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
                 "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
                 "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
@@ -990,6 +1165,7 @@ def build_prediction_scenario_output(
             current_caution_level=current_caution_level,
             invalidation_state=invalidation_state,
             scenario_switch_hint=scenario_switch_hint,
+            evidence_weighting_trace=evidence_weighting_trace,
             replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
             replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
             replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1017,6 +1193,15 @@ def build_prediction_scenario_output(
             "replay_feedback_invalidation_adjustment": replay_feedback_invalidation_adjustment,
             "replay_feedback_invalidation_adjustment_policy": replay_feedback_invalidation_policy,
             "replay_feedback_invalidation_score": replay_feedback_invalidation_score,
+            "evidence_weighting_active_weight_total": evidence_weighting_summary[
+                "active_weight_total"
+            ],
+            "evidence_weighting_missing_weight_total": evidence_weighting_summary[
+                "missing_weight_total"
+            ],
+            "evidence_weighting_primary_family": evidence_weighting_summary[
+                "primary_family"
+            ],
             "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
             "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
             "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
