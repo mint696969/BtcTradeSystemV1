@@ -1018,6 +1018,124 @@ def _build_invalidation_rewrite_trace(
     }
 
 
+def _resolve_switch_action_family(scenario_switch_hint: str) -> str:
+    if scenario_switch_hint in {"hold_primary", "maintain_no_trade"}:
+        return "hold"
+    if scenario_switch_hint in {"tighten_primary_watch", "watch_reversal_path"}:
+        return "watch"
+    if scenario_switch_hint in {
+        "prepare_alternate_path",
+        "prepare_reversal_switch",
+        "prepare_transition_switch",
+    }:
+        return "prepare"
+    if scenario_switch_hint == "execute_transition_switch":
+        return "execute"
+    if scenario_switch_hint == "exit_primary_bias":
+        return "exit"
+    if scenario_switch_hint == "rebuild_after_instability":
+        return "rebuild"
+    if scenario_switch_hint == "reduce_participation":
+        return "reduce"
+    return "unknown"
+
+
+def _resolve_switch_urgency(
+    *,
+    scenario_switch_hint: str,
+    invalidation_rewrite_trace: dict[str, Any],
+) -> str:
+    rewrite_priority = safe_str(
+        invalidation_rewrite_trace.get("rewrite_priority")
+    ) or "unknown"
+    if scenario_switch_hint in {
+        "execute_transition_switch",
+        "prepare_reversal_switch",
+        "rebuild_after_instability",
+        "exit_primary_bias",
+    }:
+        return "high"
+    if rewrite_priority == "high":
+        return "high"
+    if scenario_switch_hint in {
+        "tighten_primary_watch",
+        "watch_reversal_path",
+        "prepare_alternate_path",
+        "prepare_transition_switch",
+        "reduce_participation",
+    }:
+        return "medium"
+    if rewrite_priority == "medium":
+        return "medium"
+    if scenario_switch_hint in {"hold_primary", "maintain_no_trade"}:
+        return "normal"
+    return "unknown"
+
+
+def _resolve_trace_focus_switch_alignment(
+    *,
+    scenario_switch_hint: str,
+    replay_feedback_trace_focus_material: dict[str, Any],
+) -> str:
+    focus = safe_str(replay_feedback_trace_focus_material.get("focus")) or "unknown"
+    kind = safe_str(replay_feedback_trace_focus_material.get("kind")) or "none"
+    if kind == "none" or focus in {"unknown", "none"}:
+        return "no_focus"
+    if kind != "switch_reason":
+        return "context_focus"
+    expected_focus = f"switch_reason:{scenario_switch_hint}"
+    if focus == expected_focus:
+        return "aligned"
+    return "different_switch_focus"
+
+
+def _build_scenario_switch_trace(
+    *,
+    current_regime_state: str,
+    current_hypothesis_health: str,
+    invalidation_state: str,
+    scenario_switch_hint: str,
+    evidence_weighting_summary: dict[str, Any],
+    invalidation_rewrite_trace: dict[str, Any],
+    replay_feedback_trace_focus_material: dict[str, Any],
+) -> dict[str, Any]:
+    switch_action_family = _resolve_switch_action_family(scenario_switch_hint)
+    switch_urgency = _resolve_switch_urgency(
+        scenario_switch_hint=scenario_switch_hint,
+        invalidation_rewrite_trace=invalidation_rewrite_trace,
+    )
+    focus_alignment = _resolve_trace_focus_switch_alignment(
+        scenario_switch_hint=scenario_switch_hint,
+        replay_feedback_trace_focus_material=replay_feedback_trace_focus_material,
+    )
+
+    return {
+        "trace_type": "prediction_scenario_switch_trace",
+        "trace_version": "phase3.v1alpha1",
+        "switch_hint": scenario_switch_hint,
+        "switch_action_family": switch_action_family,
+        "switch_urgency": switch_urgency,
+        "switch_reason_path": (
+            f"regime:{current_regime_state}",
+            f"hypothesis:{current_hypothesis_health}",
+            f"invalidation:{invalidation_state}",
+            f"rewrite:{invalidation_rewrite_trace.get('rewrite_state')}",
+            f"evidence:{invalidation_rewrite_trace.get('evidence_weighting_state')}",
+        ),
+        "current_regime_state": current_regime_state,
+        "current_hypothesis_health": current_hypothesis_health,
+        "invalidation_state": invalidation_state,
+        "evidence_weighting_state": invalidation_rewrite_trace.get(
+            "evidence_weighting_state"
+        ),
+        "evidence_weighting_summary": dict(evidence_weighting_summary),
+        "rewrite_state": invalidation_rewrite_trace.get("rewrite_state"),
+        "rewrite_priority": invalidation_rewrite_trace.get("rewrite_priority"),
+        "trace_focus_switch_alignment": focus_alignment,
+        "trace_focus_material": dict(replay_feedback_trace_focus_material),
+    }
+
+
 def _build_scenario_trace(
     *,
     prediction_input: PredictionSystemInput | None,
@@ -1028,6 +1146,7 @@ def _build_scenario_trace(
     scenario_switch_hint: str,
     evidence_weighting_trace: dict[str, Any],
     invalidation_rewrite_trace: dict[str, Any],
+    scenario_switch_trace: dict[str, Any],
     replay_feedback_caution_adjustment: int,
     replay_feedback_caution_adjustment_policy: str,
     replay_feedback_invalidation_adjustment: int,
@@ -1047,6 +1166,7 @@ def _build_scenario_trace(
             "switch_reason": scenario_switch_hint,
             "evidence_weighting_trace": dict(evidence_weighting_trace),
             "invalidation_rewrite_trace": dict(invalidation_rewrite_trace),
+            "scenario_switch_trace": dict(scenario_switch_trace),
             "replay_feedback_effect": {
                 "caution_adjustment": replay_feedback_caution_adjustment,
                 "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1089,6 +1209,7 @@ def _build_scenario_trace(
         "switch_reason": scenario_switch_hint,
         "evidence_weighting_trace": dict(evidence_weighting_trace),
         "invalidation_rewrite_trace": dict(invalidation_rewrite_trace),
+        "scenario_switch_trace": dict(scenario_switch_trace),
         "replay_feedback_effect": {
             "caution_adjustment": replay_feedback_caution_adjustment,
             "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1252,6 +1373,15 @@ def build_prediction_scenario_output(
         replay_feedback_invalidation_score=replay_feedback_invalidation_score,
         replay_feedback_trace_focus_material=replay_feedback_trace_focus_material,
     )
+    scenario_switch_trace = _build_scenario_switch_trace(
+        current_regime_state=current_regime_state,
+        current_hypothesis_health=current_hypothesis_health,
+        invalidation_state=invalidation_state,
+        scenario_switch_hint=scenario_switch_hint,
+        evidence_weighting_summary=evidence_weighting_summary,
+        invalidation_rewrite_trace=invalidation_rewrite_trace,
+        replay_feedback_trace_focus_material=replay_feedback_trace_focus_material,
+    )
 
     if prediction_input is None:
         return PredictionScenarioOutput(
@@ -1272,6 +1402,7 @@ def build_prediction_scenario_output(
                 scenario_switch_hint=scenario_switch_hint,
                 evidence_weighting_trace=evidence_weighting_trace,
                 invalidation_rewrite_trace=invalidation_rewrite_trace,
+                scenario_switch_trace=scenario_switch_trace,
                 replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
                 replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
                 replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1307,6 +1438,15 @@ def build_prediction_scenario_output(
                 "invalidation_rewrite_evidence_weighting_state": (
                     invalidation_rewrite_trace["evidence_weighting_state"]
                 ),
+                "scenario_switch_action_family": scenario_switch_trace[
+                    "switch_action_family"
+                ],
+                "scenario_switch_urgency": scenario_switch_trace[
+                    "switch_urgency"
+                ],
+                "scenario_switch_trace_focus_alignment": scenario_switch_trace[
+                    "trace_focus_switch_alignment"
+                ],
                 "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
                 "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
                 "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
@@ -1343,6 +1483,7 @@ def build_prediction_scenario_output(
             scenario_switch_hint=scenario_switch_hint,
             evidence_weighting_trace=evidence_weighting_trace,
             invalidation_rewrite_trace=invalidation_rewrite_trace,
+            scenario_switch_trace=scenario_switch_trace,
             replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
             replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
             replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1388,6 +1529,15 @@ def build_prediction_scenario_output(
             "invalidation_rewrite_evidence_weighting_state": (
                 invalidation_rewrite_trace["evidence_weighting_state"]
             ),
+            "scenario_switch_action_family": scenario_switch_trace[
+                "switch_action_family"
+            ],
+            "scenario_switch_urgency": scenario_switch_trace[
+                "switch_urgency"
+            ],
+            "scenario_switch_trace_focus_alignment": scenario_switch_trace[
+                "trace_focus_switch_alignment"
+            ],
             "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
             "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
             "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],

@@ -113,6 +113,21 @@ def main() -> int:
     assert raised_rewrite_trace["invalidation_signal_count"] == len(
         raised_output.invalidation_signals
     )
+    raised_switch_trace = raised_output.scenario_trace[
+        "scenario_switch_trace"
+    ]
+    assert raised_switch_trace["trace_type"] == (
+        "prediction_scenario_switch_trace"
+    )
+    assert raised_switch_trace["switch_hint"] == "tighten_primary_watch"
+    assert raised_switch_trace["switch_action_family"] == "watch"
+    assert raised_switch_trace["switch_urgency"] == "medium"
+    assert raised_switch_trace["trace_focus_switch_alignment"] == "no_focus"
+    assert raised_output.diagnostics["scenario_switch_action_family"] == "watch"
+    assert raised_output.diagnostics["scenario_switch_urgency"] == "medium"
+    assert raised_output.diagnostics[
+        "scenario_switch_trace_focus_alignment"
+    ] == "no_focus"
     replay_feedback_effect = raised_output.scenario_trace["replay_feedback_effect"]
     assert replay_feedback_effect["caution_adjustment"] == 0
     assert replay_feedback_effect["caution_policy"] == "none"
@@ -175,6 +190,12 @@ def main() -> int:
     assert lowered_rewrite_trace["replay_feedback_rewrite_effect"] == (
         "lower_rewrite_sensitivity"
     )
+    lowered_switch_trace = lowered_output.scenario_trace[
+        "scenario_switch_trace"
+    ]
+    assert lowered_switch_trace["switch_action_family"] == "hold"
+    assert lowered_switch_trace["switch_urgency"] == "normal"
+    assert lowered_output.diagnostics["scenario_switch_action_family"] == "hold"
     assert lowered_output.diagnostics["invalidation_rewrite_state"] == (
         "rewrite_not_required"
     )
@@ -206,6 +227,11 @@ def main() -> int:
     assert transition_rewrite_trace["rewrite_state"] == "rewrite_required"
     assert transition_rewrite_trace["rewrite_priority"] == "high"
     assert transition_rewrite_trace["replay_feedback_rewrite_effect"] == "neutral"
+    transition_switch_trace = transition_output.scenario_trace[
+        "scenario_switch_trace"
+    ]
+    assert transition_switch_trace["switch_action_family"] == "execute"
+    assert transition_switch_trace["switch_urgency"] == "high"
 
     reversal_input = build_prediction_system_input(
         PredictionSystemBuildInput(
@@ -260,6 +286,25 @@ def main() -> int:
     assert reversal_rewrite_trace["trace_focus_material"]["direction"] == (
         "switch_bias"
     )
+    reversal_switch_trace = reversal_output.scenario_trace[
+        "scenario_switch_trace"
+    ]
+    assert reversal_switch_trace["switch_hint"] == "prepare_reversal_switch"
+    assert reversal_switch_trace["switch_action_family"] == "prepare"
+    assert reversal_switch_trace["switch_urgency"] == "high"
+    assert reversal_switch_trace["trace_focus_switch_alignment"] == (
+        "different_switch_focus"
+    )
+    assert reversal_switch_trace["trace_focus_material"]["direction"] == (
+        "switch_bias"
+    )
+    assert reversal_output.diagnostics["scenario_switch_action_family"] == (
+        "prepare"
+    )
+    assert reversal_output.diagnostics["scenario_switch_urgency"] == "high"
+    assert reversal_output.diagnostics[
+        "scenario_switch_trace_focus_alignment"
+    ] == "different_switch_focus"
     assert reversal_output.diagnostics["replay_feedback_scenario_trace_focus"] == (
         "switch_reason:watch_reversal_path"
     )
