@@ -41,6 +41,9 @@ from btcts.apps.operator_ui.components.prediction_warroom_ui_mount_presenter imp
 from btcts.apps.operator_ui.components.prediction_warroom_lowered_display_packet_visibility_review_panel import (
     render_prediction_warroom_lowered_display_packet_visibility_review_panel,
 )
+from btcts.apps.operator_ui.components.prediction_warroom_actual_review_packet_live_session_seed_page_mount import (
+    apply_prediction_warroom_actual_review_packet_live_session_seed_page_mount,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -313,6 +316,7 @@ def _render_prediction_warroom_ui_mount_review_section() -> None:
 
 def _render_prediction_warroom_lowered_display_packet_visibility_review_section() -> None:
     """Render PS-Q9G lowered display-packet visibility review as a folded read-only section only."""
+    apply_prediction_warroom_actual_review_packet_live_session_seed_page_mount(session_state=st.session_state)
     render_prediction_warroom_lowered_display_packet_visibility_review_panel()
 
 
