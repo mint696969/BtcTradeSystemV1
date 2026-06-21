@@ -154,3 +154,29 @@ The clean next-thread opening sentence is:
 ```text
 Start from Prediction System / Scenario Prediction Core strengthening. S203 closed the visibility-chain detour; do not continue S204 unless the human explicitly redirects. AutoTrade remains paused and should only resume later from kill switch / incident / heartbeat runtime scaffolding after Prediction System completion and explicit human approval.
 ```
+
+
+---
+
+## 2026-06-21 Q10R-Q10W WarRoom observation lane closeout
+
+```text
+Head: 47860a81
+Closeout spec: docs/strategy/PREDICTION_SYSTEM_Q10R_Q10W_THREAD_CLOSEOUT_2026-06-21.md
+Completed: Q10R-Q10W WarRoom actual review-packet mounted observation lane and release-note lineage fix.
+State: ready_for_operator_review_handoff_not_execution.
+Next: PS-Q11 Scenario Prediction Core strengthening.
+```
+
+This supersedes the older S203-only next-thread note for the current entry. The next thread should still not resume AutoTrade automatically. It should start from Scenario Core richer evidence weighting, invalidation/rewrite state, scenario switch trace, and advisory/WarRoom explanation strengthening.
+
+Explicitly still not enabled:
+
+```text
+production UI actual-read trigger
+browser automation artifact
+Prediction-to-trigger-candidate bridge
+approval/ledger append
+AutoTrade trigger
+broker/private API path
+```

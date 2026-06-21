@@ -69,6 +69,9 @@ Project Chimera の設計・仕様はここから参照します。
 - Prediction System Inference Formal Spec
   docs/strategy/PREDICTION_SYSTEM_INFERENCE_FORMAL_SPEC_BTC_BITFLYER_2026-06-20.md
 
+- Prediction System Q10R-Q10W Thread Closeout
+  docs/strategy/PREDICTION_SYSTEM_Q10R_Q10W_THREAD_CLOSEOUT_2026-06-21.md
+
 ---
 
 # 3. UI System
