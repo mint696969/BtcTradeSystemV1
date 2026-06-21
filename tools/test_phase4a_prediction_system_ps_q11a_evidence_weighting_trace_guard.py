@@ -61,7 +61,7 @@ def _dirty_paths() -> set[str]:
     for line in proc.stdout.splitlines():
         if not line.strip():
             continue
-        out.add(line[3:].replace("\", "/"))
+        out.add(line[3:].replace("\\", "/"))
     return out
 
 
