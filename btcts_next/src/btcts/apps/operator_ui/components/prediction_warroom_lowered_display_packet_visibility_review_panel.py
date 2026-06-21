@@ -9,7 +9,9 @@ import streamlit as st
 
 from .prediction_warroom_lowered_display_packet_visibility_review_contract import (
     LOWERED_DISPLAY_PACKET_VISIBILITY_REVIEW_CONTRACT_VERSION,
-    build_prediction_warroom_lowered_display_packet_visibility_review_contract,
+)
+from .prediction_warroom_lowered_display_packet_visibility_review_source_handoff import (
+    resolve_prediction_warroom_lowered_display_packet_visibility_review_source,
 )
 
 PREDICTION_WARROOM_LOWERED_DISPLAY_PACKET_VISIBILITY_REVIEW_PANEL_VERSION = "prediction_warroom_lowered_display_packet_visibility_review_panel.ps_q9g.v1"
@@ -85,9 +87,11 @@ def render_prediction_warroom_lowered_display_packet_visibility_review_panel(
     review_packet: Mapping[str, Any] | Any | None = None,
 ) -> None:
     """Render a guarded read-only PS-Q9G review panel without loader/runtime side effects."""
-    packet = _as_mapping(review_packet)
-    if not packet:
-        packet = build_prediction_warroom_lowered_display_packet_visibility_review_contract().to_dict()
+    source_handoff = resolve_prediction_warroom_lowered_display_packet_visibility_review_source(
+        explicit_review_packet=review_packet,
+        session_state=st.session_state,
+    ).to_dict()
+    packet = _as_mapping(source_handoff.get("review_packet"))
     st.caption(
         "Lowered display-packet visibility review is read-only: "
         "no loader, no file read, no payload decode, no approval, no AutoTrade, no broker."
@@ -100,6 +104,14 @@ def render_prediction_warroom_lowered_display_packet_visibility_review_panel(
             widgets=packet.get("visible_widget_group_count"),
             blockers=packet.get("blocker_count"),
             warnings=packet.get("warning_count"),
+        )
+    )
+    st.caption(
+        "source_handoff={state}; source_kind={kind}; matched_key={key}; fallback={fallback}".format(
+            state=source_handoff.get("handoff_state"),
+            kind=source_handoff.get("source_kind"),
+            key=source_handoff.get("matched_key"),
+            fallback=source_handoff.get("fallback_used"),
         )
     )
     metric_rows = _metric_rows(packet)
