@@ -15,6 +15,7 @@ from .prediction_warroom_lowered_display_packet_visibility_review_source_handoff
 )
 
 PREDICTION_WARROOM_LOWERED_DISPLAY_PACKET_VISIBILITY_REVIEW_PANEL_VERSION = "prediction_warroom_lowered_display_packet_visibility_review_panel.ps_q9g.v1"
+PANEL_OPERATOR_READABILITY_VERSION = "prediction_warroom_lowered_display_packet_visibility_readability.ps_q9k.v1"
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
@@ -82,6 +83,90 @@ def _boundary_rows(packet: Mapping[str, Any]) -> list[dict[str, Any]]:
     ]
 
 
+def _operator_focus_ja(widget_group_id: Any) -> str:
+    focus_by_id = {
+        "primary_signal_widget": "主要シグナルを最初に確認",
+        "horizon_scenario_widgets": "時間軸ごとのシナリオを確認",
+        "family_detail_widgets": "根拠ファミリーの内訳を確認",
+        "source_quality_widget": "ソース品質と制約を確認",
+        "evidence_ledger_widget": "証拠と寄与の流れを確認",
+        "warning_refresh_widget": "警告と更新要否を確認",
+    }
+    return focus_by_id.get(str(widget_group_id), "表示候補を確認")
+
+
+def _operator_readiness_card_rows(packet: Mapping[str, Any], source_handoff: Mapping[str, Any]) -> list[dict[str, Any]]:
+    blocker_count = int(packet.get("blocker_count") or 0)
+    warning_count = int(packet.get("warning_count") or 0)
+    visible_count = int(packet.get("visible_widget_group_count") or 0)
+    widget_count = int(packet.get("widget_group_count") or 0)
+    display_state = "valid" if packet.get("display_packet_valid") is True else "blocked"
+    return [
+        {
+            "card_id": "source_handoff",
+            "label_ja": "入力ソース",
+            "state": source_handoff.get("handoff_state"),
+            "summary_ja": "in-memory review packet を表示対象として確認",
+            "read_only": True,
+            "execution": "false",
+        },
+        {
+            "card_id": "display_packet",
+            "label_ja": "表示パケット",
+            "state": display_state,
+            "summary_ja": "表示パケットの生成・検証状態を確認",
+            "read_only": True,
+            "execution": "false",
+        },
+        {
+            "card_id": "widget_visibility",
+            "label_ja": "表示候補ウィジェット",
+            "state": f"{visible_count}/{widget_count}",
+            "summary_ja": "WarRoom 表示候補の数と順序を確認",
+            "read_only": True,
+            "execution": "false",
+        },
+        {
+            "card_id": "blockers_and_warnings",
+            "label_ja": "ブロッカー / 警告",
+            "state": f"blockers={blocker_count};warnings={warning_count}",
+            "summary_ja": "表示前に止める理由と注意点を確認",
+            "read_only": True,
+            "execution": "false",
+        },
+        {
+            "card_id": "next_operator_action",
+            "label_ja": "次の操作",
+            "state": "review_only_no_execution",
+            "summary_ja": "確認のみ。承認・台帳追記・AutoTrade・broker 操作はしない",
+            "read_only": True,
+            "execution": "false",
+        },
+    ]
+
+
+def _operator_widget_card_rows(packet: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for raw in _list(packet.get("widget_candidates")):
+        item = _as_mapping(raw)
+        widget_group_id = item.get("widget_group_id")
+        rows.append(
+            {
+                "widget_group_id": widget_group_id,
+                "label_ja": item.get("widget_group_label_ja"),
+                "operator_focus_ja": _operator_focus_ja(widget_group_id),
+                "kind": item.get("widget_group_kind"),
+                "visible": item.get("visible_in_review"),
+                "refresh_sec": item.get("refresh_interval_sec"),
+                "render": "review_only",
+                "execution": "false",
+                "autotrade": "false",
+                "broker": "false",
+            }
+        )
+    return rows
+
+
 def render_prediction_warroom_lowered_display_packet_visibility_review_panel(
     *,
     review_packet: Mapping[str, Any] | Any | None = None,
@@ -114,6 +199,14 @@ def render_prediction_warroom_lowered_display_packet_visibility_review_panel(
             fallback=source_handoff.get("fallback_used"),
         )
     )
+    operator_rows = _operator_readiness_card_rows(packet, source_handoff)
+    if operator_rows:
+        st.caption("operator_readability_cards=" + PANEL_OPERATOR_READABILITY_VERSION)
+        st.dataframe(operator_rows, width="stretch", hide_index=True)
+    operator_widget_rows = _operator_widget_card_rows(packet)
+    if operator_widget_rows:
+        st.caption("operator_widget_cards=review_only_no_execution")
+        st.dataframe(operator_widget_rows, width="stretch", hide_index=True)
     metric_rows = _metric_rows(packet)
     if metric_rows:
         st.dataframe(metric_rows, width="stretch", hide_index=True)
