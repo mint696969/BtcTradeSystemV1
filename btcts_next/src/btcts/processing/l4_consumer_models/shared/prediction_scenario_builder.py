@@ -1180,6 +1180,108 @@ def _build_trace_contract_summary(
     }
 
 
+def _resolve_advisory_review_priority(
+    *,
+    current_caution_level: str,
+    invalidation_state: str,
+    scenario_switch_trace: dict[str, Any],
+    invalidation_rewrite_trace: dict[str, Any],
+) -> str:
+    switch_urgency = safe_str(scenario_switch_trace.get("switch_urgency")) or "unknown"
+    rewrite_priority = safe_str(
+        invalidation_rewrite_trace.get("rewrite_priority")
+    ) or "unknown"
+    if current_caution_level == "blocked":
+        return "high"
+    if invalidation_state in {"invalidated", "scenario_switch_required"}:
+        return "high"
+    if switch_urgency == "high" or rewrite_priority == "high":
+        return "high"
+    if current_caution_level == "high":
+        return "high"
+    if switch_urgency == "medium" or rewrite_priority == "medium":
+        return "medium"
+    if invalidation_state in {"degraded", "caution_increase"}:
+        return "medium"
+    if current_caution_level == "medium":
+        return "medium"
+    return "normal"
+
+
+def _build_advisory_output_packet_candidate(
+    *,
+    current_regime_state: str,
+    current_hypothesis_health: str,
+    current_caution_level: str,
+    current_confidence: float,
+    invalidation_state: str,
+    scenario_switch_hint: str,
+    evidence_weighting_summary: dict[str, Any],
+    invalidation_rewrite_trace: dict[str, Any],
+    scenario_switch_trace: dict[str, Any],
+    trace_contract_summary: dict[str, Any],
+) -> dict[str, Any]:
+    contract_status = safe_str(trace_contract_summary.get("contract_status"))
+    packet_status = (
+        "candidate_ready"
+        if contract_status == "complete"
+        else "blocked_incomplete_trace_contract"
+    )
+    review_priority = _resolve_advisory_review_priority(
+        current_caution_level=current_caution_level,
+        invalidation_state=invalidation_state,
+        scenario_switch_trace=scenario_switch_trace,
+        invalidation_rewrite_trace=invalidation_rewrite_trace,
+    )
+    operator_review_required = review_priority in {"medium", "high"}
+
+    reason_refs = [
+        f"contract:{contract_status or 'unknown'}",
+        f"regime:{current_regime_state}",
+        f"hypothesis:{current_hypothesis_health}",
+        f"caution:{current_caution_level}",
+        f"invalidation:{invalidation_state}",
+        f"switch:{scenario_switch_hint}",
+        f"review_priority:{review_priority}",
+    ]
+
+    return {
+        "trace_type": "prediction_advisory_output_packet_candidate",
+        "trace_version": "phase3.v1alpha1",
+        "packet_status": packet_status,
+        "review_priority": review_priority,
+        "operator_review_required": operator_review_required,
+        "advisory_read_only": True,
+        "non_executing": True,
+        "would_send_to_broker": False,
+        "would_append_ledger": False,
+        "would_write_runtime_artifact": False,
+        "runtime_write_surface": "none",
+        "execution_surface": "none",
+        "candidate_sections": (
+            "scenario_summary",
+            "evidence_weighting_summary",
+            "invalidation_rewrite_trace",
+            "scenario_switch_trace",
+            "trace_contract_summary",
+        ),
+        "source_trace_names": tuple(trace_contract_summary.get("trace_names") or ()),
+        "current_regime_state": current_regime_state,
+        "current_hypothesis_health": current_hypothesis_health,
+        "current_caution_level": current_caution_level,
+        "current_confidence": current_confidence,
+        "invalidation_state": invalidation_state,
+        "scenario_switch_hint": scenario_switch_hint,
+        "evidence_weighting_summary": dict(evidence_weighting_summary),
+        "rewrite_state": invalidation_rewrite_trace.get("rewrite_state"),
+        "rewrite_priority": invalidation_rewrite_trace.get("rewrite_priority"),
+        "switch_action_family": scenario_switch_trace.get("switch_action_family"),
+        "switch_urgency": scenario_switch_trace.get("switch_urgency"),
+        "trace_contract_status": contract_status,
+        "reason_refs": tuple(reason_refs),
+    }
+
+
 def _build_scenario_trace(
     *,
     prediction_input: PredictionSystemInput | None,
@@ -1192,6 +1294,7 @@ def _build_scenario_trace(
     invalidation_rewrite_trace: dict[str, Any],
     scenario_switch_trace: dict[str, Any],
     trace_contract_summary: dict[str, Any],
+    advisory_output_packet_candidate: dict[str, Any],
     replay_feedback_caution_adjustment: int,
     replay_feedback_caution_adjustment_policy: str,
     replay_feedback_invalidation_adjustment: int,
@@ -1213,6 +1316,9 @@ def _build_scenario_trace(
             "invalidation_rewrite_trace": dict(invalidation_rewrite_trace),
             "scenario_switch_trace": dict(scenario_switch_trace),
             "trace_contract_summary": dict(trace_contract_summary),
+            "advisory_output_packet_candidate": dict(
+                advisory_output_packet_candidate
+            ),
             "replay_feedback_effect": {
                 "caution_adjustment": replay_feedback_caution_adjustment,
                 "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1257,6 +1363,9 @@ def _build_scenario_trace(
         "invalidation_rewrite_trace": dict(invalidation_rewrite_trace),
         "scenario_switch_trace": dict(scenario_switch_trace),
         "trace_contract_summary": dict(trace_contract_summary),
+        "advisory_output_packet_candidate": dict(
+            advisory_output_packet_candidate
+        ),
         "replay_feedback_effect": {
             "caution_adjustment": replay_feedback_caution_adjustment,
             "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1434,6 +1543,18 @@ def build_prediction_scenario_output(
         invalidation_rewrite_trace=invalidation_rewrite_trace,
         scenario_switch_trace=scenario_switch_trace,
     )
+    advisory_output_packet_candidate = _build_advisory_output_packet_candidate(
+        current_regime_state=current_regime_state,
+        current_hypothesis_health=current_hypothesis_health,
+        current_caution_level=current_caution_level,
+        current_confidence=current_confidence,
+        invalidation_state=invalidation_state,
+        scenario_switch_hint=scenario_switch_hint,
+        evidence_weighting_summary=evidence_weighting_summary,
+        invalidation_rewrite_trace=invalidation_rewrite_trace,
+        scenario_switch_trace=scenario_switch_trace,
+        trace_contract_summary=trace_contract_summary,
+    )
 
     if prediction_input is None:
         return PredictionScenarioOutput(
@@ -1456,6 +1577,7 @@ def build_prediction_scenario_output(
                 invalidation_rewrite_trace=invalidation_rewrite_trace,
                 scenario_switch_trace=scenario_switch_trace,
                 trace_contract_summary=trace_contract_summary,
+                advisory_output_packet_candidate=advisory_output_packet_candidate,
                 replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
                 replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
                 replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1509,6 +1631,23 @@ def build_prediction_scenario_output(
                 "scenario_trace_contract_advisory_read_only": (
                     trace_contract_summary["advisory_read_only"]
                 ),
+                "advisory_output_packet_status": (
+                    advisory_output_packet_candidate["packet_status"]
+                ),
+                "advisory_output_packet_review_priority": (
+                    advisory_output_packet_candidate["review_priority"]
+                ),
+                "advisory_output_packet_operator_review_required": (
+                    advisory_output_packet_candidate[
+                        "operator_review_required"
+                    ]
+                ),
+                "advisory_output_packet_read_only": (
+                    advisory_output_packet_candidate["advisory_read_only"]
+                ),
+                "advisory_output_packet_non_executing": (
+                    advisory_output_packet_candidate["non_executing"]
+                ),
                 "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
                 "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
                 "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
@@ -1547,6 +1686,7 @@ def build_prediction_scenario_output(
             invalidation_rewrite_trace=invalidation_rewrite_trace,
             scenario_switch_trace=scenario_switch_trace,
             trace_contract_summary=trace_contract_summary,
+            advisory_output_packet_candidate=advisory_output_packet_candidate,
             replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
             replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
             replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1609,6 +1749,21 @@ def build_prediction_scenario_output(
             ],
             "scenario_trace_contract_advisory_read_only": (
                 trace_contract_summary["advisory_read_only"]
+            ),
+            "advisory_output_packet_status": (
+                advisory_output_packet_candidate["packet_status"]
+            ),
+            "advisory_output_packet_review_priority": (
+                advisory_output_packet_candidate["review_priority"]
+            ),
+            "advisory_output_packet_operator_review_required": (
+                advisory_output_packet_candidate["operator_review_required"]
+            ),
+            "advisory_output_packet_read_only": (
+                advisory_output_packet_candidate["advisory_read_only"]
+            ),
+            "advisory_output_packet_non_executing": (
+                advisory_output_packet_candidate["non_executing"]
             ),
             "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
             "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],

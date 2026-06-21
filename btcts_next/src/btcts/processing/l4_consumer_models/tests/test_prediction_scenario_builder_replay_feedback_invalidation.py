@@ -152,6 +152,33 @@ def main() -> int:
     assert raised_output.diagnostics[
         "scenario_trace_contract_advisory_read_only"
     ] is True
+    raised_packet = raised_output.scenario_trace[
+        "advisory_output_packet_candidate"
+    ]
+    assert raised_packet["trace_type"] == (
+        "prediction_advisory_output_packet_candidate"
+    )
+    assert raised_packet["packet_status"] == "candidate_ready"
+    assert raised_packet["review_priority"] == "medium"
+    assert raised_packet["operator_review_required"] is True
+    assert raised_packet["advisory_read_only"] is True
+    assert raised_packet["non_executing"] is True
+    assert raised_packet["would_send_to_broker"] is False
+    assert raised_packet["would_append_ledger"] is False
+    assert raised_packet["would_write_runtime_artifact"] is False
+    assert raised_packet["execution_surface"] == "none"
+    assert raised_packet["runtime_write_surface"] == "none"
+    assert raised_output.diagnostics["advisory_output_packet_status"] == (
+        "candidate_ready"
+    )
+    assert raised_output.diagnostics[
+        "advisory_output_packet_review_priority"
+    ] == "medium"
+    assert raised_output.diagnostics[
+        "advisory_output_packet_operator_review_required"
+    ] is True
+    assert raised_output.diagnostics["advisory_output_packet_read_only"] is True
+    assert raised_output.diagnostics["advisory_output_packet_non_executing"] is True
     replay_feedback_effect = raised_output.scenario_trace["replay_feedback_effect"]
     assert replay_feedback_effect["caution_adjustment"] == 0
     assert replay_feedback_effect["caution_policy"] == "none"
@@ -228,6 +255,19 @@ def main() -> int:
     assert lowered_output.diagnostics["scenario_trace_contract_status"] == (
         "complete"
     )
+    lowered_packet = lowered_output.scenario_trace[
+        "advisory_output_packet_candidate"
+    ]
+    assert lowered_packet["packet_status"] == "candidate_ready"
+    assert lowered_packet["review_priority"] == "normal"
+    assert lowered_packet["operator_review_required"] is False
+    assert lowered_packet["non_executing"] is True
+    assert lowered_output.diagnostics[
+        "advisory_output_packet_review_priority"
+    ] == "normal"
+    assert lowered_output.diagnostics[
+        "advisory_output_packet_operator_review_required"
+    ] is False
     assert lowered_output.diagnostics["invalidation_rewrite_state"] == (
         "rewrite_not_required"
     )
@@ -269,6 +309,12 @@ def main() -> int:
     ]
     assert transition_contract_summary["contract_status"] == "complete"
     assert transition_contract_summary["advisory_read_only"] is True
+    transition_packet = transition_output.scenario_trace[
+        "advisory_output_packet_candidate"
+    ]
+    assert transition_packet["review_priority"] == "high"
+    assert transition_packet["operator_review_required"] is True
+    assert transition_packet["would_write_runtime_artifact"] is False
 
     reversal_input = build_prediction_system_input(
         PredictionSystemBuildInput(
@@ -350,6 +396,16 @@ def main() -> int:
     assert reversal_output.diagnostics["scenario_trace_contract_status"] == (
         "complete"
     )
+    reversal_packet = reversal_output.scenario_trace[
+        "advisory_output_packet_candidate"
+    ]
+    assert reversal_packet["review_priority"] == "high"
+    assert reversal_packet["operator_review_required"] is True
+    assert reversal_packet["advisory_read_only"] is True
+    assert reversal_packet["would_send_to_broker"] is False
+    assert reversal_output.diagnostics[
+        "advisory_output_packet_review_priority"
+    ] == "high"
     assert reversal_output.diagnostics["replay_feedback_scenario_trace_focus"] == (
         "switch_reason:watch_reversal_path"
     )
