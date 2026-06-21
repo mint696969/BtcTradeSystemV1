@@ -153,7 +153,7 @@ def test_ps_q6c_bad_path_extension_or_size_blocks_before_read() -> None:
                 "artifact_role": "prediction_system_result_snapshot",
                 "supplied": True,
                 "path_hint": "E:\\btc_ts\\prediction\\latest_prediction_system_result.txt",
-                "file_size_bytes": 3_000_000,
+                "file_size_bytes": 12_000_000,
                 "freshness_status": "fresh",
                 "schema_validation_status": "valid",
                 "schema_validation_valid": True,

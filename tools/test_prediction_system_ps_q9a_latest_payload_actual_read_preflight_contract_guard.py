@@ -218,7 +218,7 @@ def test_ps_q9a_bad_path_extension_size_or_freshness_blocks_before_read() -> Non
                 "artifact_role": "prediction_system_result_snapshot",
                 "supplied": True,
                 "path_hint": "E:\\btc_ts\\prediction\\latest_prediction_system_result.txt",
-                "file_size_bytes": 3_000_000,
+                "file_size_bytes": 12_000_000,
                 "freshness_status": "stale",
                 "schema_validation_status": "planned_not_run",
             },

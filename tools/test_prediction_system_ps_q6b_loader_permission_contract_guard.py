@@ -144,6 +144,9 @@ def test_ps_q6b_path_rules_are_scoped_to_hot_latest_prediction_jsons() -> None:
         assert item["must_match_expected_artifact_ref"] is True
         assert item["max_file_size_bytes"] > 0
         assert item["freshness_max_age_sec"] > 0
+        if item["required"]:
+            assert item["max_file_size_bytes"] >= 8_000_000
+            assert item["freshness_max_age_sec"] >= 3_600
         assert item["actual_file_read_allowed_by_this_contract"] is False
         assert item["read_by_this_slice"] is False
         assert item["loaded_in_this_slice"] is False
