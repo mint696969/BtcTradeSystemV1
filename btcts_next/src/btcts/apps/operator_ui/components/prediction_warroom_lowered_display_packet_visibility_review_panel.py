@@ -17,6 +17,7 @@ from .prediction_warroom_lowered_display_packet_visibility_review_source_handoff
 PREDICTION_WARROOM_LOWERED_DISPLAY_PACKET_VISIBILITY_REVIEW_PANEL_VERSION = "prediction_warroom_lowered_display_packet_visibility_review_panel.ps_q9g.v1"
 PANEL_OPERATOR_READABILITY_VERSION = "prediction_warroom_lowered_display_packet_visibility_readability.ps_q9k.v1"
 PANEL_PREDICTION_COMPACT_SUMMARY_VERSION = "prediction_warroom_prediction_compact_summary.ps_q9l.v1"
+PANEL_FUTURE_TOP_UX_GATE_VERSION = "prediction_warroom_future_top_default_expanded_gate.ps_q9m.v1"
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
@@ -215,6 +216,82 @@ def _prediction_compact_summary_card_rows(packet: Mapping[str, Any]) -> list[dic
     ]
 
 
+def _prediction_review_payload_is_synthetic(packet: Mapping[str, Any]) -> bool:
+    primary_payload = _widget_payload_by_id(packet, "primary_signal_widget")
+    primary = _as_mapping(primary_payload.get("primary_signal_summary"))
+    boundaries = _as_mapping(primary_payload.get("boundaries"))
+    run_id = str(primary_payload.get("prediction_run_id") or "")
+    return bool(
+        primary.get("synthetic_only") is True
+        or boundaries.get("synthetic_only") is True
+        or run_id.startswith("synthetic_")
+    )
+
+
+def _prediction_future_top_default_expanded_gate_rows(packet: Mapping[str, Any], source_handoff: Mapping[str, Any]) -> list[dict[str, Any]]:
+    compact_rows = _prediction_compact_summary_card_rows(packet)
+    compact_ready = bool(compact_rows and compact_rows[0].get("state") != "not_available" and compact_rows[1].get("state") != "0% / unknown")
+    source_ready = bool(source_handoff.get("review_packet_ready")) and source_handoff.get("handoff_state") == "review_source_handoff_ready"
+    display_ready = packet.get("display_packet_valid") is True and packet.get("ready_for_ps_q9g_guarded_ui_mount") is True
+    execution_clean = (
+        int(packet.get("blocker_count") or 0) == 0
+        and packet.get("would_send_to_broker") is not True
+        and packet.get("broker_execution_requested") is not True
+        and packet.get("command_ledger_append_requested") is not True
+        and packet.get("approval_append_requested") is not True
+        and packet.get("authorization_grant_requested") is not True
+        and packet.get("autotrade_trigger_enabled") is not True
+    )
+    synthetic_payload = _prediction_review_payload_is_synthetic(packet)
+    real_payload_state = "blocked_synthetic_fixture" if synthetic_payload and compact_ready else ("ready" if compact_ready else "blocked_missing_real_payload")
+    base = {
+        "read_only": True,
+        "execution": "false",
+        "warroom_page_mutation": "false",
+        "default_expanded_applied": "false",
+        "source": "already_lowered_review_payload_only",
+    }
+    return [
+        {
+            **base,
+            "gate_id": "compact_summary_ready",
+            "state": "ready" if compact_ready else "not_ready",
+            "operator_note_ja": "compact summary が最初に読める状態か確認",
+        },
+        {
+            **base,
+            "gate_id": "source_handoff_ready",
+            "state": "ready" if source_ready else "blocked",
+            "operator_note_ja": "in-memory source handoff が ready か確認",
+        },
+        {
+            **base,
+            "gate_id": "display_packet_ready",
+            "state": "ready" if display_ready else "blocked",
+            "operator_note_ja": "表示パケットが valid か確認",
+        },
+        {
+            **base,
+            "gate_id": "execution_boundary_clean",
+            "state": "ready" if execution_clean and compact_ready else "blocked",
+            "operator_note_ja": "承認・台帳追記・AutoTrade・broker が無効のままか確認",
+        },
+        {
+            **base,
+            "gate_id": "real_payload_required_for_top_default",
+            "state": real_payload_state,
+            "operator_note_ja": "top/default-expanded UX は real payload 観測後に検討",
+        },
+        {
+            **base,
+            "gate_id": "warroom_layout_change",
+            "state": "deferred_no_page_mutation",
+            "layout_change_status": "layout_change_not_applied",
+            "operator_note_ja": "この slice では WarRoom top 移動も default-expanded 化もしない",
+        },
+    ]
+
+
 def _operator_readiness_card_rows(packet: Mapping[str, Any], source_handoff: Mapping[str, Any]) -> list[dict[str, Any]]:
     blocker_count = int(packet.get("blocker_count") or 0)
     warning_count = int(packet.get("warning_count") or 0)
@@ -323,6 +400,10 @@ def render_prediction_warroom_lowered_display_packet_visibility_review_panel(
     if compact_summary_rows:
         st.caption("prediction_compact_summary_cards=" + PANEL_PREDICTION_COMPACT_SUMMARY_VERSION)
         st.dataframe(compact_summary_rows, width="stretch", hide_index=True)
+    top_gate_rows = _prediction_future_top_default_expanded_gate_rows(packet, source_handoff)
+    if top_gate_rows:
+        st.caption("future_top_default_expanded_gate=" + PANEL_FUTURE_TOP_UX_GATE_VERSION)
+        st.dataframe(top_gate_rows, width="stretch", hide_index=True)
     operator_rows = _operator_readiness_card_rows(packet, source_handoff)
     if operator_rows:
         st.caption("operator_readability_cards=" + PANEL_OPERATOR_READABILITY_VERSION)
