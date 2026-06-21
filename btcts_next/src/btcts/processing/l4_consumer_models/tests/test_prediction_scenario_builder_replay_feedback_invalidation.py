@@ -128,6 +128,30 @@ def main() -> int:
     assert raised_output.diagnostics[
         "scenario_switch_trace_focus_alignment"
     ] == "no_focus"
+    raised_contract_summary = raised_output.scenario_trace[
+        "trace_contract_summary"
+    ]
+    assert raised_contract_summary["trace_type"] == (
+        "prediction_scenario_trace_contract"
+    )
+    assert raised_contract_summary["contract_status"] == "complete"
+    assert raised_contract_summary["trace_count"] == 3
+    assert raised_contract_summary["trace_names"] == (
+        "evidence_weighting_trace",
+        "invalidation_rewrite_trace",
+        "scenario_switch_trace",
+    )
+    assert raised_contract_summary["missing_trace_names"] == ()
+    assert raised_contract_summary["advisory_read_only"] is True
+    assert raised_contract_summary["execution_surface"] == "none"
+    assert raised_contract_summary["runtime_write_surface"] == "none"
+    assert raised_output.diagnostics["scenario_trace_contract_status"] == (
+        "complete"
+    )
+    assert raised_output.diagnostics["scenario_trace_contract_trace_count"] == 3
+    assert raised_output.diagnostics[
+        "scenario_trace_contract_advisory_read_only"
+    ] is True
     replay_feedback_effect = raised_output.scenario_trace["replay_feedback_effect"]
     assert replay_feedback_effect["caution_adjustment"] == 0
     assert replay_feedback_effect["caution_policy"] == "none"
@@ -196,6 +220,14 @@ def main() -> int:
     assert lowered_switch_trace["switch_action_family"] == "hold"
     assert lowered_switch_trace["switch_urgency"] == "normal"
     assert lowered_output.diagnostics["scenario_switch_action_family"] == "hold"
+    lowered_contract_summary = lowered_output.scenario_trace[
+        "trace_contract_summary"
+    ]
+    assert lowered_contract_summary["contract_status"] == "complete"
+    assert lowered_contract_summary["trace_count"] == 3
+    assert lowered_output.diagnostics["scenario_trace_contract_status"] == (
+        "complete"
+    )
     assert lowered_output.diagnostics["invalidation_rewrite_state"] == (
         "rewrite_not_required"
     )
@@ -232,6 +264,11 @@ def main() -> int:
     ]
     assert transition_switch_trace["switch_action_family"] == "execute"
     assert transition_switch_trace["switch_urgency"] == "high"
+    transition_contract_summary = transition_output.scenario_trace[
+        "trace_contract_summary"
+    ]
+    assert transition_contract_summary["contract_status"] == "complete"
+    assert transition_contract_summary["advisory_read_only"] is True
 
     reversal_input = build_prediction_system_input(
         PredictionSystemBuildInput(
@@ -305,6 +342,14 @@ def main() -> int:
     assert reversal_output.diagnostics[
         "scenario_switch_trace_focus_alignment"
     ] == "different_switch_focus"
+    reversal_contract_summary = reversal_output.scenario_trace[
+        "trace_contract_summary"
+    ]
+    assert reversal_contract_summary["contract_status"] == "complete"
+    assert reversal_contract_summary["trace_count"] == 3
+    assert reversal_output.diagnostics["scenario_trace_contract_status"] == (
+        "complete"
+    )
     assert reversal_output.diagnostics["replay_feedback_scenario_trace_focus"] == (
         "switch_reason:watch_reversal_path"
     )

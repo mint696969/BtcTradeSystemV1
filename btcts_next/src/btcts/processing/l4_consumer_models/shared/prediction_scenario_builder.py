@@ -1136,6 +1136,50 @@ def _build_scenario_switch_trace(
     }
 
 
+def _build_trace_contract_summary(
+    *,
+    evidence_weighting_trace: dict[str, Any],
+    invalidation_rewrite_trace: dict[str, Any],
+    scenario_switch_trace: dict[str, Any],
+) -> dict[str, Any]:
+    trace_rows = (
+        (
+            "evidence_weighting_trace",
+            safe_str(evidence_weighting_trace.get("trace_type")),
+            safe_str(evidence_weighting_trace.get("trace_version")),
+        ),
+        (
+            "invalidation_rewrite_trace",
+            safe_str(invalidation_rewrite_trace.get("trace_type")),
+            safe_str(invalidation_rewrite_trace.get("trace_version")),
+        ),
+        (
+            "scenario_switch_trace",
+            safe_str(scenario_switch_trace.get("trace_type")),
+            safe_str(scenario_switch_trace.get("trace_version")),
+        ),
+    )
+    missing = tuple(name for name, trace_type, _ in trace_rows if not trace_type)
+    versions = tuple(version or "unknown" for _, _, version in trace_rows)
+    unique_versions = tuple(dict.fromkeys(versions))
+    contract_status = "complete" if not missing else "incomplete"
+
+    return {
+        "trace_type": "prediction_scenario_trace_contract",
+        "trace_version": "phase3.v1alpha1",
+        "contract_status": contract_status,
+        "trace_count": len(trace_rows),
+        "trace_names": tuple(name for name, _, _ in trace_rows),
+        "trace_types": tuple(trace_type for _, trace_type, _ in trace_rows),
+        "trace_versions": versions,
+        "unique_trace_versions": unique_versions,
+        "missing_trace_names": missing,
+        "advisory_read_only": True,
+        "execution_surface": "none",
+        "runtime_write_surface": "none",
+    }
+
+
 def _build_scenario_trace(
     *,
     prediction_input: PredictionSystemInput | None,
@@ -1147,6 +1191,7 @@ def _build_scenario_trace(
     evidence_weighting_trace: dict[str, Any],
     invalidation_rewrite_trace: dict[str, Any],
     scenario_switch_trace: dict[str, Any],
+    trace_contract_summary: dict[str, Any],
     replay_feedback_caution_adjustment: int,
     replay_feedback_caution_adjustment_policy: str,
     replay_feedback_invalidation_adjustment: int,
@@ -1167,6 +1212,7 @@ def _build_scenario_trace(
             "evidence_weighting_trace": dict(evidence_weighting_trace),
             "invalidation_rewrite_trace": dict(invalidation_rewrite_trace),
             "scenario_switch_trace": dict(scenario_switch_trace),
+            "trace_contract_summary": dict(trace_contract_summary),
             "replay_feedback_effect": {
                 "caution_adjustment": replay_feedback_caution_adjustment,
                 "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1210,6 +1256,7 @@ def _build_scenario_trace(
         "evidence_weighting_trace": dict(evidence_weighting_trace),
         "invalidation_rewrite_trace": dict(invalidation_rewrite_trace),
         "scenario_switch_trace": dict(scenario_switch_trace),
+        "trace_contract_summary": dict(trace_contract_summary),
         "replay_feedback_effect": {
             "caution_adjustment": replay_feedback_caution_adjustment,
             "caution_policy": replay_feedback_caution_adjustment_policy,
@@ -1382,6 +1429,11 @@ def build_prediction_scenario_output(
         invalidation_rewrite_trace=invalidation_rewrite_trace,
         replay_feedback_trace_focus_material=replay_feedback_trace_focus_material,
     )
+    trace_contract_summary = _build_trace_contract_summary(
+        evidence_weighting_trace=evidence_weighting_trace,
+        invalidation_rewrite_trace=invalidation_rewrite_trace,
+        scenario_switch_trace=scenario_switch_trace,
+    )
 
     if prediction_input is None:
         return PredictionScenarioOutput(
@@ -1403,6 +1455,7 @@ def build_prediction_scenario_output(
                 evidence_weighting_trace=evidence_weighting_trace,
                 invalidation_rewrite_trace=invalidation_rewrite_trace,
                 scenario_switch_trace=scenario_switch_trace,
+                trace_contract_summary=trace_contract_summary,
                 replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
                 replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
                 replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1447,6 +1500,15 @@ def build_prediction_scenario_output(
                 "scenario_switch_trace_focus_alignment": scenario_switch_trace[
                     "trace_focus_switch_alignment"
                 ],
+                "scenario_trace_contract_status": trace_contract_summary[
+                    "contract_status"
+                ],
+                "scenario_trace_contract_trace_count": trace_contract_summary[
+                    "trace_count"
+                ],
+                "scenario_trace_contract_advisory_read_only": (
+                    trace_contract_summary["advisory_read_only"]
+                ),
                 "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
                 "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
                 "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
@@ -1484,6 +1546,7 @@ def build_prediction_scenario_output(
             evidence_weighting_trace=evidence_weighting_trace,
             invalidation_rewrite_trace=invalidation_rewrite_trace,
             scenario_switch_trace=scenario_switch_trace,
+            trace_contract_summary=trace_contract_summary,
             replay_feedback_caution_adjustment=replay_feedback_caution_adjustment,
             replay_feedback_caution_adjustment_policy=replay_feedback_caution_adjustment_policy,
             replay_feedback_invalidation_adjustment=replay_feedback_invalidation_adjustment,
@@ -1538,6 +1601,15 @@ def build_prediction_scenario_output(
             "scenario_switch_trace_focus_alignment": scenario_switch_trace[
                 "trace_focus_switch_alignment"
             ],
+            "scenario_trace_contract_status": trace_contract_summary[
+                "contract_status"
+            ],
+            "scenario_trace_contract_trace_count": trace_contract_summary[
+                "trace_count"
+            ],
+            "scenario_trace_contract_advisory_read_only": (
+                trace_contract_summary["advisory_read_only"]
+            ),
             "replay_feedback_scenario_trace_focus": replay_feedback_scenario_trace_focus,
             "replay_feedback_trace_focus_kind": replay_feedback_trace_focus_material["kind"],
             "replay_feedback_trace_focus_direction": replay_feedback_trace_focus_material["direction"],
