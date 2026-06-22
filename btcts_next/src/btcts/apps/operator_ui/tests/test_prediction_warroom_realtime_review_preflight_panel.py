@@ -16,8 +16,12 @@ from btcts.apps.operator_ui.components.prediction_warroom_realtime_review_prefli
 )
 from btcts.apps.operator_ui.components.prediction_warroom_realtime_review_preflight_panel import (  # noqa: E402
     PREDICTION_WARROOM_REALTIME_REVIEW_PREFLIGHT_PANEL_VERSION,
+    PREDICTION_WARROOM_REALTIME_REVIEW_READABILITY_VERSION,
     build_prediction_warroom_realtime_review_preflight_panel_packet,
+    prediction_warroom_gpt_review_checklist_rows,
+    prediction_warroom_parameter_adjustment_candidate_rows,
     prediction_warroom_realtime_review_boundary_rows,
+    prediction_warroom_realtime_review_summary_cards,
     prediction_warroom_realtime_review_surface_rows,
 )
 
@@ -63,6 +67,7 @@ def main() -> int:
     assert packet["panel_version"] == PREDICTION_WARROOM_REALTIME_REVIEW_PREFLIGHT_PANEL_VERSION
     assert packet["preflight_version"] == PREDICTION_WARROOM_REALTIME_REVIEW_PREFLIGHT_VERSION
     assert packet["panel_state"] == "realtime_review_preflight_panel_ready"
+    assert packet["readability_version"] == PREDICTION_WARROOM_REALTIME_REVIEW_READABILITY_VERSION
     assert packet["read_only"] is True
     assert packet["non_executing"] is True
     assert packet["display_only"] is True
@@ -98,6 +103,40 @@ def main() -> int:
     assert all(row["execution"] is False for row in surface_rows)
     assert all(row["autotrade"] is False for row in surface_rows)
     assert all(row["broker"] is False for row in surface_rows)
+
+    summary_cards = prediction_warroom_realtime_review_summary_cards(preflight)
+    assert [row["card"] for row in summary_cards] == [
+        "prediction_run",
+        "signal_strength",
+        "warning_blocker",
+        "scenario_gpt_context",
+    ]
+    assert all(row["read_only"] is True for row in summary_cards)
+    assert all(row["execution"] is False for row in summary_cards)
+
+    gpt_rows = prediction_warroom_gpt_review_checklist_rows(preflight)
+    assert [row["check"] for row in gpt_rows] == [
+        "source_and_freshness",
+        "scenario_trace_consistency",
+        "operator_action_review",
+    ]
+    assert all(row["gpt_use"] for row in gpt_rows)
+    assert all(row["read_only"] is True for row in gpt_rows)
+    assert all(row["execution"] is False for row in gpt_rows)
+
+    parameter_rows = prediction_warroom_parameter_adjustment_candidate_rows(preflight)
+    assert [row["candidate"] for row in parameter_rows] == [
+        "source_quality_sensitivity",
+        "signal_strength_threshold",
+        "scenario_trace_required_fields",
+    ]
+    assert all(row["apply_allowed"] is False for row in parameter_rows)
+    assert all(row["staging_write_allowed"] is False for row in parameter_rows)
+    assert all(row["read_only"] is True for row in parameter_rows)
+    assert all(row["execution"] is False for row in parameter_rows)
+    assert packet["summary_cards"] == summary_cards
+    assert packet["gpt_review_checklist_rows"] == gpt_rows
+    assert packet["parameter_adjustment_candidate_rows"] == parameter_rows
 
     boundary_rows = prediction_warroom_realtime_review_boundary_rows(preflight)
     boundary_keys = {row["boundary"] for row in boundary_rows}

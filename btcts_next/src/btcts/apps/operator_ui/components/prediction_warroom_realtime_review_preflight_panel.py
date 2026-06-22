@@ -13,6 +13,7 @@ from .prediction_warroom_realtime_review_preflight_contract import (
 )
 
 PREDICTION_WARROOM_REALTIME_REVIEW_PREFLIGHT_PANEL_VERSION = "prediction_warroom_realtime_review_preflight_panel.ps_q13b.v1"
+PREDICTION_WARROOM_REALTIME_REVIEW_READABILITY_VERSION = "prediction_warroom_realtime_review_readability.ps_q13c.v1"
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
@@ -73,6 +74,124 @@ def prediction_warroom_realtime_review_boundary_rows(packet: Mapping[str, Any] |
     return rows
 
 
+def prediction_warroom_realtime_review_summary_cards(packet: Mapping[str, Any] | Any) -> list[dict[str, Any]]:
+    """Return human-readable summary cards for quick WarRoom scanning without rendering."""
+    data = _as_mapping(packet)
+    return [
+        {
+            "card": "prediction_run",
+            "label_ja": "推論run",
+            "value": data.get("prediction_run_id") or "missing",
+            "state": data.get("preflight_state"),
+            "operator_note_ja": "表示対象の推論run。売買指示ではない。",
+            "read_only": True,
+            "execution": False,
+        },
+        {
+            "card": "signal_strength",
+            "label_ja": "シグナル強度",
+            "value": f"{data.get('signal_strength_percent')} / {data.get('signal_strength_band')}",
+            "state": "review_only",
+            "operator_note_ja": "強度の確認用。triggerやorderには接続しない。",
+            "read_only": True,
+            "execution": False,
+        },
+        {
+            "card": "warning_blocker",
+            "label_ja": "warning/blocker",
+            "value": f"warnings={data.get('latest_prediction_warning_count')}; blockers={data.get('latest_prediction_blocker_count')}",
+            "state": "blocked" if int(data.get("latest_prediction_blocker_count") or 0) else "review",
+            "operator_note_ja": "情報品質と確認阻害要因。freshness bypassではない。",
+            "read_only": True,
+            "execution": False,
+        },
+        {
+            "card": "scenario_gpt_context",
+            "label_ja": "Scenario/GPT",
+            "value": f"scenario_trace={data.get('scenario_trace_present')}; gpt_digest={data.get('gpt_review_digest_present')}",
+            "state": "present" if data.get("scenario_trace_present") and data.get("gpt_review_digest_present") else "waiting_for_context",
+            "operator_note_ja": "GPTと一緒に説明・矛盾・注意点を見るための材料。",
+            "read_only": True,
+            "execution": False,
+        },
+    ]
+
+
+def prediction_warroom_gpt_review_checklist_rows(packet: Mapping[str, Any] | Any) -> list[dict[str, Any]]:
+    """Return GPT-assisted review checklist rows without rendering or sending data out."""
+    data = _as_mapping(packet)
+    return [
+        {
+            "check": "source_and_freshness",
+            "question_ja": "この推論run、生成時刻、market_uid、warning/blockerは現在の確認対象として妥当か？",
+            "state": "review_required",
+            "source": "latest_prediction_source",
+            "gpt_use": "explain_and_flag_inconsistency",
+            "read_only": True,
+            "execution": False,
+        },
+        {
+            "check": "scenario_trace_consistency",
+            "question_ja": "scenario trace / evidence / invalidation / switch hint に矛盾や不足はないか？",
+            "state": "available" if data.get("scenario_trace_present") else "waiting_for_trace",
+            "source": "scenario_trace_review",
+            "gpt_use": "summarize_trace_and_risks",
+            "read_only": True,
+            "execution": False,
+        },
+        {
+            "check": "operator_action_review",
+            "question_ja": "人間が今見るべき要点、保留理由、次に確認すべき情報源は何か？",
+            "state": "review_required",
+            "source": "gpt_assisted_explanation_context",
+            "gpt_use": "propose_review_questions_only",
+            "read_only": True,
+            "execution": False,
+        },
+    ]
+
+
+def prediction_warroom_parameter_adjustment_candidate_rows(packet: Mapping[str, Any] | Any) -> list[dict[str, Any]]:
+    """Return proposal-only parameter review rows; no apply/staging write is performed."""
+    data = _as_mapping(packet)
+    warning_count = int(data.get("latest_prediction_warning_count") or 0)
+    blocker_count = int(data.get("latest_prediction_blocker_count") or 0)
+    signal = data.get("signal_strength_percent")
+    signal_band = str(data.get("signal_strength_band") or "unknown")
+    return [
+        {
+            "candidate": "source_quality_sensitivity",
+            "current_observation": f"warnings={warning_count}; blockers={blocker_count}",
+            "review_prompt_ja": "source quality warningが継続する場合、表示上の注意強度や採用条件を見直す候補。",
+            "proposal_state": "blocked_review_first" if blocker_count else "proposal_only",
+            "apply_allowed": False,
+            "staging_write_allowed": False,
+            "read_only": True,
+            "execution": False,
+        },
+        {
+            "candidate": "signal_strength_threshold",
+            "current_observation": f"signal={signal} / {signal_band}",
+            "review_prompt_ja": "シグナル強度の見え方・注意帯・人間確認閾値の調整候補。売買trigger閾値ではない。",
+            "proposal_state": "proposal_only",
+            "apply_allowed": False,
+            "staging_write_allowed": False,
+            "read_only": True,
+            "execution": False,
+        },
+        {
+            "candidate": "scenario_trace_required_fields",
+            "current_observation": f"scenario_trace={data.get('scenario_trace_present')}; gpt_digest={data.get('gpt_review_digest_present')}",
+            "review_prompt_ja": "GPTレビューに必要なtrace/gpt digest項目の不足を確認する候補。",
+            "proposal_state": "proposal_only",
+            "apply_allowed": False,
+            "staging_write_allowed": False,
+            "read_only": True,
+            "execution": False,
+        },
+    ]
+
+
 def build_prediction_warroom_realtime_review_preflight_panel_packet(
     *,
     latest_prediction_source_panel: Mapping[str, Any] | Any | None = None,
@@ -92,6 +211,10 @@ def build_prediction_warroom_realtime_review_preflight_panel_packet(
         "preflight_packet": preflight,
         "surface_rows": prediction_warroom_realtime_review_surface_rows(preflight),
         "boundary_rows": prediction_warroom_realtime_review_boundary_rows(preflight),
+        "summary_cards": prediction_warroom_realtime_review_summary_cards(preflight),
+        "gpt_review_checklist_rows": prediction_warroom_gpt_review_checklist_rows(preflight),
+        "parameter_adjustment_candidate_rows": prediction_warroom_parameter_adjustment_candidate_rows(preflight),
+        "readability_version": PREDICTION_WARROOM_REALTIME_REVIEW_READABILITY_VERSION,
         "read_only": True,
         "non_executing": True,
         "display_only": True,
@@ -151,6 +274,18 @@ def render_prediction_warroom_realtime_review_preflight_panel(
             ready=preflight.get("ready_for_future_warroom_ui_slice"),
         )
     )
+    summary_cards = _list(packet.get("summary_cards"))
+    if summary_cards:
+        st.caption("PS-Q13C quick summary cards are human/GPT review-only and do not authorize action.")
+        st.dataframe(summary_cards, width="stretch", hide_index=True)
+    gpt_rows = _list(packet.get("gpt_review_checklist_rows"))
+    if gpt_rows:
+        st.caption("PS-Q13C GPT review checklist: explain, flag inconsistency, and propose review questions only.")
+        st.dataframe(gpt_rows, width="stretch", hide_index=True)
+    parameter_rows = _list(packet.get("parameter_adjustment_candidate_rows"))
+    if parameter_rows:
+        st.caption("PS-Q13C parameter candidates are proposal/review only: apply=false, staging_write=false.")
+        st.dataframe(parameter_rows, width="stretch", hide_index=True)
     surface_rows = _list(packet.get("surface_rows"))
     if surface_rows:
         st.dataframe(surface_rows, width="stretch", hide_index=True)
