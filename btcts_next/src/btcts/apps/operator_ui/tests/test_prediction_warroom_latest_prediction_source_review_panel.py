@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_prediction_warroom_latest_prediction_source_review_panel.py
-# desc: Verify PS-Q12B latest prediction source review panel helpers and panel packet remain read-only/non-executing.
+# desc: Verify PS-Q12B/PS-Q12G latest prediction source review panel helpers and panel packet remain read-only/non-executing.
 
 from __future__ import annotations
 
@@ -11,9 +11,12 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_source_review_panel import (  # noqa: E402
+    PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION,
     PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION,
     build_prediction_warroom_latest_prediction_source_review_panel_packet,
     latest_prediction_source_boundary_rows,
+    latest_prediction_source_issue_rows,
+    latest_prediction_source_readability_rows,
     latest_prediction_source_status_rows,
 )
 
@@ -29,10 +32,18 @@ def _adapter_packet() -> dict:
             "signal_strength_band": "medium",
         },
         "review_packet_ready": True,
+        "ready_for_warroom_review_panel": True,
         "session_state_updated": True,
         "q9b_loader_called_by_this_adapter": True,
         "actual_file_read_attempted": True,
+        "actual_file_read_succeeded": True,
         "payload_decode_attempted": True,
+        "payload_decode_succeeded": True,
+        "loaded_payload_count": 1,
+        "blocker_count": 0,
+        "warning_count": 2,
+        "blocked_reasons": [],
+        "warning_reasons": ["schema_validation_deferred_to_ps_q9c", "operator_review_warning"],
     }
 
 
@@ -66,16 +77,67 @@ def main() -> int:
     assert boundary["autotrade_trigger"] is False
     assert boundary["broker_private_api"] is False
 
+    readability_rows = latest_prediction_source_readability_rows(_adapter_packet())
+    readability = {row["item"]: row for row in readability_rows}
+    assert [row["item"] for row in readability_rows] == [
+        "source_panel",
+        "payload_load_decode",
+        "q9g_review_handoff",
+        "warnings",
+        "blockers",
+        "signal",
+    ]
+    assert readability["source_panel"]["severity"] == "ok"
+    assert readability["payload_load_decode"]["severity"] == "ok"
+    assert readability["q9g_review_handoff"]["severity"] == "ok"
+    assert readability["warnings"]["severity"] == "warning"
+    assert readability["warnings"]["state"] == "2"
+    assert readability["blockers"]["severity"] == "ok"
+    assert readability["signal"]["severity"] == "review_only"
+    assert all(row["read_only"] is True for row in readability_rows)
+    assert all(row["execution"] == "false" for row in readability_rows)
+
+    issue_rows = latest_prediction_source_issue_rows(_adapter_packet())
+    assert [row["severity"] for row in issue_rows] == ["warning", "warning"]
+    assert issue_rows[0]["reason"] == "schema_validation_deferred_to_ps_q9c"
+    assert all(row["read_only"] is True for row in issue_rows)
+    assert all(row["execution"] == "false" for row in issue_rows)
+
+    blocked_sample = dict(_adapter_packet())
+    blocked_sample.update(
+        {
+            "review_packet_ready": False,
+            "session_state_updated": False,
+            "actual_file_read_succeeded": False,
+            "payload_decode_succeeded": False,
+            "loaded_payload_count": 0,
+            "blocker_count": 1,
+            "blocked_reasons": ["freshness_status_stale_before_actual_read"],
+        }
+    )
+    blocked_readability = {row["item"]: row for row in latest_prediction_source_readability_rows(blocked_sample)}
+    assert blocked_readability["source_panel"]["severity"] == "blocker"
+    assert blocked_readability["payload_load_decode"]["severity"] == "blocker"
+    assert blocked_readability["q9g_review_handoff"]["severity"] == "blocker"
+    assert blocked_readability["blockers"]["severity"] == "blocker"
+    blocked_issues = latest_prediction_source_issue_rows(blocked_sample)
+    assert blocked_issues[0]["severity"] == "blocker"
+    assert blocked_issues[0]["reason"] == "freshness_status_stale_before_actual_read"
+
     blocked_panel = build_prediction_warroom_latest_prediction_source_review_panel_packet(
         session_state={},
         allow_actual_read=False,
         store_in_session_state=False,
     )
     assert blocked_panel["panel_version"] == PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION
+    assert blocked_panel["readability_polish_version"] == PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION
     assert blocked_panel["panel_state"] == "latest_prediction_source_review_panel_blocked"
     assert blocked_panel["top_default_expanded_review_panel_connected"] is True
     assert blocked_panel["q9g_session_state_seed_attempted"] is False
     assert blocked_panel["q9g_session_state_seed_ready"] is False
+    assert blocked_panel["warning_readability_polish"] is True
+    assert isinstance(blocked_panel["readability_rows"], list)
+    assert isinstance(blocked_panel["issue_rows"], list)
     assert blocked_panel["read_only"] is True
     assert blocked_panel["non_executing"] is True
     assert blocked_panel["display_only"] is True

@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/components/prediction_warroom_latest_prediction_source_review_panel.py
-# desc: PS-Q12B Streamlit read-only panel that connects the PS-Q12A latest prediction source adapter to the top/default-expanded WarRoom prediction review section. It may read D-hot latest prediction JSON through PS-Q12A only; no runtime writes, AutoTrade, broker, mode, approval, or ledger behavior.
+# desc: PS-Q12B/PS-Q12G Streamlit read-only panel that connects the PS-Q12A latest prediction source adapter to the top/default-expanded WarRoom prediction review section and makes warning/readiness state operator-readable. It may read D-hot latest prediction JSON through PS-Q12A only; no runtime writes, AutoTrade, broker, mode, approval, or ledger behavior.
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from .prediction_warroom_latest_prediction_source_adapter import (
 )
 
 PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION = "prediction_warroom_latest_prediction_source_review_panel.ps_q12b.v1"
+PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION = "prediction_warroom_latest_prediction_source_readability_polish.ps_q12g.v1"
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
@@ -24,6 +25,25 @@ def _as_mapping(value: Any) -> Mapping[str, Any]:
 
 def _list(value: Any) -> list[Any]:
     return list(value) if isinstance(value, (list, tuple)) else []
+
+
+def _int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _bool_label(value: Any) -> str:
+    return "ready" if value is True else "not_ready"
+
+
+def _severity(*, ready: bool, blocked: bool = False, warning: bool = False) -> str:
+    if blocked:
+        return "blocker"
+    if warning:
+        return "warning"
+    return "ok" if ready else "attention"
 
 
 def latest_prediction_source_status_rows(packet: Mapping[str, Any] | Any) -> list[dict[str, Any]]:
@@ -101,6 +121,108 @@ def latest_prediction_source_boundary_rows(packet: Mapping[str, Any] | Any) -> l
     ]
 
 
+def latest_prediction_source_readability_rows(packet: Mapping[str, Any] | Any) -> list[dict[str, Any]]:
+    """Return PS-Q12G display-only readiness rows for quick operator scanning."""
+    panel = _as_mapping(packet)
+    adapter = _as_mapping(panel.get("adapter_packet")) if "adapter_packet" in panel else panel
+    summary = _as_mapping(adapter.get("source_summary"))
+    blocker_count = _int(adapter.get("blocker_count")) or len(_list(adapter.get("blocked_reasons")))
+    warning_count = _int(adapter.get("warning_count")) or len(_list(adapter.get("warning_reasons")))
+    loaded_payloads = _int(adapter.get("loaded_payload_count"))
+    review_ready = adapter.get("review_packet_ready") is True
+    session_handoff = adapter.get("session_state_updated") is True
+    read_succeeded = adapter.get("actual_file_read_succeeded") is True
+    decode_succeeded = adapter.get("payload_decode_succeeded") is True
+    return [
+        {
+            "item": "source_panel",
+            "state": panel.get("panel_state") or adapter.get("adapter_state"),
+            "severity": _severity(ready=review_ready and session_handoff and blocker_count == 0, blocked=blocker_count > 0),
+            "operator_note_ja": "WarRoom 推論ソース表示の全体状態",
+            "read_only": True,
+            "execution": "false",
+        },
+        {
+            "item": "payload_load_decode",
+            "state": f"loaded={loaded_payloads}; read={_bool_label(read_succeeded)}; decode={_bool_label(decode_succeeded)}",
+            "severity": _severity(ready=loaded_payloads > 0 and read_succeeded and decode_succeeded, blocked=blocker_count > 0),
+            "operator_note_ja": "D-hot latest prediction の read/decode 状態",
+            "read_only": True,
+            "execution": "false",
+        },
+        {
+            "item": "q9g_review_handoff",
+            "state": f"review_ready={review_ready}; session_handoff={session_handoff}",
+            "severity": _severity(ready=review_ready and session_handoff, blocked=blocker_count > 0),
+            "operator_note_ja": "既存 Q9G review panel への handoff 状態",
+            "read_only": True,
+            "execution": "false",
+        },
+        {
+            "item": "warnings",
+            "state": str(warning_count),
+            "severity": _severity(ready=warning_count == 0, warning=warning_count > 0),
+            "operator_note_ja": "operator review 用 warning 件数。実行許可ではない",
+            "read_only": True,
+            "execution": "false",
+        },
+        {
+            "item": "blockers",
+            "state": str(blocker_count),
+            "severity": _severity(ready=blocker_count == 0, blocked=blocker_count > 0),
+            "operator_note_ja": "0 以外なら WarRoom 表示は fail-closed / blocked",
+            "read_only": True,
+            "execution": "false",
+        },
+        {
+            "item": "signal",
+            "state": f"{summary.get('signal_strength_percent')} / {summary.get('signal_strength_band')}",
+            "severity": "review_only",
+            "operator_note_ja": "推論シグナル表示。売買指示ではない",
+            "read_only": True,
+            "execution": "false",
+        },
+    ]
+
+
+def latest_prediction_source_issue_rows(packet: Mapping[str, Any] | Any) -> list[dict[str, Any]]:
+    """Return display-only blocker/warning rows for PS-Q12G operator readability."""
+    panel = _as_mapping(packet)
+    adapter = _as_mapping(panel.get("adapter_packet")) if "adapter_packet" in panel else panel
+    rows: list[dict[str, Any]] = []
+    for reason in _list(adapter.get("blocked_reasons")):
+        rows.append(
+            {
+                "severity": "blocker",
+                "reason": str(reason),
+                "operator_note_ja": "この理由がある間は review ready ではありません",
+                "read_only": True,
+                "execution": "false",
+            }
+        )
+    for reason in _list(adapter.get("warning_reasons")):
+        rows.append(
+            {
+                "severity": "warning",
+                "reason": str(reason),
+                "operator_note_ja": "operator review 用の注意。実行許可ではありません",
+                "read_only": True,
+                "execution": "false",
+            }
+        )
+    if not rows:
+        rows.append(
+            {
+                "severity": "ok",
+                "reason": "no_blockers_or_warnings_reported_by_latest_prediction_source",
+                "operator_note_ja": "blocker/warning は報告されていません",
+                "read_only": True,
+                "execution": "false",
+            }
+        )
+    return rows
+
+
 def build_prediction_warroom_latest_prediction_source_review_panel_packet(
     *,
     session_state: MutableMapping[str, Any] | None,
@@ -114,8 +236,9 @@ def build_prediction_warroom_latest_prediction_source_review_panel_packet(
         store_in_session_state=store_in_session_state,
     ).to_dict()
     ready = bool(adapter_packet.get("ready_for_warroom_review_panel")) and bool(adapter_packet.get("session_state_updated"))
-    return {
+    panel: dict[str, Any] = {
         "panel_version": PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION,
+        "readability_polish_version": PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION,
         "panel_id": f"{PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION}:latest:{'ready' if ready else 'blocked'}",
         "panel_state": "latest_prediction_source_review_panel_ready" if ready else "latest_prediction_source_review_panel_blocked",
         "adapter_version": LATEST_PREDICTION_SOURCE_ADAPTER_VERSION,
@@ -125,6 +248,7 @@ def build_prediction_warroom_latest_prediction_source_review_panel_packet(
         "top_default_expanded_review_panel_connected": True,
         "q9g_session_state_seed_attempted": store_in_session_state,
         "q9g_session_state_seed_ready": ready,
+        "warning_readability_polish": True,
         "read_only": True,
         "non_executing": True,
         "display_only": True,
@@ -146,10 +270,13 @@ def build_prediction_warroom_latest_prediction_source_review_panel_packet(
         "authorization_grant_requested": False,
         "autotrade_trigger_enabled": False,
     }
+    panel["readability_rows"] = latest_prediction_source_readability_rows(panel)
+    panel["issue_rows"] = latest_prediction_source_issue_rows(panel)
+    return panel
 
 
 def render_prediction_warroom_latest_prediction_source_review_panel() -> Mapping[str, Any]:
-    """Render PS-Q12B read-only source status and seed existing Q9G panel through session_state."""
+    """Render PS-Q12B/PS-Q12G read-only source status and seed existing Q9G panel through session_state."""
     panel = build_prediction_warroom_latest_prediction_source_review_panel_packet(
         session_state=st.session_state,
         allow_actual_read=True,
@@ -172,9 +299,20 @@ def render_prediction_warroom_latest_prediction_source_review_panel() -> Mapping
             handoff=adapter.get("session_state_updated"),
         )
     )
+    readability_rows = _list(panel.get("readability_rows"))
+    if readability_rows:
+        st.caption(
+            "PS-Q12G readability summary is display-only: warning/blocker/ready states are for operator review; "
+            "no execution, no approval, no ledger, no AutoTrade, no broker/private API."
+        )
+        st.dataframe(readability_rows, width="stretch", hide_index=True)
     rows = _list(panel.get("status_rows"))
     if rows:
         st.dataframe(rows, width="stretch", hide_index=True)
+    issue_rows = _list(panel.get("issue_rows"))
+    if issue_rows:
+        st.caption("PS-Q12G warning/blocker detail rows are review-only and do not enable execution.")
+        st.dataframe(issue_rows, width="stretch", hide_index=True)
     boundary_rows = _list(panel.get("boundary_rows"))
     if boundary_rows:
         st.dataframe(boundary_rows, width="stretch", hide_index=True)
