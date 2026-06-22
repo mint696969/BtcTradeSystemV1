@@ -17,7 +17,9 @@ from btcts.apps.operator_ui.components.prediction_warroom_realtime_review_prefli
 from btcts.apps.operator_ui.components.prediction_warroom_realtime_review_preflight_panel import (  # noqa: E402
     PREDICTION_WARROOM_REALTIME_REVIEW_PREFLIGHT_PANEL_VERSION,
     PREDICTION_WARROOM_REALTIME_REVIEW_READABILITY_VERSION,
+    PREDICTION_WARROOM_REALTIME_REVIEW_UICHECK_SNAPSHOT_VERSION,
     build_prediction_warroom_realtime_review_preflight_panel_packet,
+    build_prediction_warroom_realtime_review_uicheck_snapshot,
     prediction_warroom_gpt_review_checklist_rows,
     prediction_warroom_parameter_adjustment_candidate_rows,
     prediction_warroom_realtime_review_boundary_rows,
@@ -90,6 +92,21 @@ def main() -> int:
     assert packet["approval_append_requested"] is False
     assert packet["authorization_grant_requested"] is False
     assert packet["autotrade_trigger_enabled"] is False
+
+    snapshot = build_prediction_warroom_realtime_review_uicheck_snapshot(packet)
+    assert packet["uicheck_snapshot"] == snapshot
+    assert snapshot["snapshot_version"] == PREDICTION_WARROOM_REALTIME_REVIEW_UICHECK_SNAPSHOT_VERSION
+    assert snapshot["panel_version"] == PREDICTION_WARROOM_REALTIME_REVIEW_PREFLIGHT_PANEL_VERSION
+    assert snapshot["readability_version"] == PREDICTION_WARROOM_REALTIME_REVIEW_READABILITY_VERSION
+    assert snapshot["panel_state"] == "realtime_review_preflight_panel_ready"
+    assert snapshot["prediction_run_id"] == "prediction_system.ps_q13b:BTC_JPY:bitFlyer:unit"
+    assert snapshot["summary_card_count"] == 4
+    assert snapshot["gpt_review_checklist_count"] == 3
+    assert snapshot["parameter_adjustment_candidate_count"] == 3
+    assert snapshot["surface_row_count"] == len(REVIEW_SURFACE_IDS)
+    assert snapshot["parameter_apply_allowed_any"] is False
+    assert snapshot["parameter_staging_write_allowed_any"] is False
+    assert all(snapshot["safe_boundary"].values())
 
     preflight = packet["preflight_packet"]
     assert preflight["ready_for_future_warroom_ui_slice"] is True

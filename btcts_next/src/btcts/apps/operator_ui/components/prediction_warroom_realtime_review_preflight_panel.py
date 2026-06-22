@@ -14,6 +14,7 @@ from .prediction_warroom_realtime_review_preflight_contract import (
 
 PREDICTION_WARROOM_REALTIME_REVIEW_PREFLIGHT_PANEL_VERSION = "prediction_warroom_realtime_review_preflight_panel.ps_q13b.v1"
 PREDICTION_WARROOM_REALTIME_REVIEW_READABILITY_VERSION = "prediction_warroom_realtime_review_readability.ps_q13c.v1"
+PREDICTION_WARROOM_REALTIME_REVIEW_UICHECK_SNAPSHOT_VERSION = "prediction_warroom_realtime_review_uicheck_snapshot.ps_q13d.v1"
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
@@ -192,6 +193,72 @@ def prediction_warroom_parameter_adjustment_candidate_rows(packet: Mapping[str, 
     ]
 
 
+def build_prediction_warroom_realtime_review_uicheck_snapshot(packet: Mapping[str, Any] | Any) -> dict[str, Any]:
+    """Return a compact safe snapshot for GPT UI Check automation; display-only, no IO."""
+    data = _as_mapping(packet)
+    preflight = _as_mapping(data.get("preflight_packet"))
+    summary_cards = _list(data.get("summary_cards"))
+    gpt_rows = _list(data.get("gpt_review_checklist_rows"))
+    parameter_rows = _list(data.get("parameter_adjustment_candidate_rows"))
+    surface_rows = _list(data.get("surface_rows"))
+    boundary_rows = _list(data.get("boundary_rows"))
+    return {
+        "snapshot_version": PREDICTION_WARROOM_REALTIME_REVIEW_UICHECK_SNAPSHOT_VERSION,
+        "panel_version": data.get("panel_version"),
+        "readability_version": data.get("readability_version"),
+        "preflight_version": data.get("preflight_version"),
+        "panel_state": data.get("panel_state"),
+        "preflight_state": preflight.get("preflight_state"),
+        "prediction_run_id": preflight.get("prediction_run_id"),
+        "generated_at": preflight.get("generated_at"),
+        "market_uid": preflight.get("market_uid"),
+        "signal_strength_percent": preflight.get("signal_strength_percent"),
+        "signal_strength_band": preflight.get("signal_strength_band"),
+        "latest_prediction_source_panel_present": preflight.get("latest_prediction_source_panel_present") is True,
+        "latest_prediction_review_ready": preflight.get("latest_prediction_review_ready") is True,
+        "latest_prediction_blocker_count": int(preflight.get("latest_prediction_blocker_count") or 0),
+        "latest_prediction_warning_count": int(preflight.get("latest_prediction_warning_count") or 0),
+        "scenario_trace_present": preflight.get("scenario_trace_present") is True,
+        "gpt_review_digest_present": preflight.get("gpt_review_digest_present") is True,
+        "ready_for_future_warroom_ui_slice": preflight.get("ready_for_future_warroom_ui_slice") is True,
+        "summary_card_count": len(summary_cards),
+        "gpt_review_checklist_count": len(gpt_rows),
+        "parameter_adjustment_candidate_count": len(parameter_rows),
+        "surface_row_count": len(surface_rows),
+        "boundary_row_count": len(boundary_rows),
+        "parameter_apply_allowed_any": any(_as_mapping(row).get("apply_allowed") is True for row in parameter_rows),
+        "parameter_staging_write_allowed_any": any(_as_mapping(row).get("staging_write_allowed") is True for row in parameter_rows),
+        "safe_boundary": {
+            "read_only": data.get("read_only") is True,
+            "non_executing": data.get("non_executing") is True,
+            "display_only": data.get("display_only") is True,
+            "review_only": data.get("review_only") is True,
+            "warroom_page_mutation_allowed_false": data.get("warroom_page_mutation_allowed") is False,
+            "runtime_artifact_write_allowed_false": data.get("runtime_artifact_write_allowed") is False,
+            "parameter_mutation_allowed_false": data.get("parameter_mutation_allowed") is False,
+            "parameter_version_append_allowed_false": data.get("parameter_version_append_allowed") is False,
+            "approval_or_authorization_allowed_false": data.get("approval_or_authorization_allowed") is False,
+            "ledger_append_allowed_false": data.get("ledger_append_allowed") is False,
+            "autotrade_trigger_allowed_false": data.get("autotrade_trigger_allowed") is False,
+            "broker_private_api_allowed_false": data.get("broker_private_api_allowed") is False,
+            "would_write_runtime_artifact_false": data.get("would_write_runtime_artifact") is False,
+            "would_mutate_live_parameters_false": data.get("would_mutate_live_parameters") is False,
+            "would_append_parameter_version_false": data.get("would_append_parameter_version") is False,
+            "would_send_to_broker_false": data.get("would_send_to_broker") is False,
+            "broker_execution_requested_false": data.get("broker_execution_requested") is False,
+            "mode_apply_requested_false": data.get("mode_apply_requested") is False,
+            "command_ledger_append_requested_false": data.get("command_ledger_append_requested") is False,
+            "decision_ledger_append_requested_false": data.get("decision_ledger_append_requested") is False,
+            "approval_append_requested_false": data.get("approval_append_requested") is False,
+            "authorization_grant_requested_false": data.get("authorization_grant_requested") is False,
+            "autotrade_trigger_enabled_false": data.get("autotrade_trigger_enabled") is False,
+            "parameter_apply_allowed_any_false": not any(_as_mapping(row).get("apply_allowed") is True for row in parameter_rows),
+            "parameter_staging_write_allowed_any_false": not any(_as_mapping(row).get("staging_write_allowed") is True for row in parameter_rows),
+        },
+        "operator_note": "PS-Q13D uicheck snapshot is display-only; no parameter apply, no staging write, no runtime write, no ledger, no AutoTrade, no broker/private API.",
+    }
+
+
 def build_prediction_warroom_realtime_review_preflight_panel_packet(
     *,
     latest_prediction_source_panel: Mapping[str, Any] | Any | None = None,
@@ -240,6 +307,7 @@ def build_prediction_warroom_realtime_review_preflight_panel_packet(
         "authorization_grant_requested": False,
         "autotrade_trigger_enabled": False,
     }
+    packet["uicheck_snapshot"] = build_prediction_warroom_realtime_review_uicheck_snapshot(packet)
     return packet
 
 
@@ -256,6 +324,7 @@ def render_prediction_warroom_realtime_review_preflight_panel(
         scenario_core_output=scenario_core_output,
     )
     preflight = _as_mapping(packet.get("preflight_packet"))
+    st.session_state["warroom_realtime_review_preflight_panel_uicheck_snapshot"] = _as_mapping(packet.get("uicheck_snapshot"))
     st.caption(
         "PS-Q13B realtime prediction review preflight is display-only: "
         "human/GPT review surfaces only; no parameter apply, no runtime write, no ledger, "
