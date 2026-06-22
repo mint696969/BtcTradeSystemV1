@@ -15,6 +15,7 @@ from .prediction_warroom_latest_prediction_source_adapter import (
 PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION = "prediction_warroom_latest_prediction_source_review_panel.ps_q12b.v1"
 PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION = "prediction_warroom_latest_prediction_source_readability_polish.ps_q12g.v1"
 PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION = "prediction_warroom_latest_prediction_source_uicheck_snapshot.ps_q12h.v1"
+PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION = "prediction_warroom_latest_prediction_source_readiness_explanation.ps_q14a.v1"
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
@@ -224,6 +225,85 @@ def latest_prediction_source_issue_rows(packet: Mapping[str, Any] | Any) -> list
     return rows
 
 
+def _source_readiness_category(reason: str) -> tuple[str, str, str]:
+    """Classify latest-source blocker/warning reason for human explanation only."""
+    reason_text = str(reason)
+    if "freshness" in reason_text or "stale" in reason_text:
+        return (
+            "freshness_guard",
+            "推論ソースの鮮度確認で止まっています。freshness bypass はしません。",
+            "Collector / Prediction artifact の生成時刻と latest source adapter の鮮度判定を見る。",
+        )
+    if "q10k" in reason_text or "handoff" in reason_text or "q9h" in reason_text or "session_state" in reason_text:
+        return (
+            "review_handoff",
+            "Q9G review panel への handoff が未完了です。UI側で強制 ready にはしません。",
+            "latest source adapter の session_state_updated と q9g_session_state_seed_ready を見る。",
+        )
+    if "q9b" in reason_text or "decode" in reason_text or "payload" in reason_text or "mapping" in reason_text or "q9c" in reason_text or "q9e" in reason_text:
+        return (
+            "payload_read_decode_validation",
+            "D-hot latest prediction の read/decode/validation/display packet 準備で止まっています。",
+            "actual_file_read_succeeded / payload_decode_succeeded / validation/display packet readiness を見る。",
+        )
+    if "q9f" in reason_text or "q9o" in reason_text or "review_packet" in reason_text:
+        return (
+            "review_packet_not_ready",
+            "operator review 用 packet がまだ ready ではありません。売買判断に接続しません。",
+            "review_packet_ready と blocked_reasons の残りを確認する。",
+        )
+    return (
+        "operator_review_warning",
+        "operator review 用の注意です。実行許可や承認ではありません。",
+        "理由文字列と周辺の warning/blocker 行を確認する。",
+    )
+
+
+def latest_prediction_source_readiness_explanation_rows(packet: Mapping[str, Any] | Any) -> list[dict[str, Any]]:
+    """Return PS-Q14A human-readable source-readiness explanations without changing readiness."""
+    panel = _as_mapping(packet)
+    adapter = _as_mapping(panel.get("adapter_packet")) if "adapter_packet" in panel else panel
+    rows: list[dict[str, Any]] = []
+    for severity, reasons in (
+        ("blocker", _list(adapter.get("blocked_reasons"))),
+        ("warning", _list(adapter.get("warning_reasons"))),
+    ):
+        for reason in reasons:
+            category, explanation, next_check = _source_readiness_category(str(reason))
+            if severity == "warning":
+                category = "operator_review_warning"
+                explanation = "operator review 用の注意です。実行許可や承認ではありません。"
+                next_check = "理由文字列と周辺の warning/blocker 行を確認する。"
+            rows.append(
+                {
+                    "severity": severity,
+                    "category": category,
+                    "reason": str(reason),
+                    "human_explanation_ja": explanation,
+                    "next_check_ja": next_check,
+                    "can_fix_in_warroom": False,
+                    "bypass_allowed": False,
+                    "read_only": True,
+                    "execution": "false",
+                }
+            )
+    if not rows:
+        rows.append(
+            {
+                "severity": "ok",
+                "category": "ready_or_no_reported_issue",
+                "reason": "no_blockers_or_warnings_reported_by_latest_prediction_source",
+                "human_explanation_ja": "latest source adapter から blocker/warning は報告されていません。",
+                "next_check_ja": "推論run、generated_at、market_uid、signal を確認する。",
+                "can_fix_in_warroom": False,
+                "bypass_allowed": False,
+                "read_only": True,
+                "execution": "false",
+            }
+        )
+    return rows
+
+
 def build_prediction_warroom_latest_prediction_source_uicheck_snapshot(packet: Mapping[str, Any] | Any) -> dict[str, Any]:
     """Return a compact safe snapshot for GPT UI Check automation; display-only, no IO."""
     panel = _as_mapping(packet)
@@ -252,6 +332,8 @@ def build_prediction_warroom_latest_prediction_source_uicheck_snapshot(packet: M
         "warning_count": warning_count,
         "readability_row_count": len(_list(panel.get("readability_rows"))),
         "issue_row_count": len(_list(panel.get("issue_rows"))),
+        "readiness_explanation_version": panel.get("readiness_explanation_version") or PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION,
+        "readiness_explanation_row_count": len(_list(panel.get("readiness_explanation_rows"))),
         "safe_boundary": {
             "read_only": panel.get("read_only") is True,
             "non_executing": panel.get("non_executing") is True,
@@ -319,6 +401,8 @@ def build_prediction_warroom_latest_prediction_source_review_panel_packet(
     }
     panel["readability_rows"] = latest_prediction_source_readability_rows(panel)
     panel["issue_rows"] = latest_prediction_source_issue_rows(panel)
+    panel["readiness_explanation_version"] = PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION
+    panel["readiness_explanation_rows"] = latest_prediction_source_readiness_explanation_rows(panel)
     panel["uicheck_snapshot"] = build_prediction_warroom_latest_prediction_source_uicheck_snapshot(panel)
     return panel
 
@@ -358,6 +442,13 @@ def render_prediction_warroom_latest_prediction_source_review_panel() -> Mapping
     rows = _list(panel.get("status_rows"))
     if rows:
         st.dataframe(rows, width="stretch", hide_index=True)
+    readiness_explanation_rows = _list(panel.get("readiness_explanation_rows"))
+    if readiness_explanation_rows:
+        st.caption(
+            "PS-Q14A source-readiness explanations are human-readable; "
+            "this display does not change readiness or bypass blockers."
+        )
+        st.dataframe(readiness_explanation_rows, width="stretch", hide_index=True)
     issue_rows = _list(panel.get("issue_rows"))
     if issue_rows:
         st.caption("PS-Q12G warning/blocker detail rows are review-only and do not enable execution.")

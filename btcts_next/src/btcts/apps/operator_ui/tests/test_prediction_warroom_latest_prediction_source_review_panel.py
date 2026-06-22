@@ -12,6 +12,7 @@ if str(_SRC_ROOT) not in sys.path:
 
 from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_source_review_panel import (  # noqa: E402
     PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION,
+    PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION,
     PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION,
     PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION,
     build_prediction_warroom_latest_prediction_source_review_panel_packet,
@@ -19,6 +20,7 @@ from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_sour
     latest_prediction_source_boundary_rows,
     latest_prediction_source_issue_rows,
     latest_prediction_source_readability_rows,
+    latest_prediction_source_readiness_explanation_rows,
     latest_prediction_source_status_rows,
 )
 
@@ -110,6 +112,8 @@ def main() -> int:
             {"severity": "warning", "reason": "schema_validation_deferred_to_ps_q9c"},
             {"severity": "warning", "reason": "operator_review_warning"},
         ],
+        "readiness_explanation_version": PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION,
+        "readiness_explanation_rows": latest_prediction_source_readiness_explanation_rows(_adapter_packet()),
         "read_only": True,
         "non_executing": True,
         "display_only": True,
@@ -138,6 +142,8 @@ def main() -> int:
     assert snapshot["warning_count"] == 2
     assert snapshot["readability_row_count"] == 6
     assert snapshot["issue_row_count"] == 2
+    assert snapshot["readiness_explanation_version"] == PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION
+    assert snapshot["readiness_explanation_row_count"] == 2
     assert all(snapshot["safe_boundary"].values())
 
     issue_rows = latest_prediction_source_issue_rows(_adapter_packet())
@@ -166,6 +172,14 @@ def main() -> int:
     blocked_issues = latest_prediction_source_issue_rows(blocked_sample)
     assert blocked_issues[0]["severity"] == "blocker"
     assert blocked_issues[0]["reason"] == "freshness_status_stale_before_actual_read"
+    explanation_rows = latest_prediction_source_readiness_explanation_rows(blocked_sample)
+    assert explanation_rows[0]["severity"] == "blocker"
+    assert explanation_rows[0]["category"] == "freshness_guard"
+    assert explanation_rows[0]["can_fix_in_warroom"] is False
+    assert explanation_rows[0]["bypass_allowed"] is False
+    assert explanation_rows[0]["read_only"] is True
+    assert explanation_rows[0]["execution"] == "false"
+    assert "freshness bypass" in explanation_rows[0]["human_explanation_ja"]
 
     blocked_panel = build_prediction_warroom_latest_prediction_source_review_panel_packet(
         session_state={},
@@ -181,7 +195,13 @@ def main() -> int:
     assert blocked_panel["warning_readability_polish"] is True
     assert isinstance(blocked_panel["readability_rows"], list)
     assert isinstance(blocked_panel["issue_rows"], list)
+    assert blocked_panel["readiness_explanation_version"] == PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION
+    assert isinstance(blocked_panel["readiness_explanation_rows"], list)
+    assert blocked_panel["readiness_explanation_rows"]
+    assert all(row["can_fix_in_warroom"] is False for row in blocked_panel["readiness_explanation_rows"])
+    assert all(row["bypass_allowed"] is False for row in blocked_panel["readiness_explanation_rows"])
     assert blocked_panel["uicheck_snapshot"]["snapshot_version"] == PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION
+    assert blocked_panel["uicheck_snapshot"]["readiness_explanation_row_count"] == len(blocked_panel["readiness_explanation_rows"])
     assert blocked_panel["uicheck_snapshot"]["safe_boundary"]["read_only"] is True
     assert blocked_panel["read_only"] is True
     assert blocked_panel["non_executing"] is True
