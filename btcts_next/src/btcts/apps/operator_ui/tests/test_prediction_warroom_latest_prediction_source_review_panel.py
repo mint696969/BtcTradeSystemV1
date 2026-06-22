@@ -13,6 +13,7 @@ if str(_SRC_ROOT) not in sys.path:
 from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_source_review_panel import (  # noqa: E402
     PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION,
     PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION,
+    PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_LAYOUT_POLISH_VERSION,
     PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION,
     PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION,
     build_prediction_warroom_latest_prediction_source_review_panel_packet,
@@ -20,6 +21,7 @@ from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_sour
     latest_prediction_source_boundary_rows,
     latest_prediction_source_issue_rows,
     latest_prediction_source_readability_rows,
+    latest_prediction_source_readiness_explanation_display_rows,
     latest_prediction_source_readiness_explanation_rows,
     latest_prediction_source_status_rows,
 )
@@ -180,6 +182,13 @@ def main() -> int:
     assert explanation_rows[0]["read_only"] is True
     assert explanation_rows[0]["execution"] == "false"
     assert "freshness bypass" in explanation_rows[0]["human_explanation_ja"]
+    display_rows = latest_prediction_source_readiness_explanation_display_rows(explanation_rows)
+    assert list(display_rows[0]) == ["severity", "category", "reason", "explanation_ja", "next_check_ja", "safe_flags"]
+    assert "no_bypass" in display_rows[0]["safe_flags"]
+    assert "no_warroom_fix" in display_rows[0]["safe_flags"]
+    assert "read_only" in display_rows[0]["safe_flags"]
+    assert "can_fix_in_warroom" not in display_rows[0]
+    assert "bypass_allowed" not in display_rows[0]
 
     blocked_panel = build_prediction_warroom_latest_prediction_source_review_panel_packet(
         session_state={},
@@ -196,8 +205,14 @@ def main() -> int:
     assert isinstance(blocked_panel["readability_rows"], list)
     assert isinstance(blocked_panel["issue_rows"], list)
     assert blocked_panel["readiness_explanation_version"] == PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION
+    assert blocked_panel["readiness_layout_polish_version"] == PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_LAYOUT_POLISH_VERSION
     assert isinstance(blocked_panel["readiness_explanation_rows"], list)
     assert blocked_panel["readiness_explanation_rows"]
+    assert isinstance(blocked_panel["readiness_explanation_display_rows"], list)
+    assert len(blocked_panel["readiness_explanation_display_rows"]) == len(blocked_panel["readiness_explanation_rows"])
+    assert all("safe_flags" in row for row in blocked_panel["readiness_explanation_display_rows"])
+    assert all("can_fix_in_warroom" not in row for row in blocked_panel["readiness_explanation_display_rows"])
+    assert all("bypass_allowed" not in row for row in blocked_panel["readiness_explanation_display_rows"])
     assert all(row["can_fix_in_warroom"] is False for row in blocked_panel["readiness_explanation_rows"])
     assert all(row["bypass_allowed"] is False for row in blocked_panel["readiness_explanation_rows"])
     assert blocked_panel["uicheck_snapshot"]["snapshot_version"] == PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION

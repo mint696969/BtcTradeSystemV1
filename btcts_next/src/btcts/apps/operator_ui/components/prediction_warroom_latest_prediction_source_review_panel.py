@@ -16,6 +16,7 @@ PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION = "prediction_w
 PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION = "prediction_warroom_latest_prediction_source_readability_polish.ps_q12g.v1"
 PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION = "prediction_warroom_latest_prediction_source_uicheck_snapshot.ps_q12h.v1"
 PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION = "prediction_warroom_latest_prediction_source_readiness_explanation.ps_q14a.v1"
+PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_LAYOUT_POLISH_VERSION = "prediction_warroom_latest_prediction_source_readiness_layout_polish.ps_q14c.v1"
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
@@ -304,6 +305,46 @@ def latest_prediction_source_readiness_explanation_rows(packet: Mapping[str, Any
     return rows
 
 
+def latest_prediction_source_readiness_explanation_display_rows(rows_or_packet: Mapping[str, Any] | list[Any] | Any) -> list[dict[str, Any]]:
+    """Return PS-Q14C compact display rows for source-readiness explanations without changing raw rows."""
+    data = _as_mapping(rows_or_packet)
+    rows = _list(data.get("readiness_explanation_rows")) if data else _list(rows_or_packet)
+    display_rows: list[dict[str, Any]] = []
+    for row in rows:
+        item = _as_mapping(row)
+        flags = []
+        if item.get("read_only") is True:
+            flags.append("read_only")
+        if item.get("execution") == "false":
+            flags.append("no_exec")
+        if item.get("can_fix_in_warroom") is False:
+            flags.append("no_warroom_fix")
+        if item.get("bypass_allowed") is False:
+            flags.append("no_bypass")
+        display_rows.append(
+            {
+                "severity": item.get("severity"),
+                "category": item.get("category"),
+                "reason": item.get("reason"),
+                "explanation_ja": item.get("human_explanation_ja"),
+                "next_check_ja": item.get("next_check_ja"),
+                "safe_flags": ";".join(flags),
+            }
+        )
+    if not display_rows:
+        display_rows.append(
+            {
+                "severity": "attention",
+                "category": "missing_display_rows",
+                "reason": "readiness_explanation_rows_empty",
+                "explanation_ja": "表示用の説明行がありません。raw explanation rows を確認してください。",
+                "next_check_ja": "latest source adapter と UI Check snapshot を確認する。",
+                "safe_flags": "read_only;no_exec;no_warroom_fix;no_bypass",
+            }
+        )
+    return display_rows
+
+
 def build_prediction_warroom_latest_prediction_source_uicheck_snapshot(packet: Mapping[str, Any] | Any) -> dict[str, Any]:
     """Return a compact safe snapshot for GPT UI Check automation; display-only, no IO."""
     panel = _as_mapping(packet)
@@ -402,7 +443,9 @@ def build_prediction_warroom_latest_prediction_source_review_panel_packet(
     panel["readability_rows"] = latest_prediction_source_readability_rows(panel)
     panel["issue_rows"] = latest_prediction_source_issue_rows(panel)
     panel["readiness_explanation_version"] = PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_EXPLANATION_VERSION
+    panel["readiness_layout_polish_version"] = PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READINESS_LAYOUT_POLISH_VERSION
     panel["readiness_explanation_rows"] = latest_prediction_source_readiness_explanation_rows(panel)
+    panel["readiness_explanation_display_rows"] = latest_prediction_source_readiness_explanation_display_rows(panel["readiness_explanation_rows"])
     panel["uicheck_snapshot"] = build_prediction_warroom_latest_prediction_source_uicheck_snapshot(panel)
     return panel
 
@@ -442,13 +485,14 @@ def render_prediction_warroom_latest_prediction_source_review_panel() -> Mapping
     rows = _list(panel.get("status_rows"))
     if rows:
         st.dataframe(rows, width="stretch", hide_index=True)
-    readiness_explanation_rows = _list(panel.get("readiness_explanation_rows"))
-    if readiness_explanation_rows:
+    readiness_explanation_display_rows = _list(panel.get("readiness_explanation_display_rows"))
+    if readiness_explanation_display_rows:
         st.caption(
-            "PS-Q14A source-readiness explanations are human-readable; "
+            "PS-Q14C source-readiness layout polish: important columns stay left, "
+            "safe_flags compact read_only/no_exec/no_warroom_fix/no_bypass; "
             "this display does not change readiness or bypass blockers."
         )
-        st.dataframe(readiness_explanation_rows, width="stretch", hide_index=True)
+        st.dataframe(readiness_explanation_display_rows, width="stretch", hide_index=True)
     issue_rows = _list(panel.get("issue_rows"))
     if issue_rows:
         st.caption("PS-Q12G warning/blocker detail rows are review-only and do not enable execution.")
