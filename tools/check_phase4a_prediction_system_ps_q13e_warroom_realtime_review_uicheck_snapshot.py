@@ -59,6 +59,15 @@ REQUIRED_SAFE_BOUNDARY_KEYS = (
     "parameter_staging_write_allowed_any_false",
 )
 
+REDACTED_SAFE_BOUNDARY_KEYS = frozenset(
+    {
+        "approval_or_authorization_allowed_false",
+        "broker_private_api_allowed_false",
+        "authorization_grant_requested_false",
+    }
+)
+REDACTED_VALUE = "<redacted>"
+
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
@@ -119,8 +128,12 @@ def validate_snapshot(snapshot: Mapping[str, Any]) -> list[str]:
         failures.append("parameter_staging_write_allowed_any must be false")
     safe = _as_mapping(snapshot.get("safe_boundary"))
     for key in REQUIRED_SAFE_BOUNDARY_KEYS:
-        if safe.get(key) is not True:
-            failures.append(f"safe boundary not true: {key}")
+        value = safe.get(key)
+        if value is True:
+            continue
+        if key in REDACTED_SAFE_BOUNDARY_KEYS and value == REDACTED_VALUE:
+            continue
+        failures.append(f"safe boundary not true: {key}")
     return failures
 
 
@@ -133,6 +146,10 @@ def validate_file(path: Path) -> dict[str, Any]:
         snapshot = {}
     else:
         failures.extend(validate_snapshot(snapshot))
+    safe = _as_mapping(snapshot.get("safe_boundary"))
+    redacted_safe_boundary_keys = sorted(
+        key for key in REDACTED_SAFE_BOUNDARY_KEYS if safe.get(key) == REDACTED_VALUE
+    )
     return {
         "ok": not failures,
         "path": str(path),
@@ -146,6 +163,12 @@ def validate_file(path: Path) -> dict[str, Any]:
         "parameter_adjustment_candidate_count": snapshot.get("parameter_adjustment_candidate_count"),
         "parameter_apply_allowed_any": snapshot.get("parameter_apply_allowed_any"),
         "parameter_staging_write_allowed_any": snapshot.get("parameter_staging_write_allowed_any"),
+        "redacted_safe_boundary_keys": redacted_safe_boundary_keys,
+        "redaction_tolerance": {
+            "enabled": True,
+            "allowed_keys": sorted(REDACTED_SAFE_BOUNDARY_KEYS),
+            "reason": "UI Check safe-value export redacts approval/broker/authorization boundary names; checker accepts only these redacted negative-boundary markers.",
+        },
         "failures": failures,
     }
 
@@ -227,6 +250,23 @@ def test_ps_q13e_warroom_realtime_review_uicheck_snapshot_checker_sample() -> No
         assert result["summary_card_count"] == 4
         assert result["gpt_review_checklist_count"] == 3
         assert result["parameter_adjustment_candidate_count"] == 3
+        assert result["parameter_apply_allowed_any"] is False
+        assert result["parameter_staging_write_allowed_any"] is False
+        assert result["redacted_safe_boundary_keys"] == []
+
+
+def test_ps_q13f_warroom_realtime_review_uicheck_snapshot_checker_redaction_tolerance() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        path = Path(tmpdir) / "uicheck_redacted_sample_warroom.json"
+        payload = _sample_snapshot_payload()
+        snapshot = payload["session_state"][EXPECTED_SESSION_STATE_KEY]
+        for key in REDACTED_SAFE_BOUNDARY_KEYS:
+            snapshot["safe_boundary"][key] = REDACTED_VALUE
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        result = validate_file(path)
+        assert result["ok"] is True
+        assert result["redaction_tolerance"]["enabled"] is True
+        assert set(result["redacted_safe_boundary_keys"]) == REDACTED_SAFE_BOUNDARY_KEYS
         assert result["parameter_apply_allowed_any"] is False
         assert result["parameter_staging_write_allowed_any"] is False
 
