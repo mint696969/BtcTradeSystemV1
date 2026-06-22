@@ -14,6 +14,7 @@ from .prediction_warroom_latest_prediction_source_adapter import (
 
 PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION = "prediction_warroom_latest_prediction_source_review_panel.ps_q12b.v1"
 PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION = "prediction_warroom_latest_prediction_source_readability_polish.ps_q12g.v1"
+PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION = "prediction_warroom_latest_prediction_source_uicheck_snapshot.ps_q12h.v1"
 
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
@@ -223,6 +224,52 @@ def latest_prediction_source_issue_rows(packet: Mapping[str, Any] | Any) -> list
     return rows
 
 
+def build_prediction_warroom_latest_prediction_source_uicheck_snapshot(packet: Mapping[str, Any] | Any) -> dict[str, Any]:
+    """Return a compact safe snapshot for GPT UI Check automation; display-only, no IO."""
+    panel = _as_mapping(packet)
+    adapter = _as_mapping(panel.get("adapter_packet")) if "adapter_packet" in panel else panel
+    summary = _as_mapping(adapter.get("source_summary"))
+    blocker_count = _int(adapter.get("blocker_count")) or len(_list(adapter.get("blocked_reasons")))
+    warning_count = _int(adapter.get("warning_count")) or len(_list(adapter.get("warning_reasons")))
+    return {
+        "snapshot_version": PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION,
+        "panel_version": panel.get("panel_version") or PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION,
+        "readability_polish_version": panel.get("readability_polish_version") or PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION,
+        "panel_state": panel.get("panel_state"),
+        "adapter_state": adapter.get("adapter_state"),
+        "prediction_run_id": summary.get("prediction_run_id"),
+        "generated_at": summary.get("generated_at"),
+        "market_uid": summary.get("market_uid"),
+        "signal_strength_percent": summary.get("signal_strength_percent"),
+        "signal_strength_band": summary.get("signal_strength_band"),
+        "loaded_payload_count": _int(adapter.get("loaded_payload_count")),
+        "actual_file_read_succeeded": adapter.get("actual_file_read_succeeded") is True,
+        "payload_decode_succeeded": adapter.get("payload_decode_succeeded") is True,
+        "review_packet_ready": adapter.get("review_packet_ready") is True,
+        "session_state_updated": adapter.get("session_state_updated") is True,
+        "q9g_session_state_seed_ready": panel.get("q9g_session_state_seed_ready") is True,
+        "blocker_count": blocker_count,
+        "warning_count": warning_count,
+        "readability_row_count": len(_list(panel.get("readability_rows"))),
+        "issue_row_count": len(_list(panel.get("issue_rows"))),
+        "safe_boundary": {
+            "read_only": panel.get("read_only") is True,
+            "non_executing": panel.get("non_executing") is True,
+            "display_only": panel.get("display_only") is True,
+            "warroom_page_mutation_allowed_false": panel.get("warroom_page_mutation_allowed") is False,
+            "warroom_panel_mutation_allowed_false": panel.get("warroom_panel_mutation_allowed") is False,
+            "runtime_artifact_write_allowed_false": panel.get("runtime_artifact_write_allowed") is False,
+            "approval_or_authorization_allowed_false": panel.get("approval_or_authorization_allowed") is False,
+            "ledger_append_allowed_false": panel.get("ledger_append_allowed") is False,
+            "autotrade_trigger_allowed_false": panel.get("autotrade_trigger_allowed") is False,
+            "broker_private_api_allowed_false": panel.get("broker_private_api_allowed") is False,
+            "would_write_runtime_artifact_false": panel.get("would_write_runtime_artifact") is False,
+            "would_send_to_broker_false": panel.get("would_send_to_broker") is False,
+        },
+        "operator_note": "PS-Q12H uicheck snapshot is display-only; no execution, no approval, no ledger, no AutoTrade, no broker/private API, no runtime write.",
+    }
+
+
 def build_prediction_warroom_latest_prediction_source_review_panel_packet(
     *,
     session_state: MutableMapping[str, Any] | None,
@@ -272,6 +319,7 @@ def build_prediction_warroom_latest_prediction_source_review_panel_packet(
     }
     panel["readability_rows"] = latest_prediction_source_readability_rows(panel)
     panel["issue_rows"] = latest_prediction_source_issue_rows(panel)
+    panel["uicheck_snapshot"] = build_prediction_warroom_latest_prediction_source_uicheck_snapshot(panel)
     return panel
 
 
@@ -283,6 +331,7 @@ def render_prediction_warroom_latest_prediction_source_review_panel() -> Mapping
         store_in_session_state=True,
     )
     adapter = _as_mapping(panel.get("adapter_packet"))
+    st.session_state["warroom_latest_prediction_source_review_panel_uicheck_snapshot"] = _as_mapping(panel.get("uicheck_snapshot"))
     st.caption(
         "PS-Q12B latest prediction source is read-only and display-only: "
         "D-hot latest prediction JSON may be read/decode via PS-Q12A, but no runtime write, "

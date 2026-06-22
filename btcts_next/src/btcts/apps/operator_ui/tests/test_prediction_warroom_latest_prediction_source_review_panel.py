@@ -12,8 +12,10 @@ if str(_SRC_ROOT) not in sys.path:
 
 from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_source_review_panel import (  # noqa: E402
     PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION,
+    PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION,
     PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION,
     build_prediction_warroom_latest_prediction_source_review_panel_packet,
+    build_prediction_warroom_latest_prediction_source_uicheck_snapshot,
     latest_prediction_source_boundary_rows,
     latest_prediction_source_issue_rows,
     latest_prediction_source_readability_rows,
@@ -97,6 +99,47 @@ def main() -> int:
     assert all(row["read_only"] is True for row in readability_rows)
     assert all(row["execution"] == "false" for row in readability_rows)
 
+    snapshot_panel = {
+        "panel_version": PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_REVIEW_PANEL_VERSION,
+        "readability_polish_version": PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_READABILITY_POLISH_VERSION,
+        "panel_state": "latest_prediction_source_review_panel_ready",
+        "adapter_packet": _adapter_packet(),
+        "q9g_session_state_seed_ready": True,
+        "readability_rows": readability_rows,
+        "issue_rows": [
+            {"severity": "warning", "reason": "schema_validation_deferred_to_ps_q9c"},
+            {"severity": "warning", "reason": "operator_review_warning"},
+        ],
+        "read_only": True,
+        "non_executing": True,
+        "display_only": True,
+        "warroom_page_mutation_allowed": False,
+        "warroom_panel_mutation_allowed": False,
+        "runtime_artifact_write_allowed": False,
+        "approval_or_authorization_allowed": False,
+        "ledger_append_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "would_write_runtime_artifact": False,
+        "would_send_to_broker": False,
+    }
+    snapshot = build_prediction_warroom_latest_prediction_source_uicheck_snapshot(snapshot_panel)
+    assert snapshot["snapshot_version"] == PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION
+    assert snapshot["panel_state"] == "latest_prediction_source_review_panel_ready"
+    assert snapshot["adapter_state"] == "latest_prediction_source_ready"
+    assert snapshot["prediction_run_id"] == "run-ps-q12b"
+    assert snapshot["loaded_payload_count"] == 1
+    assert snapshot["actual_file_read_succeeded"] is True
+    assert snapshot["payload_decode_succeeded"] is True
+    assert snapshot["review_packet_ready"] is True
+    assert snapshot["session_state_updated"] is True
+    assert snapshot["q9g_session_state_seed_ready"] is True
+    assert snapshot["blocker_count"] == 0
+    assert snapshot["warning_count"] == 2
+    assert snapshot["readability_row_count"] == 6
+    assert snapshot["issue_row_count"] == 2
+    assert all(snapshot["safe_boundary"].values())
+
     issue_rows = latest_prediction_source_issue_rows(_adapter_packet())
     assert [row["severity"] for row in issue_rows] == ["warning", "warning"]
     assert issue_rows[0]["reason"] == "schema_validation_deferred_to_ps_q9c"
@@ -138,6 +181,8 @@ def main() -> int:
     assert blocked_panel["warning_readability_polish"] is True
     assert isinstance(blocked_panel["readability_rows"], list)
     assert isinstance(blocked_panel["issue_rows"], list)
+    assert blocked_panel["uicheck_snapshot"]["snapshot_version"] == PREDICTION_WARROOM_LATEST_PREDICTION_SOURCE_UICHECK_SNAPSHOT_VERSION
+    assert blocked_panel["uicheck_snapshot"]["safe_boundary"]["read_only"] is True
     assert blocked_panel["read_only"] is True
     assert blocked_panel["non_executing"] is True
     assert blocked_panel["display_only"] is True
