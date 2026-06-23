@@ -77,6 +77,9 @@ from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_summ
 from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_summary_widget_operator_value_summary_panel import (
     build_latest_prediction_summary_widget_operator_value_summary_packet,
 )
+from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_summary_widget_real_source_handoff_preflight_panel import (
+    build_latest_prediction_summary_widget_real_source_handoff_preflight_packet,
+)
 from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
     render_latest_prediction_summary_widget,
 )
@@ -756,6 +759,46 @@ def _render_prediction_warroom_latest_prediction_summary_widget_operator_value_s
         st.dataframe(summary_rows, width="stretch", hide_index=True)
 
 
+def _prediction_warroom_latest_prediction_summary_real_source_handoff_preflight_display_rows(packet: dict) -> list[dict]:
+    """Return compact latest summary real-source handoff preflight rows for WarRoom display."""
+    rows: list[dict] = []
+    for item in packet.get("handoff_rows") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "handoff_item": item.get("handoff_item"),
+                "state": item.get("state"),
+                "value": item.get("value"),
+                "operator_note": item.get("operator_note"),
+                "real_source_handoff": "false",
+                "actual_read": "false",
+                "source_discovery": "false",
+                "refresh": "false",
+                "render": "false",
+            }
+        )
+    return rows
+
+
+def _render_prediction_warroom_latest_prediction_summary_widget_real_source_handoff_preflight_section() -> None:
+    """Render PS-Q18N real-source handoff preflight rows only; no source resolution/read or real rendering."""
+    packet = build_latest_prediction_summary_widget_real_source_handoff_preflight_packet()
+    st.caption(
+        "Latest prediction summary real-source handoff preflight is display-only: WarRoom shows the handoff contract slots, "
+        "but does not resolve source artifacts, does not read D-hot, does not run Q18J, and does not render widgets."
+    )
+    st.caption(
+        "latest summary real-source handoff rows={rows} / candidate_ready={ready} / real_handoff=false / actual_read=false / render=false".format(
+            rows=packet.get("handoff_row_count"),
+            ready=str(packet.get("handoff_candidate_ready")).lower(),
+        )
+    )
+    handoff_rows = _prediction_warroom_latest_prediction_summary_real_source_handoff_preflight_display_rows(packet)
+    if handoff_rows:
+        st.dataframe(handoff_rows, width="stretch", hide_index=True)
+
+
 def _render_fragmentable_warroom_widget(
     widget_id: str,
     render_body: Callable[[], None],
@@ -930,6 +973,9 @@ def _render_warroom_page_body() -> None:
 
     with live_shell.render_folded_section("Prediction WarRoom latest summary operator value summary", expanded=False):
         _render_prediction_warroom_latest_prediction_summary_widget_operator_value_summary_section()
+
+    with live_shell.render_folded_section("Prediction WarRoom latest summary real source handoff preflight", expanded=False):
+        _render_prediction_warroom_latest_prediction_summary_widget_real_source_handoff_preflight_section()
 
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_overview"),
