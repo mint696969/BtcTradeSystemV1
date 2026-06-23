@@ -1,0 +1,119 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_PS_Q18Q_LATEST_PREDICTION_SUMMARY_WIDGET_ONE_SOURCE_RESOLVER_DRY_RUN_PATH_SHAPE_PREFLIGHT_2026-06-22.md
+# desc: PS-Q18Q latest_prediction_summary_widget one-source resolver dry-run path-shape preflight after PS-Q18P.
+# Prediction System PS-Q18Q Latest Prediction Summary Widget One-Source Resolver Dry-Run Path-Shape Preflight
+
+Updated: 2026-06-22 JST
+Status: implementation + focused guard; not committed until GPT現物確認
+Scope: dry-run path-shape preflight / string-only path preview / no resolver invocation / no path materialization / no actual read / no render
+
+## Purpose
+
+PS-Q18Q declares a string-only dry-run path shape for exactly one `latest_prediction_summary_widget` source candidate.
+
+It accepts one `artifact_ref_string_only` candidate from PS-Q18P and produces only a textual `path_shape_preview`. It does not invoke a resolver, does not resolve source artifacts, does not materialize paths, does not check file existence, does not check artifact schema, does not read D-hot, does not reparse payloads, does not run Q18P/Q18O/Q18N/Q18M/Q18J from WarRoom, does not invoke component packet builder, does not call `render_latest_prediction_summary_widget`, does not refresh, does not write runtime/status artifacts, does not stage/apply parameters, does not append ledgers, does not trigger AutoTrade, and does not call broker/private APIs.
+
+The checker validates the selected candidate using the PS-Q18P observed fixture path:
+
+```text
+selected_candidate_generated_at=2026-06-22T00:00:00Z
+selected_candidate_source_artifact_ref=fixture://ps_q18i/latest_prediction.json
+selected_candidate_market_uid=BTC-USD
+source_candidate_count=1
+resolver_input_ref_kind=artifact_ref_string_only
+path_shape_kind=dry_run_artifact_ref_to_candidate_path_shape_string_only
+path_shape_preview=D:/btc_ts_hot/prediction_sources/BTC-USD/2026-06-22T00:00:00Z/latest_prediction.json
+one_source_resolver_dry_run_path_shape_ack=PS_Q18Q_DECLARE_ONE_SOURCE_RESOLVER_DRY_RUN_PATH_SHAPE_PREFLIGHT_ONLY
+```
+
+## Checker
+
+```text
+checker=check_phase4a_prediction_system_ps_q18q_latest_prediction_summary_widget_one_source_resolver_dry_run_path_shape_preflight.v1
+one_source_resolver_dry_run_path_shape_preflight_check_version=latest_prediction_summary_widget_one_source_resolver_dry_run_path_shape_preflight.v1
+path_shape_preflight_version=prediction_warroom_latest_prediction_summary_widget_one_source_resolver_dry_run_path_shape_preflight.ps_q18q.v1
+source_q18p_checker=check_phase4a_prediction_system_ps_q18p_latest_prediction_summary_widget_one_source_resolver_contract_preflight.v1
+path_shape_row_count=13
+source_candidate_count=1
+path_shape_candidate_ready=true
+resolver_input_ref_kind=artifact_ref_string_only
+path_shape_preview_string_only=true
+latest_prediction_summary_widget_one_source_resolver_dry_run_path_shape_preflight_only=true
+one_source_resolver_dry_run_path_shape_preflight_ready=true
+path_shape_declared=true
+one_source_candidate_preserved=true
+source_candidate_count_fixed_to_one=true
+explicit_path_shape_ack_matched=true
+warroom_page_mutation_allowed=false
+source_artifact_resolver_invoked=false
+source_artifact_resolution_allowed=false
+source_artifact_resolved=false
+source_artifact_path_materialized=false
+source_artifact_exists_checked=false
+source_artifact_schema_checked=false
+actual_source_read_allowed=false
+actual_source_read_invoked=false
+payload_reparse_allowed=false
+source_discovery_allowed=false
+d_hot_directory_scan_allowed=false
+d_hot_actual_read_allowed=false
+freshness_checked_against_d_hot=false
+q18p_validation_invoked_by_mount=false
+q18o_validation_invoked_by_mount=false
+q18n_validation_invoked_by_mount=false
+q18m_validation_invoked_by_mount=false
+q18j_validation_invoked_by_mount=false
+component_packet_builder_invoked_by_mount=false
+streamlit_render_allowed=false
+streamlit_render_invoked=false
+real_prediction_widget_rendering_allowed=false
+refresh_invocation_allowed=false
+runtime_artifact_write_allowed=false
+status_artifact_write_allowed=false
+confidence_increase_allowed=false
+parameter_apply_allowed=false
+parameter_staging_write_allowed=false
+ledger_append_allowed=false
+autotrade_trigger_allowed=false
+broker_private_api_allowed=false
+```
+
+## Not in this slice
+
+```text
+no_warroom_page_mutation
+no_q18p_checker_invocation_from_warroom
+no_q18o_checker_invocation_from_warroom
+no_q18n_checker_invocation_from_warroom
+no_q18m_checker_invocation_from_warroom
+no_q18j_checker_invocation_from_warroom
+no_component_packet_builder_invocation_from_warroom
+no_render_latest_prediction_summary_widget_call_from_warroom
+no_source_artifact_resolver_invocation
+no_source_artifact_resolution
+no_source_artifact_path_materialization
+no_source_artifact_exists_check
+no_source_artifact_schema_check
+no_actual_source_read
+no_payload_reparse
+no_d_hot_discovery
+no_d_hot_directory_scan
+no_streamlit_render
+no_real_prediction_widget_rendering
+no_manual_refresh_invocation
+no_scheduler_enablement
+no_status_write
+no_runtime_write
+no_parameter_staging_write
+no_parameter_apply
+no_confidence_increase
+no_ledger_append
+no_autotrade_trigger
+no_broker_private_api
+no_freshness_bypass
+```
+
+## Recommended next safe slice
+
+```text
+PS-Q18R: Explicit one-source resolver dry-run path-shape close guard or existence-check contract preflight. Actual source resolution/read, real widget rendering, refresh invocation, confidence increase, and parameter staging/apply remain deferred.
+```
