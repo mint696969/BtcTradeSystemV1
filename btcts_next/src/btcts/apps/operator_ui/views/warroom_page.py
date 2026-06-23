@@ -59,6 +59,9 @@ from btcts.apps.operator_ui.components.prediction_warroom_prediction_widgets_dis
 from btcts.apps.operator_ui.components.prediction_warroom_prediction_widget_source_readiness_preflight_panel import (
     build_prediction_warroom_prediction_widget_source_readiness_preflight_packet,
 )
+from btcts.apps.operator_ui.components.prediction_warroom_prediction_widget_source_read_probe_status_panel import (
+    build_prediction_warroom_prediction_widget_source_read_probe_status_packet,
+)
 from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
     render_latest_prediction_summary_widget,
 )
@@ -505,6 +508,43 @@ def _render_prediction_warroom_prediction_widget_source_readiness_preflight_sect
         st.dataframe(readiness_rows, width="stretch", hide_index=True)
 
 
+def _prediction_warroom_source_read_probe_status_display_rows(packet: dict) -> list[dict]:
+    """Return compact read-only source read probe status rows for WarRoom display."""
+    rows: list[dict] = []
+    for item in packet.get("status_rows") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "status_item": item.get("status_item"),
+                "state": item.get("state"),
+                "observed": item.get("observed"),
+                "warroom_invoked": "false",
+                "d_hot_scan": "false",
+                "render": "false",
+                "refresh": "false",
+            }
+        )
+    return rows
+
+
+def _render_prediction_warroom_prediction_widget_source_read_probe_status_section() -> None:
+    """Render PS-Q18C read-probe status rows only; the WarRoom mount never invokes the probe read."""
+    packet = build_prediction_warroom_prediction_widget_source_read_probe_status_packet()
+    st.caption(
+        "Prediction widget source read probe status is display-only: WarRoom shows probe readiness/status rows, "
+        "but does not invoke the bounded read probe, does not scan D-hot, and does not render real widgets."
+    )
+    st.caption(
+        "source read probe status rows={rows} / warroom_actual_read_invoked=false / d_hot_scan=false / render=false".format(
+            rows=packet.get("status_row_count"),
+        )
+    )
+    status_rows = _prediction_warroom_source_read_probe_status_display_rows(packet)
+    if status_rows:
+        st.dataframe(status_rows, width="stretch", hide_index=True)
+
+
 def _render_fragmentable_warroom_widget(
     widget_id: str,
     render_body: Callable[[], None],
@@ -661,6 +701,9 @@ def _render_warroom_page_body() -> None:
 
     with live_shell.render_folded_section("Prediction WarRoom source readiness preflight", expanded=False):
         _render_prediction_warroom_prediction_widget_source_readiness_preflight_section()
+
+    with live_shell.render_folded_section("Prediction WarRoom source read probe status", expanded=False):
+        _render_prediction_warroom_prediction_widget_source_read_probe_status_section()
 
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_overview"),
