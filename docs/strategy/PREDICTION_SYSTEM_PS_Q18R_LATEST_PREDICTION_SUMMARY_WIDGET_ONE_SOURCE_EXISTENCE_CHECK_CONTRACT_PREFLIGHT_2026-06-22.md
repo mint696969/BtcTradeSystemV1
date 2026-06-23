@@ -1,0 +1,125 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_PS_Q18R_LATEST_PREDICTION_SUMMARY_WIDGET_ONE_SOURCE_EXISTENCE_CHECK_CONTRACT_PREFLIGHT_2026-06-22.md
+# desc: PS-Q18R latest_prediction_summary_widget one-source existence-check contract preflight after PS-Q18Q.
+# Prediction System PS-Q18R Latest Prediction Summary Widget One-Source Existence-Check Contract Preflight
+
+Updated: 2026-06-22 JST
+Status: implementation + focused guard; not committed until GPT現物確認
+Scope: existence-check contract preflight / no filesystem existence check / no schema check / no actual read / no render
+
+## Purpose
+
+PS-Q18R declares the existence-check input and output contract for exactly one `latest_prediction_summary_widget` path-shape candidate.
+
+It accepts one string-only `path_shape_preview` from PS-Q18Q and names the future existence-check output contract. It does not invoke a resolver, does not resolve source artifacts, does not materialize paths, does not run filesystem existence checks, does not check artifact schema, does not read D-hot, does not reparse payloads, does not run Q18Q/Q18P/Q18O/Q18N/Q18M/Q18J from WarRoom, does not invoke component packet builder, does not call `render_latest_prediction_summary_widget`, does not refresh, does not write runtime/status artifacts, does not stage/apply parameters, does not append ledgers, does not trigger AutoTrade, and does not call broker/private APIs.
+
+The checker validates the selected candidate using the PS-Q18Q observed fixture path:
+
+```text
+selected_candidate_generated_at=2026-06-22T00:00:00Z
+selected_candidate_source_artifact_ref=fixture://ps_q18i/latest_prediction.json
+selected_candidate_market_uid=BTC-USD
+source_candidate_count=1
+path_shape_preview=D:/btc_ts_hot/prediction_sources/BTC-USD/2026-06-22T00:00:00Z/latest_prediction.json
+existence_check_kind=dry_run_candidate_path_shape_existence_check_contract_only
+existence_result_state=not_checked
+one_source_existence_check_contract_ack=PS_Q18R_DECLARE_ONE_SOURCE_EXISTENCE_CHECK_CONTRACT_PREFLIGHT_ONLY
+```
+
+## Checker
+
+```text
+checker=check_phase4a_prediction_system_ps_q18r_latest_prediction_summary_widget_one_source_existence_check_contract_preflight.v1
+one_source_existence_check_contract_preflight_check_version=latest_prediction_summary_widget_one_source_existence_check_contract_preflight.v1
+existence_check_contract_preflight_version=prediction_warroom_latest_prediction_summary_widget_one_source_existence_check_contract_preflight.ps_q18r.v1
+source_q18q_checker=check_phase4a_prediction_system_ps_q18q_latest_prediction_summary_widget_one_source_resolver_dry_run_path_shape_preflight.v1
+existence_contract_row_count=14
+source_candidate_count=1
+existence_contract_candidate_ready=true
+existence_check_contract_declared=true
+existence_check_kind=dry_run_candidate_path_shape_existence_check_contract_only
+existence_result_state=not_checked
+path_shape_preview_string_only=true
+latest_prediction_summary_widget_one_source_existence_check_contract_preflight_only=true
+one_source_existence_check_contract_preflight_ready=true
+one_source_candidate_preserved=true
+source_candidate_count_fixed_to_one=true
+explicit_existence_check_contract_ack_matched=true
+warroom_page_mutation_allowed=false
+source_artifact_resolver_invoked=false
+source_artifact_resolution_allowed=false
+source_artifact_resolved=false
+source_artifact_path_materialized=false
+source_artifact_exists_check_allowed=false
+source_artifact_exists_checked=false
+source_artifact_exists_result_available=false
+source_artifact_schema_check_allowed=false
+source_artifact_schema_checked=false
+actual_source_read_allowed=false
+actual_source_read_invoked=false
+payload_reparse_allowed=false
+source_discovery_allowed=false
+d_hot_directory_scan_allowed=false
+d_hot_actual_read_allowed=false
+freshness_checked_against_d_hot=false
+q18q_validation_invoked_by_mount=false
+q18p_validation_invoked_by_mount=false
+q18o_validation_invoked_by_mount=false
+q18n_validation_invoked_by_mount=false
+q18m_validation_invoked_by_mount=false
+q18j_validation_invoked_by_mount=false
+component_packet_builder_invoked_by_mount=false
+streamlit_render_allowed=false
+streamlit_render_invoked=false
+real_prediction_widget_rendering_allowed=false
+refresh_invocation_allowed=false
+runtime_artifact_write_allowed=false
+status_artifact_write_allowed=false
+confidence_increase_allowed=false
+parameter_apply_allowed=false
+parameter_staging_write_allowed=false
+ledger_append_allowed=false
+autotrade_trigger_allowed=false
+broker_private_api_allowed=false
+```
+
+## Not in this slice
+
+```text
+no_warroom_page_mutation
+no_q18q_checker_invocation_from_warroom
+no_q18p_checker_invocation_from_warroom
+no_q18o_checker_invocation_from_warroom
+no_q18n_checker_invocation_from_warroom
+no_q18m_checker_invocation_from_warroom
+no_q18j_checker_invocation_from_warroom
+no_component_packet_builder_invocation_from_warroom
+no_render_latest_prediction_summary_widget_call_from_warroom
+no_source_artifact_resolver_invocation
+no_source_artifact_resolution
+no_source_artifact_path_materialization
+no_source_artifact_exists_check_execution
+no_source_artifact_schema_check_execution
+no_actual_source_read
+no_payload_reparse
+no_d_hot_discovery
+no_d_hot_directory_scan
+no_streamlit_render
+no_real_prediction_widget_rendering
+no_manual_refresh_invocation
+no_scheduler_enablement
+no_status_write
+no_runtime_write
+no_parameter_staging_write
+no_parameter_apply
+no_confidence_increase
+no_ledger_append
+no_autotrade_trigger
+no_broker_private_api
+no_freshness_bypass
+```
+
+## Recommended next safe slice
+
+```text
+PS-Q18S: Explicit one-source no-read existence check execution gate. Actual source read, real widget rendering, refresh invocation, confidence increase, and parameter staging/apply remain deferred.
+```
