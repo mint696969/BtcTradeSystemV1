@@ -68,6 +68,9 @@ from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_summ
 from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_summary_widget_render_disabled_packet_status_panel import (
     build_latest_prediction_summary_widget_render_disabled_packet_status_packet,
 )
+from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_summary_widget_mapped_payload_render_disabled_packet_status_panel import (
+    build_latest_prediction_summary_widget_mapped_payload_render_disabled_packet_status_packet,
+)
 from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
     render_latest_prediction_summary_widget,
 )
@@ -625,6 +628,44 @@ def _render_prediction_warroom_latest_prediction_summary_widget_render_disabled_
         st.dataframe(status_rows, width="stretch", hide_index=True)
 
 
+def _prediction_warroom_latest_prediction_summary_mapped_payload_render_disabled_packet_status_display_rows(packet: dict) -> list[dict]:
+    """Return compact read-only mapped-payload render-disabled packet status rows for WarRoom display."""
+    rows: list[dict] = []
+    for item in packet.get("status_rows") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "status_item": item.get("status_item"),
+                "state": item.get("state"),
+                "observed": item.get("observed"),
+                "q18j_mount": "false",
+                "component_builder_mount": "false",
+                "streamlit_render": "false",
+                "actual_read": "false",
+                "refresh": "false",
+            }
+        )
+    return rows
+
+
+def _render_prediction_warroom_latest_prediction_summary_widget_mapped_payload_render_disabled_packet_status_section() -> None:
+    """Render PS-Q18K mapped-payload render-disabled packet status rows only; no Q18J invocation or real rendering."""
+    packet = build_latest_prediction_summary_widget_mapped_payload_render_disabled_packet_status_packet()
+    st.caption(
+        "Latest prediction summary widget mapped-payload render-disabled packet status is display-only: WarRoom shows mapped value packet boundary rows, "
+        "but does not run Q18J, does not invoke the component packet builder, does not invoke Streamlit rendering, and does not read D-hot."
+    )
+    st.caption(
+        "latest summary mapped payload render-disabled packet rows={rows} / q18j_mount=false / render=false / actual_read=false".format(
+            rows=packet.get("status_row_count"),
+        )
+    )
+    status_rows = _prediction_warroom_latest_prediction_summary_mapped_payload_render_disabled_packet_status_display_rows(packet)
+    if status_rows:
+        st.dataframe(status_rows, width="stretch", hide_index=True)
+
+
 def _render_fragmentable_warroom_widget(
     widget_id: str,
     render_body: Callable[[], None],
@@ -790,6 +831,9 @@ def _render_warroom_page_body() -> None:
 
     with live_shell.render_folded_section("Prediction WarRoom latest summary render-disabled packet status", expanded=False):
         _render_prediction_warroom_latest_prediction_summary_widget_render_disabled_packet_status_section()
+
+    with live_shell.render_folded_section("Prediction WarRoom latest summary mapped payload render-disabled packet status", expanded=False):
+        _render_prediction_warroom_latest_prediction_summary_widget_mapped_payload_render_disabled_packet_status_section()
 
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_overview"),
