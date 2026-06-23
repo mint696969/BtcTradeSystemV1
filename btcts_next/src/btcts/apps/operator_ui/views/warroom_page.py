@@ -56,6 +56,9 @@ from btcts.apps.operator_ui.components.prediction_warroom_non_ui_scheduled_produ
 from btcts.apps.operator_ui.components.prediction_warroom_prediction_widgets_disabled_section_review_panel import (
     build_prediction_warroom_prediction_widgets_disabled_section_review_packet,
 )
+from btcts.apps.operator_ui.components.prediction_warroom_prediction_widget_source_readiness_preflight_panel import (
+    build_prediction_warroom_prediction_widget_source_readiness_preflight_packet,
+)
 from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
     render_latest_prediction_summary_widget,
 )
@@ -461,6 +464,47 @@ def _render_prediction_warroom_prediction_widgets_disabled_section_review_mount(
         st.dataframe(review_rows, width="stretch", hide_index=True)
 
 
+def _prediction_warroom_source_readiness_display_rows(packet: dict) -> list[dict]:
+    """Return compact read-only source readiness rows for the Prediction widget preflight mount."""
+    rows: list[dict] = []
+    for item in packet.get("readiness_rows") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "widget_family_id": item.get("widget_family_id"),
+                "source_packet_id": item.get("source_packet_id"),
+                "freshness_field": item.get("freshness_field"),
+                "source_artifact_ref_field": item.get("source_artifact_ref_field"),
+                "release_gate_field": item.get("release_gate_field"),
+                "binding_ready": item.get("actual_source_binding_ready"),
+                "actual_read": "false",
+                "d_hot_read": "false",
+                "render": "false",
+                "refresh": "false",
+            }
+        )
+    return rows
+
+
+def _render_prediction_warroom_prediction_widget_source_readiness_preflight_section() -> None:
+    """Render PS-Q17Z source readiness rows only; no actual source resolution/read or real widget rendering."""
+    packet = build_prediction_warroom_prediction_widget_source_readiness_preflight_packet()
+    st.caption(
+        "Prediction widget source readiness preflight is display-only: source binding fields are visible, "
+        "but source artifacts are not resolved, D-hot is not read, refresh is not invoked, and real widgets are not rendered."
+    )
+    st.caption(
+        "source readiness rows={rows} / source packets={packets} / actual_source_read=false / d_hot_read=false / render=false".format(
+            rows=packet.get("readiness_row_count"),
+            packets=packet.get("unique_source_packet_count"),
+        )
+    )
+    readiness_rows = _prediction_warroom_source_readiness_display_rows(packet)
+    if readiness_rows:
+        st.dataframe(readiness_rows, width="stretch", hide_index=True)
+
+
 def _render_fragmentable_warroom_widget(
     widget_id: str,
     render_body: Callable[[], None],
@@ -614,6 +658,9 @@ def _render_warroom_page_body() -> None:
 
     with live_shell.render_folded_section("Prediction WarRoom disabled widget skeleton review", expanded=False):
         _render_prediction_warroom_prediction_widgets_disabled_section_review_mount()
+
+    with live_shell.render_folded_section("Prediction WarRoom source readiness preflight", expanded=False):
+        _render_prediction_warroom_prediction_widget_source_readiness_preflight_section()
 
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_overview"),
