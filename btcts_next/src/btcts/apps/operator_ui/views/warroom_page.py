@@ -53,6 +53,9 @@ from btcts.apps.operator_ui.components.prediction_warroom_realtime_review_prefli
 from btcts.apps.operator_ui.components.prediction_warroom_non_ui_scheduled_producer_status_panel import (
     render_prediction_warroom_non_ui_scheduled_producer_status_panel,
 )
+from btcts.apps.operator_ui.components.prediction_warroom_prediction_widgets_disabled_section_review_panel import (
+    build_prediction_warroom_prediction_widgets_disabled_section_review_packet,
+)
 from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
     render_latest_prediction_summary_widget,
 )
@@ -391,6 +394,72 @@ def _render_prediction_warroom_prediction_widgets_skeleton_section() -> list[dic
     """PS-Q17V disabled mount function: builds packets only; page body does not call it yet."""
     return _build_prediction_warroom_prediction_widgets_skeleton_packets()
 
+def _prediction_warroom_disabled_widget_review_zone_display_rows(packet: dict) -> list[dict]:
+    """Return compact read-only zone rows for the disabled Prediction widget review mount."""
+    rows: list[dict] = []
+    for item in packet.get("zone_rows") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "mount_zone_id": item.get("mount_zone_id"),
+                "review_row_count": item.get("review_row_count"),
+                "all_render_disabled": item.get("all_render_disabled"),
+                "all_actual_source_read_disabled": item.get("all_actual_source_read_disabled"),
+                "widget_family_ids": ", ".join(str(value) for value in item.get("widget_family_ids") or []),
+            }
+        )
+    return rows
+
+
+def _prediction_warroom_disabled_widget_review_display_rows(packet: dict) -> list[dict]:
+    """Return compact read-only widget rows for the disabled Prediction widget review mount."""
+    rows: list[dict] = []
+    for item in packet.get("review_rows") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "widget_family_id": item.get("widget_family_id"),
+                "source_packet_id": item.get("source_packet_id"),
+                "mount_zone_id": item.get("mount_zone_id"),
+                "release_gate_state": item.get("release_gate_state"),
+                "read_only": item.get("read_only"),
+                "render": "false",
+                "actual_source_read": "false",
+                "refresh": "false",
+                "runtime_write": "false",
+                "parameter_apply": "false",
+            }
+        )
+    return rows
+
+
+def _render_prediction_warroom_prediction_widgets_disabled_section_review_mount() -> None:
+    """Render PS-Q17X disabled widget review rows only; no actual source read or widget rendering."""
+    packets = _render_prediction_warroom_prediction_widgets_skeleton_section()
+    review_packet = build_prediction_warroom_prediction_widgets_disabled_section_review_packet(
+        packets=packets,
+        source_checker_version="check_phase4a_prediction_system_ps_q17s_warroom_prediction_widget_read_only_component_skeleton_implementation.v1",
+        page_patch_checker_version="check_phase4a_prediction_system_ps_q17v_warroom_prediction_widget_page_import_mount_patch.v1",
+    )
+    st.caption(
+        "Prediction widget disabled review is display-only: skeleton packets are summarized as review rows; "
+        "no actual source read, no refresh, no runtime write, no parameter apply, no AutoTrade, no broker."
+    )
+    st.caption(
+        "review rows={rows} / zones={zones} / widget_render=false / actual_source_read=false".format(
+            rows=review_packet.get("review_row_count"),
+            zones=review_packet.get("review_zone_count"),
+        )
+    )
+    zone_rows = _prediction_warroom_disabled_widget_review_zone_display_rows(review_packet)
+    if zone_rows:
+        st.dataframe(zone_rows, width="stretch", hide_index=True)
+    review_rows = _prediction_warroom_disabled_widget_review_display_rows(review_packet)
+    if review_rows:
+        st.dataframe(review_rows, width="stretch", hide_index=True)
+
 
 def _render_fragmentable_warroom_widget(
     widget_id: str,
@@ -542,6 +611,9 @@ def _render_warroom_page_body() -> None:
             "but no runtime write, no approval, no ledger, no AutoTrade, no broker."
         )
         _render_prediction_warroom_lowered_display_packet_visibility_review_section()
+
+    with live_shell.render_folded_section("Prediction WarRoom disabled widget skeleton review", expanded=False):
+        _render_prediction_warroom_prediction_widgets_disabled_section_review_mount()
 
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_overview"),
