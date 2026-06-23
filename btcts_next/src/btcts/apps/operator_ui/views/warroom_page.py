@@ -53,6 +53,42 @@ from btcts.apps.operator_ui.components.prediction_warroom_realtime_review_prefli
 from btcts.apps.operator_ui.components.prediction_warroom_non_ui_scheduled_producer_status_panel import (
     render_prediction_warroom_non_ui_scheduled_producer_status_panel,
 )
+from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
+    render_latest_prediction_summary_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.prediction_delta_widget import (
+    render_prediction_delta_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.scenario_trace_widget import (
+    render_scenario_trace_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.evidence_weighting_widget import (
+    render_evidence_weighting_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.invalidation_rewrite_widget import (
+    render_invalidation_rewrite_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.source_quality_freshness_widget import (
+    render_source_quality_freshness_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.warning_blocker_widget import (
+    render_warning_blocker_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.signal_strength_calibration_widget import (
+    render_signal_strength_calibration_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.parameter_candidate_comparison_widget import (
+    render_parameter_candidate_comparison_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.replay_outcome_calibration_widget import (
+    render_replay_outcome_calibration_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.producer_freshness_status_widget import (
+    render_producer_freshness_status_widget,
+)
+from btcts.apps.operator_ui.components.prediction_widgets.runtime_boundary_safety_widget import (
+    render_runtime_boundary_safety_widget,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -332,6 +368,28 @@ def _render_prediction_warroom_lowered_display_packet_visibility_review_section(
     render_prediction_warroom_non_ui_scheduled_producer_status_panel()
     apply_prediction_warroom_actual_review_packet_live_session_seed_page_mount(session_state=st.session_state)
     render_prediction_warroom_lowered_display_packet_visibility_review_panel()
+
+def _build_prediction_warroom_prediction_widgets_skeleton_packets() -> list[dict]:
+    """Return PS-Q17V disabled Prediction widget skeleton packets without rendering them."""
+    return [
+        render_latest_prediction_summary_widget(props=None),
+        render_prediction_delta_widget(props=None),
+        render_scenario_trace_widget(props=None),
+        render_evidence_weighting_widget(props=None),
+        render_invalidation_rewrite_widget(props=None),
+        render_source_quality_freshness_widget(props=None),
+        render_warning_blocker_widget(props=None),
+        render_signal_strength_calibration_widget(props=None),
+        render_parameter_candidate_comparison_widget(props=None),
+        render_replay_outcome_calibration_widget(props=None),
+        render_producer_freshness_status_widget(props=None),
+        render_runtime_boundary_safety_widget(props=None),
+    ]
+
+
+def _render_prediction_warroom_prediction_widgets_skeleton_section() -> list[dict]:
+    """PS-Q17V disabled mount function: builds packets only; page body does not call it yet."""
+    return _build_prediction_warroom_prediction_widgets_skeleton_packets()
 
 
 def _render_fragmentable_warroom_widget(
