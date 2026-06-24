@@ -308,8 +308,9 @@ def build_latest_prediction_warroom_read_model(
     return read_model
 
 
-def latest_prediction_artifact_path() -> Path:
-    return core_paths.runtime_root(ensure=False) / LATEST_PREDICTION_ARTIFACT_RELATIVE_PATH
+def latest_prediction_artifact_path(*, hot_latest_root_hint: str | Path | None = None) -> Path:
+    root = Path(str(hot_latest_root_hint).rstrip("\\/")) if hot_latest_root_hint else core_paths.runtime_root(ensure=False)
+    return root / LATEST_PREDICTION_ARTIFACT_RELATIVE_PATH
 
 
 def load_latest_prediction_payload(*, path: Path | None = None, max_bytes: int = DEFAULT_MAX_ARTIFACT_BYTES) -> dict[str, Any]:
@@ -331,8 +332,9 @@ def load_latest_prediction_warroom_read_model(
     *,
     now_utc: str | None = None,
     prediction_path: Path | None = None,
+    hot_latest_root_hint: str | Path | None = None,
 ) -> dict[str, Any]:
-    target = prediction_path or latest_prediction_artifact_path()
+    target = prediction_path or latest_prediction_artifact_path(hot_latest_root_hint=hot_latest_root_hint)
     payload = load_latest_prediction_payload(path=target)
     market_state = load_latest_market_state(exchange="bitflyer", symbol_raw="FX_BTC_JPY")
     market_diag = market_state_diagnostics(exchange="bitflyer", symbol_raw="FX_BTC_JPY")
