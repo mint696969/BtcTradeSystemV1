@@ -86,6 +86,9 @@ from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_
 from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_widget_q18ai_warroom_render_disabled_packet_panel import (
     render_latest_prediction_summary_widget_q18ai_warroom_render_disabled_packet_panel,
 )
+from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel import (
+    render_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel,
+)
 from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
     render_latest_prediction_summary_widget,
 )
@@ -402,6 +405,14 @@ def _render_prediction_warroom_latest_prediction_summary_widget_q18ai_render_dis
     """Render PS-Q18AI latest summary render-disabled packet rows in WarRoom; refresh remains disabled."""
     packet = render_latest_prediction_summary_widget_q18ai_warroom_render_disabled_packet_panel()
     st.session_state["warroom_latest_prediction_summary_widget_q18ai_render_disabled_packet_panel"] = dict(packet)
+
+
+def _render_prediction_warroom_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel_section(*, fragment_enabled: bool) -> None:
+    """Render PS-Q18AJ bounded auto-refresh panel for latest prediction display only."""
+    packet = render_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel(
+        fragment_enabled=fragment_enabled,
+    )
+    st.session_state["warroom_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel"] = dict(packet)
 
 
 def _render_prediction_warroom_lowered_display_packet_visibility_review_section() -> None:
@@ -998,6 +1009,7 @@ def _render_warroom_page_body() -> None:
     with live_shell.render_folded_section("Prediction WarRoom latest summary safe display mount", expanded=False):
         _render_prediction_warroom_latest_prediction_summary_widget_safe_display_mount_section()
         _render_prediction_warroom_latest_prediction_summary_widget_q18ai_render_disabled_packet_panel_section()
+        _render_prediction_warroom_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel_section(fragment_enabled=fragment_enabled)
 
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_overview"),
