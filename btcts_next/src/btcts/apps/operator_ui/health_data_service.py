@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/health_data_service.py
-# desc: Operator UI Health タブ向けに collector / audit / market_state を統合し、短期監視用の時系列を返す。
+# desc: Operator UI Health タブ向けに collector / audit / telemetry / market_state を統合し、短期監視用の時系列を返す。
 
 from __future__ import annotations
 
@@ -104,11 +104,11 @@ def _audit_coverage_meta(
     )
     coverage_warning = None
     if earliest_ts is None or latest_ts is None:
-        coverage_warning = "audit_tail_empty_or_unparseable"
+        coverage_warning = "health_event_input_empty_or_unparseable"
     elif latest_ts < oldest_bucket:
-        coverage_warning = "audit_tail_has_no_rows_in_selected_window"
+        coverage_warning = "health_event_input_has_no_rows_in_selected_window"
     elif earliest_ts > oldest_bucket:
-        coverage_warning = "audit_tail_did_not_cover_full_window"
+        coverage_warning = "health_event_input_did_not_cover_full_window"
 
     return {
         "coverage_complete": coverage_complete,
@@ -328,7 +328,7 @@ def build_recent_api_ws_series(
                 "range_key": range_key,
                 "bucket_minutes": bucket_minutes,
                 "in_progress": False,
-                "source_kind": "audit_activity_series",
+                "source_kind": "health_event_activity_series",
                 "api_metric_mode": chart_spec["metric_mode"],
                 "api_chart_fields": list(chart_spec["chart_fields"]),
                 "api_events": api_events,
@@ -954,7 +954,7 @@ def _build_continuity_rail(
                     "range_key": range_key,
                     "bucket_minutes": bucket_minutes,
                     "in_progress": False,
-                    "source_kind": "audit_continuity_rail",
+                    "source_kind": "health_event_continuity_rail",
                     "level": level,
                     "reason": reason,
                     "coverage_complete": coverage_meta["coverage_complete"],

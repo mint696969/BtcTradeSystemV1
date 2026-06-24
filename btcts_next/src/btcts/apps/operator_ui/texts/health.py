@@ -72,7 +72,7 @@ HEALTH_TEXTS = {
         "health_read_guide_line1": "Collector / API / WS should stay healthy or caution, not broken.",
         "health_read_guide_line2": "Layer3 is the main weekly-test target. trusted is healthy, provisional is caution, broken is risk.",
         "health_read_guide_line3": "Gap / resync / 429 spikes are important when they repeat, not as single noise.",
-        "health_chart_api_caption": "Read this as collector request pressure. The upper chart is audit-based activity estimation, while the lower overlay uses exploration rate state as the current source of truth for utilization, target ratio, and hard cap. 429 is shown as a marker-like signal.",
+        "health_chart_api_caption": "Read this as collector request pressure. The upper chart uses the bounded Health event input, including PS-Q19B telemetry for collector success activity; the lower overlay uses rate state as the current source of truth for utilization, target ratio, and hard cap. 429 is shown as a marker-like signal.",
         "health_chart_ws_caption": "Read this as WS continuity. Repeated gap/resync spikes mean continuity is unstable.",
         "health_chart_layer3_caption": "Read this as Layer3 confidence monitor. A flat low score means trust is not established yet.",
         "health_chart_unfinished_bucket_caption": "The rightmost in-progress bucket is excluded from the normal chart because it is not finalized yet.",

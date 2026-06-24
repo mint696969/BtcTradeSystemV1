@@ -92,7 +92,7 @@ def render_api_chart_panel(
 
             if not coverage_complete and coverage_warning:
                 st.warning(
-                    "coverage warning: audit tail did not fully cover this window "
+                    "coverage warning: health event input did not fully cover this window "
                     f"(window_start={coverage_window_start_ts}, "
                     f"oldest_available={coverage_oldest_available_ts})"
                 )
@@ -205,7 +205,7 @@ def render_ws_chart_panel(
 
         if not coverage_complete and coverage_warning:
             st.warning(
-                "coverage warning: audit tail did not fully cover this window "
+                "coverage warning: health event input did not fully cover this window "
                 f"(window_start={coverage_window_start_ts}, "
                 f"oldest_available={coverage_oldest_available_ts})"
             )

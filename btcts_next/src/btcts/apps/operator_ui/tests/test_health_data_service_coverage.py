@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_health_data_service_coverage.py
-# desc: Verify health audit-backed series exposes coverage metadata when audit tail does not cover the requested window.
+# desc: Verify health event input series exposes coverage metadata when the bounded input does not cover the requested window.
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def main() -> int:
         rows = svc.build_recent_api_ws_series(range_key="1h")
         assert len(rows) == 2
         assert rows[-1]["coverage_complete"] is False
-        assert rows[-1]["coverage_warning"] == "audit_tail_did_not_cover_full_window"
+        assert rows[-1]["coverage_warning"] == "health_event_input_did_not_cover_full_window"
         assert rows[-1]["coverage_window_start_ts"] == "2026-04-15T01:00:00Z"
         assert rows[-1]["coverage_oldest_available_ts"] == "2026-04-15T01:01:10Z"
 
@@ -56,7 +56,7 @@ def main() -> int:
         assert rail
         first_cell = rail[0]["cells"][0]
         assert first_cell["coverage_complete"] is False
-        assert first_cell["coverage_warning"] == "audit_tail_did_not_cover_full_window"
+        assert first_cell["coverage_warning"] == "health_event_input_did_not_cover_full_window"
         assert first_cell["coverage_window_start_ts"] == "2026-04-15T01:00:00Z"
         assert first_cell["coverage_oldest_available_ts"] == "2026-04-15T01:01:10Z"
     finally:
