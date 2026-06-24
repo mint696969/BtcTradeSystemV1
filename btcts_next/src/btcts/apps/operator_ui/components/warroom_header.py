@@ -5,23 +5,16 @@ from __future__ import annotations
 
 import streamlit as st
 
-from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.components.compact_metric_cards import (
     render_compact_metric_grid,
 )
-from btcts.apps.operator_ui.components.market_state_bridge import (
-    load_execution_market_summary_status_payload,
-    load_execution_market_summary_widget_model,
-)
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     active_event_compact_reading_line,
-    summary_widget_caption,
 )
 from btcts.apps.operator_ui.components.warroom_header_state import (
     build_warroom_header_state,
 )
 from btcts.apps.operator_ui.ui_text import get_text
-
 
 def _spread_state(spread: float | None, lang: str) -> str:
     if spread is None:
@@ -35,14 +28,12 @@ def _spread_state(spread: float | None, lang: str) -> str:
 
     return get_text(lang, "warroom_value_normal")
 
-
 def _pressure_label(pressure_bias: str | None, lang: str) -> str:
     if pressure_bias == "buy_pressure":
         return get_text(lang, "warroom_value_buy")
     if pressure_bias == "sell_pressure":
         return get_text(lang, "warroom_value_sell")
     return get_text(lang, "warroom_value_neutral")
-
 
 def _risk_level(spread, imbalance, delta, wall_ratio):
     score = 0
@@ -69,7 +60,6 @@ def _risk_level(spread, imbalance, delta, wall_ratio):
         return "MEDIUM"
     return "LOW"
 
-
 def _risk_label(level: str, lang: str) -> str:
     mapping = {
         "LOW": get_text(lang, "warroom_value_low"),
@@ -77,7 +67,6 @@ def _risk_label(level: str, lang: str) -> str:
         "HIGH": get_text(lang, "warroom_value_high"),
     }
     return mapping.get(level, level)
-
 
 def _ai_decision(regime: str, imbalance, delta, lang: str) -> str:
     decision = get_text(lang, "warroom_value_wait")
@@ -92,7 +81,6 @@ def _ai_decision(regime: str, imbalance, delta, lang: str) -> str:
 
     return decision
 
-
 def _regime_label(regime: str, lang: str) -> str:
     mapping = {
         "range": get_text(lang, "warroom_value_range"),
@@ -102,7 +90,6 @@ def _regime_label(regime: str, lang: str) -> str:
         "absorption_zone": get_text(lang, "warroom_value_absorption"),
     }
     return mapping.get(regime, regime or get_text(lang, "warroom_value_unknown"))
-
 
 def build_warroom_market_reading_caption(
     *,
@@ -126,7 +113,6 @@ def build_warroom_market_reading_caption(
         f"prediction_switch_hint={prediction_switch_hint} / "
         f"prediction_trace={prediction_trace_summary}"
     )
-
 
 def build_warroom_operational_reading_caption(
     *,
@@ -153,10 +139,8 @@ def build_warroom_operational_reading_caption(
         "execution=not_instruction"
     )
 
-
 def _analyze_live_or_fallback():
     return build_warroom_header_state()
-
 
 def render():
     lang = st.session_state.get("ui_lang", "en")
@@ -167,9 +151,6 @@ def render():
     if not state:
         st.warning(get_text(lang, "warroom_header_missing_data"))
         return
-
-    summary_widget = load_execution_market_summary_widget_model()
-    summary_payload = load_execution_market_summary_status_payload()
 
     regime = state.get("regime") or "unknown"
     best_strategy = state.get("best_strategy") or "-"
@@ -209,28 +190,10 @@ def render():
             wall_ratio=wall_ratio,
         )
     )
-    live_shell.render_scrollable_text_block(
-        build_warroom_market_reading_caption(
-            state=state,
-        ),
-        max_height_px=120,
-        monospace=True,
-    )
-    live_shell.render_scrollable_text_block(
-        build_warroom_operational_reading_caption(
-            state=state,
-            summary_payload=summary_payload,
-        ),
-        max_height_px=140,
-        monospace=True,
-    )
     st.caption(
         get_text(lang, "warroom_generic_source_caption").format(
             source=state.get("source_label") or state.get("source", "unknown"),
         )
     )
-
-    if summary_widget:
-        st.caption(summary_widget_caption(summary_widget))
 
     st.divider()
