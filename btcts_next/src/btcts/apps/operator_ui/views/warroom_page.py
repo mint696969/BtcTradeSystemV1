@@ -83,6 +83,9 @@ from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_summ
 from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_widget_q18ab_safe_display_mount_panel import (
     render_latest_prediction_summary_widget_q18ab_safe_display_mount_panel,
 )
+from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_widget_q18ai_warroom_render_disabled_packet_panel import (
+    render_latest_prediction_summary_widget_q18ai_warroom_render_disabled_packet_panel,
+)
 from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
     render_latest_prediction_summary_widget,
 )
@@ -393,6 +396,12 @@ def _render_prediction_warroom_latest_prediction_summary_widget_safe_display_mou
     """Render PS-Q18AB safe display mount rows only; no real widget rendering or D-hot read."""
     packet = render_latest_prediction_summary_widget_q18ab_safe_display_mount_panel()
     st.session_state["warroom_latest_prediction_summary_widget_q18ab_safe_display_mount_packet"] = dict(packet)
+
+
+def _render_prediction_warroom_latest_prediction_summary_widget_q18ai_render_disabled_packet_panel_section() -> None:
+    """Render PS-Q18AI latest summary render-disabled packet rows in WarRoom; refresh remains disabled."""
+    packet = render_latest_prediction_summary_widget_q18ai_warroom_render_disabled_packet_panel()
+    st.session_state["warroom_latest_prediction_summary_widget_q18ai_render_disabled_packet_panel"] = dict(packet)
 
 
 def _render_prediction_warroom_lowered_display_packet_visibility_review_section() -> None:
@@ -988,6 +997,7 @@ def _render_warroom_page_body() -> None:
 
     with live_shell.render_folded_section("Prediction WarRoom latest summary safe display mount", expanded=False):
         _render_prediction_warroom_latest_prediction_summary_widget_safe_display_mount_section()
+        _render_prediction_warroom_latest_prediction_summary_widget_q18ai_render_disabled_packet_panel_section()
 
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_overview"),
