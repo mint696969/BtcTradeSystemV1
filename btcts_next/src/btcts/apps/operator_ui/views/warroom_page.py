@@ -87,9 +87,11 @@ from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_
     render_latest_prediction_summary_widget_q18ai_warroom_render_disabled_packet_panel,
 )
 from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel import (
+    build_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel_packet,
     render_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel,
 )
 from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel import (
+    build_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel_packet,
     render_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel,
 )
 from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
@@ -424,6 +426,107 @@ def _render_prediction_warroom_latest_prediction_summary_widget_q18ak_freshness_
         fragment_enabled=fragment_enabled,
     )
     st.session_state["warroom_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel"] = dict(packet)
+
+
+
+
+def _bool_display(value: object) -> str:
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    return str(value).lower() if value is not None else ""
+
+
+def _prediction_warroom_latest_prediction_observation_cleanup_summary_packet(
+    *,
+    q18aj_packet: dict | object | None,
+    q18ak_packet: dict | object | None,
+) -> dict:
+    """Build PS-Q18AU compact observation status from existing Q18AJ/Q18AK packets."""
+    q18aj = q18aj_packet if isinstance(q18aj_packet, dict) else {}
+    q18ak = q18ak_packet if isinstance(q18ak_packet, dict) else {}
+    packet = {
+        "ok": True,
+        "observation_cleanup_version": "prediction_warroom.latest_prediction_summary_widget.q18au_observation_cleanup.v1",
+        "observation_cleanup_state": "operator_quick_status_visible_display_only",
+        "read_order": "quick_status_then_searchable_tokens_then_legacy_preflight_details",
+        "latest_prediction_observation_status": "ready_for_operator_review",
+        "q18aq_manual_resmoke_result": "pass",
+        "browser_find_freshness_state": True,
+        "browser_find_safe_fallback_reason_codes": True,
+        "browser_find_refresh_heartbeat_utc": True,
+        "q18aj_auto_refresh_enabled": q18aj.get("auto_refresh_enabled") is True,
+        "q18aj_fragment_refresh_enabled": q18aj.get("fragment_refresh_enabled") is True,
+        "q18aj_broad_page_reload_disabled": q18aj.get("broad_page_reload_disabled") is True,
+        "q18aj_refresh_heartbeat_utc": str(q18aj.get("refresh_heartbeat_utc") or ""),
+        "q18ak_freshness_state": str(q18ak.get("freshness_state") or ""),
+        "q18ak_safe_fallback_reason_codes": list(q18ak.get("safe_fallback_reason_codes") or []),
+        "q18ak_observed_now_utc": str(q18ak.get("observed_now_utc") or ""),
+        "q18ak_source_age_sec": q18ak.get("source_age_sec"),
+        "implementation_gate_review_result": "blocked_not_ready_to_enable",
+        "real_rendering_enabled": False,
+        "component_runtime_binding_allowed": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "parameter_apply_allowed": False,
+        "parameter_staging_write_allowed": False,
+        "ledger_append_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "would_send_to_broker": False,
+    }
+    packet["operator_plain_text"] = (
+        "PS_Q18AU_OBSERVATION_QUICK_STATUS "
+        f"latest_prediction_observation_status={packet['latest_prediction_observation_status']} "
+        f"manual_resmoke={packet['q18aq_manual_resmoke_result']} "
+        f"freshness_state={packet['q18ak_freshness_state']} "
+        f"safe_fallback_reason_codes={','.join(str(item) for item in packet['q18ak_safe_fallback_reason_codes'])} "
+        f"refresh_heartbeat_utc={packet['q18aj_refresh_heartbeat_utc']} "
+        f"implementation_gate={packet['implementation_gate_review_result']} "
+        "real_render=false component_runtime_binding=false autotrade=false broker=false"
+    )
+    return packet
+
+
+def _prediction_warroom_latest_prediction_observation_cleanup_summary_rows(packet: dict) -> list[dict]:
+    return [
+        {"observation_item": "read_order", "value": packet.get("read_order"), "operator_note": "Read this quick status first; legacy preflight sections remain folded details."},
+        {"observation_item": "manual_resmoke", "value": packet.get("q18aq_manual_resmoke_result"), "operator_note": "PS-Q18AQ confirmed searchable tokens and visible heartbeat."},
+        {"observation_item": "auto_refresh", "value": _bool_display(packet.get("q18aj_auto_refresh_enabled")), "operator_note": "Q18AJ bounded fragment refresh only."},
+        {"observation_item": "refresh_heartbeat_utc", "value": packet.get("q18aj_refresh_heartbeat_utc"), "operator_note": "Visible heartbeat for operator confirmation."},
+        {"observation_item": "freshness_state", "value": packet.get("q18ak_freshness_state"), "operator_note": "Q18AK freshness state."},
+        {"observation_item": "safe_fallback_reason_codes", "value": ",".join(str(item) for item in packet.get("q18ak_safe_fallback_reason_codes") or []), "operator_note": "Safe fallback reason codes remain visible/searchable."},
+        {"observation_item": "implementation_gate", "value": packet.get("implementation_gate_review_result"), "operator_note": "PS-Q18AT keeps real render blocked/not-ready."},
+        {"observation_item": "real_render_runtime_binding", "value": "false", "operator_note": "No real widget rendering or runtime props binding."},
+        {"observation_item": "autotrade_broker", "value": "false", "operator_note": "No AutoTrade trigger and no broker/private API."},
+    ]
+
+
+def _render_prediction_warroom_latest_prediction_observation_cleanup_summary_section(*, fragment_enabled: bool) -> None:
+    """Render PS-Q18AU compact observation quick status; display-only and non-executing."""
+    q18aj_packet = build_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel_packet(
+        fragment_supported=live_shell.supports_streamlit_fragment(),
+        ui_auto_refresh=bool(fragment_enabled),
+    )
+    q18ak_packet = build_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel_packet(
+        supplied_q18aj_bounded_auto_refresh_packet=q18aj_packet,
+        fragment_supported=live_shell.supports_streamlit_fragment(),
+        ui_auto_refresh=bool(fragment_enabled),
+    )
+    packet = _prediction_warroom_latest_prediction_observation_cleanup_summary_packet(
+        q18aj_packet=dict(q18aj_packet),
+        q18ak_packet=dict(q18ak_packet),
+    )
+    st.session_state["warroom_latest_prediction_observation_cleanup_summary"] = dict(packet)
+    st.caption(
+        "PS-Q18AU observation quick status: read this first for latest prediction status; "
+        "legacy preflight/detail sections remain available below. Display-only; no real render, no runtime binding, no AutoTrade, no broker."
+    )
+    st.text(str(packet.get("operator_plain_text") or ""))
+    rows = _prediction_warroom_latest_prediction_observation_cleanup_summary_rows(packet)
+    if rows:
+        st.dataframe(rows, width="stretch", hide_index=True)
 
 
 def _render_prediction_warroom_lowered_display_packet_visibility_review_section() -> None:
@@ -981,6 +1084,9 @@ def _render_warroom_page_body() -> None:
         st.caption(
             get_text(lang, "warroom_caption")
         )
+
+    with live_shell.render_folded_section("Prediction WarRoom latest summary observation quick status", expanded=True):
+        _render_prediction_warroom_latest_prediction_observation_cleanup_summary_section(fragment_enabled=fragment_enabled)
 
     with live_shell.render_folded_section("Prediction WarRoom real payload review", expanded=True):
         st.caption(
