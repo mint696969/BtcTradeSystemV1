@@ -1070,6 +1070,65 @@ def _warroom_refresh_diagnostics_summary(
     }
 
 
+def _warroom_operator_first_render_path_cleanup_packet() -> dict:
+    """Return PS-Q18AZ normal UI cleanup state; keeps reusable legacy code out of normal render path."""
+    return {
+        "ok": True,
+        "cleanup_version": "prediction_warroom.q18az_operator_first_render_path_cleanup.v1",
+        "cleanup_state": "normal_warroom_ui_operator_first_dev_preflight_sections_removed",
+        "normal_ui_path_operator_first": True,
+        "latest_prediction_quick_status_kept": True,
+        "prediction_warroom_dev_preflight_sections_rendered_in_normal_path": False,
+        "legacy_dev_helpers_deleted_this_slice": False,
+        "future_extension_contracts_preserved": True,
+        "removed_from_normal_ui_path": [
+            "Prediction WarRoom real payload review",
+            "Prediction WarRoom disabled widget skeleton review",
+            "Prediction WarRoom source readiness preflight",
+            "Prediction WarRoom source read probe status",
+            "Prediction WarRoom latest summary props candidate status",
+            "Prediction WarRoom latest summary render-disabled packet status",
+            "Prediction WarRoom latest summary mapped payload render-disabled packet status",
+            "Prediction WarRoom latest summary mapped payload values",
+            "Prediction WarRoom latest summary operator value summary",
+            "Prediction WarRoom latest summary real source handoff preflight",
+            "Prediction WarRoom latest summary safe display mount",
+            "Prediction WarRoom mount review",
+        ],
+        "removed_section_count": 12,
+        "preserved_for_future_extension": [
+            "latest_prediction_payload_contracts",
+            "payload_to_widget_props_mapping_contract",
+            "latest_prediction_summary_widget_props_schema",
+            "bounded_refresh_packet_builder",
+            "freshness_fallback_packet_builder",
+            "real_render_implementation_gate_docs",
+            "rollback_to_skeleton_contract",
+            "manual_ui_smoke_contract_pattern",
+        ],
+        "real_prediction_widget_rendering_allowed": False,
+        "real_prediction_widget_render_invoked": False,
+        "streamlit_real_widget_render_invoked": False,
+        "component_runtime_binding_allowed": False,
+        "component_props_bound_to_runtime": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "parameter_apply_allowed": False,
+        "parameter_staging_write_allowed": False,
+        "ledger_append_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "would_send_to_broker": False,
+        "next_safe_slice": "PS-Q18BA WarRoom legacy prediction dev helper/import prune",
+    }
+
+
+def _record_warroom_operator_first_render_path_cleanup_state() -> None:
+    st.session_state["warroom_operator_first_render_path_cleanup"] = (
+        _warroom_operator_first_render_path_cleanup_packet()
+    )
+
+
 def render():
     _render_warroom_page_body()
 
@@ -1088,63 +1147,9 @@ def _render_warroom_page_body() -> None:
     with live_shell.render_folded_section("Prediction WarRoom latest summary observation quick status", expanded=True):
         _render_prediction_warroom_latest_prediction_observation_cleanup_summary_section(fragment_enabled=fragment_enabled)
 
-    with live_shell.render_folded_section("Prediction WarRoom real payload review", expanded=True):
-        st.caption(
-            "Prediction WarRoom real payload review is top/default-expanded and read-only: "
-            "PS-Q12B may read/decode D-hot latest prediction JSON through PS-Q12A, "
-            "but no runtime write, no approval, no ledger, no AutoTrade, no broker."
-        )
-        _render_prediction_warroom_lowered_display_packet_visibility_review_section()
+    _record_warroom_operator_first_render_path_cleanup_state()
 
-    with live_shell.render_folded_section("Prediction WarRoom disabled widget skeleton review", expanded=False):
-        _render_prediction_warroom_prediction_widgets_disabled_section_review_mount()
-
-    with live_shell.render_folded_section("Prediction WarRoom source readiness preflight", expanded=False):
-        _render_prediction_warroom_prediction_widget_source_readiness_preflight_section()
-
-    with live_shell.render_folded_section("Prediction WarRoom source read probe status", expanded=False):
-        _render_prediction_warroom_prediction_widget_source_read_probe_status_section()
-
-    with live_shell.render_folded_section("Prediction WarRoom latest summary props candidate status", expanded=False):
-        _render_prediction_warroom_latest_prediction_summary_widget_props_candidate_status_section()
-
-    with live_shell.render_folded_section("Prediction WarRoom latest summary render-disabled packet status", expanded=False):
-        _render_prediction_warroom_latest_prediction_summary_widget_render_disabled_packet_status_section()
-
-    with live_shell.render_folded_section("Prediction WarRoom latest summary mapped payload render-disabled packet status", expanded=False):
-        _render_prediction_warroom_latest_prediction_summary_widget_mapped_payload_render_disabled_packet_status_section()
-
-    with live_shell.render_folded_section("Prediction WarRoom latest summary mapped payload values", expanded=False):
-        _render_prediction_warroom_latest_prediction_summary_widget_mapped_payload_value_rows_section()
-
-    with live_shell.render_folded_section("Prediction WarRoom latest summary operator value summary", expanded=False):
-        _render_prediction_warroom_latest_prediction_summary_widget_operator_value_summary_section()
-
-    with live_shell.render_folded_section("Prediction WarRoom latest summary real source handoff preflight", expanded=False):
-        _render_prediction_warroom_latest_prediction_summary_widget_real_source_handoff_preflight_section()
-
-    with live_shell.render_folded_section("Prediction WarRoom latest summary safe display mount", expanded=False):
-        _render_prediction_warroom_latest_prediction_summary_widget_safe_display_mount_section()
-        _render_prediction_warroom_latest_prediction_summary_widget_q18ai_render_disabled_packet_panel_section()
-        _render_prediction_warroom_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel_section(fragment_enabled=fragment_enabled)
-        _render_prediction_warroom_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel_section(fragment_enabled=fragment_enabled)
-
-    with live_shell.zone_container(
-        label=get_text(lang, "ui_label_overview"),
-        zone_kind="overview",
-    ):
-        block_captions = _warroom_reading_block_captions()
-        _render_warroom_reading_caption(
-            "warroom_reading_blocks="
-            + " > ".join(_warroom_reading_block_order()),
-            max_height_px=90,
-        )
-        _render_warroom_reading_caption(
-            "current_market_summary_reading: "
-            + block_captions["current_market_summary_reading"],
-            max_height_px=90,
-        )
-        _render_warroom_primary_reading_overview(
+    _render_warroom_primary_reading_overview(
             fragment_enabled=fragment_enabled,
         )
 
@@ -1191,8 +1196,6 @@ def _render_warroom_page_body() -> None:
         ):
             _render_warroom_evidence_presentation()
 
-    with live_shell.render_folded_section("Prediction WarRoom mount review", expanded=False):
-        _render_prediction_warroom_ui_mount_review_section()
 
 
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
