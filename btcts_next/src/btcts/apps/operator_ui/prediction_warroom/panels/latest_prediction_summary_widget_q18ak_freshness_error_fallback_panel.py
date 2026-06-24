@@ -69,6 +69,20 @@ def _clean(value: Any) -> str:
     return "" if value is None else str(value)
 
 
+def _bool_token(value: Any) -> str:
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    return _clean(value).lower()
+
+
+def _join_reason_codes(value: Any) -> str:
+    if isinstance(value, (list, tuple)):
+        return ",".join(str(item) for item in value)
+    return _clean(value)
+
+
 def _parse_utc(value: str) -> datetime | None:
     text = _clean(value).strip()
     if not text:
@@ -191,6 +205,22 @@ def build_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel_
     return packet
 
 
+def latest_prediction_summary_widget_q18ak_searchable_plain_text(packet: Mapping[str, Any] | Any) -> str:
+    data = _as_mapping(packet)
+    return (
+        "PS_Q18AP_SEARCHABLE_FRESHNESS_STATUS "
+        f"freshness_state={_clean(data.get('freshness_state'))} "
+        f"safe_fallback_reason_codes={_join_reason_codes(data.get('safe_fallback_reason_codes'))} "
+        f"observed_now_utc={_clean(data.get('observed_now_utc'))} "
+        f"source_age_sec={_clean(data.get('source_age_sec'))} "
+        f"component_source_generated_at={_clean(data.get('component_source_generated_at'))} "
+        f"auto_refresh_enabled={_bool_token(data.get('auto_refresh_enabled'))} "
+        f"broad_page_reload={_bool_token(False)} "
+        f"autotrade={_bool_token(data.get('autotrade_trigger_allowed'))} "
+        f"broker={_bool_token(data.get('broker_private_api_allowed'))}"
+    )
+
+
 def latest_prediction_summary_widget_q18ak_display_rows(packet: Mapping[str, Any] | Any) -> list[dict[str, Any]]:
     data = _as_mapping(packet)
     return [
@@ -219,6 +249,7 @@ def _render_q18ak_body() -> dict[str, Any]:
             auto=packet.get("auto_refresh_enabled"),
         )
     )
+    st.text(latest_prediction_summary_widget_q18ak_searchable_plain_text(packet))
     rows = latest_prediction_summary_widget_q18ak_display_rows(packet)
     if rows:
         st.dataframe(rows, width="stretch", hide_index=True)

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Mapping
 
 import streamlit as st
@@ -67,6 +68,18 @@ def _clean(value: Any) -> str:
     return "" if value is None else str(value)
 
 
+def _bool_token(value: Any) -> str:
+    if value is True:
+        return "true"
+    if value is False:
+        return "false"
+    return _clean(value).lower()
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 def build_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel_packet(
     *,
     supplied_q18ai_warroom_panel_packet: Mapping[str, Any] | Any | None = None,
@@ -114,6 +127,7 @@ def build_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel_pack
         "ui_auto_refresh": bool(ui_auto_refresh),
         "refresh_mode": Q18AJ_REFRESH_MODE,
         "refresh_interval_sec": Q18AJ_DEFAULT_REFRESH_SEC,
+        "refresh_heartbeat_utc": _utc_now_iso(),
         "page_id": Q18AJ_PAGE_ID,
         "zone_id": Q18AJ_ZONE_ID,
         "widget_id": Q18AJ_WIDGET_ID,
@@ -138,12 +152,29 @@ def build_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel_pack
     return packet
 
 
+def latest_prediction_summary_widget_q18aj_searchable_plain_text(packet: Mapping[str, Any] | Any) -> str:
+    data = _as_mapping(packet)
+    return (
+        "PS_Q18AP_SEARCHABLE_REFRESH_HEARTBEAT "
+        f"auto_refresh_enabled={_bool_token(data.get('auto_refresh_enabled'))} "
+        f"refresh_mode={_clean(data.get('refresh_mode'))} "
+        f"refresh_interval_sec={_clean(data.get('refresh_interval_sec'))} "
+        f"refresh_heartbeat_utc={_clean(data.get('refresh_heartbeat_utc'))} "
+        f"component_source_generated_at={_clean(data.get('component_source_generated_at'))} "
+        f"broad_page_reload={_bool_token(False)} "
+        f"real_widget_render={_bool_token(data.get('real_prediction_widget_render_invoked'))} "
+        f"autotrade={_bool_token(data.get('autotrade_trigger_allowed'))} "
+        f"broker={_bool_token(data.get('broker_private_api_allowed'))}"
+    )
+
+
 def latest_prediction_summary_widget_q18aj_display_rows(packet: Mapping[str, Any] | Any) -> list[dict[str, Any]]:
     data = _as_mapping(packet)
     return [
         {"item": "auto_refresh_enabled", "value": _clean(data.get("auto_refresh_enabled")), "note": "UI fragment auto-refresh for latest prediction display only."},
         {"item": "refresh_mode", "value": _clean(data.get("refresh_mode")), "note": "Bounded live_shell refresh mode."},
         {"item": "refresh_interval_sec", "value": _clean(data.get("refresh_interval_sec")), "note": "Refresh interval for this display fragment."},
+        {"item": "refresh_heartbeat_utc", "value": _clean(data.get("refresh_heartbeat_utc")), "note": "Visible heartbeat for operator refresh confirmation."},
         {"item": "component_source_generated_at", "value": _clean(data.get("component_source_generated_at")), "note": "Latest prediction source timestamp visible in refreshed panel."},
         {"item": "mapped_record_count", "value": _clean(data.get("mapped_record_count")), "note": "Mapped forecast_batch record count."},
         {"item": "broad_page_reload", "value": "false", "note": "Uses fragment slot path; parent-page reload remains disabled."},
@@ -163,6 +194,7 @@ def _render_q18aj_body() -> dict[str, Any]:
             generated_at=packet.get("component_source_generated_at"),
         )
     )
+    st.text(latest_prediction_summary_widget_q18aj_searchable_plain_text(packet))
     rows = latest_prediction_summary_widget_q18aj_display_rows(packet)
     if rows:
         st.dataframe(rows, width="stretch", hide_index=True)
