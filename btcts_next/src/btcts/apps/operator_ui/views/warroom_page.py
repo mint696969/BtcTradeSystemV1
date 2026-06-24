@@ -80,6 +80,9 @@ from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_summ
 from btcts.apps.operator_ui.components.prediction_warroom_latest_prediction_summary_widget_real_source_handoff_preflight_panel import (
     build_latest_prediction_summary_widget_real_source_handoff_preflight_packet,
 )
+from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_widget_q18ab_safe_display_mount_panel import (
+    render_latest_prediction_summary_widget_q18ab_safe_display_mount_panel,
+)
 from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
     render_latest_prediction_summary_widget,
 )
@@ -384,6 +387,12 @@ def _render_prediction_warroom_ui_mount_review_section() -> None:
     entry_rows = _prediction_warroom_mount_review_entry_rows(packet)
     if entry_rows:
         st.dataframe(entry_rows, width="stretch", hide_index=True)
+
+
+def _render_prediction_warroom_latest_prediction_summary_widget_safe_display_mount_section() -> None:
+    """Render PS-Q18AB safe display mount rows only; no real widget rendering or D-hot read."""
+    packet = render_latest_prediction_summary_widget_q18ab_safe_display_mount_panel()
+    st.session_state["warroom_latest_prediction_summary_widget_q18ab_safe_display_mount_packet"] = dict(packet)
 
 
 def _render_prediction_warroom_lowered_display_packet_visibility_review_section() -> None:
@@ -976,6 +985,9 @@ def _render_warroom_page_body() -> None:
 
     with live_shell.render_folded_section("Prediction WarRoom latest summary real source handoff preflight", expanded=False):
         _render_prediction_warroom_latest_prediction_summary_widget_real_source_handoff_preflight_section()
+
+    with live_shell.render_folded_section("Prediction WarRoom latest summary safe display mount", expanded=False):
+        _render_prediction_warroom_latest_prediction_summary_widget_safe_display_mount_section()
 
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_overview"),
