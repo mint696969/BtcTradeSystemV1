@@ -89,6 +89,9 @@ from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_
 from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel import (
     render_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel,
 )
+from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel import (
+    render_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel,
+)
 from btcts.apps.operator_ui.components.prediction_widgets.latest_prediction_summary_widget import (
     render_latest_prediction_summary_widget,
 )
@@ -413,6 +416,14 @@ def _render_prediction_warroom_latest_prediction_summary_widget_q18aj_bounded_au
         fragment_enabled=fragment_enabled,
     )
     st.session_state["warroom_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel"] = dict(packet)
+
+
+def _render_prediction_warroom_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel_section(*, fragment_enabled: bool) -> None:
+    """Render PS-Q18AK freshness/error fallback rows for the auto-refreshed latest prediction display."""
+    packet = render_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel(
+        fragment_enabled=fragment_enabled,
+    )
+    st.session_state["warroom_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel"] = dict(packet)
 
 
 def _render_prediction_warroom_lowered_display_packet_visibility_review_section() -> None:
@@ -1010,6 +1021,7 @@ def _render_warroom_page_body() -> None:
         _render_prediction_warroom_latest_prediction_summary_widget_safe_display_mount_section()
         _render_prediction_warroom_latest_prediction_summary_widget_q18ai_render_disabled_packet_panel_section()
         _render_prediction_warroom_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel_section(fragment_enabled=fragment_enabled)
+        _render_prediction_warroom_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel_section(fragment_enabled=fragment_enabled)
 
     with live_shell.zone_container(
         label=get_text(lang, "ui_label_overview"),
