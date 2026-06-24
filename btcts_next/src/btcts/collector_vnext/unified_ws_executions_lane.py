@@ -21,6 +21,7 @@ from .transforms.facade import (
 )
 from .unified_state import write_unified_executions_status
 from .writer import write_canonical, write_raw
+from .telemetry_policy import emit_collector_event
 
 
 @dataclass
@@ -156,7 +157,7 @@ class UnifiedWsExecutionsLane:
                     if stop_event.is_set():
                         break
 
-                    audit.emit(
+                    emit_collector_event(
                         "collector_vnext.unified.ws_executions.message.received",
                         level="INFO",
                         feature="collector_vnext",
@@ -311,7 +312,7 @@ class UnifiedWsExecutionsLane:
                     )
                     self._write_status()
 
-                    audit.emit(
+                    emit_collector_event(
                         "collector_vnext.unified.ws_executions.trade.written",
                         level="INFO",
                         feature="collector_vnext",

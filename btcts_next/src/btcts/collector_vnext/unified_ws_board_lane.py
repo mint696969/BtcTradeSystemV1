@@ -23,6 +23,7 @@ from .unified_state import write_unified_origin_status
 from .unified_market_state_lane import UnifiedMarketStateLane
 from .venue_adapters.bitflyer_board import BitflyerBoardVenueAdapter
 from .writer import write_canonical, write_raw
+from .telemetry_policy import emit_collector_event
 
 
 @dataclass
@@ -297,7 +298,7 @@ class UnifiedWsBoardLane:
                     ):
                         last_audit_heartbeat_monotonic = now_monotonic
                         try:
-                            audit.emit(
+                            emit_collector_event(
                                 "collector_vnext.unified.ws_board.message.received",
                                 level="INFO",
                                 feature="collector_vnext",

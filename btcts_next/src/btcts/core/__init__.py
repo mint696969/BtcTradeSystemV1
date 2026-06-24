@@ -3,4 +3,4 @@
 
 from __future__ import annotations
 
-__all__ = ["env", "paths", "io", "audit"]
+__all__ = ["env", "paths", "io", "audit", "telemetry"]

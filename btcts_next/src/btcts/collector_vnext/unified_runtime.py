@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from btcts.core import audit
+from .telemetry_policy import emit_collector_event
 
 from .config import load_config
 from .emit_rest import (
@@ -57,7 +57,7 @@ def _emit_runtime_audit(
     if extra:
         payload.update(extra)
 
-    audit.emit(
+    emit_collector_event(
         event,
         level="INFO" if ok else "WARN",
         feature="collector_vnext",
