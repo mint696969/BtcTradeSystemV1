@@ -10,6 +10,7 @@ from typing import Any, Dict, Mapping, Tuple
 from btcts.prediction.system import LOGIC_VERSION as PREDICTION_SYSTEM_LOGIC_VERSION
 from btcts.prediction.system import build_prediction_system_result
 from btcts.prediction.feature_depth import build_feature_depth_snapshot
+from btcts.prediction.source_quality import SourceQualityStatus, assess_source_quality
 
 from .prediction_warroom_l4_latest_adapter import DEFAULT_HOT_LATEST_ROOT_HINT
 from .prediction_warroom_source_mapping_probe_runner import (
@@ -276,6 +277,96 @@ def _orderbook_snapshot_from_feature_context(feature_context: Any) -> Mapping[st
     }
 
 
+def _event_ts_from_mapping(value: Any) -> str | None:
+    if not isinstance(value, Mapping):
+        return None
+    for key in ("event_ts", "exchange_ts", "collector_ts", "generated_at", "ts"):
+        text = str(value.get(key) or "").strip()
+        if text:
+            return text
+    return None
+
+
+def _latest_event_ts_from_rows(rows: Any) -> str | None:
+    if not isinstance(rows, list):
+        return None
+    latest: datetime | None = None
+    latest_text: str | None = None
+    for row in rows:
+        text = _event_ts_from_mapping(row)
+        dt = _datetime_or_none(text)
+        if dt is not None and (latest is None or dt > latest):
+            latest = dt
+            latest_text = text
+    return latest_text
+
+
+def _source_quality_status_map_from_kwargs_contract(builder_kwargs: Mapping[str, Any]) -> dict[str, SourceQualityStatus]:
+    """Build conservative Tier0 source-quality statuses from already-supplied Q10A builder kwargs only.
+
+    This performs no hot reads, no collection, no writes, and no external API calls.
+    """
+    now_dt = _datetime_or_none(builder_kwargs.get("now")) or datetime.now(timezone.utc)
+    rows = builder_kwargs.get("rows")
+    venues = builder_kwargs.get("venue_snapshots")
+    feature_context = builder_kwargs.get("feature_depth_context_summary")
+    out: dict[str, SourceQualityStatus] = {}
+
+    trade_ts = _latest_event_ts_from_rows(rows)
+    if trade_ts:
+        out["bitflyer_trades"] = assess_source_quality(
+            source_id="bitflyer_trades",
+            source_family="bitflyer_local_fx_tradeflow",
+            latest_event_ts=trade_ts,
+            now=now_dt,
+            max_age_sec=900.0,
+        )
+
+    orderbook_ts = _event_ts_from_mapping(feature_context)
+    if orderbook_ts:
+        out["bitflyer_board_summary"] = assess_source_quality(
+            source_id="bitflyer_board_summary",
+            source_family="bitflyer_local_fx_orderbook",
+            latest_event_ts=orderbook_ts,
+            now=now_dt,
+            max_age_sec=900.0,
+        )
+
+    if isinstance(venues, list):
+        latest_venue_ts: str | None = None
+        latest_venue_dt: datetime | None = None
+        for venue in venues:
+            if not isinstance(venue, Mapping):
+                continue
+            source_id = str(venue.get("source_id") or "")
+            if source_id != "bitflyer_fx_ticker":
+                continue
+            ts_text = _event_ts_from_mapping(venue)
+            ts_dt = _datetime_or_none(ts_text)
+            if ts_dt is not None and (latest_venue_dt is None or ts_dt > latest_venue_dt):
+                latest_venue_dt = ts_dt
+                latest_venue_ts = ts_text
+        if latest_venue_ts:
+            out["bitflyer_fx_ticker"] = assess_source_quality(
+                source_id="bitflyer_fx_ticker",
+                source_family="bitflyer_local_fx_ticker",
+                latest_event_ts=latest_venue_ts,
+                now=now_dt,
+                max_age_sec=900.0,
+            )
+
+    # Mark the derived source-quality summary itself as present. It is generated in-memory from already supplied inputs.
+    now_text = now_dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    out["provider_source_reliability_state"] = assess_source_quality(
+        source_id="provider_source_reliability_state",
+        source_family="prediction_source_quality_summary",
+        latest_event_ts=now_text,
+        now=now_dt,
+        max_age_sec=900.0,
+    )
+    return out
+
+
 def _feature_depth_snapshot_from_kwargs_contract(builder_kwargs: Mapping[str, Any]) -> Any:
     """Create FeatureDepthSnapshot from already-provided Q10A builder kwargs only.
 
@@ -297,11 +388,12 @@ def _feature_depth_snapshot_from_kwargs_contract(builder_kwargs: Mapping[str, An
 
 def _build_from_kwargs_contract(builder_kwargs: Mapping[str, Any]) -> Mapping[str, Any]:
     feature_depth_snapshot = _feature_depth_snapshot_from_kwargs_contract(builder_kwargs)
+    source_quality_by_id = _source_quality_status_map_from_kwargs_contract(builder_kwargs)
     normalized_now = _datetime_or_none(builder_kwargs.get("now"))
     result = build_prediction_system_result(
         rows=builder_kwargs.get("rows") if isinstance(builder_kwargs.get("rows"), list) else None,
         venue_snapshots=builder_kwargs.get("venue_snapshots") if isinstance(builder_kwargs.get("venue_snapshots"), list) else None,
-        source_quality_by_id=None,
+        source_quality_by_id=source_quality_by_id,
         requested_horizon_groups=builder_kwargs.get("requested_horizon_groups"),
         requested_horizons_sec=builder_kwargs.get("requested_horizons_sec"),
         previous_prediction_run_id=builder_kwargs.get("previous_prediction_run_id"),
@@ -317,6 +409,8 @@ def _build_from_kwargs_contract(builder_kwargs: Mapping[str, Any]) -> Mapping[st
     )
     payload["source_artifact_coverage_summary"] = dict(source_artifact_coverage_summary)
     payload["feature_depth_snapshot_supplied"] = feature_depth_snapshot is not None
+    payload["source_quality_by_id_supplied"] = bool(source_quality_by_id)
+    payload["source_quality_status_ids_supplied"] = sorted(source_quality_by_id.keys())
     return payload
 
 
