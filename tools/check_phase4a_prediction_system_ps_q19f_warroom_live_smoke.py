@@ -104,6 +104,10 @@ def build_ps_q19f_warroom_live_smoke_packet(
         failures.append("ps_q19e_dry_run_wrote_latest_prediction_artifact")
     if dry_run.get("status_artifact_written") is not False:
         failures.append("ps_q19e_dry_run_wrote_status_artifact")
+    if read_model.get("ok") is not True:
+        failures.append("ps_q19c_read_model_not_ready")
+    if prediction_row_count <= 0:
+        failures.append("ps_q19d_prediction_rows_missing")
     if display_packet.get("display_panel_version") != "prediction_warroom.latest_prediction_warroom_display_panel.ps_q19d.v1":
         failures.append("ps_q19d_display_panel_version_mismatch")
     if display_packet.get("view_artifact_write_allowed") is not False:
@@ -141,6 +145,10 @@ def build_ps_q19f_warroom_live_smoke_packet(
             "warning_reason_codes": list(read_model.get("warning_reason_codes") or []),
             "blocker_reason_codes": list(read_model.get("blocker_reason_codes") or []),
             "record_count": read_model.get("record_count"),
+            "artifact_size_bytes": read_model.get("artifact_size_bytes"),
+            "artifact_max_bytes": read_model.get("artifact_max_bytes"),
+            "payload_load_ok": read_model.get("payload_load_ok"),
+            "payload_load_blocked_reason": read_model.get("payload_load_blocked_reason"),
         },
         "display_packet": {
             "ok": display_packet.get("ok") is True,

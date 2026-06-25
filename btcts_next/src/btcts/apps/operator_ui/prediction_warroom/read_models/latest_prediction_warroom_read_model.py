@@ -23,7 +23,7 @@ LATEST_PREDICTION_WARROOM_READ_MODEL_VERSION = "prediction_warroom.latest_predic
 LATEST_PREDICTION_WARROOM_VIEW_RELATIVE_PATH = "prediction/status/latest_prediction_warroom_view.json"
 DEFAULT_SELECTED_HORIZON_SEC = (15, 60, 300, 900)
 DEFAULT_MAX_RECORDS_PER_HORIZON = 6
-DEFAULT_MAX_ARTIFACT_BYTES = 5_000_000
+DEFAULT_MAX_ARTIFACT_BYTES = 12_000_000
 
 TRUE_BOUNDARIES = (
     "read_only",
@@ -313,19 +313,42 @@ def latest_prediction_artifact_path(*, hot_latest_root_hint: str | Path | None =
     return root / LATEST_PREDICTION_ARTIFACT_RELATIVE_PATH
 
 
-def load_latest_prediction_payload(*, path: Path | None = None, max_bytes: int = DEFAULT_MAX_ARTIFACT_BYTES) -> dict[str, Any]:
+def load_latest_prediction_payload_status(*, path: Path | None = None, max_bytes: int = DEFAULT_MAX_ARTIFACT_BYTES) -> dict[str, Any]:
     target = path or latest_prediction_artifact_path()
+    status: dict[str, Any] = {
+        "ok": False,
+        "path": str(target),
+        "max_bytes": int(max_bytes),
+        "artifact_size_bytes": None,
+        "blocked_reason": "",
+        "payload": {},
+    }
     try:
         stat = target.stat()
-    except Exception:
-        return {}
+    except Exception as exc:  # noqa: BLE001 - read-only diagnostic
+        status["blocked_reason"] = "latest_prediction_artifact_stat_failed:" + exc.__class__.__name__
+        return status
+    status["artifact_size_bytes"] = int(stat.st_size)
     if stat.st_size > int(max_bytes):
-        return {}
+        status["blocked_reason"] = "latest_prediction_artifact_exceeds_read_model_max_bytes"
+        return status
     try:
         data = json.loads(target.read_text(encoding="utf-8"))
-    except Exception:
-        return {}
-    return data if isinstance(data, dict) else {}
+    except Exception as exc:  # noqa: BLE001 - read-only diagnostic
+        status["blocked_reason"] = "latest_prediction_artifact_json_load_failed:" + exc.__class__.__name__
+        return status
+    if not isinstance(data, dict):
+        status["blocked_reason"] = "latest_prediction_artifact_not_json_object"
+        return status
+    status["ok"] = True
+    status["payload"] = data
+    return status
+
+
+def load_latest_prediction_payload(*, path: Path | None = None, max_bytes: int = DEFAULT_MAX_ARTIFACT_BYTES) -> dict[str, Any]:
+    status = load_latest_prediction_payload_status(path=path, max_bytes=max_bytes)
+    payload = status.get("payload")
+    return payload if isinstance(payload, dict) else {}
 
 
 def load_latest_prediction_warroom_read_model(
@@ -335,13 +358,22 @@ def load_latest_prediction_warroom_read_model(
     hot_latest_root_hint: str | Path | None = None,
 ) -> dict[str, Any]:
     target = prediction_path or latest_prediction_artifact_path(hot_latest_root_hint=hot_latest_root_hint)
-    payload = load_latest_prediction_payload(path=target)
+    payload_status = load_latest_prediction_payload_status(path=target)
+    payload = payload_status.get("payload") if isinstance(payload_status.get("payload"), dict) else {}
     market_state = load_latest_market_state(exchange="bitflyer", symbol_raw="FX_BTC_JPY")
     market_diag = market_state_diagnostics(exchange="bitflyer", symbol_raw="FX_BTC_JPY")
-    return build_latest_prediction_warroom_read_model(
+    read_model = build_latest_prediction_warroom_read_model(
         payload=payload,
         market_state=market_state,
         market_diag=market_diag,
         now_utc=now_utc,
         source_path=str(target),
     )
+    read_model["artifact_size_bytes"] = payload_status.get("artifact_size_bytes")
+    read_model["artifact_max_bytes"] = payload_status.get("max_bytes")
+    read_model["payload_load_ok"] = payload_status.get("ok") is True
+    blocked_reason = str(payload_status.get("blocked_reason") or "")
+    read_model["payload_load_blocked_reason"] = blocked_reason
+    if blocked_reason:
+        read_model.setdefault("blocker_reason_codes", []).append(blocked_reason)
+    return read_model
