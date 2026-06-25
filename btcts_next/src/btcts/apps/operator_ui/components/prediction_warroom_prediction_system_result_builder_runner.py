@@ -30,6 +30,11 @@ OHLCV_SOURCE_QUALITY_IDS: Tuple[str, ...] = (
     "ohlcv_1d",
 )
 
+NEUTRAL_CONTEXT_SOURCE_QUALITY_IDS: Tuple[str, ...] = (
+    "macro_context",
+    "session_calendar_context",
+)
+
 
 PREDICTION_SYSTEM_RESULT_BUILDER_RUNNER_SEQUENCE = (
     "require_operator_acknowledgement",
@@ -336,6 +341,27 @@ def _add_ohlcv_source_quality_statuses(
         )
 
 
+def _add_neutral_context_source_quality_statuses(
+    out: dict[str, SourceQualityStatus],
+    *,
+    now_dt: datetime,
+) -> None:
+    """Add explicit neutral/context-only macro and session source-quality statuses.
+
+    This does not fetch external macro/calendar data. It makes the current neutral assumption explicit
+    so context-profile minimum-source gates can distinguish "neutral default supplied" from "missing".
+    """
+    now_text = now_dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    for source_id in NEUTRAL_CONTEXT_SOURCE_QUALITY_IDS:
+        out[source_id] = assess_source_quality(
+            source_id=source_id,
+            source_family="prediction_neutral_context_default",
+            latest_event_ts=now_text,
+            now=now_dt,
+            max_age_sec=900.0,
+        )
+
+
 def _source_quality_status_map_from_kwargs_contract(builder_kwargs: Mapping[str, Any]) -> dict[str, SourceQualityStatus]:
     """Build conservative Tier0 source-quality statuses from already-supplied Q10A builder kwargs only.
 
@@ -390,6 +416,8 @@ def _source_quality_status_map_from_kwargs_contract(builder_kwargs: Mapping[str,
                 now=now_dt,
                 max_age_sec=900.0,
             )
+
+    _add_neutral_context_source_quality_statuses(out, now_dt=now_dt)
 
     # Mark the derived source-quality summary itself as present. It is generated in-memory from already supplied inputs.
     now_text = now_dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
