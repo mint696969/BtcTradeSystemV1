@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Dict, Mapping, Tuple
 
 from btcts.prediction.system import LOGIC_VERSION as PREDICTION_SYSTEM_LOGIC_VERSION
 from btcts.prediction.system import build_prediction_system_result
+from btcts.prediction.feature_depth import build_feature_depth_snapshot
 
 from .prediction_warroom_l4_latest_adapter import DEFAULT_HOT_LATEST_ROOT_HINT
 from .prediction_warroom_source_mapping_probe_runner import (
@@ -190,7 +192,112 @@ def _stdout_lines(
     )
 
 
+
+def _datetime_or_none(value: Any) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    return None
+
+
+def _float_or_zero(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except Exception:
+        return 0.0
+
+
+def _tradeflow_window_from_rows(rows: Any) -> Mapping[str, Any] | None:
+    """Build a context-only tradeflow window from normalized trade rows already read by Q10B/Q10A."""
+    if not isinstance(rows, list) or not rows:
+        return None
+    buy_volume = 0.0
+    sell_volume = 0.0
+    trade_count = 0
+    event_ts = ""
+    for row in rows:
+        if not isinstance(row, Mapping):
+            continue
+        size = _float_or_zero(row.get("size") or row.get("volume"))
+        side = str(row.get("side") or "").lower()
+        if side in {"buy", "bid"}:
+            buy_volume += size
+        elif side in {"sell", "ask"}:
+            sell_volume += size
+        else:
+            buy_volume += size / 2.0
+            sell_volume += size / 2.0
+        trade_count += 1
+        event_ts = str(row.get("event_ts") or event_ts)
+    if trade_count <= 0:
+        return None
+    return {
+        "source_id": "bitflyer_trades",
+        "source_family": "d_hot_market_trade_jsonl_context_only",
+        "event_ts": event_ts,
+        "trade_count": trade_count,
+        "buy_volume": round(buy_volume, 12),
+        "sell_volume": round(sell_volume, 12),
+        "aggressive_buy_volume": round(buy_volume, 12),
+        "aggressive_sell_volume": round(sell_volume, 12),
+        "context_only": True,
+        "read_only": True,
+        "non_executing": True,
+    }
+
+
+def _orderbook_snapshot_from_feature_context(feature_context: Any) -> Mapping[str, Any] | None:
+    """Convert Q10A orderbook feature-depth context summary into FeatureDepth input shape."""
+    if not isinstance(feature_context, Mapping) or not feature_context:
+        return None
+    return {
+        "source_id": "bitflyer_board_summary",
+        "source_family": str(feature_context.get("source_family") or "d_hot_orderbook_snapshot_jsonl_context_only"),
+        "event_ts": str(feature_context.get("event_ts") or feature_context.get("collector_ts") or ""),
+        "bid_depth": _float_or_zero(feature_context.get("bid_level_count")),
+        "ask_depth": _float_or_zero(feature_context.get("ask_level_count")),
+        "context_only": True,
+        "read_only": True,
+        "non_executing": True,
+    }
+
+
+def _feature_depth_snapshot_from_kwargs_contract(builder_kwargs: Mapping[str, Any]) -> Any:
+    """Create FeatureDepthSnapshot from already-provided Q10A builder kwargs only.
+
+    This function performs no hot reads, no collection, no writes, and no external API calls.
+    """
+    rows = builder_kwargs.get("rows")
+    feature_context = builder_kwargs.get("feature_depth_context_summary")
+    tradeflow_window = _tradeflow_window_from_rows(rows)
+    orderbook_snapshot = _orderbook_snapshot_from_feature_context(feature_context)
+    if tradeflow_window is None and orderbook_snapshot is None:
+        return None
+    return build_feature_depth_snapshot(
+        orderbook_snapshots=[orderbook_snapshot] if orderbook_snapshot is not None else None,
+        tradeflow_windows=[tradeflow_window] if tradeflow_window is not None else None,
+        provider_reliability_registry=None,
+        now=_datetime_or_none(builder_kwargs.get("now")),
+    )
+
+
 def _build_from_kwargs_contract(builder_kwargs: Mapping[str, Any]) -> Mapping[str, Any]:
+    feature_depth_snapshot = _feature_depth_snapshot_from_kwargs_contract(builder_kwargs)
+    normalized_now = _datetime_or_none(builder_kwargs.get("now"))
     result = build_prediction_system_result(
         rows=builder_kwargs.get("rows") if isinstance(builder_kwargs.get("rows"), list) else None,
         venue_snapshots=builder_kwargs.get("venue_snapshots") if isinstance(builder_kwargs.get("venue_snapshots"), list) else None,
@@ -198,10 +305,19 @@ def _build_from_kwargs_contract(builder_kwargs: Mapping[str, Any]) -> Mapping[st
         requested_horizon_groups=builder_kwargs.get("requested_horizon_groups"),
         requested_horizons_sec=builder_kwargs.get("requested_horizons_sec"),
         previous_prediction_run_id=builder_kwargs.get("previous_prediction_run_id"),
-        feature_depth_snapshot=None,
-        now=builder_kwargs.get("now"),
+        feature_depth_snapshot=feature_depth_snapshot,
+        now=normalized_now,
     )
-    return result.to_dict()
+    payload = result.to_dict()
+    system_input = payload.get("system_input") if isinstance(payload.get("system_input"), Mapping) else {}
+    source_artifact_coverage_summary = (
+        system_input.get("source_artifact_coverage_summary")
+        if isinstance(system_input, Mapping) and isinstance(system_input.get("source_artifact_coverage_summary"), Mapping)
+        else {}
+    )
+    payload["source_artifact_coverage_summary"] = dict(source_artifact_coverage_summary)
+    payload["feature_depth_snapshot_supplied"] = feature_depth_snapshot is not None
+    return payload
 
 
 def build_prediction_warroom_prediction_system_result_builder_runner(
