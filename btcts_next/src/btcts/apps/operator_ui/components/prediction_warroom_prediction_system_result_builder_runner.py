@@ -19,6 +19,18 @@ from .prediction_warroom_source_mapping_probe_runner import (
 )
 
 PREDICTION_SYSTEM_RESULT_BUILDER_RUNNER_VERSION = "prediction_warroom_prediction_system_result_builder_runner.ps_q10d.v1"
+OHLCV_SOURCE_QUALITY_IDS: Tuple[str, ...] = (
+    "ohlcv_1m",
+    "ohlcv_5m",
+    "ohlcv_10m",
+    "ohlcv_15m",
+    "ohlcv_30m",
+    "ohlcv_1h",
+    "ohlcv_4h",
+    "ohlcv_1d",
+)
+
+
 PREDICTION_SYSTEM_RESULT_BUILDER_RUNNER_SEQUENCE = (
     "require_operator_acknowledgement",
     "require_actual_read_request",
@@ -301,6 +313,29 @@ def _latest_event_ts_from_rows(rows: Any) -> str | None:
     return latest_text
 
 
+def _add_ohlcv_source_quality_statuses(
+    out: dict[str, SourceQualityStatus],
+    *,
+    rows: Any,
+    now_dt: datetime,
+) -> None:
+    """Add source-quality statuses for OHLCV artifacts derived from already-supplied rows.
+
+    This is freshness/lineage quality only. Candle sufficiency remains handled by the technical layer.
+    """
+    latest_ts = _latest_event_ts_from_rows(rows)
+    if not latest_ts:
+        return
+    for source_id in OHLCV_SOURCE_QUALITY_IDS:
+        out[source_id] = assess_source_quality(
+            source_id=source_id,
+            source_family="prediction_ohlcv_from_q10a_rows",
+            latest_event_ts=latest_ts,
+            now=now_dt,
+            max_age_sec=900.0,
+        )
+
+
 def _source_quality_status_map_from_kwargs_contract(builder_kwargs: Mapping[str, Any]) -> dict[str, SourceQualityStatus]:
     """Build conservative Tier0 source-quality statuses from already-supplied Q10A builder kwargs only.
 
@@ -321,6 +356,7 @@ def _source_quality_status_map_from_kwargs_contract(builder_kwargs: Mapping[str,
             now=now_dt,
             max_age_sec=900.0,
         )
+        _add_ohlcv_source_quality_statuses(out, rows=rows, now_dt=now_dt)
 
     orderbook_ts = _event_ts_from_mapping(feature_context)
     if orderbook_ts:
