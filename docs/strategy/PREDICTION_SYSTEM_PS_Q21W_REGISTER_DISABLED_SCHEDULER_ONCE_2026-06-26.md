@@ -30,6 +30,7 @@ action_mode=PS-Q21V dry-run only
 triggers=0
 state=Disabled
 run_level=Limited
+trigger_count_readback_null_safe=true
 rollback=Unregister only this task if action matches PS-Q21V dry-run
 ```
 

@@ -17,6 +17,8 @@ from tools.run_phase4a_prediction_system_ps_q21w_register_disabled_scheduler_onc
     TASK_NAME,
     TASK_PATH,
     _task_action_args,
+    _task_query_script,
+    _task_register_script,
     query_disabled_scheduler_registration,
     run_disabled_scheduler_registration_once,
 )
@@ -150,6 +152,15 @@ def test_query_recognizes_disabled_task_with_fake_runner() -> None:
     assert result["task_recognized_as_ps_q21w"] is True
     assert result["task_readback_failures"] == []
     assert result["producer_loop_enabled"] is False
+
+
+def test_trigger_count_readback_is_null_safe_for_no_trigger_tasks() -> None:
+    query_script = _task_query_script()
+    register_script = _task_register_script()
+    assert "if ($null -eq $Task.Triggers) { 0 } else { @($Task.Triggers).Count }" in query_script
+    assert "if ($null -eq $Registered.Triggers) { 0 } else { @($Registered.Triggers).Count }" in register_script
+    assert "trigger_count = $TriggerCount" in query_script
+    assert "trigger_count = $TriggerCount" in register_script
 
 
 def test_rollback_requires_confirmation_and_unregisters_only_matching_task() -> None:

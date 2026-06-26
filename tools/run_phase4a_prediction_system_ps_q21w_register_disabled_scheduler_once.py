@@ -72,6 +72,7 @@ def _task_query_script() -> str:
         f"$TaskPath = {_ps_single(TASK_PATH)}",
         "$Task = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue",
         "if ($null -eq $Task) { [PSCustomObject]@{ task_exists = $false } | ConvertTo-Json -Depth 5; exit 0 }",
+        "$TriggerCount = if ($null -eq $Task.Triggers) { 0 } else { @($Task.Triggers).Count }",
         "[PSCustomObject]@{",
         "  task_exists = $true",
         "  task_name = $Task.TaskName",
@@ -79,7 +80,7 @@ def _task_query_script() -> str:
         "  state = \"$($Task.State)\"",
         "  action_execute = \"$($Task.Actions[0].Execute)\"",
         "  action_arguments = \"$($Task.Actions[0].Arguments)\"",
-        "  trigger_count = @($Task.Triggers).Count",
+        "  trigger_count = $TriggerCount",
         "} | ConvertTo-Json -Depth 5",
     ]
     return "\n".join(lines)
@@ -101,6 +102,7 @@ def _task_register_script() -> str:
         "Register-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -InputObject $Task -Force | Out-Null",
         "Disable-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName | Out-Null",
         "$Registered = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName",
+        "$TriggerCount = if ($null -eq $Registered.Triggers) { 0 } else { @($Registered.Triggers).Count }",
         "[PSCustomObject]@{",
         "  task_exists = $true",
         "  task_name = $Registered.TaskName",
@@ -108,7 +110,7 @@ def _task_register_script() -> str:
         "  state = \"$($Registered.State)\"",
         "  action_execute = \"$($Registered.Actions[0].Execute)\"",
         "  action_arguments = \"$($Registered.Actions[0].Arguments)\"",
-        "  trigger_count = @($Registered.Triggers).Count",
+        "  trigger_count = $TriggerCount",
         "} | ConvertTo-Json -Depth 5",
     ]
     return "\n".join(lines)
