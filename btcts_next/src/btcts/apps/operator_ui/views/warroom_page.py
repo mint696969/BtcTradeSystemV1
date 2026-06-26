@@ -247,6 +247,14 @@ def _render_warroom_evidence_presentation() -> None:
     render_evidence_presentation_panel(evidence_payload, expanded=False)
 
 
+def _prediction_warroom_display_fragment_enabled(*, page_fragment_enabled: bool) -> bool:
+    """Keep the WarRoom prediction display refreshing by default, independent of broad page reload."""
+    return bool(
+        page_fragment_enabled
+        or st.session_state.get("warroom_prediction_auto_refresh_enabled", True)
+    )
+
+
 def _bool_display(value: object) -> str:
     if value is True:
         return "true"
@@ -548,11 +556,13 @@ def _render_warroom_page_body() -> None:
             get_text(lang, "warroom_caption")
         )
 
+    prediction_fragment_enabled = _prediction_warroom_display_fragment_enabled(page_fragment_enabled=fragment_enabled)
+
     with live_shell.render_folded_section("Prediction WarRoom latest summary observation quick status", expanded=True):
-        _render_prediction_warroom_latest_prediction_observation_cleanup_summary_section(fragment_enabled=fragment_enabled)
+        _render_prediction_warroom_latest_prediction_observation_cleanup_summary_section(fragment_enabled=prediction_fragment_enabled)
 
     with live_shell.render_folded_section("PS-Q19D realtime prediction display", expanded=True):
-        render_latest_prediction_warroom_display_panel(fragment_enabled=fragment_enabled)
+        render_latest_prediction_warroom_display_panel(fragment_enabled=prediction_fragment_enabled)
 
     _record_warroom_operator_first_render_path_cleanup_state()
 

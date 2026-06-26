@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Mapping
 
 import streamlit as st
@@ -22,6 +23,7 @@ from btcts.apps.operator_ui.prediction_warroom.texts.latest_prediction_display_t
 )
 
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_VERSION = "prediction_warroom.latest_prediction_warroom_display_panel.ps_q19d.v1"
+WARROOM_PREDICTION_DISPLAY_AUTO_REFRESH_VERSION = "prediction_warroom.warroom_prediction_display_auto_refresh.ps_q21a.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -99,6 +101,10 @@ def _bool_text(value: Any) -> str:
     if value is False:
         return "false"
     return _clean(value) or "-"
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _value_label(value: Any, *, lang: str) -> str:
@@ -268,6 +274,13 @@ def build_latest_prediction_warroom_display_panel_packet(
         "field_guide_rows": field_guide_rows,
         "field_guide_rows_display": _column_labels(field_guide_rows, lang=lang),
         "operator_reading_summary": _dominant_summary(model, lang=lang),
+        "auto_refresh_version": WARROOM_PREDICTION_DISPLAY_AUTO_REFRESH_VERSION,
+        "warroom_prediction_display_auto_refresh_enabled": bool(fragment_enabled),
+        "operator_visible_refresh_heartbeat": bool(fragment_enabled),
+        "refresh_heartbeat_utc": _utc_now_iso(),
+        "refresh_target": "latest_prediction_warroom_read_model_display_panel",
+        "auto_refresh_source": "streamlit_fragment_run_every" if fragment_enabled else "disabled_by_fragment_flag",
+        "broad_page_reload_disabled": True,
         "fragment_enabled": bool(fragment_enabled),
         "refresh_mode": Q19D_REFRESH_MODE,
         "refresh_interval_sec": Q19D_REFRESH_SEC,
@@ -332,6 +345,8 @@ def _render_panel_body() -> dict[str, Any]:
         f"display_language={packet.get('display_language')} "
         f"freshness_state={packet.get('freshness_state')} "
         f"prediction_row_count={packet.get('prediction_row_count')} "
+        f"auto_refresh={packet.get('warroom_prediction_display_auto_refresh_enabled')} "
+        f"refresh_heartbeat_utc={packet.get('refresh_heartbeat_utc')} "
         f"view_artifact_write_allowed=false autotrade=false broker=false"
     )
     return packet
