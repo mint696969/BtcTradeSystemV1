@@ -26,6 +26,7 @@ LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_VERSION = "prediction_warroom.latest_pre
 WARROOM_PREDICTION_DISPLAY_AUTO_REFRESH_VERSION = "prediction_warroom.warroom_prediction_display_auto_refresh.ps_q21a.v1"
 WARROOM_PREDICTION_REFRESH_STATUS_STRIP_VERSION = "prediction_warroom.warroom_prediction_refresh_status_strip.ps_q21c.v1"
 WARROOM_PREDICTION_REFRESH_LIVE_BADGE_VERSION = "prediction_warroom.warroom_prediction_refresh_live_badge.ps_q21d.v1"
+WARROOM_PREDICTION_DATA_FRESHNESS_BADGE_VERSION = "prediction_warroom.warroom_prediction_data_freshness_badge.ps_q21e.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -253,6 +254,73 @@ def _render_refresh_live_badge(packet: Mapping[str, Any], *, lang: str) -> None:
         st.warning(str(badge.get("refresh_live_badge_message") or badge.get("refresh_live_badge_inactive_note") or ""))
 
 
+def latest_prediction_warroom_data_freshness_badge_packet(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
+    """Return a compact badge that separates prediction data freshness from panel refresh liveness."""
+    data = _as_mapping(packet)
+    freshness_state = (_clean(data.get("freshness_state")) or "unknown").lower()
+    freshness_label = _clean(data.get("freshness_label")) or freshness_state
+    age = _clean(data.get("age_sec")) or "-"
+    row_count = _clean(data.get("prediction_row_count")) or "0"
+    generated_at = _clean(data.get("generated_at")) or "-"
+    ok = data.get("ok") is True
+    row_count_ok = False
+    try:
+        row_count_ok = int(row_count) > 0
+    except Exception:
+        row_count_ok = False
+    fresh = bool(ok and row_count_ok and freshness_state == "fresh")
+    delayed = bool(ok and row_count_ok and freshness_state in {"delayed", "late"})
+    stale = bool((not ok) or (not row_count_ok) or freshness_state in {"stale", "unknown", "missing", "blocked"})
+    if lang == "ja":
+        if fresh:
+            message = f"🟢 予測データ fresh | age={age}s | rows={row_count} | generated_at={generated_at}"
+        elif delayed:
+            message = f"🟡 予測データ delayed | age={age}s | rows={row_count} | generated_at={generated_at}"
+        else:
+            message = f"🟠 予測データ freshness注意 | state={freshness_state} | age={age}s | rows={row_count} | generated_at={generated_at}"
+        note = "パネル更新中でも、ここが stale なら予測データ自体は古い可能性があります。"
+    else:
+        if fresh:
+            message = f"🟢 Prediction data fresh | age={age}s | rows={row_count} | generated_at={generated_at}"
+        elif delayed:
+            message = f"🟡 Prediction data delayed | age={age}s | rows={row_count} | generated_at={generated_at}"
+        else:
+            message = f"🟠 Prediction data freshness attention | state={freshness_state} | age={age}s | rows={row_count} | generated_at={generated_at}"
+        note = "Panel refresh can be live while prediction data is stale; check this badge separately."
+    return {
+        "data_freshness_badge_version": WARROOM_PREDICTION_DATA_FRESHNESS_BADGE_VERSION,
+        "operator_visible_data_freshness_badge": True,
+        "data_freshness_badge_state": "prediction_data_fresh" if fresh else "prediction_data_delayed" if delayed else "prediction_data_attention",
+        "data_freshness_badge_fresh": fresh,
+        "data_freshness_badge_delayed": delayed,
+        "data_freshness_badge_attention": stale,
+        "data_freshness_badge_message": message,
+        "data_freshness_badge_note": note,
+        "data_freshness_badge_freshness_state": freshness_state,
+        "data_freshness_badge_freshness_label": freshness_label,
+        "data_freshness_badge_age_sec": age,
+        "data_freshness_badge_prediction_row_count": row_count,
+        "data_freshness_badge_generated_at": generated_at,
+        "runtime_enablement_allowed": False,
+        "view_artifact_write_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def _render_prediction_data_freshness_badge(packet: Mapping[str, Any], *, lang: str) -> None:
+    """Render a visible prediction-data freshness badge; display-only."""
+    badge = latest_prediction_warroom_data_freshness_badge_packet(packet, lang=lang)
+    message = str(badge.get("data_freshness_badge_message") or "")
+    if badge.get("data_freshness_badge_fresh") is True:
+        st.success(message)
+    elif badge.get("data_freshness_badge_delayed") is True:
+        st.warning(message)
+    else:
+        st.warning(message)
+
+
 def latest_prediction_warroom_refresh_status_rows(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> list[dict[str, str]]:
     """Return compact operator-visible refresh status rows for the WarRoom prediction panel."""
     data = _as_mapping(packet)
@@ -368,6 +436,9 @@ def build_latest_prediction_warroom_display_panel_packet(
         "auto_refresh_version": WARROOM_PREDICTION_DISPLAY_AUTO_REFRESH_VERSION,
         "refresh_status_strip_version": WARROOM_PREDICTION_REFRESH_STATUS_STRIP_VERSION,
         "refresh_live_badge_version": WARROOM_PREDICTION_REFRESH_LIVE_BADGE_VERSION,
+        "data_freshness_badge_version": WARROOM_PREDICTION_DATA_FRESHNESS_BADGE_VERSION,
+        "operator_visible_data_freshness_badge": True,
+        "data_freshness_badge_rendered": True,
         "operator_visible_refresh_live_badge": True,
         "refresh_live_badge_rendered": True,
         "operator_visible_refresh_status_strip": True,
@@ -407,6 +478,7 @@ def _render_panel_body() -> dict[str, Any]:
     )
     st.caption(str(packet.get("operator_caption") or "Latest prediction WarRoom display"))
     _render_refresh_status_strip(packet, lang=lang)
+    _render_prediction_data_freshness_badge(packet, lang=lang)
     with st.expander(_t(lang, "reading_title"), expanded=True):
         st.write(_t(lang, "reading_summary"))
         st.info(str(packet.get("operator_reading_summary") or ""))
