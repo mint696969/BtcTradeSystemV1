@@ -25,6 +25,7 @@ from btcts.apps.operator_ui.prediction_warroom.texts.latest_prediction_display_t
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_VERSION = "prediction_warroom.latest_prediction_warroom_display_panel.ps_q19d.v1"
 WARROOM_PREDICTION_DISPLAY_AUTO_REFRESH_VERSION = "prediction_warroom.warroom_prediction_display_auto_refresh.ps_q21a.v1"
 WARROOM_PREDICTION_REFRESH_STATUS_STRIP_VERSION = "prediction_warroom.warroom_prediction_refresh_status_strip.ps_q21c.v1"
+WARROOM_PREDICTION_REFRESH_LIVE_BADGE_VERSION = "prediction_warroom.warroom_prediction_refresh_live_badge.ps_q21d.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -202,6 +203,56 @@ def latest_prediction_warroom_field_guide_rows(*, lang: str = "en") -> list[dict
     return rows
 
 
+def latest_prediction_warroom_refresh_live_badge_packet(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
+    """Return a compact live badge packet for the WarRoom prediction refresh status."""
+    data = _as_mapping(packet)
+    auto_refresh = data.get("warroom_prediction_display_auto_refresh_enabled") is True
+    heartbeat = _clean(data.get("refresh_heartbeat_utc")) or "-"
+    interval = _clean(data.get("refresh_interval_sec")) or "-"
+    broad_reload_disabled = data.get("broad_page_reload_disabled") is True
+    active = bool(auto_refresh and heartbeat != "-" and broad_reload_disabled)
+    if lang == "ja":
+        message = (
+            f"🟢 予測パネル更新中 | heartbeat UTC={heartbeat} | 更新間隔={interval}s | 全体再読込なし"
+            if active
+            else f"🟡 予測パネル更新注意 | heartbeat UTC={heartbeat} | 更新間隔={interval}s"
+        )
+        inactive_note = "自動更新または全体再読込境界を確認してください。"
+    else:
+        message = (
+            f"🟢 Prediction panel live | heartbeat UTC={heartbeat} | interval={interval}s | broad reload disabled"
+            if active
+            else f"🟡 Prediction panel attention | heartbeat UTC={heartbeat} | interval={interval}s"
+        )
+        inactive_note = "Check auto-refresh or broad reload boundary."
+    return {
+        "refresh_live_badge_version": WARROOM_PREDICTION_REFRESH_LIVE_BADGE_VERSION,
+        "refresh_live_badge_active": active,
+        "refresh_live_badge_state": "prediction_refresh_live" if active else "prediction_refresh_attention",
+        "refresh_live_badge_message": message,
+        "refresh_live_badge_inactive_note": inactive_note,
+        "refresh_live_badge_heartbeat_utc": heartbeat,
+        "refresh_live_badge_interval_sec": interval,
+        "refresh_live_badge_broad_reload_disabled": broad_reload_disabled,
+        "refresh_live_badge_auto_refresh_enabled": auto_refresh,
+        "operator_visible_refresh_live_badge": True,
+        "runtime_enablement_allowed": False,
+        "view_artifact_write_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def _render_refresh_live_badge(packet: Mapping[str, Any], *, lang: str) -> None:
+    """Render a visible live badge above the refresh status strip; display-only."""
+    badge = latest_prediction_warroom_refresh_live_badge_packet(packet, lang=lang)
+    if badge.get("refresh_live_badge_active") is True:
+        st.success(str(badge.get("refresh_live_badge_message") or ""))
+    else:
+        st.warning(str(badge.get("refresh_live_badge_message") or badge.get("refresh_live_badge_inactive_note") or ""))
+
+
 def latest_prediction_warroom_refresh_status_rows(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> list[dict[str, str]]:
     """Return compact operator-visible refresh status rows for the WarRoom prediction panel."""
     data = _as_mapping(packet)
@@ -229,6 +280,7 @@ def latest_prediction_warroom_refresh_status_rows(packet: Mapping[str, Any] | An
 def _render_refresh_status_strip(packet: Mapping[str, Any], *, lang: str) -> None:
     """Render a compact top-of-panel auto-refresh status strip; display-only."""
     rows = latest_prediction_warroom_refresh_status_rows(packet, lang=lang)
+    _render_refresh_live_badge(packet, lang=lang)
     st.caption(
         "PS-Q21C refresh status strip: auto-refresh heartbeat is visible here; "
         "display-only, no artifact writes, no AutoTrade, no broker."
@@ -315,6 +367,9 @@ def build_latest_prediction_warroom_display_panel_packet(
         "operator_reading_summary": _dominant_summary(model, lang=lang),
         "auto_refresh_version": WARROOM_PREDICTION_DISPLAY_AUTO_REFRESH_VERSION,
         "refresh_status_strip_version": WARROOM_PREDICTION_REFRESH_STATUS_STRIP_VERSION,
+        "refresh_live_badge_version": WARROOM_PREDICTION_REFRESH_LIVE_BADGE_VERSION,
+        "operator_visible_refresh_live_badge": True,
+        "refresh_live_badge_rendered": True,
         "operator_visible_refresh_status_strip": True,
         "refresh_status_strip_rendered": True,
         "warroom_prediction_display_auto_refresh_enabled": bool(fragment_enabled),
