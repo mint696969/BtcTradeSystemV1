@@ -29,6 +29,7 @@ action_target=tools/run_phase4a_prediction_system_ps_q21v_disabled_scheduler_reg
 action_mode=PS-Q21V dry-run only
 triggers=0
 state=Disabled
+run_level=Limited
 rollback=Unregister only this task if action matches PS-Q21V dry-run
 ```
 

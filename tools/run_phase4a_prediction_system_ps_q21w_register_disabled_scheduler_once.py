@@ -95,7 +95,7 @@ def _task_register_script() -> str:
         "$Existing = Get-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue",
         "if ($null -ne $Existing) { throw 'ps_q21w_task_already_exists' }",
         "$Action = New-ScheduledTaskAction -Execute $Exe -Argument $Arg",
-        "$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel LeastPrivilege",
+        "$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited",
         "$Settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable:$false -ExecutionTimeLimit (New-TimeSpan -Minutes 10)",
         "$Task = New-ScheduledTask -Action $Action -Principal $Principal -Settings $Settings",
         "Register-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -InputObject $Task -Force | Out-Null",

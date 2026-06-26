@@ -18,10 +18,13 @@ from tools.test_phase4a_prediction_system_ps_q21w_register_disabled_scheduler_on
     SPEC,
 )
 
-EXPECTED_DIRTY = {
+REQUIRED_DIRTY = {
     "docs/strategy/PREDICTION_SYSTEM_PS_Q21W_REGISTER_DISABLED_SCHEDULER_ONCE_2026-06-26.md",
     "tools/run_phase4a_prediction_system_ps_q21w_register_disabled_scheduler_once.py",
     "tools/test_phase4a_prediction_system_ps_q21w_register_disabled_scheduler_once.py",
+}
+
+OPTIONAL_DIRTY = {
     "tools/test_phase4a_prediction_system_ps_q21w_register_disabled_scheduler_once_close_guard.py",
 }
 
@@ -51,8 +54,8 @@ def main_guard() -> int:
         if marker not in text:
             failures.append(f"missing false boundary: {marker}")
     dirty = _dirty_paths()
-    unexpected = dirty - EXPECTED_DIRTY
-    missing = EXPECTED_DIRTY - dirty
+    unexpected = dirty - REQUIRED_DIRTY - OPTIONAL_DIRTY
+    missing = REQUIRED_DIRTY - dirty
     if unexpected:
         failures.append(f"unexpected dirty paths: {sorted(unexpected)}")
     if missing:
@@ -79,6 +82,8 @@ def main_guard() -> int:
             "would_write_collector_state": False,
         },
         "dirty_paths": sorted(dirty),
+        "required_dirty": sorted(REQUIRED_DIRTY),
+        "optional_dirty": sorted(OPTIONAL_DIRTY),
         "unexpected_dirty": sorted(unexpected),
         "missing_dirty": sorted(missing),
         "failures": failures,

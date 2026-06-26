@@ -139,6 +139,8 @@ def test_execute_with_confirmation_registers_disabled_no_trigger_task_with_fake_
     assert result["producer_loop_enabled"] is False
     assert "Register-ScheduledTask" in scripts[0]
     assert "Disable-ScheduledTask" in scripts[0]
+    assert "-RunLevel Limited" in scripts[0]
+    assert "-RunLevel LeastPrivilege" not in scripts[0]
 
 
 def test_query_recognizes_disabled_task_with_fake_runner() -> None:
@@ -171,6 +173,8 @@ def test_tool_contains_scheduler_cmdlets_but_no_producer_or_broker_execution() -
     assert "Register-ScheduledTask" in text
     assert "Disable-ScheduledTask" in text
     assert "Unregister-ScheduledTask" in text
+    assert "RunLevel Limited" in text
+    assert "RunLevel LeastPrivilege" not in text
     # The next producer-loop token is intentionally imported from PS-Q21U to avoid duplicated literal drift.
     assert "REQUIRED_NEXT_PRODUCER_CONFIRMATION" in text
     assert "ENABLE_DISABLED_PRODUCER_LOOP_SHADOW_ONCE_WITH_ROLLBACK_PLAN" in REQUIRED_NEXT_PRODUCER_CONFIRMATION
