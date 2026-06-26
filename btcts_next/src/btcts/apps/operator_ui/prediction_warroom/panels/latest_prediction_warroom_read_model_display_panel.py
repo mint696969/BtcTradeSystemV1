@@ -24,6 +24,7 @@ from btcts.apps.operator_ui.prediction_warroom.texts.latest_prediction_display_t
 
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_VERSION = "prediction_warroom.latest_prediction_warroom_display_panel.ps_q19d.v1"
 WARROOM_PREDICTION_DISPLAY_AUTO_REFRESH_VERSION = "prediction_warroom.warroom_prediction_display_auto_refresh.ps_q21a.v1"
+WARROOM_PREDICTION_REFRESH_STATUS_STRIP_VERSION = "prediction_warroom.warroom_prediction_refresh_status_strip.ps_q21c.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -201,6 +202,44 @@ def latest_prediction_warroom_field_guide_rows(*, lang: str = "en") -> list[dict
     return rows
 
 
+def latest_prediction_warroom_refresh_status_rows(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> list[dict[str, str]]:
+    """Return compact operator-visible refresh status rows for the WarRoom prediction panel."""
+    data = _as_mapping(packet)
+    auto_refresh = data.get("warroom_prediction_display_auto_refresh_enabled") is True
+    heartbeat = _clean(data.get("refresh_heartbeat_utc")) or "-"
+    interval = _clean(data.get("refresh_interval_sec")) or "-"
+    broad_reload = data.get("broad_page_reload_disabled") is True
+    if lang == "ja":
+        return [
+            {"status_item": "自動更新", "value": "ON" if auto_refresh else "OFF", "operator_note": "予測パネルの bounded fragment 更新。"},
+            {"status_item": "heartbeat UTC", "value": heartbeat, "operator_note": "この値が更新されていれば予測パネルは生きています。"},
+            {"status_item": "更新間隔", "value": f"{interval}s", "operator_note": "PS-Q19D prediction panel refresh cadence."},
+            {"status_item": "対象", "value": _clean(data.get("refresh_target")) or "-", "operator_note": "更新対象の表示パネル。"},
+            {"status_item": "全体再読込", "value": "なし" if broad_reload else "あり", "operator_note": "ページ全体の白化を避ける境界。"},
+        ]
+    return [
+        {"status_item": "auto refresh", "value": "ON" if auto_refresh else "OFF", "operator_note": "Bounded fragment refresh for the prediction panel."},
+        {"status_item": "heartbeat UTC", "value": heartbeat, "operator_note": "If this changes, the prediction panel is alive."},
+        {"status_item": "interval", "value": f"{interval}s", "operator_note": "PS-Q19D prediction panel refresh cadence."},
+        {"status_item": "target", "value": _clean(data.get("refresh_target")) or "-", "operator_note": "Refresh target display panel."},
+        {"status_item": "broad reload", "value": "disabled" if broad_reload else "enabled", "operator_note": "Boundary to avoid whole-page whiteout."},
+    ]
+
+
+def _render_refresh_status_strip(packet: Mapping[str, Any], *, lang: str) -> None:
+    """Render a compact top-of-panel auto-refresh status strip; display-only."""
+    rows = latest_prediction_warroom_refresh_status_rows(packet, lang=lang)
+    st.caption(
+        "PS-Q21C refresh status strip: auto-refresh heartbeat is visible here; "
+        "display-only, no artifact writes, no AutoTrade, no broker."
+    )
+    columns = st.columns(5)
+    for column, row in zip(columns, rows):
+        column.metric(str(row.get("status_item") or "-"), str(row.get("value") or "-"))
+    with st.expander("PS-Q21C refresh status details", expanded=False):
+        st.dataframe(rows, width="stretch", hide_index=True)
+
+
 def _dominant_summary(read_model: Mapping[str, Any], *, lang: str) -> str:
     rows = latest_prediction_warroom_display_rows(read_model, lang=lang)
     labels = [str(row.get("label_meaning") or row.get("label") or "") for row in rows[:8] if row.get("label")]
@@ -275,6 +314,9 @@ def build_latest_prediction_warroom_display_panel_packet(
         "field_guide_rows_display": _column_labels(field_guide_rows, lang=lang),
         "operator_reading_summary": _dominant_summary(model, lang=lang),
         "auto_refresh_version": WARROOM_PREDICTION_DISPLAY_AUTO_REFRESH_VERSION,
+        "refresh_status_strip_version": WARROOM_PREDICTION_REFRESH_STATUS_STRIP_VERSION,
+        "operator_visible_refresh_status_strip": True,
+        "refresh_status_strip_rendered": True,
         "warroom_prediction_display_auto_refresh_enabled": bool(fragment_enabled),
         "operator_visible_refresh_heartbeat": bool(fragment_enabled),
         "refresh_heartbeat_utc": _utc_now_iso(),
@@ -309,6 +351,7 @@ def _render_panel_body() -> dict[str, Any]:
         lang=lang,
     )
     st.caption(str(packet.get("operator_caption") or "Latest prediction WarRoom display"))
+    _render_refresh_status_strip(packet, lang=lang)
     with st.expander(_t(lang, "reading_title"), expanded=True):
         st.write(_t(lang, "reading_summary"))
         st.info(str(packet.get("operator_reading_summary") or ""))
