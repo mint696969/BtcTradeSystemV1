@@ -86,18 +86,20 @@ def _output(
     )
 
 
-def _market_regime(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
+def _market_regime(technical: HumanTechnicalSummary | None, cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     blockers: list[str] = []
     drivers: list[str] = []
+    warnings: list[str] = []
     if technical is None or not technical.usable:
         blockers.append("human_technical_summary_missing_or_blocked")
-    if cross is None or not cross.usable:
-        blockers.append("cross_venue_summary_missing_or_blocked")
     if blockers:
-        return "unknown", None, tuple(drivers), tuple(blockers), {}
+        return "unknown", None, tuple(drivers), tuple(blockers), tuple(warnings), {}
+    cross_usable = bool(cross and cross.usable)
+    if not cross_usable:
+        warnings.append("cross_venue_summary_missing_or_blocked")
     vol_state = technical.volatility.state
     ma_state = technical.moving_average.slope_label
-    agreement = cross.agreement_state
+    agreement = cross.agreement_state if cross_usable and cross is not None else "missing_or_blocked"
     if vol_state == "expanding" or agreement == "divergent":
         label = "volatile_or_divergent"
         score = 0.68
@@ -113,7 +115,7 @@ def _market_regime(technical: HumanTechnicalSummary | None, cross: CrossVenueRef
     else:
         label = "unclear"
         score = 0.30
-    return label, score, tuple(drivers), tuple(), {"volatility_state": vol_state, "ma_state": ma_state, "cross_venue_agreement": agreement}
+    return label, score, tuple(drivers), tuple(), tuple(warnings), {"volatility_state": vol_state, "ma_state": ma_state, "cross_venue_agreement": agreement}
 
 
 def _trend_bias(technical: HumanTechnicalSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
@@ -534,7 +536,7 @@ def _opportunity_participation(
 
 def _cross_venue_confirmation(cross: CrossVenueReferenceSummary | None) -> tuple[str, float | None, Tuple[str, ...], Tuple[str, ...], Tuple[str, ...], Dict[str, Any]]:
     if cross is None or not cross.usable:
-        return "unknown", None, tuple(), ("cross_venue_summary_missing_or_blocked",), tuple(), {}
+        return "unknown", 0.0, tuple(), tuple(), ("cross_venue_summary_missing_or_blocked",), {"cross_venue": {"usable": False, "agreement_state": "missing_or_blocked"}}
     warnings = tuple(cross.warnings)
     if cross.agreement_state == "confirmed":
         label = "confirmed"
@@ -711,7 +713,7 @@ def build_rule_based_v0_outputs(
     feature_depth_snapshot: FeatureDepthSnapshot | None = None,
 ) -> Tuple[PredictionOutput, ...]:
     generated_at = _generated_at(now)
-    mr_label, mr_score, mr_drivers, mr_blockers, mr_values = _market_regime(technical_summary, cross_venue_summary)
+    mr_label, mr_score, mr_drivers, mr_blockers, mr_warnings, mr_values = _market_regime(technical_summary, cross_venue_summary)
     tb_label, tb_score, tb_drivers, tb_blockers, tb_values = _trend_bias(technical_summary)
     rz_label, rz_score, rz_drivers, rz_blockers, rz_warnings, rz_values = _reversal_zone(technical_summary)
     vr_label, vr_score, vr_drivers, vr_blockers, vr_values = _volatility_risk(technical_summary)
@@ -731,7 +733,7 @@ def build_rule_based_v0_outputs(
     )
     ht_label, ht_score, ht_drivers, ht_blockers, ht_warnings, ht_values = _human_technical_structure(technical_summary)
     return (
-        _output(family=PredictionFamily.MARKET_REGIME, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=mr_label, score=mr_score, drivers=mr_drivers, blockers=mr_blockers, values=mr_values),
+        _output(family=PredictionFamily.MARKET_REGIME, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=mr_label, score=mr_score, drivers=mr_drivers, blockers=mr_blockers, warnings=mr_warnings, values=mr_values),
         _output(family=PredictionFamily.TREND_BIAS, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=tb_label, score=tb_score, drivers=tb_drivers, blockers=tb_blockers, values=tb_values),
         _output(family=PredictionFamily.REVERSAL_ZONE, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=rz_label, score=rz_score, drivers=rz_drivers, blockers=rz_blockers, warnings=rz_warnings, values=rz_values),
         _output(family=PredictionFamily.VOLATILITY_RISK, generated_at=generated_at, horizon_sec=horizon_sec, primary_label=vr_label, score=vr_score, drivers=vr_drivers, blockers=vr_blockers, values=vr_values),
