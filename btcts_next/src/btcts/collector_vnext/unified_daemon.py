@@ -260,6 +260,15 @@ def run_forever() -> int:
 
                 ws_board_snapshot = ws_board_lane.snapshot()
                 ws_executions_snapshot = ws_executions_lane.snapshot()
+                ws_board_lane_state = str(ws_board_snapshot.get("lane_state") or "unknown")
+                ws_board_is_degraded = ws_board_lane_state.lower() in {
+                    "degraded",
+                    "broken",
+                    "stopped",
+                }
+                daemon_mode = "DEGRADED" if ws_board_is_degraded else "RUNNING"
+                daemon_health_ok = not ws_board_is_degraded
+                daemon_health_status = "healthy" if daemon_health_ok else "degraded"
 
                 write_unified_daemon_status(
                     cfg,
@@ -267,7 +276,7 @@ def run_forever() -> int:
                         "ts": now_iso_utc(),
                         "collector_id": cfg.collector_id,
                         "collector_role": cfg.collector_role,
-                        "mode": "RUNNING",
+                        "mode": daemon_mode,
                         "message": (
                             f"collector_vnext unified daemon active "
                             f"cycle={cycle_no} sleep_sec={loop_sleep_sec}"
@@ -277,7 +286,7 @@ def run_forever() -> int:
                         "cycle_no": cycle_no,
                         "lane_health": {
                             "rest_lane": "running",
-                            "ws_board_lane": ws_board_snapshot.get("lane_state") or "unknown",
+                            "ws_board_lane": ws_board_lane_state,
                             "ws_executions_lane": ws_executions_snapshot.get("lane_state") or "unknown",
                         },
                         "stop_requested": False,
@@ -290,8 +299,8 @@ def run_forever() -> int:
                     cfg,
                     {
                         "ts": now_iso_utc(),
-                        "ok": True,
-                        "status": "healthy",
+                        "ok": daemon_health_ok,
+                        "status": daemon_health_status,
                         "runtime_kind": "unified",
                         "daemon": True,
                         "cycle_no": cycle_no,

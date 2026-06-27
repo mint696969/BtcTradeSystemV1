@@ -58,6 +58,7 @@ def test_unified_ws_board_audit_heartbeat_is_throttled_and_fail_soft(monkeypatch
 
     monkeypatch.setattr("btcts.collector_vnext.unified_ws_board_lane.connect_and_stream_board", fake_stream)
     monkeypatch.setattr("btcts.collector_vnext.unified_ws_board_lane.audit.emit", fake_emit)
+    monkeypatch.setattr("btcts.collector_vnext.unified_ws_board_lane.emit_collector_event", fake_emit)
     monkeypatch.setattr("btcts.collector_vnext.unified_ws_board_lane.time.monotonic", lambda: next(monotonic_values))
 
     lane = UnifiedWsBoardLane()

@@ -176,7 +176,7 @@ def _build_status_payload(
 
     ws_state = str(origin_status.get("ws_state") or "NOT_STARTED")
     ws_lane_state = str(origin_status.get("lane_state") or "not_started")
-    ws_last_event_ts = origin_status.get("ts")
+    ws_last_event_ts = origin_status.get("last_event_ts") or origin_status.get("ts")
     ws_freshness = _infer_ws_freshness(
         ws_state=ws_state,
         last_event_ts=ws_last_event_ts,
@@ -197,7 +197,7 @@ def _build_status_payload(
         f"requests_300s={rate_view.get('requests_300s', 0)}"
     )
 
-    status_mode = "DEGRADED" if mode == "CRIT" else "RUNNING"
+    status_mode = "DEGRADED" if mode == "CRIT" or ws_freshness == "BROKEN" else "RUNNING"
 
     return {
         "ts": now_iso_utc(),
@@ -263,9 +263,10 @@ def _build_health_payload(
     executions_status = _load_unified_executions_status(cfg)
 
     ws_state = str(origin_status.get("ws_state") or "NOT_STARTED")
+    ws_last_event_ts = origin_status.get("last_event_ts") or origin_status.get("ts")
     ws_freshness = _infer_ws_freshness(
         ws_state=ws_state,
-        last_event_ts=origin_status.get("ts"),
+        last_event_ts=ws_last_event_ts,
     )
 
     ws_executions_state = str(executions_status.get("ws_state") or "NOT_STARTED")
@@ -275,10 +276,13 @@ def _build_health_payload(
         connected_ts=executions_status.get("connected_ts"),
     )
 
+    health_ok = mode != "CRIT" and ws_freshness != "BROKEN"
+    health_status = "healthy" if health_ok else "degraded"
+
     return {
         "ts": now_iso_utc(),
-        "ok": True,
-        "status": "healthy",
+        "ok": health_ok,
+        "status": health_status,
         "runtime_kind": "unified",
         "exchange": exchange,
         "rest_mode": mode,
@@ -291,7 +295,7 @@ def _build_health_payload(
         "utilization": rate_view.get("utilization"),
         "last_429_ts": rate_view.get("last_429_ts"),
         "hold_until_ts": rate_view.get("hold_until_ts"),
-        "ws_last_event_ts": origin_status.get("ts"),
+        "ws_last_event_ts": ws_last_event_ts,
         "ws_last_error": origin_status.get("last_error"),
         "ws_executions_state": ws_executions_state,
         "ws_executions_freshness": ws_executions_freshness,

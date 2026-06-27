@@ -77,7 +77,9 @@ class UnifiedWsBoardLane:
         write_unified_origin_status(
             self.cfg,
             {
-                "ts": snap["last_event_ts"] or now_iso_utc(),
+                # ts is the status write time; last_event_ts is the market event time.
+                "ts": now_iso_utc(),
+                "last_event_ts": snap["last_event_ts"],
                 "runtime_kind": "unified",
                 "exchange": "bitflyer",
                 "channel": "board_ws",
