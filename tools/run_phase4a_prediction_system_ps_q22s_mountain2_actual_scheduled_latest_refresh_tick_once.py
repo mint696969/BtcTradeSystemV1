@@ -20,6 +20,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from tools.diagnose_phase4a_prediction_system_ps_q22m_mountain2_recurring_trigger_prep_no_enablement import FUTURE_MOUNTAIN2_TOKEN_CANDIDATE  # noqa: E402
 from tools.diagnose_phase4a_prediction_system_ps_q22q_mountain2_final_readiness_no_enablement import run_final_readiness  # noqa: E402
+from tools.diagnose_phase4a_prediction_system_ps_q22v_post_enablement_tick_readiness import run_post_enablement_readiness  # noqa: E402
 from tools.run_phase4a_prediction_system_ps_q21i_one_shot_bounded_manual_latest_prediction_write import (  # noqa: E402
     DEFAULT_HOT_ROOT,
     REQUIRED_CONFIRMATION as Q21I_REQUIRED_CONFIRMATION,
@@ -310,13 +311,20 @@ def _post_refresh_q22e_design_packet(*, hot_root: Path) -> dict[str, Any]:
 
 
 def _readiness_green(packet: Mapping[str, Any]) -> bool:
-    return bool(
+    pre_danger_ready = bool(
         packet.get("readiness_state") == "mountain2_final_pre_danger_boundary_ready_no_enablement"
         and packet.get("readiness_blockers") in ([], None)
         and packet.get("runtime_readiness_blockers") in ([], None)
         and packet.get("safe_to_stop_before_danger_boundary") is True
         and packet.get("repo_status_short") == ""
     )
+    post_enablement_ready = bool(
+        packet.get("readiness_state") == "post_enablement_tick_readiness_ready"
+        and packet.get("post_enablement_tick_ready") is True
+        and packet.get("readiness_blockers") in ([], None)
+        and packet.get("repo_status_short") == ""
+    )
+    return pre_danger_ready or post_enablement_ready
 
 
 def run_mountain2_actual_scheduled_latest_refresh_tick_once(
@@ -343,10 +351,18 @@ def run_mountain2_actual_scheduled_latest_refresh_tick_once(
     repo_status = _repo_status_short() if repo_status_short is None else str(repo_status_short)
     if repo_status:
         blockers.append("repo_clean_required_before_mountain2_tick")
-    readiness_provider = readiness_provider or run_final_readiness
-    readiness = dict(readiness_provider())
+    if readiness_provider is not None:
+        readiness = dict(readiness_provider())
+    else:
+        readiness = dict(run_final_readiness())
+        if not _readiness_green(readiness):
+            post_readiness = dict(run_post_enablement_readiness())
+            if _readiness_green(post_readiness):
+                readiness = post_readiness
+            else:
+                readiness = {"pre_danger_readiness": readiness, "post_enablement_readiness": post_readiness}
     if not _readiness_green(readiness):
-        blockers.append("q22q_final_readiness_green_required")
+        blockers.append("q22s_tick_readiness_green_required")
     if blockers:
         return {**base, "tick_state": "mountain2_actual_tick_blocked_no_write", "success": False, "blocked_reasons": blockers, "repo_status_short": repo_status, "q22q_final_readiness": readiness, "lock_acquire_attempted": False, "lock_acquired": False, "latest_prediction_artifact_written": False, "status_artifact_written": False}
 
