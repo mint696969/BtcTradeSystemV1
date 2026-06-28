@@ -377,3 +377,304 @@ def load_latest_prediction_warroom_read_model(
     if blocked_reason:
         read_model.setdefault("blocker_reason_codes", []).append(blocked_reason)
     return read_model
+
+# PS-Q23D manifest-first distributed read adapter
+LATEST_MANIFEST_RELATIVE_PATH = "prediction/latest_manifest.json"
+DISTRIBUTED_FORECAST_RECORDS_MAX_BYTES = 50_000_000
+
+
+def _q23d_read_json_object_status(path: Path, *, max_bytes: int) -> dict[str, Any]:
+    status: dict[str, Any] = {
+        "ok": False,
+        "path": str(path),
+        "artifact_size_bytes": None,
+        "blocked_reason": "",
+        "payload": {},
+    }
+    try:
+        stat = path.stat()
+    except Exception as exc:  # noqa: BLE001 - read-only diagnostic
+        status["blocked_reason"] = "json_artifact_stat_failed:" + exc.__class__.__name__
+        return status
+    status["artifact_size_bytes"] = int(stat.st_size)
+    if stat.st_size > int(max_bytes):
+        status["blocked_reason"] = "json_artifact_exceeds_max_bytes"
+        return status
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception as exc:  # noqa: BLE001 - read-only diagnostic
+        status["blocked_reason"] = "json_artifact_load_failed:" + exc.__class__.__name__
+        return status
+    if not isinstance(data, dict):
+        status["blocked_reason"] = "json_artifact_not_object"
+        return status
+    status["ok"] = True
+    status["payload"] = data
+    return status
+
+
+def _q23d_relative_path_safe(rel: str) -> bool:
+    parts = rel.replace("\\", "/").split("/")
+    return bool(rel) and not Path(rel).is_absolute() and ".." not in parts and ":" not in rel and rel.startswith("prediction/")
+
+
+def _q23d_resolve_relative(root: Path, rel: str) -> Path:
+    if not _q23d_relative_path_safe(rel):
+        raise ValueError(f"unsafe prediction artifact relative path: {rel}")
+    return root / Path(rel)
+
+
+def _q23d_read_jsonl_records_status(path: Path, *, max_bytes: int = DISTRIBUTED_FORECAST_RECORDS_MAX_BYTES) -> dict[str, Any]:
+    status: dict[str, Any] = {
+        "ok": False,
+        "path": str(path),
+        "artifact_size_bytes": None,
+        "blocked_reason": "",
+        "records": [],
+        "record_count": 0,
+    }
+    try:
+        stat = path.stat()
+    except Exception as exc:  # noqa: BLE001 - read-only diagnostic
+        status["blocked_reason"] = "forecast_records_stat_failed:" + exc.__class__.__name__
+        return status
+    status["artifact_size_bytes"] = int(stat.st_size)
+    if stat.st_size > int(max_bytes):
+        status["blocked_reason"] = "forecast_records_exceeds_max_bytes"
+        return status
+    records: list[Any] = []
+    try:
+        with path.open("r", encoding="utf-8-sig") as fh:
+            for line in fh:
+                text = line.strip()
+                if not text:
+                    continue
+                records.append(json.loads(text))
+    except Exception as exc:  # noqa: BLE001 - read-only diagnostic
+        status["blocked_reason"] = "forecast_records_jsonl_load_failed:" + exc.__class__.__name__
+        status["record_count"] = len(records)
+        status["records"] = records
+        return status
+    status["ok"] = True
+    status["record_count"] = len(records)
+    status["records"] = records
+    return status
+
+
+def _q23d_legacy_generated_at(payload: Mapping[str, Any]) -> str:
+    batch = _as_mapping(payload.get("forecast_batch"))
+    return _clean(batch.get("generated_at") or payload.get("generated_at"))
+
+
+def _q23d_distributed_payload_from_sidecars(*, root: Path, manifest_payload: Mapping[str, Any], max_bytes: int) -> dict[str, Any]:
+    sidecars = _as_mapping(manifest_payload.get("sidecars"))
+    required = ("summary", "forecast_batch_summary", "forecast_records", "safety")
+    blockers: list[str] = []
+    for key in required:
+        rel = _clean(sidecars.get(key))
+        if not rel:
+            blockers.append(f"sidecar_path_missing:{key}")
+        elif not _q23d_relative_path_safe(rel):
+            blockers.append(f"sidecar_path_unsafe:{key}")
+    if blockers:
+        return {"ok": False, "blocked_reasons": blockers, "payload": {}}
+
+    summary_status = _q23d_read_json_object_status(_q23d_resolve_relative(root, _clean(sidecars.get("summary"))), max_bytes=max_bytes)
+    batch_status = _q23d_read_json_object_status(_q23d_resolve_relative(root, _clean(sidecars.get("forecast_batch_summary"))), max_bytes=max_bytes)
+    safety_status = _q23d_read_json_object_status(_q23d_resolve_relative(root, _clean(sidecars.get("safety"))), max_bytes=max_bytes)
+    records_status = _q23d_read_jsonl_records_status(_q23d_resolve_relative(root, _clean(sidecars.get("forecast_records"))))
+    for label, status in (
+        ("summary", summary_status),
+        ("forecast_batch_summary", batch_status),
+        ("safety", safety_status),
+        ("forecast_records", records_status),
+    ):
+        if status.get("ok") is not True:
+            blockers.append(f"sidecar_load_failed:{label}:{status.get('blocked_reason')}")
+    if blockers:
+        return {"ok": False, "blocked_reasons": blockers, "payload": {}}
+
+    summary = _as_mapping(summary_status.get("payload"))
+    batch_summary = _as_mapping(batch_status.get("payload"))
+    safety = _as_mapping(safety_status.get("payload"))
+    records = _as_list(records_status.get("records"))
+    record_count = len(records)
+    for label, value in (
+        ("latest_manifest", manifest_payload.get("record_count")),
+        ("summary", summary.get("record_count")),
+        ("forecast_batch_summary", batch_summary.get("record_count")),
+    ):
+        expected = _to_int(value)
+        if expected is not None and expected != record_count:
+            blockers.append(f"record_count_mismatch:{label}")
+    if blockers:
+        return {"ok": False, "blocked_reasons": blockers, "payload": {}}
+
+    generated_at = _clean(manifest_payload.get("generated_at") or summary.get("generated_at") or batch_summary.get("generated_at"))
+    payload = {
+        "generated_at": generated_at,
+        "read_only": True,
+        "non_executing": True,
+        "broker_execution_requested": safety.get("broker_execution_requested") is True,
+        "command_ledger_append_requested": safety.get("command_ledger_append_requested") is True,
+        "approval_append_requested": safety.get("approval_append_requested") is True,
+        "forecast_batch": {
+            "generated_at": generated_at,
+            "read_only": True,
+            "non_executing": True,
+            "family_count": batch_summary.get("family_count") or summary.get("family_count"),
+            "horizon_count": batch_summary.get("horizon_count") or summary.get("horizon_count"),
+            "record_count": record_count,
+            "records": records,
+        },
+    }
+    return {
+        "ok": True,
+        "blocked_reasons": [],
+        "payload": payload,
+        "record_count": record_count,
+        "generated_at": generated_at,
+        "sidecar_paths": dict(sidecars),
+    }
+
+
+def _q23d_generated_at_is_older(left: Any, right: Any) -> bool:
+    left_dt = _parse_utc(left)
+    right_dt = _parse_utc(right)
+    if left_dt is None or right_dt is None:
+        return False
+    return left_dt < right_dt
+
+
+def load_latest_prediction_payload_status_manifest_first(
+    *,
+    hot_latest_root_hint: str | Path | None = None,
+    max_bytes: int = DEFAULT_MAX_ARTIFACT_BYTES,
+    prefer_distributed: bool = True,
+) -> dict[str, Any]:
+    root = Path(str(hot_latest_root_hint).rstrip("\\/")) if hot_latest_root_hint else core_paths.runtime_root(ensure=False)
+    legacy_path = root / LATEST_PREDICTION_ARTIFACT_RELATIVE_PATH
+    manifest_path = root / LATEST_MANIFEST_RELATIVE_PATH
+    legacy_status = load_latest_prediction_payload_status(path=legacy_path, max_bytes=max_bytes)
+    legacy_payload = legacy_status.get("payload") if isinstance(legacy_status.get("payload"), dict) else {}
+    legacy_generated_at = _q23d_legacy_generated_at(_as_mapping(legacy_payload))
+    manifest_status = _q23d_read_json_object_status(manifest_path, max_bytes=max_bytes) if prefer_distributed else {
+        "ok": False,
+        "blocked_reason": "distributed_preference_disabled",
+        "payload": {},
+    }
+
+    distributed_status: dict[str, Any] = {
+        "ok": False,
+        "blocked_reasons": [],
+        "payload": {},
+        "generated_at": "",
+        "record_count": 0,
+    }
+    if manifest_status.get("ok") is True:
+        manifest_payload = _as_mapping(manifest_status.get("payload"))
+        run_dir = _clean(manifest_payload.get("run_dir"))
+        if not _q23d_relative_path_safe(run_dir):
+            distributed_status = {"ok": False, "blocked_reasons": ["latest_manifest_run_dir_unsafe"], "payload": {}, "generated_at": "", "record_count": 0}
+        else:
+            distributed_status = _q23d_distributed_payload_from_sidecars(root=root, manifest_payload=manifest_payload, max_bytes=max_bytes)
+    elif prefer_distributed:
+        distributed_status["blocked_reasons"] = [_clean(manifest_status.get("blocked_reason") or "latest_manifest_unavailable")]
+
+    distributed_ready = distributed_status.get("ok") is True
+    legacy_ready = legacy_status.get("ok") is True
+    distributed_generated_at = _clean(distributed_status.get("generated_at"))
+    stale_vs_legacy = bool(distributed_ready and legacy_ready and _q23d_generated_at_is_older(distributed_generated_at, legacy_generated_at))
+    warning_reason_codes: list[str] = []
+    if stale_vs_legacy:
+        warning_reason_codes.append("distributed_artifact_older_than_legacy_latest")
+
+    if distributed_ready and not stale_vs_legacy:
+        selected_payload = _as_mapping(distributed_status.get("payload"))
+        source_mode = "distributed"
+        source_relative = LATEST_MANIFEST_RELATIVE_PATH
+        source_path = manifest_path
+        ok = True
+        blocked_reason = ""
+    elif legacy_ready:
+        selected_payload = _as_mapping(legacy_payload)
+        source_mode = "legacy_fallback"
+        source_relative = LATEST_PREDICTION_ARTIFACT_RELATIVE_PATH
+        source_path = legacy_path
+        ok = True
+        blocked_reason = ""
+    else:
+        selected_payload = {}
+        source_mode = "blocked"
+        source_relative = LATEST_PREDICTION_ARTIFACT_RELATIVE_PATH
+        source_path = legacy_path
+        ok = False
+        blocked_reason = "distributed_and_legacy_unavailable"
+
+    return {
+        "ok": ok,
+        "source_artifact_mode": source_mode,
+        "source_artifact_relative_path": source_relative,
+        "source_artifact_path": str(source_path),
+        "payload": dict(selected_payload),
+        "blocked_reason": blocked_reason,
+        "warning_reason_codes": warning_reason_codes,
+        "distributed_reader_ready": distributed_ready,
+        "legacy_fallback_ready": legacy_ready,
+        "distributed_stale_vs_legacy": stale_vs_legacy,
+        "distributed_generated_at": distributed_generated_at,
+        "legacy_generated_at": legacy_generated_at,
+        "distributed_status": distributed_status,
+        "legacy_status": legacy_status,
+        "manifest_status": manifest_status,
+        "latest_manifest_written": False,
+        "run_sidecars_written": False,
+        "latest_prediction_artifact_written": False,
+        "status_artifact_written": False,
+        "runtime_artifact_write_enabled": False,
+        "would_send_to_broker": False,
+        "broker_private_api_allowed": False,
+        "autotrade_trigger_allowed": False,
+    }
+
+
+def load_latest_prediction_warroom_read_model_manifest_first(
+    *,
+    now_utc: str | None = None,
+    hot_latest_root_hint: str | Path | None = None,
+    prefer_distributed: bool = True,
+) -> dict[str, Any]:
+    payload_status = load_latest_prediction_payload_status_manifest_first(
+        hot_latest_root_hint=hot_latest_root_hint,
+        prefer_distributed=prefer_distributed,
+    )
+    payload = payload_status.get("payload") if isinstance(payload_status.get("payload"), dict) else {}
+    market_state = load_latest_market_state(exchange="bitflyer", symbol_raw="FX_BTC_JPY")
+    market_diag = market_state_diagnostics(exchange="bitflyer", symbol_raw="FX_BTC_JPY")
+    read_model = build_latest_prediction_warroom_read_model(
+        payload=payload,
+        market_state=market_state,
+        market_diag=market_diag,
+        now_utc=now_utc,
+        source_path=str(payload_status.get("source_artifact_path") or ""),
+    )
+    read_model["payload_load_ok"] = payload_status.get("ok") is True
+    read_model["payload_load_blocked_reason"] = _clean(payload_status.get("blocked_reason"))
+    read_model["source_artifact_mode"] = _clean(payload_status.get("source_artifact_mode"))
+    read_model["source_artifact_relative_path"] = _clean(payload_status.get("source_artifact_relative_path"))
+    read_model["distributed_reader_ready"] = payload_status.get("distributed_reader_ready") is True
+    read_model["legacy_fallback_ready"] = payload_status.get("legacy_fallback_ready") is True
+    read_model["distributed_stale_vs_legacy"] = payload_status.get("distributed_stale_vs_legacy") is True
+    for reason in _as_list(payload_status.get("warning_reason_codes")):
+        if str(reason) not in read_model.setdefault("warning_reason_codes", []):
+            read_model["warning_reason_codes"].append(str(reason))
+    read_model["latest_manifest_written"] = False
+    read_model["run_sidecars_written"] = False
+    read_model["latest_prediction_artifact_written"] = False
+    read_model["status_artifact_written"] = False
+    read_model["runtime_artifact_write_enabled"] = False
+    read_model["would_send_to_broker"] = False
+    read_model["broker_private_api_allowed"] = False
+    read_model["autotrade_trigger_allowed"] = False
+    return read_model
+
