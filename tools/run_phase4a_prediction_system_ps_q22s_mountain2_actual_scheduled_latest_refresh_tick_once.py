@@ -95,6 +95,21 @@ def _file_meta(path: Path) -> dict[str, Any]:
     return {"exists": True, "size_bytes": int(stat.st_size), "mtime_utc": datetime.fromtimestamp(stat.st_mtime, timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")}
 
 
+def _compact_runner_result(result: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "success": result.get("success") is True,
+        "runner_state": result.get("runner_state"),
+        "blocked_reasons": list(result.get("blocked_reasons") or []),
+        "warning_reasons": list(result.get("warning_reasons") or []),
+        "latest_prediction_artifact_written": result.get("latest_prediction_artifact_written") is True,
+        "status_artifact_written": result.get("status_artifact_written") is True,
+        "generated_at": result.get("generated_at"),
+        "prediction_run_id": result.get("prediction_run_id"),
+        "producer_state": result.get("producer_state"),
+        "runtime_artifact_write_enabled": result.get("runtime_artifact_write_enabled") is True,
+    }
+
+
 def _false_scheduler_boundary() -> dict[str, Any]:
     return {
         "scheduler_action_replacement_executed": False,
@@ -186,8 +201,8 @@ def _release_lock(lock_path: Path, *, run_id: str) -> dict[str, Any]:
     return {"released": True, "lock_owner_mismatch": False}
 
 
-def _status_payload(*, hot_root: Path, run_id: str, state: str, blockers: list[str], warning_reasons: list[str] | None = None) -> dict[str, Any]:
-    current = _load_json(hot_root / STATUS_RELATIVE_PATH)
+def _status_payload(*, hot_root: Path, run_id: str, state: str, blockers: list[str], warning_reasons: list[str] | None = None, base_status: Mapping[str, Any] | None = None, extra: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    current = dict(base_status) if isinstance(base_status, Mapping) else _load_json(hot_root / STATUS_RELATIVE_PATH)
     safe_flags = _as_mapping(current.get("safe_flags"))
     now = _iso()
     previous_count = int(current.get("consecutive_failure_count") or 0)
@@ -218,13 +233,17 @@ def _status_payload(*, hot_root: Path, run_id: str, state: str, blockers: list[s
             "would_send_to_broker_false": True,
         },
     })
+    if is_failure:
+        payload["failure_preserved_previous_success"] = bool(current.get("last_success_generated_at") and current.get("last_prediction_run_id"))
+    if isinstance(extra, Mapping):
+        payload.update(dict(extra))
     return payload
 
 
-def _write_tick_status(*, hot_root: Path, run_id: str, state: str, blockers: list[str], warning_reasons: list[str] | None = None) -> dict[str, Any]:
+def _write_tick_status(*, hot_root: Path, run_id: str, state: str, blockers: list[str], warning_reasons: list[str] | None = None, base_status: Mapping[str, Any] | None = None, extra: Mapping[str, Any] | None = None) -> dict[str, Any]:
     path = hot_root / STATUS_RELATIVE_PATH
     before = _file_meta(path)
-    payload = _status_payload(hot_root=hot_root, run_id=run_id, state=state, blockers=blockers, warning_reasons=warning_reasons)
+    payload = _status_payload(hot_root=hot_root, run_id=run_id, state=state, blockers=blockers, warning_reasons=warning_reasons, base_status=base_status, extra=extra)
     size = _write_json_atomic(path, payload)
     return {"status_artifact_written": True, "status_artifact_size_bytes": size, "before_status_meta": before, "after_status_meta": _file_meta(path), "written_status_payload": payload}
 
@@ -373,12 +392,13 @@ def run_mountain2_actual_scheduled_latest_refresh_tick_once(
         return {**base, "tick_state": "mountain2_actual_tick_skipped_active_lock", "success": False, "blocked_reasons": ["active_lock_present_skip_tick"], "q22q_final_readiness": readiness, "lock_acquire_attempted": True, "lock_acquired": False, "lock_active": True, "lock_result": lock_result, "latest_prediction_artifact_written": False, **status_packet}
 
     release_result: dict[str, Any] = {"released": False}
+    pre_tick_status: Mapping[str, Any] = _load_json(hot_root / STATUS_RELATIVE_PATH)
     try:
         q21i_runner = q21i_runner or run_one_shot_write
         q22e_runner = q22e_runner or run_success_preserving_status_write_once
         refresh = dict(q21i_runner(hot_root=hot_root, operator_acknowledged=True, execute_one_shot_write=True, confirmation=Q21I_REQUIRED_CONFIRMATION, require_clean_tree=True))
         if refresh.get("success") is not True or refresh.get("latest_prediction_artifact_written") is not True or refresh.get("status_artifact_written") is not True:
-            status_packet = _write_tick_status(hot_root=hot_root, run_id=run_id, state="mountain2_tick_failed", blockers=["bounded_latest_refresh_failed_or_incomplete"], warning_reasons=list(refresh.get("warning_reasons") or []))
+            status_packet = _write_tick_status(hot_root=hot_root, run_id=run_id, state="mountain2_tick_failed", blockers=["bounded_latest_refresh_failed_or_incomplete"], warning_reasons=list(refresh.get("warning_reasons") or []), base_status=pre_tick_status, extra={"q21i_result_summary": _compact_runner_result(refresh)})
             release_result = _release_lock(lock_path, run_id=run_id)
             return {**base, "tick_state": "mountain2_actual_tick_failed", "success": False, "blocked_reasons": ["bounded_latest_refresh_failed_or_incomplete"], "q22q_final_readiness": readiness, "lock_acquire_attempted": True, "lock_acquired": True, "lock_result": lock_result, "lock_release_attempted": True, "lock_released": release_result.get("released") is True, "lock_release_result": release_result, "q21i_result": refresh, "latest_prediction_artifact_written": refresh.get("latest_prediction_artifact_written") is True, **status_packet}
         q22e_design = _post_refresh_q22e_design_packet(hot_root=hot_root)

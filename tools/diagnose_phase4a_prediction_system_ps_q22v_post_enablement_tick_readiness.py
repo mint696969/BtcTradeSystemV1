@@ -117,10 +117,20 @@ def build_post_enablement_readiness(*, repo_status_short: str, latest_payload: M
     action_args = str(task.get("action_arguments") or "")
     if Q22S_TOOL_NAME not in action_args:
         blockers.append("scheduler_task_action_must_be_q22s_after_enablement")
-    if status.get("producer_version") != Q22E_STATUS_VERSION:
-        blockers.append("q22e_status_marker_required_before_tick")
-    if status.get("producer_state") != "manual_refresh_exported_status_written":
-        blockers.append("producer_success_state_required_before_tick")
+    q22e_success_marker = bool(
+        status.get("producer_version") == Q22E_STATUS_VERSION
+        and status.get("producer_state") == "manual_refresh_exported_status_written"
+    )
+    retryable_q22s_failure = bool(
+        status.get("producer_version") == Q22S_RUNNER_VERSION
+        and status.get("producer_state") in {"mountain2_tick_failed", "mountain2_actual_tick_failed", "mountain2_actual_tick_skipped_active_lock"}
+        and status.get("failure_preserved_previous_success") is True
+        and status.get("last_tick_run_id")
+        and int(status.get("consecutive_failure_count") or 0) < 3
+    )
+    status_acceptance_mode = "q22e_success_marker" if q22e_success_marker else "retryable_q22s_failure_preserved_success" if retryable_q22s_failure else "blocked"
+    if not (q22e_success_marker or retryable_q22s_failure):
+        blockers.append("q22e_success_or_retryable_q22s_failure_status_required_before_tick")
     if status.get("last_success_generated_at") != generated_at:
         blockers.append("status_last_success_generated_at_must_match_latest")
     if status.get("producer_enabled") is not False:
@@ -149,6 +159,8 @@ def build_post_enablement_readiness(*, repo_status_short: str, latest_payload: M
         "status_producer_version": status.get("producer_version"),
         "status_producer_state": status.get("producer_state"),
         "status_last_success_generated_at": status.get("last_success_generated_at"),
+        "status_acceptance_mode": status_acceptance_mode,
+        "status_consecutive_failure_count": status.get("consecutive_failure_count"),
         "scheduler_task": dict(task),
         "q22s_runner_version": Q22S_RUNNER_VERSION,
         "read_only_diagnostic": True,
