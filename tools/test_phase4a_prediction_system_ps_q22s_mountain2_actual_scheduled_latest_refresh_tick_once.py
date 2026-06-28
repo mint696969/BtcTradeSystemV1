@@ -132,6 +132,10 @@ def test_exact_token_executes_one_tick_with_lock_then_releases(tmp_path: Path) -
     assert result["trigger_added"] is False
     assert result["recurring_enablement_allowed_now"] is False
     assert result["would_send_to_broker"] is False
+    assert result["sidecar_dual_write_requested"] is False
+    assert result["sidecar_dual_write_executed"] is False
+    assert result["latest_manifest_written"] is False
+    assert result["run_sidecars_written"] is False
 
 
 def test_active_lock_skips_and_writes_skip_status_without_refresh(tmp_path: Path) -> None:

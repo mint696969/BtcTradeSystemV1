@@ -30,6 +30,10 @@ from tools.run_phase4a_prediction_system_ps_q22e_success_preserving_status_write
     REQUIRED_STATUS_WRITE_CONFIRMATION as Q22E_REQUIRED_CONFIRMATION,
     run_success_preserving_status_write_once,
 )
+from tools.run_phase4a_prediction_system_ps_q23b_gated_dual_write_sidecars_once import (  # noqa: E402
+    REQUIRED_CONFIRMATION as REQUIRED_DISTRIBUTED_SIDECAR_CONFIRMATION,
+    write_distributed_sidecars_once,
+)
 
 RUNNER_VERSION = "prediction_warroom.mountain2_actual_scheduled_latest_refresh_tick_once.ps_q22s.v1"
 LOCK_RELATIVE_PATH = Path("prediction/runtime/non_ui_scheduler_producer.lock.json")
@@ -37,6 +41,7 @@ STATUS_RELATIVE_PATH = Path("prediction/status/non_ui_scheduled_producer_status.
 LOCK_STALE_AFTER_SEC = 900
 Q21IRunner = Callable[..., Mapping[str, Any]]
 Q22ERunner = Callable[..., Mapping[str, Any]]
+SidecarWriter = Callable[..., Mapping[str, Any]]
 ReadinessProvider = Callable[[], Mapping[str, Any]]
 
 
@@ -107,6 +112,63 @@ def _compact_runner_result(result: Mapping[str, Any]) -> dict[str, Any]:
         "prediction_run_id": result.get("prediction_run_id"),
         "producer_state": result.get("producer_state"),
         "runtime_artifact_write_enabled": result.get("runtime_artifact_write_enabled") is True,
+    }
+
+
+def _compact_sidecar_result(result: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "success": result.get("success") is True,
+        "execution_state": result.get("execution_state"),
+        "blocked_reasons": list(result.get("blocked_reasons") or []),
+        "latest_manifest_written": result.get("latest_manifest_written") is True,
+        "run_sidecars_written": result.get("run_sidecars_written") is True,
+        "latest_prediction_artifact_written": result.get("latest_prediction_artifact_written") is True,
+        "legacy_latest_modified": result.get("legacy_latest_modified") is True,
+        "status_artifact_written": result.get("status_artifact_written") is True,
+        "would_send_to_broker": result.get("would_send_to_broker") is True,
+        "broker_private_api_allowed": result.get("broker_private_api_allowed") is True,
+        "autotrade_trigger_allowed": result.get("autotrade_trigger_allowed") is True,
+        "run_dir": result.get("run_dir"),
+        "latest_manifest_relative_path": result.get("latest_manifest_relative_path"),
+    }
+
+
+def _sidecar_disabled_result() -> dict[str, Any]:
+    return {
+        "sidecar_dual_write_requested": False,
+        "sidecar_dual_write_executed": False,
+        "sidecar_dual_write_success": False,
+        "sidecar_dual_write_warning": False,
+        "latest_manifest_written": False,
+        "run_sidecars_written": False,
+        "scheduled_sidecar_write_enabled": False,
+        "scheduler_action_changed": False,
+    }
+
+
+def _run_optional_sidecar_dual_write(*, hot_root: Path, enable: bool, confirmation: str, sidecar_writer: SidecarWriter | None) -> dict[str, Any]:
+    if not enable:
+        return _sidecar_disabled_result()
+    writer = sidecar_writer or write_distributed_sidecars_once
+    raw = dict(writer(
+        hot_root=hot_root,
+        operator_acknowledged=True,
+        execute_sidecar_write_once=True,
+        confirmation=confirmation,
+        require_clean_tree=True,
+    ))
+    compact = _compact_sidecar_result(raw)
+    success = compact["success"] is True and compact["latest_manifest_written"] is True and compact["run_sidecars_written"] is True
+    return {
+        "sidecar_dual_write_requested": True,
+        "sidecar_dual_write_executed": True,
+        "sidecar_dual_write_success": success,
+        "sidecar_dual_write_warning": not success,
+        "latest_manifest_written": compact["latest_manifest_written"],
+        "run_sidecars_written": compact["run_sidecars_written"],
+        "scheduled_sidecar_write_enabled": False,
+        "scheduler_action_changed": False,
+        "sidecar_dual_write_result": compact,
     }
 
 
@@ -355,6 +417,9 @@ def run_mountain2_actual_scheduled_latest_refresh_tick_once(
     readiness_provider: ReadinessProvider | None = None,
     q21i_runner: Q21IRunner | None = None,
     q22e_runner: Q22ERunner | None = None,
+    sidecar_writer: SidecarWriter | None = None,
+    enable_distributed_sidecar_dual_write: bool = False,
+    distributed_sidecar_confirmation: str = "",
     repo_status_short: str | None = None,
 ) -> dict[str, Any]:
     run_id = f"mountain2.tick.ps_q22s:{_iso()}:{uuid.uuid4().hex[:8]}"
@@ -410,6 +475,12 @@ def run_mountain2_actual_scheduled_latest_refresh_tick_once(
             return {**base, "tick_state": "mountain2_actual_tick_failed", "success": False, "blocked_reasons": ["q22e_status_visibility_restore_failed"], "q22q_final_readiness": readiness, "lock_acquire_attempted": True, "lock_acquired": True, "lock_result": lock_result, "lock_release_attempted": True, "lock_released": release_result.get("released") is True, "lock_release_result": release_result, "q21i_result": refresh, "q22e_design": q22e_design, "q22e_result": q22e, "latest_prediction_artifact_written": refresh.get("latest_prediction_artifact_written") is True, **status_packet}
         release_result = _release_lock(lock_path, run_id=run_id)
         success = bool(release_result.get("released") is True)
+        sidecar_dual_write_payload = _run_optional_sidecar_dual_write(
+            hot_root=hot_root,
+            enable=bool(success and enable_distributed_sidecar_dual_write),
+            confirmation=distributed_sidecar_confirmation,
+            sidecar_writer=sidecar_writer,
+        )
         return {
             **base,
             "tick_state": "mountain2_actual_tick_completed_one_bounded_refresh" if success else "mountain2_actual_tick_completed_but_lock_release_failed",
@@ -429,6 +500,8 @@ def run_mountain2_actual_scheduled_latest_refresh_tick_once(
             "status_artifact_written": True,
             "bounded_manual_refresh_invoked": True,
             "actual_export_runner_invoked": True,
+            **sidecar_dual_write_payload,
+            "warning_reasons": ["distributed_sidecar_dual_write_failed_or_blocked"] if sidecar_dual_write_payload.get("sidecar_dual_write_warning") is True else [],
         }
     except Exception as exc:  # noqa: BLE001 - status visibility and lock release must be best effort
         status_packet = _write_tick_status(hot_root=hot_root, run_id=run_id, state="mountain2_tick_failed", blockers=[f"exception:{exc.__class__.__name__}"], warning_reasons=[str(exc)])
@@ -442,12 +515,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--execute-tick-once", action="store_true")
     parser.add_argument("--confirmation", default="")
     parser.add_argument("--hot-root", default=str(DEFAULT_HOT_ROOT))
+    parser.add_argument("--enable-distributed-sidecar-dual-write", action="store_true")
+    parser.add_argument("--distributed-sidecar-confirmation", default="")
     args = parser.parse_args(argv)
     result = run_mountain2_actual_scheduled_latest_refresh_tick_once(
         operator_acknowledged=bool(args.operator_acknowledged),
         execute_tick_once=bool(args.execute_tick_once),
         confirmation=str(args.confirmation),
         hot_root=Path(args.hot_root),
+        enable_distributed_sidecar_dual_write=bool(args.enable_distributed_sidecar_dual_write),
+        distributed_sidecar_confirmation=str(args.distributed_sidecar_confirmation),
     )
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True, default=str))
     return 0 if result.get("ok") is True and (result.get("success") is True or not args.execute_tick_once) else 1
