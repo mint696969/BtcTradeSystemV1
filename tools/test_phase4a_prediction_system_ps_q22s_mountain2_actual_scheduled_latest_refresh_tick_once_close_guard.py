@@ -37,6 +37,7 @@ def main_guard() -> int:
         "unexpected_dirty": sorted(dirty - EXPECTED),
         "contract": {
             "actual_tick_runner_implemented": True,
+            "post_refresh_q22e_design_packet": True,
             "default_no_write": True,
             "lock_acquire_explicit_only": True,
             "latest_prediction_artifact_write_explicit_only": True,

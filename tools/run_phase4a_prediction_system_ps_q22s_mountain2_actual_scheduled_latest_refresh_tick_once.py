@@ -228,6 +228,87 @@ def _write_tick_status(*, hot_root: Path, run_id: str, state: str, blockers: lis
     return {"status_artifact_written": True, "status_artifact_size_bytes": size, "before_status_meta": before, "after_status_meta": _file_meta(path), "written_status_payload": payload}
 
 
+def _post_refresh_q22e_design_packet(*, hot_root: Path) -> dict[str, Any]:
+    """Build a Q22E-compatible design packet from the just-written Q21I success status.
+
+    Q22S runs in the narrow interval immediately after Q21I refreshed latest/status.
+    At that point Q22E's normal Q22D path can be cyclic because Q21X may still
+    depend on the Q22E status marker. This recovery packet preserves the Q21I
+    success fields and lets Q22E write the status-only marker without weakening
+    standalone Q22E validation.
+    """
+    status_path = hot_root / STATUS_RELATIVE_PATH
+    latest_path = hot_root / "prediction/latest_prediction_system_result.json"
+    status = _load_json(status_path)
+    latest_meta = _file_meta(latest_path)
+    status_meta = _file_meta(status_path)
+    safe_flags = _as_mapping(status.get("safe_flags"))
+    now = _iso()
+    proposed = dict(status)
+    proposed.update({
+        "producer_version": "prediction_warroom.success_preserving_producer_status_design.ps_q22d.v1",
+        "producer_state": "producer_shadow_status_success_preserved_no_write_design",
+        "producer_enabled": False,
+        "scheduler_enabled": False,
+        "runtime_artifact_write_enabled": status.get("runtime_artifact_write_enabled") is True,
+        "last_run_started_at": now,
+        "last_run_finished_at": now,
+        "last_failure_at": None,
+        "last_blocker_count": 0,
+        "consecutive_failure_count": 0,
+        "blockers": [],
+        "safe_flags": {
+            **dict(safe_flags),
+            "producer_enabled_false": True,
+            "scheduler_enabled_false": True,
+            "scheduled_loop_enabled_false": True,
+            "warroom_ui_trigger_false": True,
+            "autotrade_trigger_allowed_false": True,
+            "broker_private_api_allowed_false": True,
+            "would_send_to_broker_false": True,
+            "would_write_collector_state_false": True,
+        },
+        "q22d_design_note": "No artifact was written. Q22S post-refresh recovery preserves Q21I success fields before Q22E status-only write.",
+    })
+    last_success = status.get("last_success_generated_at")
+    last_run_id = status.get("last_prediction_run_id")
+    ready = bool(
+        status.get("producer_state") == "manual_refresh_exported_status_written"
+        and last_success
+        and last_run_id
+        and status.get("producer_enabled") is False
+        and status.get("scheduler_enabled") is False
+        and status.get("blockers") in ([], None)
+        and latest_meta.get("exists") is True
+        and status_meta.get("exists") is True
+    )
+    blockers: list[str] = []
+    if not ready:
+        blockers.append("post_refresh_q21i_success_status_required")
+    return {
+        "ok": True,
+        "design_version": "prediction_warroom.success_preserving_producer_status_design.ps_q22d.v1",
+        "read_only_no_write": True,
+        "repo_status_short": _repo_status_short(),
+        "design_state": "success_preserving_producer_status_design_ready_no_write" if ready else "success_preserving_producer_status_design_blocked",
+        "design_blockers": blockers,
+        "current_producer_state": status.get("producer_state"),
+        "current_last_success_generated_at": last_success,
+        "current_last_prediction_run_id": last_run_id,
+        "q21x_shadow_preflight_ready_for_one_shot": None,
+        "q21x_latest_status_success_observed": True if ready else False,
+        "q21x_disabled_boundary_preserved": True if ready else False,
+        "preserves_last_success_generated_at": bool(last_success),
+        "preserves_last_prediction_run_id": bool(last_run_id),
+        "preserves_last_target_file_size_bytes": True,
+        "proposed_status_payload_not_written": proposed,
+        "latest_meta": latest_meta,
+        "status_meta": status_meta,
+        "next_recommended_action": "q22s_post_refresh_q22e_status_restore" if ready else "inspect_q21i_status_before_q22e_restore",
+        "safety": _false_scheduler_boundary(),
+    }
+
+
 def _readiness_green(packet: Mapping[str, Any]) -> bool:
     return bool(
         packet.get("readiness_state") == "mountain2_final_pre_danger_boundary_ready_no_enablement"
@@ -284,12 +365,13 @@ def run_mountain2_actual_scheduled_latest_refresh_tick_once(
             status_packet = _write_tick_status(hot_root=hot_root, run_id=run_id, state="mountain2_tick_failed", blockers=["bounded_latest_refresh_failed_or_incomplete"], warning_reasons=list(refresh.get("warning_reasons") or []))
             release_result = _release_lock(lock_path, run_id=run_id)
             return {**base, "tick_state": "mountain2_actual_tick_failed", "success": False, "blocked_reasons": ["bounded_latest_refresh_failed_or_incomplete"], "q22q_final_readiness": readiness, "lock_acquire_attempted": True, "lock_acquired": True, "lock_result": lock_result, "lock_release_attempted": True, "lock_released": release_result.get("released") is True, "lock_release_result": release_result, "q21i_result": refresh, "latest_prediction_artifact_written": refresh.get("latest_prediction_artifact_written") is True, **status_packet}
-        q22e = dict(q22e_runner(operator_acknowledged=True, execute_status_write_once=True, confirmation=Q22E_REQUIRED_CONFIRMATION))
+        q22e_design = _post_refresh_q22e_design_packet(hot_root=hot_root)
+        q22e = dict(q22e_runner(operator_acknowledged=True, execute_status_write_once=True, confirmation=Q22E_REQUIRED_CONFIRMATION, design_packet=q22e_design))
         q22e_success = q22e.get("success") is True and q22e.get("status_artifact_written") is True and q22e.get("latest_prediction_artifact_written") is False
         if not q22e_success:
             status_packet = _write_tick_status(hot_root=hot_root, run_id=run_id, state="mountain2_tick_failed", blockers=["q22e_status_visibility_restore_failed"], warning_reasons=[])
             release_result = _release_lock(lock_path, run_id=run_id)
-            return {**base, "tick_state": "mountain2_actual_tick_failed", "success": False, "blocked_reasons": ["q22e_status_visibility_restore_failed"], "q22q_final_readiness": readiness, "lock_acquire_attempted": True, "lock_acquired": True, "lock_result": lock_result, "lock_release_attempted": True, "lock_released": release_result.get("released") is True, "lock_release_result": release_result, "q21i_result": refresh, "q22e_result": q22e, "latest_prediction_artifact_written": refresh.get("latest_prediction_artifact_written") is True, **status_packet}
+            return {**base, "tick_state": "mountain2_actual_tick_failed", "success": False, "blocked_reasons": ["q22e_status_visibility_restore_failed"], "q22q_final_readiness": readiness, "lock_acquire_attempted": True, "lock_acquired": True, "lock_result": lock_result, "lock_release_attempted": True, "lock_released": release_result.get("released") is True, "lock_release_result": release_result, "q21i_result": refresh, "q22e_design": q22e_design, "q22e_result": q22e, "latest_prediction_artifact_written": refresh.get("latest_prediction_artifact_written") is True, **status_packet}
         release_result = _release_lock(lock_path, run_id=run_id)
         success = bool(release_result.get("released") is True)
         return {
@@ -305,6 +387,7 @@ def run_mountain2_actual_scheduled_latest_refresh_tick_once(
             "lock_released": success,
             "lock_release_result": release_result,
             "q21i_result": refresh,
+            "q22e_design": q22e_design,
             "q22e_result": q22e,
             "latest_prediction_artifact_written": True,
             "status_artifact_written": True,

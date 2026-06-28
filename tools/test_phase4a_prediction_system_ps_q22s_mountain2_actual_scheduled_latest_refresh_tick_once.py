@@ -65,7 +65,11 @@ def _refresh_ok(**_: object) -> dict:
     return {"success": True, "latest_prediction_artifact_written": True, "status_artifact_written": True, "warning_reasons": [], "generated_at": "2026-06-28T00:01:00Z"}
 
 
-def _q22e_ok(**_: object) -> dict:
+def _q22e_ok(**kwargs: object) -> dict:
+    design = kwargs.get("design_packet")
+    assert isinstance(design, dict)
+    assert design.get("design_state") == "success_preserving_producer_status_design_ready_no_write"
+    assert design.get("design_blockers") == []
     return {"success": True, "latest_prediction_artifact_written": False, "status_artifact_written": True}
 
 
@@ -123,6 +127,7 @@ def test_exact_token_executes_one_tick_with_lock_then_releases(tmp_path: Path) -
     assert not (root / LOCK_RELATIVE_PATH).exists()
     assert result["latest_prediction_artifact_written"] is True
     assert result["status_artifact_written"] is True
+    assert result["q22e_design"]["design_state"] == "success_preserving_producer_status_design_ready_no_write"
     assert result["scheduler_enabled"] is False
     assert result["trigger_added"] is False
     assert result["recurring_enablement_allowed_now"] is False
