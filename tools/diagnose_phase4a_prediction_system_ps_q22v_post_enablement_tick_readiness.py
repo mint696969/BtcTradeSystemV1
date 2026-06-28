@@ -26,6 +26,7 @@ STATUS = HOT_ROOT / "prediction/status/non_ui_scheduled_producer_status.json"
 Q22V_VERSION = "prediction_warroom.post_enablement_tick_readiness.ps_q22v.v1"
 Q22E_STATUS_VERSION = "prediction_warroom.success_preserving_status_write_once.ps_q22e.v1"
 Q22S_TOOL_NAME = "run_phase4a_prediction_system_ps_q22s_mountain2_actual_scheduled_latest_refresh_tick_once.py"
+Q22X_SILENT_LAUNCHER_NAME = "run_phase4a_prediction_system_ps_q22x_silent_q22s_launcher.py"
 Q22S_RUNNER_VERSION = "prediction_warroom.mountain2_actual_scheduled_latest_refresh_tick_once.ps_q22s.v1"
 
 
@@ -115,7 +116,8 @@ def build_post_enablement_readiness(*, repo_status_short: str, latest_payload: M
     if int(task.get("trigger_count") or 0) < 1:
         blockers.append("scheduler_task_trigger_required_after_enablement")
     action_args = str(task.get("action_arguments") or "")
-    if Q22S_TOOL_NAME not in action_args:
+    scheduler_action_mode = "q22s_direct" if Q22S_TOOL_NAME in action_args else "q22x_silent_launcher" if Q22X_SILENT_LAUNCHER_NAME in action_args else "blocked"
+    if scheduler_action_mode == "blocked":
         blockers.append("scheduler_task_action_must_be_q22s_after_enablement")
     q22e_success_marker = bool(
         status.get("producer_version") == Q22E_STATUS_VERSION
@@ -162,6 +164,7 @@ def build_post_enablement_readiness(*, repo_status_short: str, latest_payload: M
         "status_acceptance_mode": status_acceptance_mode,
         "status_consecutive_failure_count": status.get("consecutive_failure_count"),
         "scheduler_task": dict(task),
+        "scheduler_action_mode": scheduler_action_mode,
         "q22s_runner_version": Q22S_RUNNER_VERSION,
         "read_only_diagnostic": True,
         "scheduler_action_replacement_executed": False,
