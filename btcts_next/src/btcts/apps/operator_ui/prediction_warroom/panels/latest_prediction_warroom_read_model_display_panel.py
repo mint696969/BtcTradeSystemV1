@@ -11,7 +11,7 @@ import streamlit as st
 from btcts.apps.operator_ui.components import live_shell
 from btcts.apps.operator_ui.prediction_warroom.read_models.latest_prediction_warroom_read_model import (
     LATEST_PREDICTION_WARROOM_READ_MODEL_VERSION,
-    load_latest_prediction_warroom_read_model,
+    load_latest_prediction_warroom_read_model_manifest_first,
 )
 from btcts.apps.operator_ui.prediction_warroom.texts.latest_prediction_display_texts import (
     COLUMN_LABELS,
@@ -36,6 +36,12 @@ Q19D_REFRESH_SEC = 5
 # Legacy guard marker kept in the panel after PS-Q19J text-catalog split.
 # The footer token text itself is supplied by prediction_warroom.texts.latest_prediction_display_texts.
 Q19I_BILINGUAL_EXPLANATION_LEGACY_GUARD_TOKEN = "PS_Q19I_WARROOM_PREDICTION_BILINGUAL_EXPLANATION"
+Q23J_DISPLAY_DEFAULT_HOT_ROOT_HINT = r"D:\btc_ts_hot"
+
+
+def _prediction_display_hot_root_hint() -> str:
+    """Return the live D-hot root used by the scheduled prediction producer."""
+    return Q23J_DISPLAY_DEFAULT_HOT_ROOT_HINT
 
 TRUE_BOUNDARIES = (
     "read_only",
@@ -382,7 +388,7 @@ def build_latest_prediction_warroom_display_panel_packet(
     lang: str = "en",
 ) -> dict[str, Any]:
     lang = "ja" if lang == "ja" else "en"
-    model = dict(_as_mapping(read_model)) if read_model is not None else load_latest_prediction_warroom_read_model()
+    model = dict(_as_mapping(read_model)) if read_model is not None else load_latest_prediction_warroom_read_model_manifest_first(hot_latest_root_hint=_prediction_display_hot_root_hint())
     prediction_rows = latest_prediction_warroom_display_rows(model, lang=lang)
     safety_rows = latest_prediction_warroom_safety_rows(model, lang=lang)
     market_rows = latest_prediction_warroom_market_rows(model, lang=lang)
@@ -417,6 +423,11 @@ def build_latest_prediction_warroom_display_panel_packet(
         "display_language": lang,
         "read_model_version": _clean(model.get("read_model_version")),
         "read_model_ok": model.get("ok") is True,
+        "source_artifact_mode": _clean(model.get("source_artifact_mode")) or "legacy",
+        "source_artifact_relative_path": _clean(model.get("source_artifact_relative_path")),
+        "distributed_reader_ready": model.get("distributed_reader_ready") is True,
+        "distributed_stale_vs_legacy": model.get("distributed_stale_vs_legacy") is True,
+        "legacy_fallback_ready": model.get("legacy_fallback_ready") is True,
         "generated_at": _clean(model.get("generated_at")),
         "age_sec": model.get("age_sec"),
         "freshness_state": _clean(model.get("freshness_state")),
