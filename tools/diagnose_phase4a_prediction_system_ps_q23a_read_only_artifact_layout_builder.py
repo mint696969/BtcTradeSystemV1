@@ -69,8 +69,8 @@ def _prediction_run_id(payload: Mapping[str, Any]) -> str:
 
 
 def _safe_slug(text: str) -> str:
-    clean = re.sub(r"[^A-Za-z0-9_.:-]+", "_", text.strip())
-    clean = clean.strip("_:")
+    clean = re.sub(r"[^A-Za-z0-9_.-]+", "_", text.strip())
+    clean = clean.strip("_.-")
     return clean[-80:] if len(clean) > 80 else clean
 
 

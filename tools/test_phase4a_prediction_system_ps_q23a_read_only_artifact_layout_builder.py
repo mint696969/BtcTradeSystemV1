@@ -72,6 +72,9 @@ def test_candidate_layout_uses_manifest_and_run_sidecars_without_embedding_recor
     assert manifest["legacy_latest_path"] == "prediction/latest_prediction_system_result.json"
     assert manifest["record_count"] == 2
     assert "prediction/runs/2026-06-28/061525_" in manifest["run_dir"]
+    assert ":" not in manifest["run_dir"]
+    for candidate_path in layout["candidate_sidecars"].values():
+        assert ":" not in candidate_path
     assert layout["candidate_sidecars"]["forecast_records"].endswith("forecast_records.jsonl")
     assert layout["summary_candidate_not_written"]["records_embedded"] is False
     assert layout["candidate_sizes"]["forecast_records_jsonl_estimated_bytes"] > 0

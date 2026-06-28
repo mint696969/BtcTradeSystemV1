@@ -49,6 +49,7 @@ forecast_batch is present
 record_count can be derived
 run_id can be derived from prediction_run_id or generated_at
 candidate run directory is deterministic
+candidate run directory is Windows-safe and contains no colon in relative path components
 candidate latest_manifest is small
 records are planned as JSONL, not embedded in summary
 summary excludes full records
