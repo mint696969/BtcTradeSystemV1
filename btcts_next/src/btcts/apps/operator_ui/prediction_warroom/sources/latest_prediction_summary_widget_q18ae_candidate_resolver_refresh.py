@@ -1,25 +1,22 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/sources/latest_prediction_summary_widget_q18ae_candidate_resolver_refresh.py
-# desc: PS-Q18AE candidate resolver refresh for latest_prediction_summary_widget. Selects existing latest prediction artifact path and verifies availability with exists only; no read, schema validation, parse, render, refresh, writes, AutoTrade, or broker behavior.
+# desc: PS-Q18AE retired legacy candidate resolver for latest_prediction_summary_widget. After PS-Q23J the WarRoom display default is manifest-first; this chain is kept no-read/no-render/no-write for compatibility only.
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Mapping
 
-from btcts.apps.operator_ui.components.prediction_warroom_non_ui_scheduled_producer_contract import (
-    LATEST_PREDICTION_ARTIFACT_RELATIVE_PATH,
-)
 from btcts.apps.operator_ui.prediction_warroom.sources.latest_prediction_summary_widget_q18ad_schema_validation_gate import (
     build_latest_prediction_summary_widget_q18ad_schema_validation_gate_packet,
 )
 
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_VERSION = "prediction_warroom.latest_prediction_summary_widget.q18ae_candidate_resolver_refresh.v1"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_ACK = "PS_Q18AE_REFRESH_CANDIDATE_TO_PRESENT_LATEST_PREDICTION_ARTIFACT_ONLY"
-LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_KIND = "candidate_resolver_refresh_to_latest_prediction_system_result_artifact"
-LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_STATE = "present_candidate_observed_no_read_no_schema_no_render"
+LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_KIND = "retired_legacy_candidate_resolver_after_manifest_first_default"
+LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_STATE = "legacy_q18_candidate_resolver_retired_after_manifest_first_default"
 HOT_ROOT_HINT = "D:/btc_ts_hot"
-REFRESHED_CANDIDATE_PATH = "D:/btc_ts_hot/prediction/latest_prediction_system_result.json"
-REFRESHED_CANDIDATE_RELATIVE_PATH = "prediction/latest_prediction_system_result.json"
+REFRESHED_CANDIDATE_PATH = "D:/btc_ts_hot/prediction/latest_manifest.json"
+REFRESHED_CANDIDATE_RELATIVE_PATH = "prediction/latest_manifest.json"
 PREVIOUS_MISSING_PATH = "D:/btc_ts_hot/prediction_sources/BTC-USD/2026-06-22T00:00:00Z/latest_prediction.json"
 
 TRUE_BOUNDARIES = (
@@ -105,14 +102,10 @@ def build_latest_prediction_summary_widget_q18ae_candidate_resolver_refresh_pack
         failures.append("execute_refreshed_candidate_exists_check_false")
     if explicit_ack != LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_ACK:
         failures.append("explicit_ack_missing_or_mismatch")
-    if LATEST_PREDICTION_ARTIFACT_RELATIVE_PATH != REFRESHED_CANDIDATE_RELATIVE_PATH:
-        failures.append("latest_prediction_artifact_relative_path_contract_mismatch")
+    failures.append("legacy_q18_candidate_resolver_retired_after_manifest_first_default")
 
-    if execution_allowed and not any(item.startswith("q18ad_") for item in failures):
-        exists_result = bool(Path(REFRESHED_CANDIDATE_PATH).exists())
-        exists_checked = True
-        if exists_result is not True:
-            failures.append("refreshed_candidate_path_not_present")
+    # Retired after PS-Q23J: keep the compatibility packet no-read/no-exists-check.
+    execution_allowed = False
 
     result_available = exists_checked and exists_result is not None
     ok = bool(execution_allowed and exists_checked and exists_result is True and result_available and not [item for item in failures if item != "execute_refreshed_candidate_exists_check_false" and item != "explicit_ack_missing_or_mismatch"])
@@ -121,7 +114,7 @@ def build_latest_prediction_summary_widget_q18ae_candidate_resolver_refresh_pack
         "candidate_resolver_refresh_version": LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_VERSION,
         "candidate_resolver_refresh_ack": LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_ACK,
         "candidate_resolver_refresh_kind": LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_KIND,
-        "candidate_resolver_refresh_state": LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_STATE if ok else "candidate_resolver_refresh_blocked_or_not_present",
+        "candidate_resolver_refresh_state": LATEST_PREDICTION_SUMMARY_WIDGET_Q18AE_CANDIDATE_RESOLVER_REFRESH_STATE,
         "source_q18ad_schema_gate_ready": source.get("ok") is True,
         "previous_candidate_path_shape_preview": _clean(source.get("path_shape_preview")),
         "previous_candidate_exists_result_state": _clean(source.get("source_artifact_exists_result_state")),
@@ -137,10 +130,12 @@ def build_latest_prediction_summary_widget_q18ae_candidate_resolver_refresh_pack
         "refreshed_candidate_exists_result_available": result_available,
         "refreshed_candidate_exists_result": bool(exists_result) if exists_result is not None else None,
         "refreshed_candidate_exists_result_state": "present" if exists_result is True else "missing" if exists_result is False and result_available else "not_checked",
-        "source_candidate_count": 1,
+        "legacy_q18_candidate_resolver_retired": True,
+        "manifest_first_display_default_replacement": True,
+        "source_candidate_count": 0,
         "validation_failures": failures,
-        "recommended_next_slice": "schema validation against refreshed present latest_prediction_system_result artifact; keep actual source read, real widget rendering, refresh, AutoTrade, broker, and parameter apply deferred unless explicitly approved.",
-        "human_interpretation": "PS-Q18AE refreshes the latest prediction summary candidate from the missing prediction_sources path to the existing non-UI scheduled producer latest artifact path. It checks only existence of the refreshed candidate and does not read, parse, validate schema, render, refresh, write, trigger AutoTrade, or call broker APIs.",
+        "recommended_next_slice": "Use the PS-Q23J WarRoom display default manifest-first read path; do not reactivate this Q18 legacy widget chain." ,
+        "human_interpretation": "PS-Q18AE is retired after the PS-Q23J manifest-first WarRoom display default. It preserves a compatibility packet only and does not read, parse, validate schema, render, refresh, write, trigger AutoTrade, or call broker APIs.",
     }
     packet.update({key: True for key in TRUE_BOUNDARIES})
     packet.update({key: False for key in FALSE_BOUNDARIES})

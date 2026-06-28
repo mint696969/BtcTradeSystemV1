@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/mapping/latest_prediction_summary_widget_q18ag_payload_to_props_mapping_preflight.py
-# desc: PS-Q18AG bounded payload-to-widget props mapping preflight for latest_prediction_summary_widget. Builds props candidate only; no real widget render, refresh, writes, AutoTrade, or broker behavior.
+# desc: PS-Q18AG retired payload-to-props mapping preflight for legacy latest_prediction_summary_widget. Kept no-render/no-refresh/no-write after PS-Q23J manifest-first display default.
 
 from __future__ import annotations
 
@@ -200,7 +200,7 @@ def build_latest_prediction_summary_widget_q18ag_payload_to_props_mapping_prefli
                 "mount_zone_id": MOUNT_ZONE_ID,
                 "mount_slot_id": MOUNT_SLOT_ID,
                 "source_generated_at": generated_at,
-                "source_artifact_ref": "hot://prediction/latest_prediction_system_result.json",
+                "source_artifact_ref": "hot://prediction/latest_manifest.json",
                 "release_gate_state": "payload_to_widget_props_mapping_preflight_only_render_disabled",
                 "fallback_reason_codes": ["ps_q18ag_props_candidate_ready_render_refresh_disabled"],
                 "operator_summary_ja": f"latest_prediction_summary_widget props mapping preflight: generated_at={generated_at} / records={record_count} / first={first_family}:{first_horizon_sec}s:{first_primary_label} / score={first_score}。実 widget render / refresh / write はまだ行いません。",
@@ -235,7 +235,7 @@ def build_latest_prediction_summary_widget_q18ag_payload_to_props_mapping_prefli
         "source_q18af_schema_probe_ready": schema.get("ok") is True,
         "source_artifact_schema_valid": schema.get("source_artifact_schema_valid") is True,
         "path_shape_preview": path_preview,
-        "selected_candidate_source_artifact_ref": "hot://prediction/latest_prediction_system_result.json",
+        "selected_candidate_source_artifact_ref": "hot://prediction/latest_manifest.json",
         "selected_candidate_market_uid": market_uid or "unknown_until_widget_mapping_review",
         "max_mapping_bytes": max_bytes,
         "observed_file_size_bytes": observed_file_size_bytes,

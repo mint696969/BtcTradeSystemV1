@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/mapping/latest_prediction_summary_widget_q18ah_render_disabled_packet_builder_validation.py
-# desc: PS-Q18AH render-disabled packet builder validation for latest_prediction_summary_widget mapped props. Invokes only the read-only skeleton packet builder; no Streamlit render, WarRoom mount, refresh, writes, AutoTrade, or broker behavior.
+# desc: PS-Q18AH retired render-disabled packet builder validation for legacy latest_prediction_summary_widget mapped props. Kept no-render/no-refresh/no-write after PS-Q23J manifest-first display default.
 
 from __future__ import annotations
 
@@ -129,7 +129,7 @@ def build_latest_prediction_summary_widget_q18ah_render_disabled_packet_builder_
             "component_module_path": COMPONENT_MODULE_PATH,
             "component_function_name": COMPONENT_FUNCTION_NAME,
             "source_generated_at": _clean(mapping.get("mapped_generated_at")),
-            "source_artifact_ref": "hot://prediction/latest_prediction_system_result.json",
+            "source_artifact_ref": "hot://prediction/latest_manifest.json",
         }
         for key, value in expected.items():
             if component_packet.get(key) != value:

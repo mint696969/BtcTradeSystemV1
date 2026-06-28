@@ -40,19 +40,19 @@ def test_spec_declares_no_write_shrink_readiness_contract() -> None:
         assert marker in text, marker
 
 
-def test_reference_inventory_classifies_remaining_legacy_refs() -> None:
+def test_reference_inventory_allows_retired_legacy_widget_refs() -> None:
     inv = legacy_reference_inventory()
     assert inv["legacy_reference_count"] > 0
-    assert inv["blocking_legacy_reference_count"] > 0
-    assert "legacy_widget_or_mapping_reader" in inv["blocking_legacy_reference_classes"] or "legacy_l4_latest_adapter_reader" in inv["blocking_legacy_reference_classes"]
+    assert inv["blocking_legacy_reference_count"] == 0
+    assert "legacy_widget_or_mapping_reader" not in inv["blocking_legacy_reference_classes"]
 
 
-def test_live_no_write_diagnostic_blocks_shrink_while_refs_remain() -> None:
+def test_live_no_write_diagnostic_is_ready_or_only_dirty_blocked_after_retirement() -> None:
     result = run_legacy_latest_shrink_readiness_no_write()
     assert result["diagnostic_version"] == DIAGNOSTIC_VERSION
     assert result["ok"] is True
-    assert result["legacy_latest_shrink_ready"] is False
-    assert "blocking_legacy_latest_references_remain" in result["blockers"]
+    assert result["legacy_reference_inventory"]["blocking_legacy_reference_count"] == 0
+    assert "blocking_legacy_latest_references_remain" not in result["blockers"]
     assert result["q23j_display_default"]["source_artifact_mode"] == "distributed"
     assert result["q23j_display_default"]["source_artifact_relative_path"] == "prediction/latest_manifest.json"
     assert result["q23j_display_default"]["distributed_stale_vs_legacy"] is False
@@ -87,7 +87,7 @@ def test_tool_has_no_writer_scheduler_or_broker_code() -> None:
 
 if __name__ == "__main__":
     test_spec_declares_no_write_shrink_readiness_contract()
-    test_reference_inventory_classifies_remaining_legacy_refs()
-    test_live_no_write_diagnostic_blocks_shrink_while_refs_remain()
+    test_reference_inventory_allows_retired_legacy_widget_refs()
+    test_live_no_write_diagnostic_is_ready_or_only_dirty_blocked_after_retirement()
     test_tool_has_no_writer_scheduler_or_broker_code()
     print(json.dumps({"ok": True}))

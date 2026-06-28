@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/sources/latest_prediction_summary_widget_q18af_schema_probe.py
-# desc: PS-Q18AF bounded JSON schema probe for refreshed latest_prediction_summary_widget artifact. Reads only one explicitly refreshed candidate for schema shape; no payload-to-widget mapping, real render, refresh, writes, AutoTrade, or broker behavior.
+# desc: PS-Q18AF retired schema probe for the legacy latest_prediction_summary_widget chain. Kept no-render/no-refresh/no-write after PS-Q23J manifest-first display default.
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from btcts.apps.operator_ui.prediction_warroom.sources.latest_prediction_summary
 
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AF_SCHEMA_PROBE_VERSION = "prediction_warroom.latest_prediction_summary_widget.q18af_schema_probe.v1"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AF_SCHEMA_PROBE_ACK = "PS_Q18AF_RUN_BOUNDED_JSON_SCHEMA_PROBE_ONLY"
-LATEST_PREDICTION_SUMMARY_WIDGET_Q18AF_SCHEMA_PROBE_KIND = "bounded_json_schema_probe_for_refreshed_present_latest_prediction_artifact"
+LATEST_PREDICTION_SUMMARY_WIDGET_Q18AF_SCHEMA_PROBE_KIND = "retired_schema_probe_after_manifest_first_display_default"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AF_SCHEMA_PROBE_STATE = "schema_probe_succeeded_no_mapping_no_render_no_refresh"
 DEFAULT_MAX_SCHEMA_PROBE_BYTES = 5_000_000
 
@@ -248,7 +248,7 @@ def build_latest_prediction_summary_widget_q18af_schema_probe_packet(
         "source_q18ae_candidate_resolver_refresh_ready": source.get("ok") is True,
         "refreshed_candidate_present_observed": source.get("refreshed_candidate_present_observed") is True,
         "path_shape_preview": path_preview,
-        "selected_candidate_source_artifact_ref": "hot://prediction/latest_prediction_system_result.json",
+        "selected_candidate_source_artifact_ref": "hot://prediction/latest_manifest.json",
         "selected_candidate_market_uid": "unknown_until_payload_mapping",
         "max_schema_probe_bytes": max_bytes,
         "observed_file_size_bytes": observed_file_size_bytes,
