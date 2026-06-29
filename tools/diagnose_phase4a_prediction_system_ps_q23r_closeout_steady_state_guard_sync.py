@@ -52,9 +52,12 @@ EXPECTED_Q24F_SLICE = "PS-Q24F_AUTOTRADE_READ_ONLY_STATUS_PAGE_RENDERER_COMPONEN
 EXPECTED_Q24G_GATE = "PS_Q24G_AUTOTRADE_READ_ONLY_STATUS_PAGE_ACTUAL_RENDER_WIRING_PLAN_NO_PAGE_CHANGE_DONE"
 EXPECTED_Q24G_FOCUS = "ps_q24g_autotrade_read_only_status_page_actual_render_wiring_plan_no_page_change_completed"
 EXPECTED_Q24G_SLICE = "PS-Q24G_AUTOTRADE_READ_ONLY_STATUS_PAGE_ACTUAL_RENDER_WIRING_PLAN_NO_PAGE_CHANGE"
-ALLOWED_ROOM_GATES = {EXPECTED_PRE_CLOSEOUT_GATE, EXPECTED_POST_CLOSEOUT_GATE, EXPECTED_Q23T_GATE, EXPECTED_Q24A_GATE, EXPECTED_Q24B_GATE, EXPECTED_Q24C_GATE, EXPECTED_Q24D_GATE, EXPECTED_Q24E_GATE, EXPECTED_Q24F_GATE, EXPECTED_Q24G_GATE}
-ALLOWED_ROOM_FOCUSES = {EXPECTED_PRE_CLOSEOUT_FOCUS, EXPECTED_POST_CLOSEOUT_FOCUS, EXPECTED_Q23T_FOCUS, EXPECTED_Q24A_FOCUS, EXPECTED_Q24B_FOCUS, EXPECTED_Q24C_FOCUS, EXPECTED_Q24D_FOCUS, EXPECTED_Q24E_FOCUS, EXPECTED_Q24F_FOCUS, EXPECTED_Q24G_FOCUS}
-ALLOWED_ROOM_SLICES = {EXPECTED_PRE_CLOSEOUT_SLICE, EXPECTED_POST_CLOSEOUT_SLICE, EXPECTED_Q23T_SLICE, EXPECTED_Q24A_SLICE, EXPECTED_Q24B_SLICE, EXPECTED_Q24C_SLICE, EXPECTED_Q24D_SLICE, EXPECTED_Q24E_SLICE, EXPECTED_Q24F_SLICE, EXPECTED_Q24G_SLICE}
+EXPECTED_Q24H_GATE = "PS_Q24H_AUTOTRADE_READ_ONLY_STATUS_PAGE_PAGE_WIRING_READINESS_NO_CHANGE_DONE"
+EXPECTED_Q24H_FOCUS = "ps_q24h_autotrade_read_only_status_page_page_wiring_readiness_no_change_completed"
+EXPECTED_Q24H_SLICE = "PS-Q24H_AUTOTRADE_READ_ONLY_STATUS_PAGE_PAGE_WIRING_READINESS_NO_CHANGE"
+ALLOWED_ROOM_GATES = {EXPECTED_PRE_CLOSEOUT_GATE, EXPECTED_POST_CLOSEOUT_GATE, EXPECTED_Q23T_GATE, EXPECTED_Q24A_GATE, EXPECTED_Q24B_GATE, EXPECTED_Q24C_GATE, EXPECTED_Q24D_GATE, EXPECTED_Q24E_GATE, EXPECTED_Q24F_GATE, EXPECTED_Q24G_GATE, EXPECTED_Q24H_GATE}
+ALLOWED_ROOM_FOCUSES = {EXPECTED_PRE_CLOSEOUT_FOCUS, EXPECTED_POST_CLOSEOUT_FOCUS, EXPECTED_Q23T_FOCUS, EXPECTED_Q24A_FOCUS, EXPECTED_Q24B_FOCUS, EXPECTED_Q24C_FOCUS, EXPECTED_Q24D_FOCUS, EXPECTED_Q24E_FOCUS, EXPECTED_Q24F_FOCUS, EXPECTED_Q24G_FOCUS, EXPECTED_Q24H_FOCUS}
+ALLOWED_ROOM_SLICES = {EXPECTED_PRE_CLOSEOUT_SLICE, EXPECTED_POST_CLOSEOUT_SLICE, EXPECTED_Q23T_SLICE, EXPECTED_Q24A_SLICE, EXPECTED_Q24B_SLICE, EXPECTED_Q24C_SLICE, EXPECTED_Q24D_SLICE, EXPECTED_Q24E_SLICE, EXPECTED_Q24F_SLICE, EXPECTED_Q24G_SLICE, EXPECTED_Q24H_SLICE}
 DIRTY_ONLY_BLOCKERS = {
     "repo_clean_required_for_q23r_closeout",
     "q23k_no_write_readiness_blockers_unexpected",
@@ -124,7 +127,8 @@ def run_ps_q23r_closeout_steady_state_guard_sync() -> dict[str, Any]:
     status_has_q24e_marker = "PS-Q24E AutoTrade read-only status page render plan / no commands completed" in status_text
     status_has_q24f_marker = "PS-Q24F AutoTrade read-only status page renderer component dry-run / no page wiring completed" in status_text
     status_has_q24g_marker = "PS-Q24G AutoTrade read-only status page actual render wiring plan / no page change completed" in status_text
-    if not (status_has_pre_closeout_marker or status_has_post_closeout_marker or status_has_q23t_marker or status_has_q24a_marker or status_has_q24b_marker or status_has_q24c_marker or status_has_q24d_marker or status_has_q24e_marker or status_has_q24f_marker or status_has_q24g_marker):
+    status_has_q24h_marker = "PS-Q24H AutoTrade read-only status page page-wiring readiness / no change completed" in status_text
+    if not (status_has_pre_closeout_marker or status_has_post_closeout_marker or status_has_q23t_marker or status_has_q24a_marker or status_has_q24b_marker or status_has_q24c_marker or status_has_q24d_marker or status_has_q24e_marker or status_has_q24f_marker or status_has_q24g_marker or status_has_q24h_marker):
         room_blockers.append("room_status_q23r_or_later_safe_marker_required")
     if "PS-Q22T danger boundary" in status_text:
         room_blockers.append("room_status_must_not_be_old_q22t_entry")
@@ -147,7 +151,7 @@ def run_ps_q23r_closeout_steady_state_guard_sync() -> dict[str, Any]:
         room_blockers.append("room_state_original_record_count_110_required")
     if prediction_status.get("would_send_to_broker") is not False:
         room_blockers.append("room_state_would_send_to_broker_false_required")
-    if EXPECTED_PRE_CLOSEOUT_GATE not in handoff_text and EXPECTED_POST_CLOSEOUT_GATE not in status_text and EXPECTED_Q23T_GATE not in status_text and EXPECTED_Q24A_GATE not in status_text and EXPECTED_Q24B_GATE not in status_text and EXPECTED_Q24C_GATE not in status_text and EXPECTED_Q24D_GATE not in status_text and EXPECTED_Q24E_GATE not in status_text and EXPECTED_Q24F_GATE not in status_text and EXPECTED_Q24G_GATE not in status_text:
+    if EXPECTED_PRE_CLOSEOUT_GATE not in handoff_text and EXPECTED_POST_CLOSEOUT_GATE not in status_text and EXPECTED_Q23T_GATE not in status_text and EXPECTED_Q24A_GATE not in status_text and EXPECTED_Q24B_GATE not in status_text and EXPECTED_Q24C_GATE not in status_text and EXPECTED_Q24D_GATE not in status_text and EXPECTED_Q24E_GATE not in status_text and EXPECTED_Q24F_GATE not in status_text and EXPECTED_Q24G_GATE not in status_text and EXPECTED_Q24H_GATE not in status_text:
         room_blockers.append("room_handoff_or_status_expected_gate_required")
 
     q23r_legacy = _mapping(q23r.get("legacy_latest"))
@@ -189,7 +193,7 @@ def run_ps_q23r_closeout_steady_state_guard_sync() -> dict[str, Any]:
         "room_blockers": room_blockers,
         "artifact_blockers": artifact_blockers,
         "room": {
-            "status_marker_present": status_has_pre_closeout_marker or status_has_post_closeout_marker or status_has_q23t_marker or status_has_q24a_marker or status_has_q24b_marker or status_has_q24c_marker or status_has_q24d_marker or status_has_q24e_marker or status_has_q24f_marker or status_has_q24g_marker,
+            "status_marker_present": status_has_pre_closeout_marker or status_has_post_closeout_marker or status_has_q23t_marker or status_has_q24a_marker or status_has_q24b_marker or status_has_q24c_marker or status_has_q24d_marker or status_has_q24e_marker or status_has_q24f_marker or status_has_q24g_marker or status_has_q24h_marker,
             "status_pre_closeout_marker_present": status_has_pre_closeout_marker,
             "status_post_closeout_marker_present": status_has_post_closeout_marker,
             "status_q23t_marker_present": status_has_q23t_marker,
@@ -200,6 +204,7 @@ def run_ps_q23r_closeout_steady_state_guard_sync() -> dict[str, Any]:
             "status_q24e_marker_present": status_has_q24e_marker,
             "status_q24f_marker_present": status_has_q24f_marker,
             "status_q24g_marker_present": status_has_q24g_marker,
+            "status_q24h_marker_present": status_has_q24h_marker,
             "focus_current_focus": focus.get("current_focus"),
             "focus_latest_slice": focus.get("latest_slice"),
             "state_current_gate": state.get("current_gate"),
