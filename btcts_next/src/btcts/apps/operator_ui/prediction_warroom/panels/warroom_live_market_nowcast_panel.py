@@ -17,6 +17,7 @@ WARROOM_LIVE_MARKET_NOWCAST_PANEL_VERSION = "prediction_warroom.live_market_nowc
 WARROOM_LIVE_NOWCAST_OPERATOR_SUMMARY_VERSION = "prediction_warroom.live_nowcast_operator_summary.ps_q25c.v1"
 WARROOM_LIVE_NOWCAST_SOURCE_LAYERING_VERSION = "prediction_warroom.live_nowcast_source_importance_signal_layering.ps_q25d.v1"
 WARROOM_LIVE_NOWCAST_COMPOSITE_SCORE_VERSION = "prediction_warroom.live_nowcast_composite_score_history_mini_trend.ps_q25e.v1"
+WARROOM_LIVE_NOWCAST_HORIZON_READINESS_VERSION = "prediction_warroom.live_nowcast_horizon_readiness_prediction_input_handoff.ps_q25f.v1"
 WARROOM_LIVE_NOWCAST_HISTORY_SESSION_KEY = "warroom_live_nowcast_composite_score_history_ps_q25e"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_MODE = "poll_fast"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_SEC = 3
@@ -753,6 +754,143 @@ def _render_warroom_live_nowcast_composite_score(packet: Mapping[str, Any], oper
     return {"composite": composite, "mini_trend": mini_trend}
 
 
+
+_HORIZON_READINESS_CONFIG = [
+    {"horizon_label": "5m", "horizon_sec": 300, "score_floor": 85, "freshness_required": {"live", "slightly_delayed"}, "role": "tactical short-term prediction input"},
+    {"horizon_label": "15m", "horizon_sec": 900, "score_floor": 75, "freshness_required": {"live", "slightly_delayed"}, "role": "tactical context prediction input"},
+    {"horizon_label": "30m", "horizon_sec": 1800, "score_floor": 65, "freshness_required": {"live", "slightly_delayed", "stale_caution"}, "role": "short scenario prediction input"},
+    {"horizon_label": "1h", "horizon_sec": 3600, "score_floor": 60, "freshness_required": {"live", "slightly_delayed", "stale_caution"}, "role": "scenario/regime prediction input"},
+]
+
+
+def _horizon_readiness_grade(*, horizon_label: str, score: int, score_floor: int, gate: str, severity: str, freshness: str, allowed_freshness: set[str], trend: str) -> tuple[str, str]:
+    if gate == "prediction_input_foundation_weak" or severity == "critical":
+        if horizon_label in {"5m", "15m"}:
+            return "not_ready", "現在状態の土台が弱いため、短期予測の入力前提として使わないでください。"
+        return "read_as_context_only", "現在状態の土台が弱いため、長めの予測は文脈参考だけにしてください。"
+    if freshness not in allowed_freshness:
+        return "not_ready", "freshness が horizon の入力条件を満たしていません。"
+    if score < score_floor:
+        return "read_with_caution", "score が horizon の推奨閾値未満です。予測を弱めて読んでください。"
+    if trend == "deteriorating" and horizon_label in {"5m", "15m"}:
+        return "read_with_caution", "現在状態スコアが悪化方向です。短期予測は慎重に読んでください。"
+    if gate == "prediction_input_foundation_caution" or severity == "warning":
+        return "read_with_caution", "注意付きの現在状態です。予測の重みを下げてください。"
+    return "ready", "現在状態はこの horizon の予測入力前提として利用可能です。"
+
+
+def build_warroom_live_nowcast_horizon_readiness_packet(
+    packet: Mapping[str, Any],
+    operator_summary: Mapping[str, Any],
+    source_layering: Mapping[str, Any],
+    composite: Mapping[str, Any],
+    mini_trend: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    trend = mini_trend if isinstance(mini_trend, Mapping) else {}
+    score = int(_float(composite.get("current_state_score")) or 0)
+    gate = _clean(source_layering.get("prediction_input_gate") or composite.get("prediction_input_gate")) or "unknown"
+    severity = _clean(operator_summary.get("operator_attention_severity")) or "unknown"
+    freshness = _clean(packet.get("nowcast_freshness_state")) or "unknown"
+    trend_state = _clean(trend.get("current_state_score_trend")) or "insufficient_history"
+    rows: list[dict[str, Any]] = []
+    for item in _HORIZON_READINESS_CONFIG:
+        grade, note = _horizon_readiness_grade(
+            horizon_label=str(item["horizon_label"]),
+            score=score,
+            score_floor=int(item["score_floor"]),
+            gate=gate,
+            severity=severity,
+            freshness=freshness,
+            allowed_freshness=set(item["freshness_required"]),
+            trend=trend_state,
+        )
+        rows.append({
+            "horizon": item["horizon_label"],
+            "horizon_sec": item["horizon_sec"],
+            "readiness": grade,
+            "score": score,
+            "score_floor": item["score_floor"],
+            "prediction_input_gate": gate,
+            "freshness": freshness,
+            "mini_trend": trend_state,
+            "role": item["role"],
+            "operator_note": note,
+        })
+    readiness_order = {"ready": 0, "read_with_caution": 1, "read_as_context_only": 2, "not_ready": 3}
+    worst = max((str(row.get("readiness")) for row in rows), key=lambda value: readiness_order.get(value, 4), default="not_ready")
+    if worst == "ready":
+        overall = "all_horizons_ready"
+        summary = "5m/15m/30m/1h の予測を読む現在状態の土台は整っています。"
+    elif worst == "read_with_caution":
+        overall = "horizons_read_with_caution"
+        summary = "一部 horizon は注意付きです。予測の重みを下げて読んでください。"
+    elif worst == "read_as_context_only":
+        overall = "longer_horizons_context_only"
+        summary = "短期 horizon は弱く、長め horizon は文脈参考に留めてください。"
+    else:
+        overall = "horizons_not_ready"
+        summary = "現在状態の土台が弱いため、予測評価より先にデータ状態を確認してください。"
+    return {
+        "ok": True,
+        "horizon_readiness_version": WARROOM_LIVE_NOWCAST_HORIZON_READINESS_VERSION,
+        "nowcast_role": "current_market_state_not_prediction",
+        "overall_horizon_readiness": overall,
+        "operator_summary_text": summary,
+        "horizon_readiness_rows": rows,
+        "horizon_readiness_row_count": len(rows),
+        "current_state_score": score,
+        "prediction_input_gate": gate,
+        "operator_attention_severity": severity,
+        "freshness": freshness,
+        "mini_trend": trend_state,
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "current_state_not_prediction": True,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def warroom_live_nowcast_horizon_readiness_summary_rows(readiness: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {"item": "horizon_readiness_version", "value": readiness.get("horizon_readiness_version"), "note": "display-only prediction-input handoff"},
+        {"item": "overall_horizon_readiness", "value": readiness.get("overall_horizon_readiness"), "note": readiness.get("operator_summary_text")},
+        {"item": "current_state_score", "value": readiness.get("current_state_score"), "note": f"trend={readiness.get('mini_trend')}"},
+        {"item": "prediction_input_gate", "value": readiness.get("prediction_input_gate"), "note": "current-state foundation before prediction"},
+    ]
+
+
+def _render_warroom_live_nowcast_horizon_readiness(
+    packet: Mapping[str, Any],
+    operator_summary: Mapping[str, Any],
+    source_layering: Mapping[str, Any],
+    composite: Mapping[str, Any],
+    mini_trend: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    readiness = build_warroom_live_nowcast_horizon_readiness_packet(packet, operator_summary, source_layering, composite, mini_trend)
+    st.caption("PS-Q25F horizon readiness / prediction-input handoff: display-only; does not change producer cadence or scheduler.")
+    if readiness.get("overall_horizon_readiness") == "all_horizons_ready":
+        st.success(readiness.get("operator_summary_text"))
+    elif readiness.get("overall_horizon_readiness") == "horizons_not_ready":
+        st.error(readiness.get("operator_summary_text"))
+    else:
+        st.warning(readiness.get("operator_summary_text"))
+    st.dataframe(warroom_live_nowcast_horizon_readiness_summary_rows(readiness), width="stretch", hide_index=True)
+    st.dataframe(readiness.get("horizon_readiness_rows") or [], width="stretch", hide_index=True)
+    return readiness
+
+
 def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -> Mapping[str, Any]:
     packet_holder: dict[str, Any] = {}
 
@@ -765,6 +903,7 @@ def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -
         score_packet = _render_warroom_live_nowcast_composite_score(packet, operator_summary, source_layering)
         composite_score = score_packet.get("composite", {}) if isinstance(score_packet, Mapping) else {}
         mini_trend = score_packet.get("mini_trend", {}) if isinstance(score_packet, Mapping) else {}
+        horizon_readiness = _render_warroom_live_nowcast_horizon_readiness(packet, operator_summary, source_layering, composite_score, mini_trend)
         if packet.get("current_state_summary") == "current_market_state_live_observable":
             st.success(f"🟢 Live current state | {packet.get('market_uid')} | spread={packet.get('spread')} ({packet.get('spread_bps')} bps) | market_age={packet.get('market_event_age_sec')}s")
         elif packet.get("current_state_summary") == "current_market_state_caution":
@@ -794,6 +933,7 @@ def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -
             f"prediction_input_gate={source_layering.get('prediction_input_gate')} "
             f"current_state_score={composite_score.get('current_state_score')} "
             f"current_state_score_trend={mini_trend.get('current_state_score_trend')} "
+            f"overall_horizon_readiness={horizon_readiness.get('overall_horizon_readiness')} "
             "read_only=true display_only=true autotrade=false broker=false"
         )
 
