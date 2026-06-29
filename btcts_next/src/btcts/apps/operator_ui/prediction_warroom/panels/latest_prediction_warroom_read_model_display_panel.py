@@ -30,6 +30,7 @@ WARROOM_PREDICTION_REFRESH_LIVE_BADGE_VERSION = "prediction_warroom.warroom_pred
 WARROOM_PREDICTION_DATA_FRESHNESS_BADGE_VERSION = "prediction_warroom.warroom_prediction_data_freshness_badge.ps_q21e.v1"
 WARROOM_PREDICTION_UPDATE_VISIBILITY_VERSION = "prediction_warroom.warroom_prediction_refresh_visibility.ps_q25a.v1"
 WARROOM_PREDICTION_HORIZON_EXPIRY_VERSION = "prediction_warroom.prediction_artifact_horizon_freshness_expiry.ps_q25g.v1"
+WARROOM_PREDICTION_OPERATOR_ACTION_GUIDANCE_VERSION = "prediction_warroom.prediction_data_age_severity_operator_action_guidance.ps_q25h.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -388,6 +389,122 @@ def _render_prediction_horizon_expiry(packet: Mapping[str, Any], *, lang: str) -
         st.dataframe(rows, width="stretch", hide_index=True)
 
 
+
+def _prediction_action_horizon_lists(expiry_rows: list[Mapping[str, Any]]) -> tuple[list[str], list[str], list[str]]:
+    ignore: list[str] = []
+    context_only: list[str] = []
+    usable: list[str] = []
+    for row in expiry_rows:
+        horizon = _clean(row.get("horizon")) or f"{row.get('horizon_sec')}s"
+        state = _clean(row.get("horizon_expiry_state"))
+        sec = _int_or_none(row.get("horizon_sec")) or 0
+        if state in {"stale", "expired"} and sec in {15, 30, 60}:
+            ignore.append(horizon)
+        elif state in {"stale", "expired"}:
+            context_only.append(horizon)
+        elif state == "usable":
+            usable.append(horizon)
+        else:
+            context_only.append(horizon)
+    return ignore, context_only, usable
+
+
+def latest_prediction_warroom_operator_action_guidance_packet(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
+    data = _as_mapping(packet)
+    expiry = _as_mapping(data.get("horizon_expiry_packet"))
+    rows = [row for row in (expiry.get("horizon_expiry_rows") or []) if isinstance(row, Mapping)]
+    ignore_horizons, context_only_horizons, usable_horizons = _prediction_action_horizon_lists(rows)
+    freshness_state = (_clean(data.get("freshness_state")) or "unknown").lower()
+    age_sec = _int_or_none(data.get("age_sec"))
+    short_expired = expiry.get("short_horizon_expired_or_stale") is True
+    overall_expiry = _clean(expiry.get("overall_horizon_expiry_state")) or "horizon_expiry_unknown"
+    if short_expired:
+        severity = "critical"
+        tactical_readiness = "tactical_predictions_not_ready"
+    elif overall_expiry in {"some_horizons_stale", "some_horizons_expired", "horizon_expiry_unknown"} or freshness_state in {"delayed", "stale", "unknown"}:
+        severity = "warning"
+        tactical_readiness = "read_predictions_with_caution"
+    else:
+        severity = "ok"
+        tactical_readiness = "prediction_rows_readable_as_current_artifact"
+    wait_for_new = bool(short_expired or severity == "warning")
+    if lang == "ja":
+        if severity == "critical":
+            summary = "短期予測は live tactical guidance として読まないでください。新しい予測 artifact を待ち、現在状態 nowcast を優先してください。"
+        elif severity == "warning":
+            summary = "予測データは注意付きです。期限切れ horizon を弱め、使う場合は context-only にしてください。"
+        else:
+            summary = "予測 artifact は表示 horizon の範囲で読めます。ただし売買指示ではありません。"
+        wait_note = "generated_at が更新されるまで短期予測を tactical に扱わないでください。"
+        nowcast_note = "現在判断は Live Market Nowcast / current-state score を優先してください。"
+        heartbeat_note = "UI heartbeat は画面更新の確認であり、予測データ生成の更新ではありません。"
+    else:
+        if severity == "critical":
+            summary = "Do not read short-horizon predictions as live tactical guidance. Wait for a new artifact and prioritize current-state nowcast."
+        elif severity == "warning":
+            summary = "Prediction data needs caution; de-weight expired horizons and read as context-only where applicable."
+        else:
+            summary = "Prediction artifact is readable within displayed horizon TTL. Not a trade instruction."
+        wait_note = "Do not treat short predictions as tactical until generated_at changes."
+        nowcast_note = "Prioritize Live Market Nowcast / current-state score for current decisions."
+        heartbeat_note = "UI heartbeat confirms panel refresh, not prediction data generation."
+    action_rows = [
+        {"action": "ignore_live_tactical_horizons", "target": ",".join(ignore_horizons) or "none", "severity": severity if ignore_horizons else "ok", "operator_note": summary if ignore_horizons else ("期限切れ短期 horizon はありません。" if lang == "ja" else "No expired short horizon.")},
+        {"action": "context_only_horizons", "target": ",".join(context_only_horizons) or "none", "severity": "warning" if context_only_horizons else "ok", "operator_note": "文脈参考に留め、entry/exit 判断には使わないでください。" if lang == "ja" else "Use only as context; do not use for entry/exit."},
+        {"action": "wait_for_new_prediction_artifact", "target": "generated_at", "severity": severity if wait_for_new else "ok", "operator_note": wait_note if wait_for_new else ("generated_at は horizon TTL 上で利用可能です。" if lang == "ja" else "generated_at is usable for displayed horizon TTL.")},
+        {"action": "prioritize_current_state_nowcast", "target": "Live Market Nowcast", "severity": "info" if wait_for_new else "ok", "operator_note": nowcast_note},
+        {"action": "do_not_confuse_ui_heartbeat_with_prediction_update", "target": "panel heartbeat", "severity": "info", "operator_note": heartbeat_note},
+    ]
+    return {
+        "operator_action_guidance_version": WARROOM_PREDICTION_OPERATOR_ACTION_GUIDANCE_VERSION,
+        "operator_visible_action_guidance": True,
+        "operator_action_severity": severity,
+        "prediction_tactical_readiness": tactical_readiness,
+        "operator_action_summary_text": summary,
+        "ignore_live_tactical_horizons": ignore_horizons,
+        "context_only_horizons": context_only_horizons,
+        "usable_horizons": usable_horizons,
+        "wait_for_new_prediction_artifact": wait_for_new,
+        "action_rows": action_rows,
+        "action_row_count": len(action_rows),
+        "artifact_age_sec": age_sec,
+        "freshness_state": freshness_state,
+        "overall_horizon_expiry_state": overall_expiry,
+        "short_horizon_expired_or_stale": short_expired,
+        "read_only": True,
+        "non_executing": True,
+        "display_only": True,
+        "producer_cadence_changed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def _render_prediction_operator_action_guidance(packet: Mapping[str, Any], *, lang: str) -> None:
+    guidance = _as_mapping(packet.get("operator_action_guidance_packet"))
+    message = str(guidance.get("operator_action_summary_text") or "")
+    if guidance.get("operator_action_severity") == "critical":
+        st.error(message)
+    elif guidance.get("operator_action_severity") == "warning":
+        st.warning(message)
+    else:
+        st.success(message)
+    st.caption("PS-Q25H operator action guidance: display-only; no producer cadence, scheduler, AutoTrade, or broker changes.")
+    rows = list(guidance.get("action_rows") or [])
+    if rows:
+        st.dataframe(rows, width="stretch", hide_index=True)
+
+
 def latest_prediction_warroom_refresh_live_badge_packet(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
     """Return a compact live badge packet for the WarRoom prediction refresh status."""
     data = _as_mapping(packet)
@@ -572,6 +689,8 @@ def build_latest_prediction_warroom_display_panel_packet(
     market_rows = latest_prediction_warroom_market_rows(model, lang=lang)
     field_guide_rows = latest_prediction_warroom_field_guide_rows(lang=lang)
     horizon_expiry_packet = latest_prediction_warroom_horizon_expiry_packet(model, lang=lang)
+    action_guidance_source_packet = {"horizon_expiry_packet": horizon_expiry_packet, "freshness_state": model.get("freshness_state"), "age_sec": model.get("age_sec")}
+    operator_action_guidance_packet = latest_prediction_warroom_operator_action_guidance_packet(action_guidance_source_packet, lang=lang)
     failures: list[str] = []
     if not model:
         failures.append("read_model_missing")
@@ -637,6 +756,13 @@ def build_latest_prediction_warroom_display_panel_packet(
         "horizon_expiry_packet": horizon_expiry_packet,
         "overall_horizon_expiry_state": horizon_expiry_packet.get("overall_horizon_expiry_state"),
         "short_horizon_expired_or_stale": horizon_expiry_packet.get("short_horizon_expired_or_stale"),
+        "prediction_operator_action_guidance_version": WARROOM_PREDICTION_OPERATOR_ACTION_GUIDANCE_VERSION,
+        "operator_visible_action_guidance": True,
+        "operator_action_guidance_rendered": True,
+        "operator_action_guidance_packet": operator_action_guidance_packet,
+        "operator_action_severity": operator_action_guidance_packet.get("operator_action_severity"),
+        "prediction_tactical_readiness": operator_action_guidance_packet.get("prediction_tactical_readiness"),
+        "wait_for_new_prediction_artifact": operator_action_guidance_packet.get("wait_for_new_prediction_artifact"),
         "operator_visible_refresh_live_badge": True,
         "refresh_live_badge_rendered": True,
         "operator_visible_refresh_status_strip": True,
@@ -685,6 +811,7 @@ def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
     _render_refresh_status_strip(packet, lang=lang)
     _render_prediction_data_freshness_badge(packet, lang=lang)
     _render_prediction_horizon_expiry(packet, lang=lang)
+    _render_prediction_operator_action_guidance(packet, lang=lang)
     _render_prediction_update_visibility_strip(packet, lang=lang)
     with st.expander(_t(lang, "reading_title"), expanded=True):
         st.write(_t(lang, "reading_summary"))
@@ -724,6 +851,8 @@ def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
         f"prediction_row_count={packet.get('prediction_row_count')} "
         f"overall_horizon_expiry_state={packet.get('overall_horizon_expiry_state')} "
         f"short_horizon_expired_or_stale={packet.get('short_horizon_expired_or_stale')} "
+        f"operator_action_severity={packet.get('operator_action_severity')} "
+        f"prediction_tactical_readiness={packet.get('prediction_tactical_readiness')} "
         f"auto_refresh={packet.get('warroom_prediction_display_auto_refresh_enabled')} "
         f"refresh_heartbeat_utc={packet.get('refresh_heartbeat_utc')} "
         f"view_artifact_write_allowed=false autotrade=false broker=false"
