@@ -14,6 +14,7 @@ import streamlit as st
 from btcts.apps.operator_ui.components import live_shell
 
 WARROOM_LIVE_MARKET_NOWCAST_PANEL_VERSION = "prediction_warroom.live_market_nowcast_panel.ps_q25b.v1"
+WARROOM_LIVE_NOWCAST_OPERATOR_SUMMARY_VERSION = "prediction_warroom.live_nowcast_operator_summary.ps_q25c.v1"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_MODE = "poll_fast"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_SEC = 3
 Q25B_PAGE_ID = "warroom"
@@ -264,13 +265,167 @@ def warroom_live_market_nowcast_metric_rows(packet: Mapping[str, Any]) -> list[d
     ]
 
 
+
+_ATTENTION_SEVERITY_ORDER = {
+    "ok": 0,
+    "info": 1,
+    "warning": 2,
+    "critical": 3,
+}
+
+_ATTENTION_DESCRIPTIONS_JA = {
+    "collector_not_ok": ("critical", "Collector が healthy ではありません", "現在状態の信頼性が落ちています。取引判断の根拠にしないでください。"),
+    "market_lane_not_live": ("critical", "market lane が live ではありません", "板・市場状態の更新が止まっている可能性があります。"),
+    "board_not_live": ("critical", "板 WS が LIVE ではありません", "現在価格・spread の信頼性が落ちます。"),
+    "spread_wide_caution": ("warning", "spread が広いです", "約定コスト・滑り・薄板に注意してください。"),
+    "gap_detected": ("critical", "データ gap を検出しています", "連続性が崩れているため、現在状態の解釈を保留してください。"),
+    "resync_active": ("critical", "resync 中です", "再同期完了まで現在状態の判断を弱めてください。"),
+    "daemon_stop_requested": ("critical", "daemon stop_requested が true です", "Collector の継続稼働を確認してください。"),
+    "daemon_failures_present": ("warning", "daemon failure が存在します", "直近失敗の影響を確認してください。"),
+    "nowcast_stale_caution": ("warning", "nowcast が stale です", "現在状態として古くなっています。"),
+    "rate_limit_recent": ("warning", "直近 rate limit があります", "REST 制限の影響に注意してください。"),
+}
+
+_ATTENTION_DESCRIPTIONS_EN = {
+    "collector_not_ok": ("critical", "Collector is not healthy", "Do not use this current state as a decision basis."),
+    "market_lane_not_live": ("critical", "Market lane is not live", "Board/current-state updates may be stopped."),
+    "board_not_live": ("critical", "Board WS is not LIVE", "Price/spread reliability is reduced."),
+    "spread_wide_caution": ("warning", "Spread is wide", "Watch execution cost, slippage, and thin liquidity."),
+    "gap_detected": ("critical", "Data gap detected", "Current-state continuity is broken."),
+    "resync_active": ("critical", "Resync active", "Wait for resync completion before relying on nowcast."),
+    "daemon_stop_requested": ("critical", "Daemon stop requested", "Confirm collector continuity."),
+    "daemon_failures_present": ("warning", "Daemon failures present", "Check recent failure impact."),
+    "nowcast_stale_caution": ("warning", "Nowcast stale", "Current-state data is old."),
+    "rate_limit_recent": ("warning", "Recent rate limit", "REST throttling may affect source coverage."),
+}
+
+
+def classify_warroom_live_nowcast_attention(packet: Mapping[str, Any], *, lang: str = "ja") -> list[dict[str, str]]:
+    descriptions = _ATTENTION_DESCRIPTIONS_JA if lang == "ja" else _ATTENTION_DESCRIPTIONS_EN
+    rows: list[dict[str, str]] = []
+    for code in packet.get("attention_flags") or []:
+        severity, label, note = descriptions.get(str(code), ("warning", str(code), "Review this attention flag."))
+        rows.append({"code": str(code), "severity": severity, "label": label, "operator_note": note})
+    if rows:
+        return rows
+    if lang == "ja":
+        return [{"code": "none", "severity": "ok", "label": "現在状態の重大な注意フラグはありません", "operator_note": "ただしこれは予測ではなく、現在状態の観測です。"}]
+    return [{"code": "none", "severity": "ok", "label": "No major current-state attention flags", "operator_note": "This is current-state observation, not prediction."}]
+
+
+def _max_attention_severity(rows: list[Mapping[str, Any]]) -> str:
+    severity = "ok"
+    for row in rows:
+        candidate = _clean(row.get("severity")) or "ok"
+        if _ATTENTION_SEVERITY_ORDER.get(candidate, 0) > _ATTENTION_SEVERITY_ORDER.get(severity, 0):
+            severity = candidate
+    return severity
+
+
+def build_warroom_live_nowcast_operator_summary_packet(packet: Mapping[str, Any], *, lang: str = "ja") -> dict[str, Any]:
+    attention_rows = classify_warroom_live_nowcast_attention(packet, lang=lang)
+    max_severity = _max_attention_severity(attention_rows)
+    freshness = _clean(packet.get("nowcast_freshness_state")) or "unknown"
+    state = _clean(packet.get("current_state_summary")) or "unknown"
+    spread_state = _clean(packet.get("spread_state")) or "unknown"
+    if max_severity == "critical" or freshness == "stale_caution" or state in {"current_market_state_stream_attention", "current_market_state_review_required"}:
+        grade = "not_usable_for_current_decision"
+        tone = "critical"
+    elif max_severity == "warning" or spread_state == "wide_caution":
+        grade = "usable_with_caution"
+        tone = "warning"
+    elif state == "current_market_state_live_observable" and freshness in {"live", "slightly_delayed"}:
+        grade = "live_observable"
+        tone = "ok"
+    else:
+        grade = "review_required"
+        tone = "info"
+    if lang == "ja":
+        summary_map = {
+            "live_observable": "現在状態は観測可能です。板・collector・主要WSは利用可能で、重大な注意フラグはありません。",
+            "usable_with_caution": "現在状態は利用できますが注意が必要です。注意フラグを確認してください。",
+            "not_usable_for_current_decision": "現在状態は判断材料として弱いです。stale/gap/resync/stream 状態を確認してください。",
+            "review_required": "現在状態は追加確認が必要です。表示値と attention を確認してください。",
+        }
+        instruction_map = {
+            "live_observable": "予測を見る前の土台として利用できます。ただしこれは予測ではなく現在状態の観測であり、売買指示ではありません。",
+            "usable_with_caution": "予測や判断を弱め、spread・freshness・WS状態を優先確認してください。",
+            "not_usable_for_current_decision": "予測評価や売買判断より先にデータ状態を確認してください。",
+            "review_required": "人間が状態を確認してから予測を読んでください。",
+        }
+    else:
+        summary_map = {
+            "live_observable": "Current market state is observable; major live sources are usable with no major attention flags.",
+            "usable_with_caution": "Current market state is usable with caution; review attention flags.",
+            "not_usable_for_current_decision": "Current market state is weak for decision support; check stale/gap/resync/stream state.",
+            "review_required": "Current market state needs additional operator review.",
+        }
+        instruction_map = {
+            "live_observable": "Usable as the foundation before reading predictions. Not a trade instruction.",
+            "usable_with_caution": "De-weight predictions and inspect spread/freshness/WS state first.",
+            "not_usable_for_current_decision": "Confirm data state before prediction review or trading decisions.",
+            "review_required": "Review current state before reading predictions.",
+        }
+    return {
+        "ok": True,
+        "operator_summary_version": WARROOM_LIVE_NOWCAST_OPERATOR_SUMMARY_VERSION,
+        "nowcast_role": "current_market_state_not_prediction",
+        "operator_state_grade": grade,
+        "operator_attention_severity": tone,
+        "operator_summary_text": summary_map[grade],
+        "operator_instruction_text": instruction_map[grade],
+        "attention_rows": attention_rows,
+        "attention_flag_count": len([row for row in attention_rows if row.get("code") != "none"]),
+        "current_state_summary": packet.get("current_state_summary"),
+        "nowcast_freshness_state": packet.get("nowcast_freshness_state"),
+        "spread_state": packet.get("spread_state"),
+        "spread_bps": packet.get("spread_bps"),
+        "market_event_age_sec": packet.get("market_event_age_sec"),
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "current_state_not_prediction": True,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def warroom_live_nowcast_operator_summary_rows(summary: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {"item": "operator_state_grade", "value": summary.get("operator_state_grade"), "note": summary.get("operator_summary_text")},
+        {"item": "attention_severity", "value": summary.get("operator_attention_severity"), "note": f"flags={summary.get('attention_flag_count')}"},
+        {"item": "operator_instruction", "value": summary.get("operator_instruction_text"), "note": "current-state guidance only"},
+        {"item": "freshness", "value": summary.get("nowcast_freshness_state"), "note": f"market_age={summary.get('market_event_age_sec')}s"},
+        {"item": "spread", "value": summary.get("spread_state"), "note": f"{summary.get('spread_bps')} bps"},
+    ]
+
+
+def _render_warroom_live_nowcast_operator_summary(packet: Mapping[str, Any], *, lang: str = "ja") -> Mapping[str, Any]:
+    summary = build_warroom_live_nowcast_operator_summary_packet(packet, lang=lang)
+    tone = summary.get("operator_attention_severity")
+    message = f"{summary.get('operator_summary_text')} {summary.get('operator_instruction_text')}"
+    if tone == "critical":
+        st.error(message)
+    elif tone == "warning":
+        st.warning(message)
+    elif tone == "ok":
+        st.success(message)
+    else:
+        st.info(message)
+    st.dataframe(warroom_live_nowcast_operator_summary_rows(summary), width="stretch", hide_index=True)
+    st.dataframe(summary.get("attention_rows") or [], width="stretch", hide_index=True)
+    return summary
+
+
 def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -> Mapping[str, Any]:
     packet_holder: dict[str, Any] = {}
 
     def _render_body() -> None:
         packet = build_warroom_live_market_nowcast_packet(fragment_enabled=bool(fragment_enabled))
         packet_holder.update(packet)
-        st.caption("PS-Q25B Live Market Nowcast: current board/executions/spread/freshness. This is not a future prediction and not a trade instruction.")
+        st.caption("PS-Q25B/Q25C Live Market Nowcast: current board/executions/spread/freshness plus operator classification. This is not a future prediction and not a trade instruction.")
+        operator_summary = _render_warroom_live_nowcast_operator_summary(packet, lang="ja")
         if packet.get("current_state_summary") == "current_market_state_live_observable":
             st.success(f"🟢 Live current state | {packet.get('market_uid')} | spread={packet.get('spread')} ({packet.get('spread_bps')} bps) | market_age={packet.get('market_event_age_sec')}s")
         elif packet.get("current_state_summary") == "current_market_state_caution":
@@ -295,6 +450,8 @@ def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -
             f"market_event_age_sec={packet.get('market_event_age_sec')} "
             f"spread_bps={packet.get('spread_bps')} "
             f"attention_flags={','.join(packet.get('attention_flags') or []) or 'none'} "
+            f"operator_state_grade={operator_summary.get('operator_state_grade')} "
+            f"operator_attention_severity={operator_summary.get('operator_attention_severity')} "
             "read_only=true display_only=true autotrade=false broker=false"
         )
 
