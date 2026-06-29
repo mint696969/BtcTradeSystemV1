@@ -28,9 +28,12 @@ EXPECTED_PRE_CLOSEOUT_SLICE = "PS-Q23R_SCHEDULED_COMPACT_LEGACY_TICK_OBSERVATION
 EXPECTED_POST_CLOSEOUT_GATE = "PS_Q23R_CLOSEOUT_STEADY_STATE_GUARD_SYNCED"
 EXPECTED_POST_CLOSEOUT_FOCUS = "ps_q23r_closeout_steady_state_guard_sync_completed"
 EXPECTED_POST_CLOSEOUT_SLICE = "PS-Q23R_CLOSEOUT_AND_STEADY_STATE_GUARD_SYNC"
-ALLOWED_ROOM_GATES = {EXPECTED_PRE_CLOSEOUT_GATE, EXPECTED_POST_CLOSEOUT_GATE}
-ALLOWED_ROOM_FOCUSES = {EXPECTED_PRE_CLOSEOUT_FOCUS, EXPECTED_POST_CLOSEOUT_FOCUS}
-ALLOWED_ROOM_SLICES = {EXPECTED_PRE_CLOSEOUT_SLICE, EXPECTED_POST_CLOSEOUT_SLICE}
+EXPECTED_Q23T_GATE = "PS_Q23T_MANIFEST_FIRST_STEADY_STATE_GUARD_HARDENED"
+EXPECTED_Q23T_FOCUS = "ps_q23t_manifest_first_steady_state_guard_hardening_completed"
+EXPECTED_Q23T_SLICE = "PS-Q23T_MANIFEST_FIRST_STEADY_STATE_GUARD_HARDENING"
+ALLOWED_ROOM_GATES = {EXPECTED_PRE_CLOSEOUT_GATE, EXPECTED_POST_CLOSEOUT_GATE, EXPECTED_Q23T_GATE}
+ALLOWED_ROOM_FOCUSES = {EXPECTED_PRE_CLOSEOUT_FOCUS, EXPECTED_POST_CLOSEOUT_FOCUS, EXPECTED_Q23T_FOCUS}
+ALLOWED_ROOM_SLICES = {EXPECTED_PRE_CLOSEOUT_SLICE, EXPECTED_POST_CLOSEOUT_SLICE, EXPECTED_Q23T_SLICE}
 DIRTY_ONLY_BLOCKERS = {
     "repo_clean_required_for_q23r_closeout",
     "q23k_no_write_readiness_blockers_unexpected",
@@ -92,8 +95,9 @@ def run_ps_q23r_closeout_steady_state_guard_sync() -> dict[str, Any]:
         room_blockers.append("room_q23r_handoff_read_required")
     status_has_pre_closeout_marker = "PS-Q23R after scheduled compact legacy steady-state" in status_text
     status_has_post_closeout_marker = "PS-Q23R closeout steady-state guard synced" in status_text
-    if not (status_has_pre_closeout_marker or status_has_post_closeout_marker):
-        room_blockers.append("room_status_q23r_or_closeout_marker_required")
+    status_has_q23t_marker = "PS-Q23T manifest-first steady-state guard hardened" in status_text
+    if not (status_has_pre_closeout_marker or status_has_post_closeout_marker or status_has_q23t_marker):
+        room_blockers.append("room_status_q23r_or_closeout_or_q23t_marker_required")
     if "PS-Q22T danger boundary" in status_text:
         room_blockers.append("room_status_must_not_be_old_q22t_entry")
     if focus.get("current_focus") not in ALLOWED_ROOM_FOCUSES:
@@ -115,7 +119,7 @@ def run_ps_q23r_closeout_steady_state_guard_sync() -> dict[str, Any]:
         room_blockers.append("room_state_original_record_count_110_required")
     if prediction_status.get("would_send_to_broker") is not False:
         room_blockers.append("room_state_would_send_to_broker_false_required")
-    if EXPECTED_PRE_CLOSEOUT_GATE not in handoff_text and EXPECTED_POST_CLOSEOUT_GATE not in status_text:
+    if EXPECTED_PRE_CLOSEOUT_GATE not in handoff_text and EXPECTED_POST_CLOSEOUT_GATE not in status_text and EXPECTED_Q23T_GATE not in status_text:
         room_blockers.append("room_handoff_or_status_expected_gate_required")
 
     q23r_legacy = _mapping(q23r.get("legacy_latest"))
@@ -157,9 +161,10 @@ def run_ps_q23r_closeout_steady_state_guard_sync() -> dict[str, Any]:
         "room_blockers": room_blockers,
         "artifact_blockers": artifact_blockers,
         "room": {
-            "status_marker_present": status_has_pre_closeout_marker or status_has_post_closeout_marker,
+            "status_marker_present": status_has_pre_closeout_marker or status_has_post_closeout_marker or status_has_q23t_marker,
             "status_pre_closeout_marker_present": status_has_pre_closeout_marker,
             "status_post_closeout_marker_present": status_has_post_closeout_marker,
+            "status_q23t_marker_present": status_has_q23t_marker,
             "focus_current_focus": focus.get("current_focus"),
             "focus_latest_slice": focus.get("latest_slice"),
             "state_current_gate": state.get("current_gate"),
