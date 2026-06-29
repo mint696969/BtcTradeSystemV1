@@ -16,6 +16,8 @@ from btcts.apps.operator_ui.components import live_shell
 WARROOM_LIVE_MARKET_NOWCAST_PANEL_VERSION = "prediction_warroom.live_market_nowcast_panel.ps_q25b.v1"
 WARROOM_LIVE_NOWCAST_OPERATOR_SUMMARY_VERSION = "prediction_warroom.live_nowcast_operator_summary.ps_q25c.v1"
 WARROOM_LIVE_NOWCAST_SOURCE_LAYERING_VERSION = "prediction_warroom.live_nowcast_source_importance_signal_layering.ps_q25d.v1"
+WARROOM_LIVE_NOWCAST_COMPOSITE_SCORE_VERSION = "prediction_warroom.live_nowcast_composite_score_history_mini_trend.ps_q25e.v1"
+WARROOM_LIVE_NOWCAST_HISTORY_SESSION_KEY = "warroom_live_nowcast_composite_score_history_ps_q25e"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_MODE = "poll_fast"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_SEC = 3
 Q25B_PAGE_ID = "warroom"
@@ -550,6 +552,207 @@ def _render_warroom_live_nowcast_source_layering(packet: Mapping[str, Any], summ
     return layering
 
 
+
+
+def _score_penalty_from_source_row(row: Mapping[str, Any]) -> float:
+    importance = _float(row.get("importance")) or 0.0
+    status = _clean(row.get("status"))
+    if status == "blocked":
+        return 28.0 * importance
+    if status == "caution":
+        return 10.0 * importance
+    if status not in {"usable", ""}:
+        return 6.0 * importance
+    return 0.0
+
+
+def _bounded_score(value: float) -> int:
+    return int(round(max(0.0, min(100.0, value))))
+
+
+def build_warroom_live_nowcast_composite_score_packet(
+    packet: Mapping[str, Any],
+    operator_summary: Mapping[str, Any],
+    source_layering: Mapping[str, Any],
+) -> dict[str, Any]:
+    score = 100.0
+    penalty_reasons: list[str] = []
+    for row in source_layering.get("source_importance_rows") or []:
+        if not isinstance(row, Mapping):
+            continue
+        penalty = _score_penalty_from_source_row(row)
+        if penalty:
+            score -= penalty
+            penalty_reasons.append(f"{row.get('source')}:{row.get('status')}:-{round(penalty, 1)}")
+    severity = _clean(operator_summary.get("operator_attention_severity")) or "ok"
+    if severity == "critical":
+        score -= 35.0
+        penalty_reasons.append("operator_attention=critical:-35")
+    elif severity == "warning":
+        score -= 12.0
+        penalty_reasons.append("operator_attention=warning:-12")
+    elif severity == "info":
+        score -= 5.0
+        penalty_reasons.append("operator_attention=info:-5")
+    freshness = _clean(packet.get("nowcast_freshness_state")) or "unknown"
+    if freshness == "stale_caution":
+        score -= 24.0
+        penalty_reasons.append("freshness=stale_caution:-24")
+    elif freshness == "unknown":
+        score -= 12.0
+        penalty_reasons.append("freshness=unknown:-12")
+    elif freshness == "slightly_delayed":
+        score -= 3.0
+        penalty_reasons.append("freshness=slightly_delayed:-3")
+    spread_state = _clean(packet.get("spread_state")) or "unknown"
+    if spread_state == "wide_caution":
+        score -= 12.0
+        penalty_reasons.append("spread=wide_caution:-12")
+    elif spread_state == "unknown":
+        score -= 5.0
+        penalty_reasons.append("spread=unknown:-5")
+    market_age = _float(packet.get("market_event_age_sec"))
+    if market_age is None:
+        score -= 8.0
+        penalty_reasons.append("market_age=unknown:-8")
+    elif market_age > 30:
+        score -= 16.0
+        penalty_reasons.append("market_age>30s:-16")
+    elif market_age > 15:
+        score -= 8.0
+        penalty_reasons.append("market_age>15s:-8")
+    composite_score = _bounded_score(score)
+    if composite_score >= 85:
+        grade = "high_quality_current_state"
+        note = "現在状態の土台はかなり良好です。"
+    elif composite_score >= 70:
+        grade = "usable_current_state"
+        note = "現在状態は利用可能です。軽い遅延や注意点は確認してください。"
+    elif composite_score >= 50:
+        grade = "caution_current_state"
+        note = "現在状態は注意付きです。予測や判断を弱めてください。"
+    else:
+        grade = "weak_current_state"
+        note = "現在状態の信頼性が弱いです。予測を見る前にデータ状態を確認してください。"
+    return {
+        "ok": True,
+        "composite_score_version": WARROOM_LIVE_NOWCAST_COMPOSITE_SCORE_VERSION,
+        "nowcast_role": "current_market_state_not_prediction",
+        "current_state_score": composite_score,
+        "current_state_score_grade": grade,
+        "current_state_score_note": note,
+        "penalty_reasons": penalty_reasons,
+        "penalty_count": len(penalty_reasons),
+        "prediction_input_gate": source_layering.get("prediction_input_gate"),
+        "operator_attention_severity": operator_summary.get("operator_attention_severity"),
+        "operator_state_grade": operator_summary.get("operator_state_grade"),
+        "freshness_state": packet.get("nowcast_freshness_state"),
+        "spread_state": packet.get("spread_state"),
+        "spread_bps": packet.get("spread_bps"),
+        "market_event_age_sec": packet.get("market_event_age_sec"),
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "current_state_not_prediction": True,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def build_warroom_live_nowcast_history_mini_trend_packet(history: list[Mapping[str, Any]]) -> dict[str, Any]:
+    samples = [item for item in history if isinstance(item, Mapping)]
+    if not samples:
+        trend = "insufficient_history"
+        delta = 0
+    else:
+        first = int(_float(samples[0].get("current_state_score")) or 0)
+        last = int(_float(samples[-1].get("current_state_score")) or 0)
+        delta = last - first
+        if len(samples) < 2:
+            trend = "insufficient_history"
+        elif delta >= 5:
+            trend = "improving"
+        elif delta <= -5:
+            trend = "deteriorating"
+        else:
+            trend = "stable"
+    return {
+        "ok": True,
+        "mini_trend_version": WARROOM_LIVE_NOWCAST_COMPOSITE_SCORE_VERSION,
+        "history_sample_count": len(samples),
+        "current_state_score_trend": trend,
+        "current_state_score_delta": delta,
+        "latest_score": samples[-1].get("current_state_score") if samples else None,
+        "latest_grade": samples[-1].get("current_state_score_grade") if samples else None,
+        "history_scores": [item.get("current_state_score") for item in samples],
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "current_state_not_prediction": True,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def warroom_live_nowcast_composite_score_rows(composite: Mapping[str, Any], mini_trend: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
+    trend = mini_trend if isinstance(mini_trend, Mapping) else {}
+    return [
+        {"item": "current_state_score", "value": composite.get("current_state_score"), "note": composite.get("current_state_score_grade")},
+        {"item": "score_note", "value": composite.get("current_state_score_note"), "note": "current-state only"},
+        {"item": "mini_trend", "value": trend.get("current_state_score_trend"), "note": f"delta={trend.get('current_state_score_delta')} samples={trend.get('history_sample_count')}"},
+        {"item": "prediction_input_gate", "value": composite.get("prediction_input_gate"), "note": "foundation before prediction"},
+        {"item": "penalty_reasons", "value": ",".join(str(item) for item in composite.get("penalty_reasons") or []) or "none", "note": "score deductions"},
+    ]
+
+
+def _append_warroom_live_nowcast_session_history(composite: Mapping[str, Any], packet: Mapping[str, Any], *, max_samples: int = 12) -> list[dict[str, Any]]:
+    existing = st.session_state.get(WARROOM_LIVE_NOWCAST_HISTORY_SESSION_KEY)
+    history = list(existing) if isinstance(existing, list) else []
+    sample = {
+        "ts": packet.get("panel_heartbeat_utc"),
+        "market_event_age_sec": packet.get("market_event_age_sec"),
+        "spread_bps": packet.get("spread_bps"),
+        "current_state_score": composite.get("current_state_score"),
+        "current_state_score_grade": composite.get("current_state_score_grade"),
+        "prediction_input_gate": composite.get("prediction_input_gate"),
+    }
+    if not history or history[-1] != sample:
+        history.append(sample)
+    history = history[-int(max_samples):]
+    st.session_state[WARROOM_LIVE_NOWCAST_HISTORY_SESSION_KEY] = history
+    return history
+
+
+def _render_warroom_live_nowcast_composite_score(packet: Mapping[str, Any], operator_summary: Mapping[str, Any], source_layering: Mapping[str, Any]) -> Mapping[str, Any]:
+    composite = build_warroom_live_nowcast_composite_score_packet(packet, operator_summary, source_layering)
+    history = _append_warroom_live_nowcast_session_history(composite, packet)
+    mini_trend = build_warroom_live_nowcast_history_mini_trend_packet(history)
+    st.caption("PS-Q25E current-state composite score / mini trend: display-only session history, not persisted, not prediction.")
+    st.metric("current-state score", str(composite.get("current_state_score")), delta=str(mini_trend.get("current_state_score_trend")))
+    st.dataframe(warroom_live_nowcast_composite_score_rows(composite, mini_trend), width="stretch", hide_index=True)
+    return {"composite": composite, "mini_trend": mini_trend}
+
+
 def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -> Mapping[str, Any]:
     packet_holder: dict[str, Any] = {}
 
@@ -559,6 +762,9 @@ def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -
         st.caption("PS-Q25B/Q25C Live Market Nowcast: current board/executions/spread/freshness plus operator classification. This is not a future prediction and not a trade instruction.")
         operator_summary = _render_warroom_live_nowcast_operator_summary(packet, lang="ja")
         source_layering = _render_warroom_live_nowcast_source_layering(packet, operator_summary)
+        score_packet = _render_warroom_live_nowcast_composite_score(packet, operator_summary, source_layering)
+        composite_score = score_packet.get("composite", {}) if isinstance(score_packet, Mapping) else {}
+        mini_trend = score_packet.get("mini_trend", {}) if isinstance(score_packet, Mapping) else {}
         if packet.get("current_state_summary") == "current_market_state_live_observable":
             st.success(f"🟢 Live current state | {packet.get('market_uid')} | spread={packet.get('spread')} ({packet.get('spread_bps')} bps) | market_age={packet.get('market_event_age_sec')}s")
         elif packet.get("current_state_summary") == "current_market_state_caution":
@@ -586,6 +792,8 @@ def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -
             f"operator_state_grade={operator_summary.get('operator_state_grade')} "
             f"operator_attention_severity={operator_summary.get('operator_attention_severity')} "
             f"prediction_input_gate={source_layering.get('prediction_input_gate')} "
+            f"current_state_score={composite_score.get('current_state_score')} "
+            f"current_state_score_trend={mini_trend.get('current_state_score_trend')} "
             "read_only=true display_only=true autotrade=false broker=false"
         )
 
