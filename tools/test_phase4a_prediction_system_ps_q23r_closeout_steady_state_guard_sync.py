@@ -14,10 +14,12 @@ for candidate in (REPO_ROOT, SRC_ROOT):
         sys.path.insert(0, str(candidate))
 
 from tools.diagnose_phase4a_prediction_system_ps_q23r_closeout_steady_state_guard_sync import (  # noqa: E402
+    ALLOWED_ROOM_FOCUSES,
+    ALLOWED_ROOM_GATES,
+    ALLOWED_ROOM_SLICES,
     DIAGNOSTIC_VERSION,
-    EXPECTED_FOCUS,
-    EXPECTED_GATE,
-    EXPECTED_SLICE,
+    EXPECTED_PRE_CLOSEOUT_FOCUS,
+    EXPECTED_PRE_CLOSEOUT_GATE,
     run_ps_q23r_closeout_steady_state_guard_sync,
 )
 
@@ -29,8 +31,8 @@ def test_spec_declares_closeout_guard_contract() -> None:
     text = SPEC.read_text(encoding="utf-8-sig")
     for marker in (
         "ps_q23r_closeout_and_steady_state_guard_sync=true",
-        f"canonical_reentry={EXPECTED_GATE}",
-        f"room_current_focus={EXPECTED_FOCUS}",
+        f"canonical_reentry={EXPECTED_PRE_CLOSEOUT_GATE}",
+        f"room_current_focus={EXPECTED_PRE_CLOSEOUT_FOCUS}",
         "legacy_latest_compact_after_scheduled_tick=true",
         "legacy_latest_compact_record_count=24",
         "sidecar_forecast_records_full_count=110",
@@ -54,10 +56,10 @@ def test_live_room_and_artifact_closeout_ready() -> None:
     assert result["q23r_non_dirty_blockers"] == []
     room = result["room"]
     assert room["status_marker_present"] is True
-    assert room["focus_current_focus"] == EXPECTED_FOCUS
-    assert room["focus_latest_slice"] == EXPECTED_SLICE
-    assert room["state_current_gate"] == EXPECTED_GATE
-    assert room["state_latest_completed_slice"] == EXPECTED_SLICE
+    assert room["focus_current_focus"] in ALLOWED_ROOM_FOCUSES
+    assert room["focus_latest_slice"] in ALLOWED_ROOM_SLICES
+    assert room["state_current_gate"] in ALLOWED_ROOM_GATES
+    assert room["state_latest_completed_slice"] in ALLOWED_ROOM_SLICES
     assert room["work_policy_default_method"] == "one_shot_patch_runner"
     assert room["handoff_exists"] is True
     artifact = result["artifact_summary"]

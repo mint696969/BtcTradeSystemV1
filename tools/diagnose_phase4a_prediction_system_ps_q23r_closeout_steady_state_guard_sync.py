@@ -22,9 +22,15 @@ from tools.diagnose_phase4a_prediction_system_ps_q23r_scheduled_compact_legacy_t
 
 DIAGNOSTIC_VERSION = "prediction_warroom.ps_q23r_closeout_steady_state_guard_sync.v1"
 ROOM_ROOT = REPO_ROOT / "tmp" / "gpt_room"
-EXPECTED_GATE = "PS_Q23R_AFTER_SCHEDULED_COMPACT_LEGACY_STEADY_STATE"
-EXPECTED_FOCUS = "ps_q23r_room_sync_after_scheduled_compact_legacy_steady_state"
-EXPECTED_SLICE = "PS-Q23R_SCHEDULED_COMPACT_LEGACY_TICK_OBSERVATION"
+EXPECTED_PRE_CLOSEOUT_GATE = "PS_Q23R_AFTER_SCHEDULED_COMPACT_LEGACY_STEADY_STATE"
+EXPECTED_PRE_CLOSEOUT_FOCUS = "ps_q23r_room_sync_after_scheduled_compact_legacy_steady_state"
+EXPECTED_PRE_CLOSEOUT_SLICE = "PS-Q23R_SCHEDULED_COMPACT_LEGACY_TICK_OBSERVATION"
+EXPECTED_POST_CLOSEOUT_GATE = "PS_Q23R_CLOSEOUT_STEADY_STATE_GUARD_SYNCED"
+EXPECTED_POST_CLOSEOUT_FOCUS = "ps_q23r_closeout_steady_state_guard_sync_completed"
+EXPECTED_POST_CLOSEOUT_SLICE = "PS-Q23R_CLOSEOUT_AND_STEADY_STATE_GUARD_SYNC"
+ALLOWED_ROOM_GATES = {EXPECTED_PRE_CLOSEOUT_GATE, EXPECTED_POST_CLOSEOUT_GATE}
+ALLOWED_ROOM_FOCUSES = {EXPECTED_PRE_CLOSEOUT_FOCUS, EXPECTED_POST_CLOSEOUT_FOCUS}
+ALLOWED_ROOM_SLICES = {EXPECTED_PRE_CLOSEOUT_SLICE, EXPECTED_POST_CLOSEOUT_SLICE}
 DIRTY_ONLY_BLOCKERS = {
     "repo_clean_required_for_q23r_closeout",
     "q23k_no_write_readiness_blockers_unexpected",
@@ -84,20 +90,22 @@ def run_ps_q23r_closeout_steady_state_guard_sync() -> dict[str, Any]:
         room_blockers.append("room_state_json_read_required")
     if handoff_error:
         room_blockers.append("room_q23r_handoff_read_required")
-    if "PS-Q23R after scheduled compact legacy steady-state" not in status_text:
-        room_blockers.append("room_status_q23r_marker_required")
+    status_has_pre_closeout_marker = "PS-Q23R after scheduled compact legacy steady-state" in status_text
+    status_has_post_closeout_marker = "PS-Q23R closeout steady-state guard synced" in status_text
+    if not (status_has_pre_closeout_marker or status_has_post_closeout_marker):
+        room_blockers.append("room_status_q23r_or_closeout_marker_required")
     if "PS-Q22T danger boundary" in status_text:
         room_blockers.append("room_status_must_not_be_old_q22t_entry")
-    if focus.get("current_focus") != EXPECTED_FOCUS:
-        room_blockers.append("room_focus_current_focus_q23r_required")
-    if focus.get("latest_slice") != EXPECTED_SLICE:
-        room_blockers.append("room_focus_latest_slice_q23r_required")
+    if focus.get("current_focus") not in ALLOWED_ROOM_FOCUSES:
+        room_blockers.append("room_focus_current_focus_q23r_or_closeout_required")
+    if focus.get("latest_slice") not in ALLOWED_ROOM_SLICES:
+        room_blockers.append("room_focus_latest_slice_q23r_or_closeout_required")
     if _mapping(focus.get("work_policy")).get("default_method") != "one_shot_patch_runner":
         room_blockers.append("room_focus_one_shot_patch_runner_policy_required")
-    if state.get("current_gate") != EXPECTED_GATE:
-        room_blockers.append("room_state_current_gate_q23r_required")
-    if state.get("latest_completed_slice") != EXPECTED_SLICE:
-        room_blockers.append("room_state_latest_completed_slice_q23r_required")
+    if state.get("current_gate") not in ALLOWED_ROOM_GATES:
+        room_blockers.append("room_state_current_gate_q23r_or_closeout_required")
+    if state.get("latest_completed_slice") not in ALLOWED_ROOM_SLICES:
+        room_blockers.append("room_state_latest_completed_slice_q23r_or_closeout_required")
     prediction_status = _mapping(state.get("prediction_status"))
     if prediction_status.get("latest_manifest_record_count") != 110:
         room_blockers.append("room_state_latest_manifest_record_count_110_required")
@@ -107,8 +115,8 @@ def run_ps_q23r_closeout_steady_state_guard_sync() -> dict[str, Any]:
         room_blockers.append("room_state_original_record_count_110_required")
     if prediction_status.get("would_send_to_broker") is not False:
         room_blockers.append("room_state_would_send_to_broker_false_required")
-    if EXPECTED_GATE not in handoff_text:
-        room_blockers.append("room_handoff_expected_gate_required")
+    if EXPECTED_PRE_CLOSEOUT_GATE not in handoff_text and EXPECTED_POST_CLOSEOUT_GATE not in status_text:
+        room_blockers.append("room_handoff_or_status_expected_gate_required")
 
     q23r_legacy = _mapping(q23r.get("legacy_latest"))
     q23r_manifest = _mapping(q23r.get("latest_manifest"))
@@ -149,11 +157,16 @@ def run_ps_q23r_closeout_steady_state_guard_sync() -> dict[str, Any]:
         "room_blockers": room_blockers,
         "artifact_blockers": artifact_blockers,
         "room": {
-            "status_marker_present": "PS-Q23R after scheduled compact legacy steady-state" in status_text,
+            "status_marker_present": status_has_pre_closeout_marker or status_has_post_closeout_marker,
+            "status_pre_closeout_marker_present": status_has_pre_closeout_marker,
+            "status_post_closeout_marker_present": status_has_post_closeout_marker,
             "focus_current_focus": focus.get("current_focus"),
             "focus_latest_slice": focus.get("latest_slice"),
             "state_current_gate": state.get("current_gate"),
             "state_latest_completed_slice": state.get("latest_completed_slice"),
+            "allowed_room_gates": sorted(ALLOWED_ROOM_GATES),
+            "allowed_room_focuses": sorted(ALLOWED_ROOM_FOCUSES),
+            "allowed_room_slices": sorted(ALLOWED_ROOM_SLICES),
             "work_policy_default_method": _mapping(focus.get("work_policy")).get("default_method"),
             "handoff_exists": handoff_path.exists(),
         },
