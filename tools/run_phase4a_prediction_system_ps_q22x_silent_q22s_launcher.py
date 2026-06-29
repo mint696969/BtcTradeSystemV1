@@ -6,7 +6,9 @@ from __future__ import annotations
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
+import subprocess
 import sys
 import traceback
 from typing import Any
@@ -39,14 +41,51 @@ def _event(event: str, **extra: Any) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
 
 
+def _install_windows_no_window_subprocess_patch() -> bool:
+    """Prevent console child windows when Q22X runs under pythonw.exe.
+
+    The scheduled action is already pythonw.exe, but child processes launched by
+    subprocess from that GUI process can still create transient console windows
+    on Windows. Patch subprocess.Popen inside this scheduled launcher process so
+    descendants such as git.exe inherit CREATE_NO_WINDOW / SW_HIDE defaults.
+    """
+    if os.name != "nt":
+        return False
+    if getattr(subprocess, "_btcts_q22x_no_window_patch_installed", False):
+        return True
+
+    original_popen = subprocess.Popen
+    create_no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+    startf_use_show_window = getattr(subprocess, "STARTF_USESHOWWINDOW", 0x00000001)
+    sw_hide = 0
+
+    def _btcts_q22x_no_window_popen(*args: Any, **kwargs: Any) -> subprocess.Popen[Any]:
+        kwargs["creationflags"] = int(kwargs.get("creationflags") or 0) | int(create_no_window)
+        startupinfo = kwargs.get("startupinfo")
+        if startupinfo is None:
+            startupinfo = subprocess.STARTUPINFO()
+        try:
+            startupinfo.dwFlags |= startf_use_show_window
+            startupinfo.wShowWindow = sw_hide
+        except Exception:
+            pass
+        kwargs["startupinfo"] = startupinfo
+        return original_popen(*args, **kwargs)
+
+    subprocess.Popen = _btcts_q22x_no_window_popen  # type: ignore[assignment]
+    setattr(subprocess, "_btcts_q22x_no_window_patch_installed", True)
+    return True
+
+
 def run_silent_q22s(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     path = _log_path()
     path.parent.mkdir(parents=True, exist_ok=True)
+    no_window_patch_installed = _install_windows_no_window_subprocess_patch()
     with path.open("a", encoding="utf-8", buffering=1) as log:
         with redirect_stdout(log), redirect_stderr(log):
-            print(_event("q22x_silent_launcher_start", argv=args, log_path=str(path)))
+            print(_event("q22x_silent_launcher_start", argv=args, log_path=str(path), no_window_subprocess_patch_installed=no_window_patch_installed))
             try:
                 rc = int(q22s_main(args))
                 print(_event("q22x_silent_launcher_finish", returncode=rc))
