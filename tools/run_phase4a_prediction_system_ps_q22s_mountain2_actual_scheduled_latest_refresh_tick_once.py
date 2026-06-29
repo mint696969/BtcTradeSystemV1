@@ -30,9 +30,15 @@ from tools.run_phase4a_prediction_system_ps_q22e_success_preserving_status_write
     REQUIRED_STATUS_WRITE_CONFIRMATION as Q22E_REQUIRED_CONFIRMATION,
     run_success_preserving_status_write_once,
 )
+from btcts.apps.operator_ui.prediction_warroom.read_models.latest_prediction_warroom_read_model import load_latest_prediction_payload_status_manifest_first  # noqa: E402
 from tools.run_phase4a_prediction_system_ps_q23b_gated_dual_write_sidecars_once import (  # noqa: E402
     REQUIRED_CONFIRMATION as REQUIRED_DISTRIBUTED_SIDECAR_CONFIRMATION,
     write_distributed_sidecars_once,
+)
+from tools.run_phase4a_prediction_system_ps_q23m_gated_legacy_latest_shrink_once import (  # noqa: E402
+    LEGACY_LATEST_RELATIVE_PATH as Q23M_LEGACY_LATEST_RELATIVE_PATH,
+    RUNNER_VERSION as Q23M_COMPACTOR_VERSION,
+    build_compact_legacy_latest_payload,
 )
 
 RUNNER_VERSION = "prediction_warroom.mountain2_actual_scheduled_latest_refresh_tick_once.ps_q22s.v1"
@@ -42,6 +48,7 @@ LOCK_STALE_AFTER_SEC = 900
 Q21IRunner = Callable[..., Mapping[str, Any]]
 Q22ERunner = Callable[..., Mapping[str, Any]]
 SidecarWriter = Callable[..., Mapping[str, Any]]
+LegacyLatestCompactor = Callable[..., Mapping[str, Any]]
 ReadinessProvider = Callable[[], Mapping[str, Any]]
 
 
@@ -75,6 +82,10 @@ def _repo_status_short() -> str:
 
 def _as_mapping(value: Any) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
+
+
+def _json_bytes(value: Any) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True, default=str) + "\n").encode("utf-8")
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -143,6 +154,97 @@ def _sidecar_disabled_result() -> dict[str, Any]:
         "run_sidecars_written": False,
         "scheduled_sidecar_write_enabled": False,
         "scheduler_action_changed": False,
+    }
+
+
+def _compact_legacy_disabled_result() -> dict[str, Any]:
+    return {
+        "compact_legacy_latest_after_sidecar_requested": False,
+        "compact_legacy_latest_after_sidecar_executed": False,
+        "compact_legacy_latest_after_sidecar_success": False,
+        "compact_legacy_latest_after_sidecar_warning": False,
+        "compact_legacy_latest_written": False,
+        "compact_legacy_latest_backup_written": False,
+        "compact_legacy_latest_size_bytes": None,
+        "compact_legacy_latest_before_size_bytes": None,
+        "compact_legacy_latest_original_record_count": None,
+        "compact_legacy_latest_compact_record_count": None,
+    }
+
+
+def compact_legacy_latest_after_sidecar_dual_write_once(*, hot_root: Path) -> dict[str, Any]:
+    """Compact legacy latest after distributed sidecars have been written.
+
+    This is used by the recurring Q22S scheduled tick after Q23B sidecars are
+    already durable. It intentionally does not create a per-tick backup because
+    the full record set is preserved in distributed sidecars and PS-Q23O already
+    created the one-time pre-shrink backup.
+    """
+    legacy_path = hot_root / Q23M_LEGACY_LATEST_RELATIVE_PATH
+    payload_status = load_latest_prediction_payload_status_manifest_first(hot_latest_root_hint=hot_root, prefer_distributed=True)
+    blockers: list[str] = []
+    if payload_status.get("ok") is not True:
+        blockers.append("manifest_first_payload_status_required")
+    if payload_status.get("source_artifact_mode") != "distributed":
+        blockers.append("manifest_first_source_must_be_distributed")
+    if payload_status.get("source_artifact_relative_path") != "prediction/latest_manifest.json":
+        blockers.append("manifest_first_source_must_be_latest_manifest")
+    if payload_status.get("distributed_stale_vs_legacy") is True:
+        blockers.append("distributed_must_not_be_stale_vs_legacy_before_compact")
+    selected_payload = _as_mapping(payload_status.get("payload"))
+    compact_payload = build_compact_legacy_latest_payload(distributed_payload=selected_payload) if selected_payload else {}
+    compact_bytes = _json_bytes(compact_payload) if compact_payload else b""
+    if not compact_payload:
+        blockers.append("compact_payload_required")
+    if int(compact_payload.get("compact_record_count") or 0) <= 0:
+        blockers.append("compact_record_count_required")
+    if int(compact_payload.get("original_record_count") or 0) <= int(compact_payload.get("compact_record_count") or 0):
+        blockers.append("original_record_count_must_be_greater_than_compact")
+    if not compact_bytes:
+        blockers.append("compact_payload_bytes_required")
+    before = _file_meta(legacy_path)
+    if before.get("exists") is not True:
+        blockers.append("legacy_latest_required_before_compact")
+    if blockers:
+        return {
+            **_compact_legacy_disabled_result(),
+            "compact_legacy_latest_after_sidecar_requested": True,
+            "compact_legacy_latest_after_sidecar_executed": False,
+            "compact_legacy_latest_after_sidecar_warning": True,
+            "compact_legacy_latest_blocked_reasons": blockers,
+            "compact_legacy_latest_source_artifact_mode": payload_status.get("source_artifact_mode"),
+            "compact_legacy_latest_source_artifact_relative_path": payload_status.get("source_artifact_relative_path"),
+        }
+    legacy_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = legacy_path.with_name(legacy_path.name + ".q23q_tmp")
+    tmp.write_bytes(compact_bytes)
+    tmp.replace(legacy_path)
+    after = _file_meta(legacy_path)
+    return {
+        "compact_legacy_latest_after_sidecar_requested": True,
+        "compact_legacy_latest_after_sidecar_executed": True,
+        "compact_legacy_latest_after_sidecar_success": True,
+        "compact_legacy_latest_after_sidecar_warning": False,
+        "compact_legacy_latest_written": True,
+        "compact_legacy_latest_backup_written": False,
+        "compact_legacy_latest_compactor_version": Q23M_COMPACTOR_VERSION,
+        "compact_legacy_latest_source_artifact_mode": payload_status.get("source_artifact_mode"),
+        "compact_legacy_latest_source_artifact_relative_path": payload_status.get("source_artifact_relative_path"),
+        "compact_legacy_latest_before_size_bytes": before.get("size_bytes"),
+        "compact_legacy_latest_size_bytes": after.get("size_bytes"),
+        "compact_legacy_latest_before_meta": before,
+        "compact_legacy_latest_after_meta": after,
+        "compact_legacy_latest_original_record_count": compact_payload.get("original_record_count"),
+        "compact_legacy_latest_compact_record_count": compact_payload.get("compact_record_count"),
+        "latest_prediction_artifact_written": True,
+        "status_artifact_written": False,
+        "latest_manifest_written": False,
+        "run_sidecars_written": False,
+        "runtime_artifact_write_enabled": True,
+        "scheduler_action_changed": False,
+        "broker_private_api_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "would_send_to_broker": False,
     }
 
 
@@ -418,6 +520,7 @@ def run_mountain2_actual_scheduled_latest_refresh_tick_once(
     q21i_runner: Q21IRunner | None = None,
     q22e_runner: Q22ERunner | None = None,
     sidecar_writer: SidecarWriter | None = None,
+    legacy_latest_compactor: LegacyLatestCompactor | None = None,
     enable_distributed_sidecar_dual_write: bool = False,
     distributed_sidecar_confirmation: str = "",
     repo_status_short: str | None = None,
@@ -481,6 +584,16 @@ def run_mountain2_actual_scheduled_latest_refresh_tick_once(
             confirmation=distributed_sidecar_confirmation,
             sidecar_writer=sidecar_writer,
         )
+        if sidecar_dual_write_payload.get("sidecar_dual_write_success") is True:
+            compactor = legacy_latest_compactor or compact_legacy_latest_after_sidecar_dual_write_once
+            compact_legacy_payload = dict(compactor(hot_root=hot_root))
+        else:
+            compact_legacy_payload = _compact_legacy_disabled_result()
+        warning_reasons: list[str] = []
+        if sidecar_dual_write_payload.get("sidecar_dual_write_warning") is True:
+            warning_reasons.append("distributed_sidecar_dual_write_failed_or_blocked")
+        if compact_legacy_payload.get("compact_legacy_latest_after_sidecar_warning") is True:
+            warning_reasons.append("compact_legacy_latest_after_sidecar_failed_or_blocked")
         return {
             **base,
             "tick_state": "mountain2_actual_tick_completed_one_bounded_refresh" if success else "mountain2_actual_tick_completed_but_lock_release_failed",
@@ -501,7 +614,8 @@ def run_mountain2_actual_scheduled_latest_refresh_tick_once(
             "bounded_manual_refresh_invoked": True,
             "actual_export_runner_invoked": True,
             **sidecar_dual_write_payload,
-            "warning_reasons": ["distributed_sidecar_dual_write_failed_or_blocked"] if sidecar_dual_write_payload.get("sidecar_dual_write_warning") is True else [],
+            **compact_legacy_payload,
+            "warning_reasons": warning_reasons,
         }
     except Exception as exc:  # noqa: BLE001 - status visibility and lock release must be best effort
         status_packet = _write_tick_status(hot_root=hot_root, run_id=run_id, state="mountain2_tick_failed", blockers=[f"exception:{exc.__class__.__name__}"], warning_reasons=[str(exc)])

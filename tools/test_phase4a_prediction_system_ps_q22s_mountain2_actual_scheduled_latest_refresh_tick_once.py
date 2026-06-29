@@ -136,6 +136,76 @@ def test_exact_token_executes_one_tick_with_lock_then_releases(tmp_path: Path) -
     assert result["sidecar_dual_write_executed"] is False
     assert result["latest_manifest_written"] is False
     assert result["run_sidecars_written"] is False
+    assert result["compact_legacy_latest_after_sidecar_requested"] is False
+    assert result["compact_legacy_latest_written"] is False
+
+
+def test_sidecar_success_triggers_compact_legacy_latest_after_sidecars(tmp_path: Path) -> None:
+    root = _setup_hot(tmp_path)
+    calls = {"sidecar": 0, "compactor": 0}
+
+    def sidecar_writer(**_: object) -> dict:
+        calls["sidecar"] += 1
+        return {
+            "success": True,
+            "execution_state": "test_sidecar_success",
+            "latest_manifest_written": True,
+            "run_sidecars_written": True,
+            "latest_prediction_artifact_written": False,
+            "legacy_latest_modified": False,
+            "status_artifact_written": False,
+            "would_send_to_broker": False,
+            "broker_private_api_allowed": False,
+            "autotrade_trigger_allowed": False,
+            "run_dir": "prediction/runs/test",
+            "latest_manifest_relative_path": "prediction/latest_manifest.json",
+        }
+
+    def compactor(**_: object) -> dict:
+        calls["compactor"] += 1
+        return {
+            "compact_legacy_latest_after_sidecar_requested": True,
+            "compact_legacy_latest_after_sidecar_executed": True,
+            "compact_legacy_latest_after_sidecar_success": True,
+            "compact_legacy_latest_after_sidecar_warning": False,
+            "compact_legacy_latest_written": True,
+            "compact_legacy_latest_backup_written": False,
+            "compact_legacy_latest_size_bytes": 19000,
+            "compact_legacy_latest_before_size_bytes": 5200000,
+            "compact_legacy_latest_original_record_count": 110,
+            "compact_legacy_latest_compact_record_count": 24,
+        }
+
+    result = run_mountain2_actual_scheduled_latest_refresh_tick_once(
+        operator_acknowledged=True,
+        execute_tick_once=True,
+        confirmation=FUTURE_MOUNTAIN2_TOKEN_CANDIDATE,
+        hot_root=root,
+        readiness_provider=_ready,
+        q21i_runner=_refresh_ok,
+        q22e_runner=_q22e_ok,
+        sidecar_writer=sidecar_writer,
+        legacy_latest_compactor=compactor,
+        enable_distributed_sidecar_dual_write=True,
+        distributed_sidecar_confirmation="WRITE_D_HOT_DISTRIBUTED_PREDICTION_SIDECARS_ONCE",
+        repo_status_short="",
+    )
+    assert result["success"] is True
+    assert calls == {"sidecar": 1, "compactor": 1}
+    assert result["sidecar_dual_write_success"] is True
+    assert result["latest_manifest_written"] is True
+    assert result["run_sidecars_written"] is True
+    assert result["compact_legacy_latest_after_sidecar_requested"] is True
+    assert result["compact_legacy_latest_after_sidecar_executed"] is True
+    assert result["compact_legacy_latest_after_sidecar_success"] is True
+    assert result["compact_legacy_latest_written"] is True
+    assert result["compact_legacy_latest_backup_written"] is False
+    assert result["compact_legacy_latest_before_size_bytes"] > result["compact_legacy_latest_size_bytes"]
+    assert result["compact_legacy_latest_original_record_count"] > result["compact_legacy_latest_compact_record_count"]
+    assert result["warning_reasons"] == []
+    assert result["scheduler_enabled"] is False
+    assert result["trigger_added"] is False
+    assert result["would_send_to_broker"] is False
 
 
 def test_active_lock_skips_and_writes_skip_status_without_refresh(tmp_path: Path) -> None:
@@ -185,6 +255,7 @@ if __name__ == "__main__":
         test_spec_declares_actual_tick_but_no_scheduler_enablement()
         test_default_blocks_no_write_no_runner_invocation(tmp)
         test_exact_token_executes_one_tick_with_lock_then_releases(tmp)
+        test_sidecar_success_triggers_compact_legacy_latest_after_sidecars(tmp)
         test_active_lock_skips_and_writes_skip_status_without_refresh(tmp)
         test_tool_contains_no_scheduler_or_broker_enablement_tokens()
     print(json.dumps({"ok": True}))
