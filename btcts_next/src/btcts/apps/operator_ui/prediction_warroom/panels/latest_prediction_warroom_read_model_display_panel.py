@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Mapping
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 
@@ -27,6 +28,7 @@ WARROOM_PREDICTION_DISPLAY_AUTO_REFRESH_VERSION = "prediction_warroom.warroom_pr
 WARROOM_PREDICTION_REFRESH_STATUS_STRIP_VERSION = "prediction_warroom.warroom_prediction_refresh_status_strip.ps_q21c.v1"
 WARROOM_PREDICTION_REFRESH_LIVE_BADGE_VERSION = "prediction_warroom.warroom_prediction_refresh_live_badge.ps_q21d.v1"
 WARROOM_PREDICTION_DATA_FRESHNESS_BADGE_VERSION = "prediction_warroom.warroom_prediction_data_freshness_badge.ps_q21e.v1"
+WARROOM_PREDICTION_UPDATE_VISIBILITY_VERSION = "prediction_warroom.warroom_prediction_refresh_visibility.ps_q25a.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -208,6 +210,64 @@ def latest_prediction_warroom_field_guide_rows(*, lang: str = "en") -> list[dict
         {"item": "drivers", "value": _t(lang, "meaning_drivers")},
     ]
     return rows
+
+
+
+def _format_jst_from_utc(value: Any) -> str:
+    text = _clean(value).strip()
+    if not text:
+        return "-"
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m-%d %H:%M:%S JST")
+    except Exception:
+        return text
+
+
+def latest_prediction_warroom_update_visibility_rows(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> list[dict[str, str]]:
+    data = _as_mapping(packet)
+    data_generated_utc = _clean(data.get("prediction_data_generated_at_utc") or data.get("generated_at")) or "-"
+    data_generated_jst = _clean(data.get("prediction_data_generated_at_jst")) or _format_jst_from_utc(data_generated_utc)
+    heartbeat_utc = _clean(data.get("refresh_heartbeat_utc")) or "-"
+    heartbeat_jst = _clean(data.get("refresh_heartbeat_jst")) or _format_jst_from_utc(heartbeat_utc)
+    auto_refresh = data.get("warroom_prediction_display_auto_refresh_enabled") is True
+    fragment_enabled = data.get("fragment_enabled") is True
+    interval = _clean(data.get("refresh_interval_sec")) or "-"
+    source_mode = _clean(data.get("source_artifact_mode")) or "-"
+    if lang == "ja":
+        return [
+            {"status_item": "予測データ生成 UTC", "value": data_generated_utc, "operator_note": "この値が変わった時だけ、予測結果そのものが新しくなっています。"},
+            {"status_item": "予測データ生成 JST", "value": data_generated_jst, "operator_note": "画面で確認しやすい日本時間です。"},
+            {"status_item": "パネル heartbeat JST", "value": heartbeat_jst, "operator_note": "この値が動くなら UI パネルの再描画は動いています。"},
+            {"status_item": "UI更新間隔", "value": f"{interval}s", "operator_note": "UI heartbeat の間隔。予測データ生成間隔とは別です。"},
+            {"status_item": "自動更新経路", "value": "ON" if auto_refresh and fragment_enabled else "OFF", "operator_note": "Streamlit fragment による部分更新です。"},
+            {"status_item": "読込元", "value": source_mode, "operator_note": "distributed なら latest_manifest/sidecars 優先です。"},
+        ]
+    return [
+        {"status_item": "prediction data generated UTC", "value": data_generated_utc, "operator_note": "Prediction results changed only when this value changes."},
+        {"status_item": "prediction data generated JST", "value": data_generated_jst, "operator_note": "Local display time for operator review."},
+        {"status_item": "panel heartbeat JST", "value": heartbeat_jst, "operator_note": "If this moves, the UI panel is rerendering."},
+        {"status_item": "UI interval", "value": f"{interval}s", "operator_note": "UI heartbeat interval, separate from prediction production cadence."},
+        {"status_item": "auto-refresh path", "value": "ON" if auto_refresh and fragment_enabled else "OFF", "operator_note": "Streamlit fragment partial refresh."},
+        {"status_item": "source mode", "value": source_mode, "operator_note": "distributed means latest_manifest/sidecars first."},
+    ]
+
+
+def _render_prediction_update_visibility_strip(packet: Mapping[str, Any], *, lang: str) -> None:
+    rows = latest_prediction_warroom_update_visibility_rows(packet, lang=lang)
+    if lang == "ja":
+        st.caption(
+            "PS-Q25A update visibility: 予測データ生成時刻と UI heartbeat は別です。"
+            "生成時刻が変わると予測そのものが更新、heartbeat が変わるとパネル再描画が生きています。"
+        )
+    else:
+        st.caption(
+            "PS-Q25A update visibility: prediction data generation and UI heartbeat are separate. "
+            "Data changes when generated_at changes; the panel is alive when heartbeat changes."
+        )
+    st.dataframe(rows, width="stretch", hide_index=True)
 
 
 def latest_prediction_warroom_refresh_live_badge_packet(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
@@ -416,6 +476,8 @@ def build_latest_prediction_warroom_display_panel_packet(
         if model.get(key) is not False:
             failures.append(f"read_model_boundary_not_false:{key}")
     ok = bool(model and not failures)
+    refresh_heartbeat_utc = _utc_now_iso()
+    prediction_data_generated_at_utc = _clean(model.get("generated_at"))
     packet: dict[str, Any] = {
         "ok": ok,
         "display_panel_version": LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_VERSION,
@@ -456,7 +518,14 @@ def build_latest_prediction_warroom_display_panel_packet(
         "refresh_status_strip_rendered": True,
         "warroom_prediction_display_auto_refresh_enabled": bool(fragment_enabled),
         "operator_visible_refresh_heartbeat": bool(fragment_enabled),
-        "refresh_heartbeat_utc": _utc_now_iso(),
+        "refresh_heartbeat_utc": refresh_heartbeat_utc,
+        "refresh_heartbeat_jst": _format_jst_from_utc(refresh_heartbeat_utc),
+        "prediction_update_visibility_version": WARROOM_PREDICTION_UPDATE_VISIBILITY_VERSION,
+        "operator_visible_prediction_update_visibility": True,
+        "prediction_update_visibility_rendered": True,
+        "prediction_data_generated_at_utc": prediction_data_generated_at_utc,
+        "prediction_data_generated_at_jst": _format_jst_from_utc(prediction_data_generated_at_utc),
+        "prediction_update_visibility_note": "prediction_data_generated_at_changes_only_when_producer_writes_new_artifact; panel_heartbeat_changes_when_ui_rerenders",
         "refresh_target": "latest_prediction_warroom_read_model_display_panel",
         "auto_refresh_source": "streamlit_fragment_run_every" if fragment_enabled else "disabled_by_fragment_flag",
         "broad_page_reload_disabled": True,
@@ -481,15 +550,16 @@ def build_latest_prediction_warroom_display_panel_packet(
     return packet
 
 
-def _render_panel_body() -> dict[str, Any]:
+def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
     lang = _lang()
     packet = build_latest_prediction_warroom_display_panel_packet(
-        fragment_enabled=live_shell.supports_streamlit_fragment(),
+        fragment_enabled=bool(fragment_enabled),
         lang=lang,
     )
     st.caption(str(packet.get("operator_caption") or "Latest prediction WarRoom display"))
     _render_refresh_status_strip(packet, lang=lang)
     _render_prediction_data_freshness_badge(packet, lang=lang)
+    _render_prediction_update_visibility_strip(packet, lang=lang)
     with st.expander(_t(lang, "reading_title"), expanded=True):
         st.write(_t(lang, "reading_summary"))
         st.info(str(packet.get("operator_reading_summary") or ""))
@@ -537,7 +607,7 @@ def render_latest_prediction_warroom_display_panel(*, fragment_enabled: bool = T
     packet_holder: dict[str, Any] = {}
 
     def _render_body() -> None:
-        packet_holder.update(_render_panel_body())
+        packet_holder.update(_render_panel_body(fragment_enabled=bool(fragment_enabled)))
 
     lang = _lang()
     meta = live_shell.make_slot_meta(
