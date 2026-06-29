@@ -15,6 +15,7 @@ from btcts.apps.operator_ui.components import live_shell
 
 WARROOM_LIVE_MARKET_NOWCAST_PANEL_VERSION = "prediction_warroom.live_market_nowcast_panel.ps_q25b.v1"
 WARROOM_LIVE_NOWCAST_OPERATOR_SUMMARY_VERSION = "prediction_warroom.live_nowcast_operator_summary.ps_q25c.v1"
+WARROOM_LIVE_NOWCAST_SOURCE_LAYERING_VERSION = "prediction_warroom.live_nowcast_source_importance_signal_layering.ps_q25d.v1"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_MODE = "poll_fast"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_SEC = 3
 Q25B_PAGE_ID = "warroom"
@@ -418,6 +419,137 @@ def _render_warroom_live_nowcast_operator_summary(packet: Mapping[str, Any], *, 
     return summary
 
 
+
+_SOURCE_IMPORTANCE_PROFILES = {
+    "current_nowcast": {
+        "board_spread": 1.00,
+        "collector_freshness": 0.95,
+        "ws_board_state": 0.95,
+        "gap_resync": 0.95,
+        "executions_flow": 0.75,
+        "rate_limit_pressure": 0.55,
+        "daemon_continuity": 0.70,
+    },
+    "tactical_5m": {
+        "executions_flow": 0.95,
+        "board_spread": 0.90,
+        "collector_freshness": 0.90,
+        "gap_resync": 0.85,
+        "rate_limit_pressure": 0.55,
+        "daemon_continuity": 0.60,
+    },
+    "tactical_15m": {
+        "executions_flow": 0.90,
+        "board_spread": 0.75,
+        "collector_freshness": 0.85,
+        "gap_resync": 0.80,
+        "rate_limit_pressure": 0.50,
+        "daemon_continuity": 0.55,
+    },
+    "scenario_30m_1h": {
+        "collector_freshness": 0.85,
+        "gap_resync": 0.80,
+        "executions_flow": 0.70,
+        "board_spread": 0.60,
+        "rate_limit_pressure": 0.50,
+        "daemon_continuity": 0.55,
+    },
+}
+
+_SIGNAL_LAYER_DESCRIPTIONS_JA = {
+    "foundation_integrity": "まずデータ連続性・freshness・gap/resync を確認する土台レイヤー。",
+    "microstructure_now": "板、best bid/ask、spread、WS board を見る現在状態レイヤー。",
+    "trade_flow_now": "約定WS、trade count、executions freshness を見る短期フローレイヤー。",
+    "operational_pressure": "REST利用率、rate limit、daemon状態を見る運用圧力レイヤー。",
+    "prediction_input_gate": "この現在状態を予測入力の前提として使えるかを判断するゲート。",
+}
+
+
+def build_warroom_live_nowcast_source_importance_packet(packet: Mapping[str, Any], summary: Mapping[str, Any] | None = None, *, lang: str = "ja") -> dict[str, Any]:
+    summary_map = summary if isinstance(summary, Mapping) else {}
+    attention = {str(item) for item in packet.get("attention_flags") or []}
+    spread_state = _clean(packet.get("spread_state")) or "unknown"
+    freshness = _clean(packet.get("nowcast_freshness_state")) or "unknown"
+    operator_grade = _clean(summary_map.get("operator_state_grade")) or "unknown"
+    rows: list[dict[str, Any]] = []
+
+    def add(layer: str, source: str, role: str, importance: float, status: str, reason: str) -> None:
+        rows.append({
+            "layer": layer,
+            "source": source,
+            "role": role,
+            "importance": round(float(importance), 2),
+            "status": status,
+            "reason": reason,
+        })
+
+    foundation_status = "usable" if freshness in {"live", "slightly_delayed"} and not ({"gap_detected", "resync_active"} & attention) else "blocked"
+    add("foundation_integrity", "collector_freshness", "current-state trust gate", _SOURCE_IMPORTANCE_PROFILES["current_nowcast"]["collector_freshness"], foundation_status, f"freshness={freshness}")
+    add("foundation_integrity", "gap_resync", "continuity gate", _SOURCE_IMPORTANCE_PROFILES["current_nowcast"]["gap_resync"], "blocked" if {"gap_detected", "resync_active"} & attention else "usable", "gap/resync must stay false before reading prediction")
+    add("microstructure_now", "board_spread", "best bid/ask and cost state", _SOURCE_IMPORTANCE_PROFILES["current_nowcast"]["board_spread"], "caution" if spread_state == "wide_caution" else "usable", f"spread_state={spread_state} spread_bps={packet.get('spread_bps')}")
+    add("microstructure_now", "ws_board_state", "board stream liveness", _SOURCE_IMPORTANCE_PROFILES["current_nowcast"]["ws_board_state"], "usable" if packet.get("ws_state") == "LIVE" else "blocked", f"ws_state={packet.get('ws_state')}")
+    add("trade_flow_now", "executions_flow", "recent trade-flow liveness", _SOURCE_IMPORTANCE_PROFILES["current_nowcast"]["executions_flow"], "usable" if packet.get("ws_executions_state") == "LIVE" else "caution", f"exec_state={packet.get('ws_executions_state')} exec_freshness={packet.get('ws_executions_freshness')}")
+    add("operational_pressure", "rate_limit_pressure", "REST/API pressure context", _SOURCE_IMPORTANCE_PROFILES["current_nowcast"]["rate_limit_pressure"], "caution" if "rate_limit_recent" in attention else "usable", f"utilization={packet.get('utilization')} last_429={packet.get('last_429_ts')}")
+    add("operational_pressure", "daemon_continuity", "collector daemon continuity", _SOURCE_IMPORTANCE_PROFILES["current_nowcast"]["daemon_continuity"], "blocked" if packet.get("daemon_stop_requested") is True else "usable", f"daemon_mode={packet.get('daemon_mode')} failures={packet.get('daemon_consecutive_failures')}")
+
+    top_read_order = ["foundation_integrity", "microstructure_now", "trade_flow_now", "operational_pressure", "prediction_input_gate"]
+    if operator_grade == "live_observable" and foundation_status == "usable":
+        input_gate = "prediction_input_foundation_usable"
+    elif operator_grade == "usable_with_caution":
+        input_gate = "prediction_input_foundation_caution"
+    else:
+        input_gate = "prediction_input_foundation_weak"
+    if lang == "ja":
+        instruction = "予測を見る前に foundation_integrity → microstructure_now → trade_flow_now の順で確認してください。これは現在状態の信号レイヤーであり、売買指示ではありません。"
+    else:
+        instruction = "Before reading predictions, check foundation_integrity → microstructure_now → trade_flow_now. This is current-state signal layering, not a trade instruction."
+    return {
+        "ok": True,
+        "source_layering_version": WARROOM_LIVE_NOWCAST_SOURCE_LAYERING_VERSION,
+        "nowcast_role": "current_market_state_not_prediction",
+        "source_importance_rows": rows,
+        "source_importance_row_count": len(rows),
+        "read_order": top_read_order,
+        "prediction_input_gate": input_gate,
+        "operator_instruction_text": instruction,
+        "profiles": _SOURCE_IMPORTANCE_PROFILES,
+        "layer_descriptions": _SIGNAL_LAYER_DESCRIPTIONS_JA if lang == "ja" else {},
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "current_state_not_prediction": True,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def warroom_live_nowcast_source_layer_summary_rows(layering: Mapping[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {"item": "source_layering_version", "value": layering.get("source_layering_version"), "note": "display-only current-state layer"},
+        {"item": "prediction_input_gate", "value": layering.get("prediction_input_gate"), "note": "whether current state is a usable foundation before prediction"},
+        {"item": "read_order", "value": " → ".join(str(item) for item in layering.get("read_order") or []), "note": "operator read order"},
+        {"item": "operator_instruction", "value": layering.get("operator_instruction_text"), "note": "not a trade instruction"},
+    ]
+
+
+def _render_warroom_live_nowcast_source_layering(packet: Mapping[str, Any], summary: Mapping[str, Any]) -> Mapping[str, Any]:
+    layering = build_warroom_live_nowcast_source_importance_packet(packet, summary, lang="ja")
+    st.caption("PS-Q25D source importance / signal layering: read current-state sources before predictions. Display-only; no execution.")
+    st.dataframe(warroom_live_nowcast_source_layer_summary_rows(layering), width="stretch", hide_index=True)
+    st.dataframe(layering.get("source_importance_rows") or [], width="stretch", hide_index=True)
+    return layering
+
+
 def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -> Mapping[str, Any]:
     packet_holder: dict[str, Any] = {}
 
@@ -426,6 +558,7 @@ def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -
         packet_holder.update(packet)
         st.caption("PS-Q25B/Q25C Live Market Nowcast: current board/executions/spread/freshness plus operator classification. This is not a future prediction and not a trade instruction.")
         operator_summary = _render_warroom_live_nowcast_operator_summary(packet, lang="ja")
+        source_layering = _render_warroom_live_nowcast_source_layering(packet, operator_summary)
         if packet.get("current_state_summary") == "current_market_state_live_observable":
             st.success(f"🟢 Live current state | {packet.get('market_uid')} | spread={packet.get('spread')} ({packet.get('spread_bps')} bps) | market_age={packet.get('market_event_age_sec')}s")
         elif packet.get("current_state_summary") == "current_market_state_caution":
@@ -452,6 +585,7 @@ def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -
             f"attention_flags={','.join(packet.get('attention_flags') or []) or 'none'} "
             f"operator_state_grade={operator_summary.get('operator_state_grade')} "
             f"operator_attention_severity={operator_summary.get('operator_attention_severity')} "
+            f"prediction_input_gate={source_layering.get('prediction_input_gate')} "
             "read_only=true display_only=true autotrade=false broker=false"
         )
 
