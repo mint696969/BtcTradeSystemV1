@@ -29,6 +29,7 @@ WARROOM_PREDICTION_REFRESH_STATUS_STRIP_VERSION = "prediction_warroom.warroom_pr
 WARROOM_PREDICTION_REFRESH_LIVE_BADGE_VERSION = "prediction_warroom.warroom_prediction_refresh_live_badge.ps_q21d.v1"
 WARROOM_PREDICTION_DATA_FRESHNESS_BADGE_VERSION = "prediction_warroom.warroom_prediction_data_freshness_badge.ps_q21e.v1"
 WARROOM_PREDICTION_UPDATE_VISIBILITY_VERSION = "prediction_warroom.warroom_prediction_refresh_visibility.ps_q25a.v1"
+WARROOM_PREDICTION_HORIZON_EXPIRY_VERSION = "prediction_warroom.prediction_artifact_horizon_freshness_expiry.ps_q25g.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -270,6 +271,123 @@ def _render_prediction_update_visibility_strip(packet: Mapping[str, Any], *, lan
     st.dataframe(rows, width="stretch", hide_index=True)
 
 
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        if value is None or value == "":
+            return None
+        return int(float(value))
+    except Exception:
+        return None
+
+
+def _horizon_expiry_state(*, age_sec: int | None, horizon_sec: int) -> tuple[str, int | None, int | None, str]:
+    if age_sec is None or horizon_sec <= 0:
+        return "unknown", None, None, "prediction artifact age or horizon is unknown"
+    time_to_expiry = int(horizon_sec) - int(age_sec)
+    if age_sec <= horizon_sec:
+        return "usable", max(0, time_to_expiry), 0, "prediction artifact is within this horizon TTL"
+    expired_by = int(age_sec) - int(horizon_sec)
+    if age_sec <= horizon_sec * 2:
+        return "stale", 0, expired_by, "prediction artifact is older than horizon TTL; read with caution only"
+    return "expired", 0, expired_by, "prediction artifact is expired for this horizon; do not use as live tactical guidance"
+
+
+def latest_prediction_warroom_horizon_expiry_rows(read_model: Mapping[str, Any] | Any, *, lang: str = "en") -> list[dict[str, Any]]:
+    model = _as_mapping(read_model)
+    age_sec = _int_or_none(model.get("age_sec"))
+    selected = _as_mapping(model.get("selected_records_by_horizon"))
+    horizons = [_int_or_none(item) for item in (model.get("selected_horizon_sec") or [])]
+    rows: list[dict[str, Any]] = []
+    for horizon in [item for item in horizons if item is not None]:
+        state, time_to_expiry, expired_by, note = _horizon_expiry_state(age_sec=age_sec, horizon_sec=int(horizon))
+        record_count = len(selected.get(str(horizon)) or []) if isinstance(selected.get(str(horizon)) or [], list) else 0
+        if lang == "ja":
+            if state == "usable":
+                operator_note = "この horizon では予測 artifact はまだ期限内です。"
+            elif state == "stale":
+                operator_note = "この horizon では期限切れ直後です。参考程度に弱めて読んでください。"
+            elif state == "expired":
+                operator_note = "この horizon では期限切れです。現在の短期判断には使わないでください。"
+            else:
+                operator_note = "age または horizon が不明です。"
+        else:
+            operator_note = note
+        rows.append({
+            "horizon": f"{int(horizon)}s",
+            "horizon_sec": int(horizon),
+            "artifact_age_sec": age_sec,
+            "horizon_expiry_state": state,
+            "time_to_expiry_sec": time_to_expiry,
+            "expired_by_sec": expired_by,
+            "selected_record_count": record_count,
+            "operator_note": operator_note,
+        })
+    return rows
+
+
+def latest_prediction_warroom_horizon_expiry_packet(read_model: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
+    rows = latest_prediction_warroom_horizon_expiry_rows(read_model, lang=lang)
+    order = {"usable": 0, "unknown": 1, "stale": 2, "expired": 3}
+    worst = max((str(row.get("horizon_expiry_state")) for row in rows), key=lambda item: order.get(item, 4), default="unknown")
+    short_expired = any(row.get("horizon_sec") in {15, 30, 60} and row.get("horizon_expiry_state") in {"stale", "expired"} for row in rows)
+    if worst == "usable":
+        overall = "all_selected_horizons_within_ttl"
+        summary = "すべての表示 horizon は artifact age 上の期限内です。" if lang == "ja" else "All displayed horizons are within artifact TTL."
+    elif short_expired:
+        overall = "short_horizon_expired_or_stale"
+        summary = "短期 horizon の予測は古い可能性があります。現在の短期判断には使わないでください。" if lang == "ja" else "Short-horizon predictions may be old; do not treat them as live tactical guidance."
+    elif worst == "stale":
+        overall = "some_horizons_stale"
+        summary = "一部 horizon は期限切れ直後です。予測の重みを下げて読んでください。" if lang == "ja" else "Some horizons are stale; de-weight prediction interpretation."
+    elif worst == "expired":
+        overall = "some_horizons_expired"
+        summary = "一部 horizon は期限切れです。live tactical guidance として読まないでください。" if lang == "ja" else "Some horizons are expired; do not read as live tactical guidance."
+    else:
+        overall = "horizon_expiry_unknown"
+        summary = "horizon expiry を判定できません。generated_at と age を確認してください。" if lang == "ja" else "Horizon expiry cannot be determined; check generated_at and age."
+    return {
+        "horizon_expiry_version": WARROOM_PREDICTION_HORIZON_EXPIRY_VERSION,
+        "operator_visible_horizon_expiry": True,
+        "horizon_expiry_rows": rows,
+        "horizon_expiry_row_count": len(rows),
+        "overall_horizon_expiry_state": overall,
+        "short_horizon_expired_or_stale": short_expired,
+        "operator_summary_text": summary,
+        "read_only": True,
+        "non_executing": True,
+        "display_only": True,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "producer_cadence_changed": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def _render_prediction_horizon_expiry(packet: Mapping[str, Any], *, lang: str) -> None:
+    expiry = _as_mapping(packet.get("horizon_expiry_packet"))
+    message = str(expiry.get("operator_summary_text") or "")
+    if expiry.get("overall_horizon_expiry_state") == "all_selected_horizons_within_ttl":
+        st.success(message)
+    elif expiry.get("short_horizon_expired_or_stale") is True:
+        st.warning(message)
+    else:
+        st.info(message)
+    st.caption("PS-Q25G horizon freshness/expiry: display-only. This does not change prediction producer cadence or scheduler.")
+    rows = list(expiry.get("horizon_expiry_rows") or [])
+    if rows:
+        st.dataframe(rows, width="stretch", hide_index=True)
+
+
 def latest_prediction_warroom_refresh_live_badge_packet(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
     """Return a compact live badge packet for the WarRoom prediction refresh status."""
     data = _as_mapping(packet)
@@ -453,6 +571,7 @@ def build_latest_prediction_warroom_display_panel_packet(
     safety_rows = latest_prediction_warroom_safety_rows(model, lang=lang)
     market_rows = latest_prediction_warroom_market_rows(model, lang=lang)
     field_guide_rows = latest_prediction_warroom_field_guide_rows(lang=lang)
+    horizon_expiry_packet = latest_prediction_warroom_horizon_expiry_packet(model, lang=lang)
     failures: list[str] = []
     if not model:
         failures.append("read_model_missing")
@@ -512,6 +631,12 @@ def build_latest_prediction_warroom_display_panel_packet(
         "data_freshness_badge_version": WARROOM_PREDICTION_DATA_FRESHNESS_BADGE_VERSION,
         "operator_visible_data_freshness_badge": True,
         "data_freshness_badge_rendered": True,
+        "prediction_horizon_expiry_version": WARROOM_PREDICTION_HORIZON_EXPIRY_VERSION,
+        "operator_visible_horizon_expiry": True,
+        "horizon_expiry_rendered": True,
+        "horizon_expiry_packet": horizon_expiry_packet,
+        "overall_horizon_expiry_state": horizon_expiry_packet.get("overall_horizon_expiry_state"),
+        "short_horizon_expired_or_stale": horizon_expiry_packet.get("short_horizon_expired_or_stale"),
         "operator_visible_refresh_live_badge": True,
         "refresh_live_badge_rendered": True,
         "operator_visible_refresh_status_strip": True,
@@ -559,6 +684,7 @@ def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
     st.caption(str(packet.get("operator_caption") or "Latest prediction WarRoom display"))
     _render_refresh_status_strip(packet, lang=lang)
     _render_prediction_data_freshness_badge(packet, lang=lang)
+    _render_prediction_horizon_expiry(packet, lang=lang)
     _render_prediction_update_visibility_strip(packet, lang=lang)
     with st.expander(_t(lang, "reading_title"), expanded=True):
         st.write(_t(lang, "reading_summary"))
@@ -596,6 +722,8 @@ def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
         f"display_language={packet.get('display_language')} "
         f"freshness_state={packet.get('freshness_state')} "
         f"prediction_row_count={packet.get('prediction_row_count')} "
+        f"overall_horizon_expiry_state={packet.get('overall_horizon_expiry_state')} "
+        f"short_horizon_expired_or_stale={packet.get('short_horizon_expired_or_stale')} "
         f"auto_refresh={packet.get('warroom_prediction_display_auto_refresh_enabled')} "
         f"refresh_heartbeat_utc={packet.get('refresh_heartbeat_utc')} "
         f"view_artifact_write_allowed=false autotrade=false broker=false"
