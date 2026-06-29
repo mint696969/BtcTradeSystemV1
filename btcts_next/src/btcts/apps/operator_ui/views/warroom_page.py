@@ -48,6 +48,9 @@ from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_
 from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_warroom_read_model_display_panel import (
     render_latest_prediction_warroom_display_panel,
 )
+from btcts.apps.operator_ui.prediction_warroom.panels.warroom_live_market_nowcast_panel import (
+    render_warroom_live_market_nowcast_panel,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -560,6 +563,9 @@ def _render_warroom_page_body() -> None:
 
     with live_shell.render_folded_section("Prediction WarRoom latest summary observation quick status", expanded=True):
         _render_prediction_warroom_latest_prediction_observation_cleanup_summary_section(fragment_enabled=prediction_fragment_enabled)
+
+    with live_shell.render_folded_section("PS-Q25B Live Market Nowcast / current state", expanded=True):
+        render_warroom_live_market_nowcast_panel(fragment_enabled=fragment_enabled)
 
     with live_shell.render_folded_section("PS-Q19D realtime prediction display", expanded=True):
         render_latest_prediction_warroom_display_panel(fragment_enabled=prediction_fragment_enabled)
