@@ -552,3 +552,166 @@ def build_prediction_warroom_producer_cadence_gap_plan(
         "would_send_to_broker": False,
     }
 
+# PS-Q25L planning-only cadence option decision packet. This does not record a
+# human decision and cannot apply cadence/scheduler/artifact changes.
+PREDICTION_WARROOM_PRODUCER_CADENCE_OPTION_DECISION_VERSION = (
+    "prediction_warroom.producer_cadence_options_human_gate.ps_q25l.v1"
+)
+
+CADENCE_OPTION_DECISION_CANDIDATES: Tuple[Mapping[str, Any], ...] = (
+    {
+        "option_id": "keep_current_300s_context_only_until_gate",
+        "label": "Keep current 300s cadence; treat short horizons as context-only",
+        "candidate_cadence_sec": 300,
+        "supports_15s_tactical": False,
+        "supports_60s_tactical": False,
+        "supports_300s_tactical": False,
+        "supports_900s_context": True,
+        "requires_explicit_human_gate": False,
+        "requires_scheduler_action_change": False,
+        "requires_runtime_artifact_write_change": False,
+        "risk_level": "low",
+        "recommended_as_safe_default": True,
+        "next_step": "continue display guidance and require explicit gate before any cadence change",
+    },
+    {
+        "option_id": "single_producer_60s_candidate",
+        "label": "Future 60s single-producer cadence candidate",
+        "candidate_cadence_sec": 60,
+        "supports_15s_tactical": False,
+        "supports_60s_tactical": True,
+        "supports_300s_tactical": True,
+        "supports_900s_context": True,
+        "requires_explicit_human_gate": True,
+        "requires_scheduler_action_change": True,
+        "requires_runtime_artifact_write_change": True,
+        "risk_level": "medium",
+        "recommended_as_safe_default": False,
+        "next_step": "separate gated implementation slice with scheduler diff, rollback, and load guard",
+    },
+    {
+        "option_id": "split_lane_30s_tactical_300s_context_candidate",
+        "label": "Future split-lane candidate: 30s tactical lane plus 300s context lane",
+        "candidate_cadence_sec": 30,
+        "supports_15s_tactical": False,
+        "supports_60s_tactical": True,
+        "supports_300s_tactical": True,
+        "supports_900s_context": True,
+        "requires_explicit_human_gate": True,
+        "requires_scheduler_action_change": True,
+        "requires_runtime_artifact_write_change": True,
+        "risk_level": "high",
+        "recommended_as_safe_default": False,
+        "next_step": "separate architecture slice before any scheduler or producer change",
+    },
+    {
+        "option_id": "micro_15s_high_frequency_not_recommended",
+        "label": "15s micro-cadence candidate; not recommended without major load/replay evidence",
+        "candidate_cadence_sec": 15,
+        "supports_15s_tactical": True,
+        "supports_60s_tactical": True,
+        "supports_300s_tactical": True,
+        "supports_900s_context": True,
+        "requires_explicit_human_gate": True,
+        "requires_scheduler_action_change": True,
+        "requires_runtime_artifact_write_change": True,
+        "risk_level": "very_high",
+        "recommended_as_safe_default": False,
+        "next_step": "do not implement before profiling, replay evidence, lock policy, and explicit gate",
+    },
+)
+
+
+def _cadence_option_rows() -> list[dict[str, Any]]:
+    return [dict(item) for item in CADENCE_OPTION_DECISION_CANDIDATES]
+
+
+def build_prediction_warroom_producer_cadence_option_decision_packet(
+    *,
+    selected_option_id: str = "",
+    explicit_human_gate_granted: bool = False,
+    request_apply_selected_option: bool = False,
+    request_scheduler_action_change: bool = False,
+    request_runtime_artifact_write_enable: bool = False,
+    request_prediction_artifact_write_enable: bool = False,
+) -> dict[str, Any]:
+    """Return a planning-only cadence option packet that requires a future gate.
+
+    This function never applies a cadence option. Even when a gate flag is supplied,
+    it only reports that a separate implementation slice would be required.
+    """
+    rows = _cadence_option_rows()
+    by_id = {str(row.get("option_id")): row for row in rows}
+    selected = by_id.get(str(selected_option_id or ""), {})
+    selected_known = bool(selected)
+    selected_requires_gate = bool(selected.get("requires_explicit_human_gate")) if selected_known else False
+    dangerous_requests = {
+        "request_apply_selected_option": bool(request_apply_selected_option),
+        "request_scheduler_action_change": bool(request_scheduler_action_change),
+        "request_runtime_artifact_write_enable": bool(request_runtime_artifact_write_enable),
+        "request_prediction_artifact_write_enable": bool(request_prediction_artifact_write_enable),
+    }
+    requested_flags = [name for name, value in dangerous_requests.items() if value]
+    blockers: list[str] = []
+    if selected_option_id and not selected_known:
+        blockers.append("selected_option_unknown")
+    if selected_requires_gate and not explicit_human_gate_granted:
+        blockers.append("selected_option_requires_explicit_human_gate")
+    if requested_flags and not explicit_human_gate_granted:
+        blockers.extend(f"explicit_gate_required_before:{name}" for name in requested_flags)
+    if requested_flags and explicit_human_gate_granted:
+        blockers.append("separate_implementation_slice_required_after_gate")
+    if blockers:
+        decision_state = "blocked_or_waiting_for_explicit_human_gate"
+    elif selected_known:
+        decision_state = "option_selected_for_future_planning_no_change"
+    else:
+        decision_state = "cadence_options_ready_human_gate_decision_required"
+    return {
+        "cadence_option_decision_version": PREDICTION_WARROOM_PRODUCER_CADENCE_OPTION_DECISION_VERSION,
+        "decision_state": decision_state,
+        "planning_only": True,
+        "decision_packet_only": True,
+        "read_only": True,
+        "non_executing": True,
+        "contract_only": True,
+        "display_only": True,
+        "human_gate_required_before_any_change": True,
+        "explicit_human_gate_granted": bool(explicit_human_gate_granted),
+        "selected_option_id": str(selected_option_id or ""),
+        "selected_option_known": selected_known,
+        "selected_option_requires_gate": selected_requires_gate,
+        "selected_option": dict(selected),
+        "recommended_safe_default_option_id": "keep_current_300s_context_only_until_gate",
+        "option_rows": rows,
+        "option_row_count": len(rows),
+        "options_requiring_gate_count": sum(1 for row in rows if row.get("requires_explicit_human_gate") is True),
+        "requested_dangerous_flags": requested_flags,
+        "blocked_reasons": list(dict.fromkeys(blockers)),
+        "blocker_count": len(list(dict.fromkeys(blockers))),
+        "next_required_before_implementation": [
+            "operator_human_gate_decision",
+            "scheduler_action_diff_review",
+            "rollback_plan",
+            "load_and_runtime_lock_guard",
+            "read_only_diagnostic_before_any_write",
+        ],
+        "producer_cadence_changed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "latest_manifest_written": False,
+        "run_sidecars_written": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "parameter_staging_write_allowed": False,
+        "would_send_to_broker": False,
+    }
+
