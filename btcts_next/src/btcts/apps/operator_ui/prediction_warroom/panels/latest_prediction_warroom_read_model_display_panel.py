@@ -34,6 +34,7 @@ WARROOM_PREDICTION_OPERATOR_ACTION_GUIDANCE_VERSION = "prediction_warroom.predic
 WARROOM_PREDICTION_COMPACT_LAYOUT_VERSION = "prediction_warroom.prediction_panel_section_order_compact_layout.ps_q25i.v1"
 WARROOM_PREDICTION_DENSITY_TUNING_VERSION = "prediction_warroom.prediction_panel_visual_review_density_tuning.ps_q25j.v1"
 WARROOM_PREDICTION_JAPANESE_READING_LAYER_VERSION = "prediction_warroom.prediction_display_japanese_reading_layer.ps_q26a.v1"
+WARROOM_PREDICTION_JAPANESE_READING_DENSITY_POLISH_VERSION = "prediction_warroom.prediction_display_japanese_reading_density_polish.ps_q26b.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -300,6 +301,122 @@ def latest_prediction_warroom_japanese_reading_rows(
         },
     ]
 
+
+
+def _q26b_prediction_label(value: Any) -> str:
+    raw = _clean(value)
+    mapping = {
+        "fresh": "鮮度: 新しい",
+        "delayed": "鮮度: やや遅延",
+        "stale": "鮮度: 古い",
+        "unknown": "鮮度: 不明",
+        "all_selected_horizons_within_ttl": "全horizon期限内",
+        "short_horizon_expired_or_stale": "短期は古い/弱い",
+        "some_horizons_stale": "一部は古い",
+        "some_horizons_expired": "一部は期限切れ",
+        "horizon_expiry_unknown": "期限判定不明",
+        "tactical_predictions_ready": "予測表示: 読める",
+        "tactical_predictions_not_ready": "予測表示: 弱い",
+        "warning": "注意",
+        "critical": "強い注意",
+        "ok": "OK",
+    }
+    return mapping.get(raw, raw or "-")
+
+
+def latest_prediction_warroom_japanese_density_polish_rows(
+    read_model: Mapping[str, Any] | Any,
+    *,
+    prediction_rows: list[dict[str, Any]] | None = None,
+    horizon_expiry_packet: Mapping[str, Any] | Any | None = None,
+    operator_action_guidance_packet: Mapping[str, Any] | Any | None = None,
+) -> list[dict[str, Any]]:
+    model = _as_mapping(read_model)
+    expiry = _as_mapping(horizon_expiry_packet)
+    guidance = _as_mapping(operator_action_guidance_packet)
+    rows = list(prediction_rows if prediction_rows is not None else latest_prediction_warroom_display_rows(model, lang="ja"))
+    short_15 = _q26a_prediction_first_row(rows, 15)
+    short_60 = _q26a_prediction_first_row(rows, 60)
+    mid_300 = _q26a_prediction_first_row(rows, 300)
+    long_900 = _q26a_prediction_first_row(rows, 900)
+    generated = _clean(model.get("generated_at")) or "-"
+    age = _clean(model.get("age_sec")) or "-"
+    freshness = _q26b_prediction_label(model.get("freshness_state"))
+    expiry_state = _q26b_prediction_label(expiry.get("overall_horizon_expiry_state"))
+    readiness = _q26b_prediction_label(guidance.get("prediction_tactical_readiness") or guidance.get("operator_action_severity"))
+    guidance_text = _clean(guidance.get("operator_action_text") or guidance.get("operator_summary_text")) or "鮮度と期限を先に確認します。"
+    return [
+        {
+            "要点": "予測を読めるか",
+            "状態": f"{freshness} / age={age}s / {expiry_state}",
+            "見る順番": "generated_at → horizon期限 → 15s/60s",
+            "読み方": "generated_at が変わった時だけ予測そのものが更新です。UI更新とは別です。",
+        },
+        {
+            "要点": "短期 15s/60s",
+            "状態": f"15s={_q26a_prediction_row_summary(short_15)} / 60s={_q26a_prediction_row_summary(short_60)}",
+            "見る順番": "現在状態がliveの時だけ強めに読む",
+            "読み方": "短期の警戒テーマです。売買指示ではありません。古ければ読まない/弱めます。",
+        },
+        {
+            "要点": "中期 300s/900s",
+            "状態": f"300s={_q26a_prediction_row_summary(mid_300)} / 900s={_q26a_prediction_row_summary(long_900)}",
+            "見る順番": "短期と矛盾したら鮮度を優先",
+            "読み方": "地合い・背景理解です。短期エントリー判断には変換しません。",
+        },
+        {
+            "要点": "今の扱い",
+            "状態": readiness,
+            "見る順番": "注意表示があれば待つ/弱める",
+            "読み方": guidance_text,
+        },
+        {
+            "要点": "安全境界",
+            "状態": f"generated_at={generated}",
+            "見る順番": "確認のみ",
+            "読み方": "表示専用です。AutoTrade・broker・ledger・parameter apply には接続しません。",
+        },
+    ]
+
+
+def build_latest_prediction_warroom_japanese_density_polish_packet(
+    read_model: Mapping[str, Any] | Any,
+    *,
+    prediction_rows: list[dict[str, Any]] | None = None,
+    horizon_expiry_packet: Mapping[str, Any] | Any | None = None,
+    operator_action_guidance_packet: Mapping[str, Any] | Any | None = None,
+) -> dict[str, Any]:
+    compact_rows = latest_prediction_warroom_japanese_density_polish_rows(
+        read_model,
+        prediction_rows=prediction_rows,
+        horizon_expiry_packet=horizon_expiry_packet,
+        operator_action_guidance_packet=operator_action_guidance_packet,
+    )
+    return {
+        "ok": True,
+        "density_polish_version": WARROOM_PREDICTION_JAPANESE_READING_DENSITY_POLISH_VERSION,
+        "density_polish_role": "compact_japanese_prediction_reading_not_trade_instruction",
+        "operator_visible_compact_japanese_rows": True,
+        "compact_row_count": len(compact_rows),
+        "compact_rows": compact_rows,
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
 
 def build_latest_prediction_warroom_japanese_reading_layer_packet(
     read_model: Mapping[str, Any] | Any,
@@ -948,6 +1065,7 @@ def build_latest_prediction_warroom_display_panel_packet(
     action_guidance_source_packet = {"horizon_expiry_packet": horizon_expiry_packet, "freshness_state": model.get("freshness_state"), "age_sec": model.get("age_sec")}
     operator_action_guidance_packet = latest_prediction_warroom_operator_action_guidance_packet(action_guidance_source_packet, lang=lang)
     q26a_japanese_reading_layer = build_latest_prediction_warroom_japanese_reading_layer_packet(model, prediction_rows=prediction_rows, horizon_expiry_packet=horizon_expiry_packet, operator_action_guidance_packet=operator_action_guidance_packet)
+    q26b_density_polish = build_latest_prediction_warroom_japanese_density_polish_packet(model, prediction_rows=prediction_rows, horizon_expiry_packet=horizon_expiry_packet, operator_action_guidance_packet=operator_action_guidance_packet)
     failures: list[str] = []
     if not model:
         failures.append("read_model_missing")
@@ -1019,6 +1137,8 @@ def build_latest_prediction_warroom_display_panel_packet(
         "operator_action_guidance_packet": operator_action_guidance_packet,
         "q26a_japanese_reading_layer_packet": q26a_japanese_reading_layer,
         "q26a_japanese_reading_rows": q26a_japanese_reading_layer.get("rows"),
+        "q26b_density_polish_packet": q26b_density_polish,
+        "q26b_compact_japanese_rows": q26b_density_polish.get("compact_rows"),
         "operator_action_severity": operator_action_guidance_packet.get("operator_action_severity"),
         "prediction_tactical_readiness": operator_action_guidance_packet.get("prediction_tactical_readiness"),
         "wait_for_new_prediction_artifact": operator_action_guidance_packet.get("wait_for_new_prediction_artifact"),
@@ -1095,6 +1215,11 @@ def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
             blockers=packet.get("blocker_reason_codes") or [],
         )
     )
+    q26b_rows = list(packet.get("q26b_compact_japanese_rows") or [])
+    if q26b_rows:
+        st.caption("PS-Q26B 日本語要点: 予測表示は要点→短期→中期→安全境界の順で読みます。")
+        st.dataframe(q26b_rows, width="stretch", hide_index=True)
+
     q26a_rows = list(packet.get("q26a_japanese_reading_rows") or [])
     if q26a_rows:
         st.caption("PS-Q26A 日本語読み方: 予測表示は、現在状態と鮮度を確認してから読む operator review 材料です。売買指示ではありません。")
