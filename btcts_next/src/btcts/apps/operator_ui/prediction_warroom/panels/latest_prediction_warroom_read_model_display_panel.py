@@ -31,6 +31,7 @@ WARROOM_PREDICTION_DATA_FRESHNESS_BADGE_VERSION = "prediction_warroom.warroom_pr
 WARROOM_PREDICTION_UPDATE_VISIBILITY_VERSION = "prediction_warroom.warroom_prediction_refresh_visibility.ps_q25a.v1"
 WARROOM_PREDICTION_HORIZON_EXPIRY_VERSION = "prediction_warroom.prediction_artifact_horizon_freshness_expiry.ps_q25g.v1"
 WARROOM_PREDICTION_OPERATOR_ACTION_GUIDANCE_VERSION = "prediction_warroom.prediction_data_age_severity_operator_action_guidance.ps_q25h.v1"
+WARROOM_PREDICTION_COMPACT_LAYOUT_VERSION = "prediction_warroom.prediction_panel_section_order_compact_layout.ps_q25i.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -505,6 +506,80 @@ def _render_prediction_operator_action_guidance(packet: Mapping[str, Any], *, la
         st.dataframe(rows, width="stretch", hide_index=True)
 
 
+
+def latest_prediction_warroom_compact_layout_rows(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> list[dict[str, Any]]:
+    data = _as_mapping(packet)
+    guidance = _as_mapping(data.get("operator_action_guidance_packet"))
+    expiry = _as_mapping(data.get("horizon_expiry_packet"))
+    if lang == "ja":
+        return [
+            {"item": "operator_action", "value": _clean(guidance.get("operator_action_severity")) or "-", "note": _clean(guidance.get("prediction_tactical_readiness")) or "-"},
+            {"item": "prediction_data_age", "value": _clean(data.get("age_sec")) or "-", "note": _clean(data.get("freshness_state")) or "unknown"},
+            {"item": "horizon_expiry", "value": _clean(expiry.get("overall_horizon_expiry_state")) or "-", "note": "short_expired=" + _bool_text(expiry.get("short_horizon_expired_or_stale"))},
+            {"item": "generated_at", "value": _clean(data.get("generated_at")) or "-", "note": "この値が変わると予測データが更新されます。"},
+            {"item": "panel_heartbeat", "value": _clean(data.get("refresh_heartbeat_utc")) or "-", "note": "画面更新の確認。予測生成更新ではありません。"},
+        ]
+    return [
+        {"item": "operator_action", "value": _clean(guidance.get("operator_action_severity")) or "-", "note": _clean(guidance.get("prediction_tactical_readiness")) or "-"},
+        {"item": "prediction_data_age", "value": _clean(data.get("age_sec")) or "-", "note": _clean(data.get("freshness_state")) or "unknown"},
+        {"item": "horizon_expiry", "value": _clean(expiry.get("overall_horizon_expiry_state")) or "-", "note": "short_expired=" + _bool_text(expiry.get("short_horizon_expired_or_stale"))},
+        {"item": "generated_at", "value": _clean(data.get("generated_at")) or "-", "note": "Prediction data updates when this changes."},
+        {"item": "panel_heartbeat", "value": _clean(data.get("refresh_heartbeat_utc")) or "-", "note": "UI refresh check, not producer generation."},
+    ]
+
+
+def latest_prediction_warroom_compact_layout_packet(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
+    data = _as_mapping(packet)
+    rows = latest_prediction_warroom_compact_layout_rows(data, lang=lang)
+    guidance = _as_mapping(data.get("operator_action_guidance_packet"))
+    severity = _clean(guidance.get("operator_action_severity")) or "unknown"
+    summary = _clean(guidance.get("operator_action_summary_text")) or ("Prediction panel compact summary." if lang != "ja" else "予測パネル compact summary。")
+    return {
+        "compact_layout_version": WARROOM_PREDICTION_COMPACT_LAYOUT_VERSION,
+        "operator_visible_compact_layout": True,
+        "compact_layout_rows": rows,
+        "compact_layout_row_count": len(rows),
+        "compact_layout_top_priority": "operator_action_guidance_first",
+        "compact_layout_detail_tables_still_visible": True,
+        "operator_action_severity": severity,
+        "prediction_tactical_readiness": guidance.get("prediction_tactical_readiness"),
+        "operator_summary_text": summary,
+        "read_only": True,
+        "non_executing": True,
+        "display_only": True,
+        "layout_only_change": True,
+        "producer_cadence_changed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def _render_prediction_compact_operator_header(packet: Mapping[str, Any], *, lang: str) -> None:
+    compact = _as_mapping(packet.get("compact_layout_packet"))
+    severity = _clean(compact.get("operator_action_severity"))
+    message = str(compact.get("operator_summary_text") or "")
+    if severity == "critical":
+        st.error(message)
+    elif severity == "warning":
+        st.warning(message)
+    else:
+        st.success(message)
+    st.caption("PS-Q25I compact top summary: operator action → data age → horizon expiry → generated_at/heartbeat. Layout-only, display-only.")
+    rows = list(compact.get("compact_layout_rows") or [])
+    if rows:
+        st.dataframe(rows, width="stretch", hide_index=True)
+
+
 def latest_prediction_warroom_refresh_live_badge_packet(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
     """Return a compact live badge packet for the WarRoom prediction refresh status."""
     data = _as_mapping(packet)
@@ -763,6 +838,10 @@ def build_latest_prediction_warroom_display_panel_packet(
         "operator_action_severity": operator_action_guidance_packet.get("operator_action_severity"),
         "prediction_tactical_readiness": operator_action_guidance_packet.get("prediction_tactical_readiness"),
         "wait_for_new_prediction_artifact": operator_action_guidance_packet.get("wait_for_new_prediction_artifact"),
+        "prediction_compact_layout_version": WARROOM_PREDICTION_COMPACT_LAYOUT_VERSION,
+        "operator_visible_compact_layout": True,
+        "compact_layout_rendered": True,
+        "compact_layout_packet": latest_prediction_warroom_compact_layout_packet({"operator_action_guidance_packet": operator_action_guidance_packet, "horizon_expiry_packet": horizon_expiry_packet, "age_sec": model.get("age_sec"), "freshness_state": model.get("freshness_state"), "generated_at": model.get("generated_at"), "refresh_heartbeat_utc": refresh_heartbeat_utc}, lang=lang),
         "operator_visible_refresh_live_badge": True,
         "refresh_live_badge_rendered": True,
         "operator_visible_refresh_status_strip": True,
@@ -808,6 +887,7 @@ def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
         lang=lang,
     )
     st.caption(str(packet.get("operator_caption") or "Latest prediction WarRoom display"))
+    _render_prediction_compact_operator_header(packet, lang=lang)
     _render_refresh_status_strip(packet, lang=lang)
     _render_prediction_data_freshness_badge(packet, lang=lang)
     _render_prediction_horizon_expiry(packet, lang=lang)
@@ -853,6 +933,7 @@ def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
         f"short_horizon_expired_or_stale={packet.get('short_horizon_expired_or_stale')} "
         f"operator_action_severity={packet.get('operator_action_severity')} "
         f"prediction_tactical_readiness={packet.get('prediction_tactical_readiness')} "
+        f"compact_layout_rendered={packet.get('compact_layout_rendered')} "
         f"auto_refresh={packet.get('warroom_prediction_display_auto_refresh_enabled')} "
         f"refresh_heartbeat_utc={packet.get('refresh_heartbeat_utc')} "
         f"view_artifact_write_allowed=false autotrade=false broker=false"
