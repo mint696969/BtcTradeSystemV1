@@ -18,6 +18,7 @@ WARROOM_LIVE_NOWCAST_OPERATOR_SUMMARY_VERSION = "prediction_warroom.live_nowcast
 WARROOM_LIVE_NOWCAST_SOURCE_LAYERING_VERSION = "prediction_warroom.live_nowcast_source_importance_signal_layering.ps_q25d.v1"
 WARROOM_LIVE_NOWCAST_COMPOSITE_SCORE_VERSION = "prediction_warroom.live_nowcast_composite_score_history_mini_trend.ps_q25e.v1"
 WARROOM_LIVE_NOWCAST_HORIZON_READINESS_VERSION = "prediction_warroom.live_nowcast_horizon_readiness_prediction_input_handoff.ps_q25f.v1"
+WARROOM_LIVE_NOWCAST_JAPANESE_READING_LAYER_VERSION = "prediction_warroom.live_nowcast_japanese_reading_layer.ps_q26a.v1"
 WARROOM_LIVE_NOWCAST_HISTORY_SESSION_KEY = "warroom_live_nowcast_composite_score_history_ps_q25e"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_MODE = "poll_fast"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_SEC = 3
@@ -891,6 +892,113 @@ def _render_warroom_live_nowcast_horizon_readiness(
     return readiness
 
 
+
+def _q26a_text(value: Any) -> str:
+    text = _clean(value)
+    return text if text else "-"
+
+
+def _q26a_bool_ok(value: Any) -> str:
+    return "正常" if value is True else "注意"
+
+
+def warroom_live_nowcast_japanese_reading_rows(
+    packet: Mapping[str, Any] | Any,
+    operator_summary: Mapping[str, Any] | Any | None = None,
+    source_layering: Mapping[str, Any] | Any | None = None,
+    composite: Mapping[str, Any] | Any | None = None,
+    horizon_readiness: Mapping[str, Any] | Any | None = None,
+) -> list[dict[str, Any]]:
+    """Return compact Japanese operator reading rows for current-state nowcast.
+
+    PS-Q26A is display-only. These rows explain how to read the current state;
+    they are not prediction, trading advice, or execution instructions.
+    """
+    nowcast = _as_mapping(packet)
+    summary = _as_mapping(operator_summary)
+    layering = _as_mapping(source_layering)
+    score = _as_mapping(composite)
+    readiness = _as_mapping(horizon_readiness)
+    attention_count = len(nowcast.get("attention_flags") or []) if isinstance(nowcast.get("attention_flags") or [], list) else 0
+    freshness = _q26a_text(nowcast.get("nowcast_freshness_state"))
+    current_state = _q26a_text(nowcast.get("current_state_summary"))
+    spread_state = _q26a_text(nowcast.get("spread_state"))
+    spread_bps = _q26a_text(nowcast.get("spread_bps"))
+    operator_grade = _q26a_text(summary.get("operator_state_grade"))
+    composite_score = _q26a_text(score.get("composite_score") or score.get("score") or score.get("current_composite_score"))
+    horizon_state = _q26a_text(readiness.get("horizon_readiness_state") or readiness.get("prediction_input_handoff_state"))
+    dominant_source = _q26a_text(layering.get("dominant_source") or layering.get("primary_source") or layering.get("source_layering_state"))
+    return [
+        {
+            "読む順番": 1,
+            "見る場所": "現在状態の総合判定",
+            "現在の値": current_state,
+            "日本語での読み方": _q26a_text(summary.get("operator_summary_text")) or "現在状態を先に確認します。",
+            "注意": "これは現在状態の観測で、予測や売買指示ではありません。",
+        },
+        {
+            "読む順番": 2,
+            "見る場所": "データ鮮度・WS・Collector",
+            "現在の値": f"freshness={freshness} / collector={_q26a_bool_ok(nowcast.get('collector_ok'))} / board={_q26a_text(nowcast.get('ws_state'))}",
+            "日本語での読み方": "live または slightly_delayed なら現在状態の土台として読めます。stale や WS 非LIVEなら先にデータ状態を疑います。",
+            "注意": "予測を見る前に鮮度を確認します。",
+        },
+        {
+            "読む順番": 3,
+            "見る場所": "板・spread",
+            "現在の値": f"bid={_q26a_text(nowcast.get('best_bid'))} / ask={_q26a_text(nowcast.get('best_ask'))} / spread={_q26a_text(nowcast.get('spread'))} ({spread_bps}bps, {spread_state})",
+            "日本語での読み方": "spread が tight/normal なら状態は読みやすく、wide_caution なら薄板・滑り・急変に注意します。",
+            "注意": "ここでは売買可否を決めません。市場の読みやすさだけを見ます。",
+        },
+        {
+            "読む順番": 4,
+            "見る場所": "注意フラグ",
+            "現在の値": f"attention_flags={attention_count} / grade={operator_grade}",
+            "日本語での読み方": _q26a_text(summary.get("operator_instruction_text")) or "attention が出たら予測の重みを下げます。",
+            "注意": "critical があれば予測より先に Collector/WS/resync を確認します。",
+        },
+        {
+            "読む順番": 5,
+            "見る場所": "source / score / horizon handoff",
+            "現在の値": f"source={dominant_source} / score={composite_score} / horizon={horizon_state}",
+            "日本語での読み方": "source と horizon readiness は、予測表示を読む前に現在データが入力として使えるかを見る補助です。",
+            "注意": "読み方の補助であり、AutoTrade・broker・ledger にはつながりません。",
+        },
+    ]
+
+
+def build_warroom_live_nowcast_japanese_reading_layer_packet(
+    packet: Mapping[str, Any] | Any,
+    operator_summary: Mapping[str, Any] | Any | None = None,
+    source_layering: Mapping[str, Any] | Any | None = None,
+    composite: Mapping[str, Any] | Any | None = None,
+    horizon_readiness: Mapping[str, Any] | Any | None = None,
+) -> dict[str, Any]:
+    rows = warroom_live_nowcast_japanese_reading_rows(packet, operator_summary, source_layering, composite, horizon_readiness)
+    return {
+        "ok": True,
+        "japanese_reading_layer_version": WARROOM_LIVE_NOWCAST_JAPANESE_READING_LAYER_VERSION,
+        "japanese_reading_layer_role": "current_nowcast_reading_support_not_trade_instruction",
+        "operator_visible_japanese_rows": True,
+        "row_count": len(rows),
+        "rows": rows,
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
 def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -> Mapping[str, Any]:
     packet_holder: dict[str, Any] = {}
 
@@ -920,6 +1028,10 @@ def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -
         c6.metric("exec WS", str(packet.get("ws_executions_state") or "-"), delta=str(packet.get("ws_executions_freshness") or "-"))
         c7.metric("trades", str(packet.get("ws_executions_trade_count") or "-"))
         c8.metric("refresh", f"{packet.get('refresh_interval_sec')}s", delta=packet.get("panel_heartbeat_jst"))
+        japanese_reading_layer = build_warroom_live_nowcast_japanese_reading_layer_packet(packet, operator_summary, source_layering, composite_score, horizon_readiness)
+        st.caption("PS-Q26A 日本語読み方: 現在状態 nowcast は、予測や売買指示ではなく、いまの市場データを読む順番です。")
+        st.dataframe(japanese_reading_layer.get("rows") or [], width="stretch", hide_index=True)
+
         st.dataframe(warroom_live_market_nowcast_metric_rows(packet), width="stretch", hide_index=True)
         st.text(
             "PS_Q25B_LIVE_MARKET_NOWCAST "
