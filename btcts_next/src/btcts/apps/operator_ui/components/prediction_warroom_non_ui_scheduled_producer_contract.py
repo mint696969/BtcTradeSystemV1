@@ -441,3 +441,114 @@ def build_prediction_warroom_non_ui_scheduled_producer_contract(
         warning_reasons=unique_warnings,
         requested_enablement_flags=requested,
     )
+
+# PS-Q25K planning-only cadence/freshness gap packet. This is intentionally appended
+# to the PS-Q16A contract module without enabling producer cadence, scheduler, or writes.
+PREDICTION_WARROOM_PRODUCER_CADENCE_GAP_PLAN_VERSION = (
+    "prediction_warroom.producer_cadence_gap_planning.ps_q25k.v1"
+)
+
+HORIZON_CADENCE_PLANNING_TARGETS: Tuple[Mapping[str, Any], ...] = (
+    {"horizon_label": "15s", "horizon_sec": 15, "desired_max_age_sec": 15, "candidate_generation_cadence_sec": 15, "purpose": "micro tactical visibility"},
+    {"horizon_label": "60s", "horizon_sec": 60, "desired_max_age_sec": 30, "candidate_generation_cadence_sec": 30, "purpose": "short tactical visibility"},
+    {"horizon_label": "300s", "horizon_sec": 300, "desired_max_age_sec": 90, "candidate_generation_cadence_sec": 60, "purpose": "5m tactical visibility"},
+    {"horizon_label": "900s", "horizon_sec": 900, "desired_max_age_sec": 300, "candidate_generation_cadence_sec": 300, "purpose": "15m tactical/context visibility"},
+    {"horizon_label": "1800s", "horizon_sec": 1800, "desired_max_age_sec": 600, "candidate_generation_cadence_sec": 600, "purpose": "30m context visibility"},
+    {"horizon_label": "3600s", "horizon_sec": 3600, "desired_max_age_sec": 900, "candidate_generation_cadence_sec": 900, "purpose": "1h context visibility"},
+)
+
+
+def _cadence_gap_row(target: Mapping[str, Any], *, baseline_cadence_sec: int) -> dict[str, Any]:
+    horizon_sec = _int(target.get("horizon_sec"))
+    desired_age = _int(target.get("desired_max_age_sec"))
+    candidate = _int(target.get("candidate_generation_cadence_sec"))
+    baseline_supports = bool(baseline_cadence_sec <= desired_age)
+    needs_faster = bool(not baseline_supports)
+    return {
+        "horizon_label": str(target.get("horizon_label") or f"{horizon_sec}s"),
+        "horizon_sec": horizon_sec,
+        "purpose": str(target.get("purpose") or ""),
+        "desired_max_age_sec": desired_age,
+        "current_contract_recommended_cadence_sec": baseline_cadence_sec,
+        "candidate_generation_cadence_sec": candidate,
+        "baseline_supports_horizon_freshness": baseline_supports,
+        "needs_faster_than_current_contract": needs_faster,
+        "planning_note": (
+            "current_contract_cadence_too_slow_for_this_horizon" if needs_faster else "current_contract_cadence_can_support_this_horizon"
+        ),
+    }
+
+
+def build_prediction_warroom_producer_cadence_gap_plan(
+    *,
+    baseline_cadence_sec: int = RECOMMENDED_CADENCE_SEC,
+    request_producer_cadence_change: bool = False,
+    request_scheduler_action_change: bool = False,
+    request_runtime_artifact_write_enable: bool = False,
+    request_status_artifact_write_enable: bool = False,
+    request_prediction_artifact_write_enable: bool = False,
+    explicit_human_gate_granted: bool = False,
+) -> dict[str, Any]:
+    """Return a planning-only cadence/freshness gap packet for WarRoom prediction display.
+
+    The packet does not change scheduler actions, producer cadence, or artifacts. It only
+    documents which horizons would require a future explicitly gated cadence discussion.
+    """
+    baseline = max(1, _int(baseline_cadence_sec) or RECOMMENDED_CADENCE_SEC)
+    rows = [_cadence_gap_row(target, baseline_cadence_sec=baseline) for target in HORIZON_CADENCE_PLANNING_TARGETS]
+    short_horizon_gap_count = sum(1 for row in rows if row["horizon_sec"] <= 300 and row["needs_faster_than_current_contract"] is True)
+    requested_dangerous = {
+        "request_producer_cadence_change": bool(request_producer_cadence_change),
+        "request_scheduler_action_change": bool(request_scheduler_action_change),
+        "request_runtime_artifact_write_enable": bool(request_runtime_artifact_write_enable),
+        "request_status_artifact_write_enable": bool(request_status_artifact_write_enable),
+        "request_prediction_artifact_write_enable": bool(request_prediction_artifact_write_enable),
+    }
+    requested_flags = [name for name, value in requested_dangerous.items() if value]
+    blocked_reasons = [f"explicit_gate_required_before:{name}" for name in requested_flags]
+    if requested_flags and not explicit_human_gate_granted:
+        planning_state = "blocked_dangerous_request_without_explicit_gate"
+    else:
+        planning_state = "planning_only_ready"
+    return {
+        "cadence_gap_plan_version": PREDICTION_WARROOM_PRODUCER_CADENCE_GAP_PLAN_VERSION,
+        "planning_state": planning_state,
+        "planning_only": True,
+        "read_only": True,
+        "non_executing": True,
+        "contract_only": True,
+        "display_only": True,
+        "human_gate_required_before_any_change": True,
+        "explicit_human_gate_granted": bool(explicit_human_gate_granted),
+        "current_contract_recommended_cadence_sec": baseline,
+        "current_contract_minimum_cadence_sec": MINIMUM_CADENCE_SEC,
+        "current_contract_maximum_cadence_sec": MAXIMUM_CADENCE_SEC,
+        "freshness_warning_age_sec": FRESHNESS_WARNING_AGE_SEC,
+        "freshness_max_age_sec": FRESHNESS_MAX_AGE_SEC,
+        "horizon_cadence_gap_rows": rows,
+        "horizon_cadence_gap_row_count": len(rows),
+        "short_horizon_gap_count": short_horizon_gap_count,
+        "short_horizon_freshness_gap_present": short_horizon_gap_count > 0,
+        "recommended_next_step": "operator_review_then_explicit_gate_before_any_producer_or_scheduler_change",
+        "requested_dangerous_flags": requested_flags,
+        "blocked_reasons": blocked_reasons,
+        "blocker_count": len(blocked_reasons),
+        "producer_cadence_changed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "latest_manifest_written": False,
+        "run_sidecars_written": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "parameter_staging_write_allowed": False,
+        "would_send_to_broker": False,
+    }
+
