@@ -32,6 +32,7 @@ WARROOM_PREDICTION_UPDATE_VISIBILITY_VERSION = "prediction_warroom.warroom_predi
 WARROOM_PREDICTION_HORIZON_EXPIRY_VERSION = "prediction_warroom.prediction_artifact_horizon_freshness_expiry.ps_q25g.v1"
 WARROOM_PREDICTION_OPERATOR_ACTION_GUIDANCE_VERSION = "prediction_warroom.prediction_data_age_severity_operator_action_guidance.ps_q25h.v1"
 WARROOM_PREDICTION_COMPACT_LAYOUT_VERSION = "prediction_warroom.prediction_panel_section_order_compact_layout.ps_q25i.v1"
+WARROOM_PREDICTION_DENSITY_TUNING_VERSION = "prediction_warroom.prediction_panel_visual_review_density_tuning.ps_q25j.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -580,6 +581,64 @@ def _render_prediction_compact_operator_header(packet: Mapping[str, Any], *, lan
         st.dataframe(rows, width="stretch", hide_index=True)
 
 
+
+def latest_prediction_warroom_density_tuning_packet(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
+    data = _as_mapping(packet)
+    return {
+        "density_tuning_version": WARROOM_PREDICTION_DENSITY_TUNING_VERSION,
+        "operator_visible_density_tuning": True,
+        "compact_header_kept_top": True,
+        "detail_checks_folded_default": True,
+        "detail_checks_still_available": True,
+        "detail_sections_folded": [
+            "refresh_status",
+            "prediction_data_freshness",
+            "horizon_expiry",
+            "operator_action_guidance",
+            "prediction_update_visibility",
+        ],
+        "detail_sections_folded_count": 5,
+        "reading_guide_folded_default": True,
+        "metrics_still_visible": True,
+        "prediction_rows_still_visible": True,
+        "operator_action_severity": data.get("operator_action_severity"),
+        "prediction_tactical_readiness": data.get("prediction_tactical_readiness"),
+        "layout_only_change": True,
+        "read_only": True,
+        "non_executing": True,
+        "display_only": True,
+        "producer_cadence_changed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def _render_prediction_detail_checks_foldout(packet: Mapping[str, Any], *, lang: str) -> None:
+    label = "PS-Q25J prediction detail checks / freshness, expiry, action, heartbeat"
+    help_text = "Compact header is shown above. Open this for detailed refresh/freshness/expiry/action tables."
+    if lang == "ja":
+        label = "PS-Q25J 予測詳細チェック / freshness・expiry・action・heartbeat"
+        help_text = "上部 compact header を優先表示。詳細な更新・期限・action・heartbeat 表はここを開いて確認します。"
+    st.caption("PS-Q25J density tuning: compact header first; detailed checks folded by default. Layout-only, display-only.")
+    with st.expander(label, expanded=False):
+        st.caption(help_text)
+        _render_refresh_status_strip(packet, lang=lang)
+        _render_prediction_data_freshness_badge(packet, lang=lang)
+        _render_prediction_horizon_expiry(packet, lang=lang)
+        _render_prediction_operator_action_guidance(packet, lang=lang)
+        _render_prediction_update_visibility_strip(packet, lang=lang)
+
+
 def latest_prediction_warroom_refresh_live_badge_packet(packet: Mapping[str, Any] | Any, *, lang: str = "en") -> dict[str, Any]:
     """Return a compact live badge packet for the WarRoom prediction refresh status."""
     data = _as_mapping(packet)
@@ -842,6 +901,10 @@ def build_latest_prediction_warroom_display_panel_packet(
         "operator_visible_compact_layout": True,
         "compact_layout_rendered": True,
         "compact_layout_packet": latest_prediction_warroom_compact_layout_packet({"operator_action_guidance_packet": operator_action_guidance_packet, "horizon_expiry_packet": horizon_expiry_packet, "age_sec": model.get("age_sec"), "freshness_state": model.get("freshness_state"), "generated_at": model.get("generated_at"), "refresh_heartbeat_utc": refresh_heartbeat_utc}, lang=lang),
+        "prediction_density_tuning_version": WARROOM_PREDICTION_DENSITY_TUNING_VERSION,
+        "operator_visible_density_tuning": True,
+        "density_tuning_rendered": True,
+        "density_tuning_packet": latest_prediction_warroom_density_tuning_packet({"operator_action_severity": operator_action_guidance_packet.get("operator_action_severity"), "prediction_tactical_readiness": operator_action_guidance_packet.get("prediction_tactical_readiness")}, lang=lang),
         "operator_visible_refresh_live_badge": True,
         "refresh_live_badge_rendered": True,
         "operator_visible_refresh_status_strip": True,
@@ -888,12 +951,8 @@ def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
     )
     st.caption(str(packet.get("operator_caption") or "Latest prediction WarRoom display"))
     _render_prediction_compact_operator_header(packet, lang=lang)
-    _render_refresh_status_strip(packet, lang=lang)
-    _render_prediction_data_freshness_badge(packet, lang=lang)
-    _render_prediction_horizon_expiry(packet, lang=lang)
-    _render_prediction_operator_action_guidance(packet, lang=lang)
-    _render_prediction_update_visibility_strip(packet, lang=lang)
-    with st.expander(_t(lang, "reading_title"), expanded=True):
+    _render_prediction_detail_checks_foldout(packet, lang=lang)
+    with st.expander(_t(lang, "reading_title"), expanded=False):
         st.write(_t(lang, "reading_summary"))
         st.info(str(packet.get("operator_reading_summary") or ""))
         guide_rows = list(packet.get("field_guide_rows_display") or [])
@@ -934,6 +993,8 @@ def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
         f"operator_action_severity={packet.get('operator_action_severity')} "
         f"prediction_tactical_readiness={packet.get('prediction_tactical_readiness')} "
         f"compact_layout_rendered={packet.get('compact_layout_rendered')} "
+        f"density_tuning_rendered={packet.get('density_tuning_rendered')} "
+        f"detail_checks_folded_default=True "
         f"auto_refresh={packet.get('warroom_prediction_display_auto_refresh_enabled')} "
         f"refresh_heartbeat_utc={packet.get('refresh_heartbeat_utc')} "
         f"view_artifact_write_allowed=false autotrade=false broker=false"
