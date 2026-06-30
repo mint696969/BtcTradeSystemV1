@@ -715,3 +715,103 @@ def build_prediction_warroom_producer_cadence_option_decision_packet(
         "would_send_to_broker": False,
     }
 
+# PS-Q25M gate-awaiting packet. This records that a human decision is required;
+# it does not accept this module as an implementation authority.
+PREDICTION_WARROOM_PRODUCER_CADENCE_GATE_AWAITING_HUMAN_VERSION = (
+    "prediction_warroom.producer_cadence_gate_awaiting_human.ps_q25m.v1"
+)
+PREDICTION_WARROOM_PRODUCER_CADENCE_GATE_DECISION_TOKEN = (
+    "GRANT_Q25M_PREDICTION_CADENCE_IMPLEMENTATION_PLANNING_ONLY"
+)
+
+
+def build_prediction_warroom_producer_cadence_gate_awaiting_human_packet(
+    *,
+    operator_selected_option_id: str = "",
+    explicit_gate_token: str = "",
+    request_start_implementation: bool = False,
+) -> dict[str, Any]:
+    """Return the gate-awaiting state for producer cadence options.
+
+    This function never starts implementation. A matching token only records that a
+    separate implementation slice would be allowed to be planned next.
+    """
+    selected = str(operator_selected_option_id or "")
+    option_packet = build_prediction_warroom_producer_cadence_option_decision_packet(selected_option_id=selected)
+    known = option_packet.get("selected_option_known") is True
+    requires_gate = option_packet.get("selected_option_requires_gate") is True
+    token_supplied = bool(str(explicit_gate_token or ""))
+    token_matches = str(explicit_gate_token or "") == PREDICTION_WARROOM_PRODUCER_CADENCE_GATE_DECISION_TOKEN
+    blockers: list[str] = []
+    if selected and not known:
+        blockers.append("selected_option_unknown")
+    if not selected:
+        blockers.append("operator_option_selection_required")
+    elif requires_gate and not token_matches:
+        blockers.append("explicit_gate_token_required_for_selected_option")
+    if token_supplied and not token_matches:
+        blockers.append("explicit_gate_token_invalid")
+    if request_start_implementation:
+        blockers.append("implementation_request_blocked_separate_slice_required")
+    if selected == "keep_current_300s_context_only_until_gate" and not request_start_implementation:
+        gate_state = "safe_default_selected_no_change"
+    elif token_matches and selected and known and requires_gate and not request_start_implementation:
+        gate_state = "human_gate_intent_detected_separate_implementation_slice_required"
+        blockers.append("separate_implementation_slice_required_after_human_gate")
+    else:
+        gate_state = "awaiting_human_cadence_gate_decision"
+    unique_blockers = list(dict.fromkeys(blockers))
+    return {
+        "cadence_gate_awaiting_human_version": PREDICTION_WARROOM_PRODUCER_CADENCE_GATE_AWAITING_HUMAN_VERSION,
+        "gate_decision_token_required": PREDICTION_WARROOM_PRODUCER_CADENCE_GATE_DECISION_TOKEN,
+        "gate_state": gate_state,
+        "planning_only": True,
+        "gate_marker_only": True,
+        "decision_packet_only": True,
+        "read_only": True,
+        "non_executing": True,
+        "contract_only": True,
+        "display_only": True,
+        "human_gate_required_before_any_change": True,
+        "human_decision_recorded": False,
+        "operator_selected_option_id": selected,
+        "selected_option_known": known,
+        "selected_option_requires_gate": requires_gate,
+        "selected_option": dict(option_packet.get("selected_option") or {}),
+        "explicit_gate_token_supplied": token_supplied,
+        "explicit_gate_token_matches": token_matches,
+        "implementation_allowed_by_this_packet": False,
+        "must_stop_before_implementation": True,
+        "safe_default_option_id": "keep_current_300s_context_only_until_gate",
+        "available_option_row_count": option_packet.get("option_row_count"),
+        "options_requiring_gate_count": option_packet.get("options_requiring_gate_count"),
+        "next_required_before_implementation": [
+            "human_selects_option_explicitly",
+            "human_provides_exact_gate_token",
+            "new_implementation_slice_created_after_gate",
+            "scheduler_action_diff_review",
+            "rollback_plan",
+            "load_and_runtime_lock_guard",
+            "read_only_diagnostic_before_any_write",
+        ],
+        "blocked_reasons": unique_blockers,
+        "blocker_count": len(unique_blockers),
+        "producer_cadence_changed": False,
+        "scheduler_action_changed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "latest_manifest_written": False,
+        "run_sidecars_written": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "parameter_staging_write_allowed": False,
+        "would_send_to_broker": False,
+    }
+
