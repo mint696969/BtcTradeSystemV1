@@ -435,8 +435,4 @@ def render_warroom_market_regime_card_shell(
             generated_at=generated_at,
         )
     st.session_state["warroom_market_regime_card_renderer"] = dict(packet)
-    if packet.get("preview_cards_used"):
-        st.caption("地合いカード: preview / read-only")
-    else:
-        st.caption("地合いカード: sample")
     st.markdown(market_regime_cards_html(packet["cards"]), unsafe_allow_html=True)

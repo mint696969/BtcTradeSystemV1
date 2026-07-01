@@ -618,7 +618,7 @@ def _render_warroom_page_body() -> None:
     with render_warroom_focus_section("market_regime_card_sample"):
         market_regime_preview_enabled = bool(
             st.checkbox(
-                "地合いカード preview を明示有効化（D-hot read-only / 実行系なし）",
+                "地合い preview",
                 value=False,
                 key="warroom_market_regime_card_preview_enabled_q27p",
             )
@@ -632,8 +632,6 @@ def _render_warroom_page_body() -> None:
         st.session_state["warroom_market_regime_card_preview_enablement_q27p"] = dict(
             market_regime_preview_enablement_packet
         )
-        if not market_regime_preview_enablement_packet["preview_enabled_effective"]:
-            st.caption("地合いカード preview はデフォルトOFFです。ON時のみ D-hot を read-only で読みます。")
         render_warroom_market_regime_card_shell(
             **market_regime_preview_enablement_packet["render_kwargs"]
         )

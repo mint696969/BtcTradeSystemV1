@@ -78,11 +78,11 @@ def test_q27s_doc_records_compact_copy_boundaries() -> None:
     assert "would_send_to_broker=false" in text
 
 
-def test_q27s_panel_caption_strings_are_compact_and_do_not_add_explainer() -> None:
+def test_q27s_panel_caption_strings_are_not_redundant_and_do_not_add_explainer() -> None:
     panel_text = PANEL.read_text(encoding="utf-8-sig")
     page_text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
-    assert "地合いカード: sample" in panel_text
-    assert "地合いカード: preview / read-only" in panel_text
+    assert "地合いカード: sample" not in panel_text
+    assert "地合いカード: preview / read-only" not in panel_text
     assert "勝率ではありません" not in panel_text
     assert "分類信頼度は" not in panel_text
     assert "実行系なし" not in panel_text
