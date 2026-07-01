@@ -40,7 +40,7 @@ DISPLAY_TEXTS = {
         "metric_age": "経過秒",
         "metric_rows": "表示行数",
         "metric_safe": "安全",
-        "caption_line": "生成時刻={generated_at} / 注意={warnings} / ブロッカー={blockers} / 表示書込=false / AutoTrade=false / broker=false",
+        "caption_line": "生成時刻={generated_at} / 注意={warnings} / ブロッカー={blockers} / 表示書込=なし / AutoTrade=なし / broker=なし",
         "no_rows": "読み取りモデルに表示対象の予測行がありません。",
         "market_safety_title": "市場スナップショット / 安全フラグ",
         "prediction_table_title": "予測行",

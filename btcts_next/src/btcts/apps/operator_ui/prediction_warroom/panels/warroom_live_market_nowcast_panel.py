@@ -21,6 +21,7 @@ WARROOM_LIVE_NOWCAST_HORIZON_READINESS_VERSION = "prediction_warroom.live_nowcas
 WARROOM_LIVE_NOWCAST_JAPANESE_READING_LAYER_VERSION = "prediction_warroom.live_nowcast_japanese_reading_layer.ps_q26a.v1"
 WARROOM_LIVE_NOWCAST_JAPANESE_READING_DENSITY_POLISH_VERSION = "prediction_warroom.live_nowcast_japanese_reading_density_polish.ps_q26b.v1"
 WARROOM_LIVE_NOWCAST_JAPANESE_REMAINING_TOKEN_LOCALIZATION_VERSION = "prediction_warroom.live_nowcast_japanese_remaining_token_localization.ps_q26c.v1"
+WARROOM_LIVE_NOWCAST_TELEMETRY_FOOTER_DETAIL_NOTE_LOCALIZATION_VERSION = "prediction_warroom.live_nowcast_telemetry_footer_detail_note_localization.ps_q26e.v1"
 WARROOM_LIVE_NOWCAST_HISTORY_SESSION_KEY = "warroom_live_nowcast_composite_score_history_ps_q25e"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_MODE = "poll_fast"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_SEC = 3
@@ -551,7 +552,7 @@ def warroom_live_nowcast_source_layer_summary_rows(layering: Mapping[str, Any]) 
 def _render_warroom_live_nowcast_source_layering(packet: Mapping[str, Any], summary: Mapping[str, Any]) -> Mapping[str, Any]:
     layering = build_warroom_live_nowcast_source_importance_packet(packet, summary, lang="ja")
     st.caption("PS-Q25D source importance / signal layering: read current-state sources before predictions. Display-only; no execution.")
-    st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(warroom_live_nowcast_source_layer_summary_rows(layering)), width="stretch", hide_index=True)
+    st.dataframe(warroom_live_nowcast_q26e_localize_display_rows(warroom_live_nowcast_source_layer_summary_rows(layering)), width="stretch", hide_index=True)
     st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(layering.get("source_importance_rows") or []), width="stretch", hide_index=True)
     return layering
 
@@ -751,9 +752,9 @@ def _render_warroom_live_nowcast_composite_score(packet: Mapping[str, Any], oper
     composite = build_warroom_live_nowcast_composite_score_packet(packet, operator_summary, source_layering)
     history = _append_warroom_live_nowcast_session_history(composite, packet)
     mini_trend = build_warroom_live_nowcast_history_mini_trend_packet(history)
-    st.caption("PS-Q25E current-state composite score / mini trend: display-only session history, not persisted, not prediction.")
+    st.caption("PS-Q25E current-state composite score / mini trend: 表示専用のセッション履歴です。永続化なし・予測ではありません。")
     st.metric("current-state score", str(composite.get("current_state_score")), delta=str(mini_trend.get("current_state_score_trend")))
-    st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(warroom_live_nowcast_composite_score_rows(composite, mini_trend)), width="stretch", hide_index=True)
+    st.dataframe(warroom_live_nowcast_q26e_localize_display_rows(warroom_live_nowcast_composite_score_rows(composite, mini_trend)), width="stretch", hide_index=True)
     return {"composite": composite, "mini_trend": mini_trend}
 
 
@@ -882,14 +883,14 @@ def _render_warroom_live_nowcast_horizon_readiness(
     mini_trend: Mapping[str, Any],
 ) -> Mapping[str, Any]:
     readiness = build_warroom_live_nowcast_horizon_readiness_packet(packet, operator_summary, source_layering, composite, mini_trend)
-    st.caption("PS-Q25F horizon readiness / prediction-input handoff: display-only; does not change producer cadence or scheduler.")
+    st.caption("PS-Q25F horizon readiness / prediction-input handoff: 表示専用です。producer cadenceやschedulerは変更しません。")
     if readiness.get("overall_horizon_readiness") == "all_horizons_ready":
         st.success(readiness.get("operator_summary_text"))
     elif readiness.get("overall_horizon_readiness") == "horizons_not_ready":
         st.error(readiness.get("operator_summary_text"))
     else:
         st.warning(readiness.get("operator_summary_text"))
-    st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(warroom_live_nowcast_horizon_readiness_summary_rows(readiness)), width="stretch", hide_index=True)
+    st.dataframe(warroom_live_nowcast_q26e_localize_display_rows(warroom_live_nowcast_horizon_readiness_summary_rows(readiness)), width="stretch", hide_index=True)
     st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(readiness.get("horizon_readiness_rows") or []), width="stretch", hide_index=True)
     return readiness
 
@@ -1095,6 +1096,90 @@ def build_warroom_live_nowcast_q26c_remaining_token_localization_packet() -> dic
         "would_send_to_broker": False,
     }
 
+_Q26E_NOWCAST_TELEMETRY_TOKEN_LABELS = {
+    "current-state only": "現在状態のみ",
+    "display-only": "表示専用",
+    "display-only current-state layer": "表示専用の現在状態レイヤー",
+    "display-only prediction-input handoff": "表示専用の予測入力handoff",
+    "not persisted, not prediction": "永続化なし・予測ではありません",
+    "not prediction": "予測ではありません",
+    "foundation before prediction": "予測を見る前の土台",
+    "score deductions": "スコア減点理由",
+    "operator read order": "オペレーターが読む順番",
+    "not a trade instruction": "売買指示ではありません",
+    "read_only=true": "読み取り専用=はい",
+    "display_only=true": "表示専用=はい",
+    "autotrade=false": "AutoTrade=なし",
+    "broker=false": "broker=なし",
+    "current_state_summary": "現在状態summary",
+    "nowcast_freshness_state": "nowcast鮮度",
+    "market_event_age_sec": "市場イベント経過秒",
+    "attention_flags": "注意フラグ",
+    "operator_state_grade": "operator状態grade",
+    "prediction_input_gate": "予測入力状態",
+    "current_state_score": "現在状態スコア",
+    "overall_horizon_readiness": "全horizon準備状態",
+}
+
+
+def _q26e_nowcast_localize_telemetry_text(value: Any) -> str:
+    text = _clean(value)
+    for token, label in sorted(_Q26E_NOWCAST_TELEMETRY_TOKEN_LABELS.items(), key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(token, label)
+    text = text.replace("=true", "=はい").replace("=false", "=いいえ")
+    return text
+
+
+def warroom_live_nowcast_q26e_localize_display_rows(rows: Any) -> list[dict[str, Any]]:
+    localized = warroom_live_nowcast_q26c_localize_display_rows(rows)
+    output: list[dict[str, Any]] = []
+    for row in localized:
+        if isinstance(row, Mapping):
+            output.append({str(key): _q26e_nowcast_localize_telemetry_text(value) for key, value in row.items()})
+        else:
+            output.append({"値": _q26e_nowcast_localize_telemetry_text(row)})
+    return output
+
+
+def warroom_live_nowcast_q26e_telemetry_footer_text(packet: Mapping[str, Any] | Any) -> str:
+    data = _as_mapping(packet)
+    return (
+        "PS-Q26E nowcast telemetry: "
+        f"現在状態={_q26c_token_text(data.get('current_state_summary'))} / "
+        f"鮮度={_q26c_token_text(data.get('nowcast_freshness_state'))} / "
+        f"market_age={data.get('market_event_age_sec')}s / "
+        f"spread={data.get('spread_bps')}bps / "
+        "読み取り専用=はい / 表示専用=はい / AutoTrade=なし / broker=なし"
+    )
+
+
+def build_warroom_live_nowcast_q26e_telemetry_footer_detail_note_localization_packet() -> dict[str, Any]:
+    sample = warroom_live_nowcast_q26e_telemetry_footer_text({"current_state_summary": "current_market_state_live_observable", "nowcast_freshness_state": "live", "market_event_age_sec": 0, "spread_bps": 1.2})
+    return {
+        "ok": True,
+        "localization_version": WARROOM_LIVE_NOWCAST_TELEMETRY_FOOTER_DETAIL_NOTE_LOCALIZATION_VERSION,
+        "telemetry_footer_japanese_localized": True,
+        "detail_note_token_fragments_localized": True,
+        "sample_footer": sample,
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
 def _q26b_nowcast_label(value: Any) -> str:
     raw = _clean(value)
     mapping = {
@@ -1274,22 +1359,8 @@ def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -
         st.caption("PS-Q26A 日本語読み方: 現在状態 nowcast は、予測や売買指示ではなく、いまの市場データを読む順番です。")
         st.dataframe(japanese_reading_layer.get("rows") or [], width="stretch", hide_index=True)
 
-        st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(warroom_live_market_nowcast_metric_rows(packet)), width="stretch", hide_index=True)
-        st.text(
-            "PS_Q25B_LIVE_MARKET_NOWCAST "
-            f"current_state_summary={packet.get('current_state_summary')} "
-            f"nowcast_freshness_state={packet.get('nowcast_freshness_state')} "
-            f"market_event_age_sec={packet.get('market_event_age_sec')} "
-            f"spread_bps={packet.get('spread_bps')} "
-            f"attention_flags={','.join(packet.get('attention_flags') or []) or 'none'} "
-            f"operator_state_grade={operator_summary.get('operator_state_grade')} "
-            f"operator_attention_severity={operator_summary.get('operator_attention_severity')} "
-            f"prediction_input_gate={source_layering.get('prediction_input_gate')} "
-            f"current_state_score={composite_score.get('current_state_score')} "
-            f"current_state_score_trend={mini_trend.get('current_state_score_trend')} "
-            f"overall_horizon_readiness={horizon_readiness.get('overall_horizon_readiness')} "
-            "read_only=true display_only=true autotrade=false broker=false"
-        )
+        st.dataframe(warroom_live_nowcast_q26e_localize_display_rows(warroom_live_market_nowcast_metric_rows(packet)), width="stretch", hide_index=True)
+        st.caption(warroom_live_nowcast_q26e_telemetry_footer_text(packet))
 
     meta = live_shell.make_slot_meta(
         Q25B_PAGE_ID,

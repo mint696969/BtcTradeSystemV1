@@ -36,6 +36,7 @@ WARROOM_PREDICTION_DENSITY_TUNING_VERSION = "prediction_warroom.prediction_panel
 WARROOM_PREDICTION_JAPANESE_READING_LAYER_VERSION = "prediction_warroom.prediction_display_japanese_reading_layer.ps_q26a.v1"
 WARROOM_PREDICTION_JAPANESE_READING_DENSITY_POLISH_VERSION = "prediction_warroom.prediction_display_japanese_reading_density_polish.ps_q26b.v1"
 WARROOM_PREDICTION_JAPANESE_REMAINING_TOKEN_LOCALIZATION_VERSION = "prediction_warroom.prediction_display_japanese_remaining_token_localization.ps_q26c.v1"
+WARROOM_PREDICTION_TELEMETRY_FOOTER_DETAIL_NOTE_LOCALIZATION_VERSION = "prediction_warroom.telemetry_footer_detail_note_localization.ps_q26e.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -403,6 +404,99 @@ def build_latest_prediction_warroom_q26c_remaining_token_localization_packet() -
         "would_send_to_broker": False,
     }
 
+_Q26E_TELEMETRY_TOKEN_LABELS = {
+    "display-only": "表示専用",
+    "Display-only": "表示専用",
+    "Layout-only": "レイアウトのみ",
+    "view_artifact_write_allowed=false": "view artifact書込=なし",
+    "view_write=false": "表示書込=なし",
+    "autotrade=false": "AutoTrade=なし",
+    "AutoTrade=false": "AutoTrade=なし",
+    "broker=false": "broker=なし",
+    "broker": "broker",
+    "scheduler": "scheduler",
+    "parameter apply": "parameter apply",
+    "parameter_apply": "parameter apply",
+    "no artifact writes": "artifact書込なし",
+    "no AutoTrade": "AutoTradeなし",
+    "no broker": "brokerなし",
+    "prediction_tactical_readiness": "予測の扱い",
+    "compact_layout_rendered=True": "compact表示=あり",
+    "density_tuning_rendered=True": "密度調整=あり",
+    "detail_checks_folded_default=True": "詳細チェック=通常は折りたたみ",
+    "refresh_heartbeat_utc": "画面heartbeat UTC",
+    "source_generated_at": "予測生成時刻",
+    "generated_at": "予測生成時刻",
+    "freshness_state": "鮮度",
+    "prediction_row_count": "予測行数",
+    "short_horizon_expired_or_stale": "短期horizonは古い/弱い",
+    "short_horizon_expired_or_stale=True": "短期horizonは古い/弱い=はい",
+}
+
+
+def _q26e_localize_telemetry_text(value: Any) -> str:
+    text = _clean(value)
+    for token, label in sorted(_Q26E_TELEMETRY_TOKEN_LABELS.items(), key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(token, label)
+    text = text.replace("=true", "=はい").replace("=false", "=いいえ")
+    return text
+
+
+def _q26e_safe_value(packet: Mapping[str, Any], *keys: str, default: str = "-") -> str:
+    for key in keys:
+        value = packet.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return default
+
+
+def latest_prediction_warroom_q26e_telemetry_footer_text(packet: Mapping[str, Any] | Any, *, lang: str = "ja") -> str:
+    data = _as_mapping(packet)
+    if lang != "ja":
+        return _q26e_localize_telemetry_text(
+            f"{_t('en', 'footer_token')} display_language={lang} "
+            f"freshness_state={_q26e_safe_value(data, 'freshness_state')} "
+            f"prediction_row_count={_q26e_safe_value(data, 'prediction_row_count', 'row_count')} "
+            f"generated_at={_q26e_safe_value(data, 'generated_at', 'prediction_data_generated_at_utc')} "
+            "view_artifact_write_allowed=false autotrade=false broker=false"
+        )
+    return (
+        "PS-Q26E telemetry: "
+        f"表示言語={lang} / "
+        f"鮮度={_q26c_token_text(_q26e_safe_value(data, 'freshness_state'))} / "
+        f"表示行数={_q26e_safe_value(data, 'prediction_row_count', 'row_count', default='-')} / "
+        f"生成時刻={_q26e_safe_value(data, 'generated_at', 'prediction_data_generated_at_utc', default='-')} / "
+        "表示専用 / view artifact書込=なし / AutoTrade=なし / broker=なし"
+    )
+
+
+def build_latest_prediction_warroom_q26e_telemetry_footer_detail_note_localization_packet() -> dict[str, Any]:
+    sample = latest_prediction_warroom_q26e_telemetry_footer_text({"freshness_state": "fresh", "prediction_row_count": 24, "generated_at": "2026-07-01T00:00:00Z"}, lang="ja")
+    return {
+        "ok": True,
+        "localization_version": WARROOM_PREDICTION_TELEMETRY_FOOTER_DETAIL_NOTE_LOCALIZATION_VERSION,
+        "telemetry_footer_japanese_localized": True,
+        "detail_note_token_fragments_localized": True,
+        "sample_footer": sample,
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
 def _q26b_prediction_label(value: Any) -> str:
     raw = _clean(value)
     mapping = {
@@ -725,7 +819,7 @@ def _render_prediction_horizon_expiry(packet: Mapping[str, Any], *, lang: str) -
         st.warning(message)
     else:
         st.info(message)
-    st.caption("PS-Q25G horizon freshness/expiry: display-only. This does not change prediction producer cadence or scheduler.")
+    st.caption("PS-Q25G horizon freshness/expiry: 表示専用です。予測producer cadenceやschedulerは変更しません。")
     rows = list(expiry.get("horizon_expiry_rows") or [])
     if rows:
         st.dataframe(latest_prediction_warroom_q26c_localize_display_rows(rows), width="stretch", hide_index=True)
@@ -841,7 +935,7 @@ def _render_prediction_operator_action_guidance(packet: Mapping[str, Any], *, la
         st.warning(message)
     else:
         st.success(message)
-    st.caption("PS-Q25H operator action guidance: display-only; no producer cadence, scheduler, AutoTrade, or broker changes.")
+    st.caption("PS-Q25H operator action guidance: 表示専用です。producer cadence、scheduler、AutoTrade、brokerは変更しません。")
     rows = list(guidance.get("action_rows") or [])
     if rows:
         st.dataframe(latest_prediction_warroom_q26c_localize_display_rows(rows), width="stretch", hide_index=True)
@@ -915,7 +1009,7 @@ def _render_prediction_compact_operator_header(packet: Mapping[str, Any], *, lan
         st.warning(message)
     else:
         st.success(message)
-    st.caption("PS-Q25I compact top summary: operator action → data age → horizon expiry → generated_at/heartbeat. Layout-only, display-only.")
+    st.caption("PS-Q25I compact top summary: action → data age → horizon expiry → generated_at/heartbeat の順で確認します。レイアウトのみ・表示専用です。")
     rows = list(compact.get("compact_layout_rows") or [])
     if rows:
         st.dataframe(latest_prediction_warroom_q26c_localize_display_rows(rows), width="stretch", hide_index=True)
@@ -969,7 +1063,7 @@ def _render_prediction_detail_checks_foldout(packet: Mapping[str, Any], *, lang:
     if lang == "ja":
         label = "PS-Q25J 予測詳細チェック / freshness・expiry・action・heartbeat"
         help_text = "上部 compact header を優先表示。詳細な更新・期限・action・heartbeat 表はここを開いて確認します。"
-    st.caption("PS-Q25J density tuning: compact header first; detailed checks folded by default. Layout-only, display-only.")
+    st.caption("PS-Q25J density tuning: compact headerを先に表示し、詳細チェックは通常折りたたみます。レイアウトのみ・表示専用です。")
     with st.expander(label, expanded=False):
         st.caption(help_text)
         _render_refresh_status_strip(packet, lang=lang)
@@ -1126,7 +1220,7 @@ def _render_refresh_status_strip(packet: Mapping[str, Any], *, lang: str) -> Non
     _render_refresh_live_badge(packet, lang=lang)
     st.caption(
         "PS-Q21C refresh status strip: auto-refresh heartbeat is visible here; "
-        "display-only, no artifact writes, no AutoTrade, no broker."
+        "表示専用です。artifact書込、AutoTrade、brokerはありません。"
     )
     columns = st.columns(5)
     for column, row in zip(columns, rows):
@@ -1340,22 +1434,7 @@ def _render_panel_body(*, fragment_enabled: bool = True) -> dict[str, Any]:
         safety_rows = list(packet.get("safety_rows_display") or [])
         if safety_rows:
             st.dataframe(latest_prediction_warroom_q26c_localize_display_rows(safety_rows), width="stretch", hide_index=True)
-    st.text(
-        f"{_t(lang, 'footer_token')} "
-        f"display_language={packet.get('display_language')} "
-        f"freshness_state={packet.get('freshness_state')} "
-        f"prediction_row_count={packet.get('prediction_row_count')} "
-        f"overall_horizon_expiry_state={packet.get('overall_horizon_expiry_state')} "
-        f"short_horizon_expired_or_stale={packet.get('short_horizon_expired_or_stale')} "
-        f"operator_action_severity={packet.get('operator_action_severity')} "
-        f"prediction_tactical_readiness={packet.get('prediction_tactical_readiness')} "
-        f"compact_layout_rendered={packet.get('compact_layout_rendered')} "
-        f"density_tuning_rendered={packet.get('density_tuning_rendered')} "
-        f"detail_checks_folded_default=True "
-        f"auto_refresh={packet.get('warroom_prediction_display_auto_refresh_enabled')} "
-        f"refresh_heartbeat_utc={packet.get('refresh_heartbeat_utc')} "
-        f"view_artifact_write_allowed=false autotrade=false broker=false"
-    )
+    st.caption(latest_prediction_warroom_q26e_telemetry_footer_text(packet, lang=lang))
     return packet
 
 
