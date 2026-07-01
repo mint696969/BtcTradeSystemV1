@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/panels/warroom_operator_focus_nav_panel.py
-# desc: PS-Q26N compact WarRoom operator-first focus navigation panel. Layout-only Streamlit presentation; no runtime writes, producer/scheduler, AutoTrade, broker, ledger, mode, or parameter behavior.
+# desc: WarRoom operator-first focus navigation panel. Visual-only Streamlit presentation; no runtime writes, producer/scheduler, AutoTrade, broker, ledger, mode, or parameter behavior.
 
 from __future__ import annotations
 
@@ -7,6 +7,37 @@ import streamlit as st
 
 WARROOM_OPERATOR_FOCUS_NAV_VERSION = "prediction_warroom.operator_focus_nav.ps_q26n.v1"
 WARROOM_OPERATOR_FOCUS_VISUAL_TUNE_VERSION = "prediction_warroom.operator_focus_visual_tune.ps_q26s.v1"
+WARROOM_OPERATOR_FOCUS_COMMAND_CARDS_VERSION = "prediction_warroom.operator_focus_command_cards.ps_q26t.v1"
+
+
+def warroom_operator_focus_card_rows() -> list[dict]:
+    """Return first-glance command cards for the WarRoom entry."""
+    return [
+        {
+            "card_id": "current_state",
+            "順": "①",
+            "見出し": "現在状態",
+            "主確認": "live / board / freshness",
+            "合図": "古い・注意なら予測を弱めに読む",
+            "tone": "primary",
+        },
+        {
+            "card_id": "prediction_read",
+            "順": "②",
+            "見出し": "予測表示",
+            "主確認": "generated_at / horizon",
+            "合図": "時刻が変わった時だけ予測更新",
+            "tone": "accent",
+        },
+        {
+            "card_id": "operator_alert",
+            "順": "③",
+            "見出し": "alert / operator",
+            "主確認": "注意・要約・安全境界",
+            "合図": "最後に全体注意を確認",
+            "tone": "safe",
+        },
+    ]
 
 
 def warroom_operator_focus_route_rows() -> list[dict]:
@@ -91,13 +122,18 @@ def warroom_operator_focus_nav_rows() -> list[dict]:
 def build_warroom_operator_focus_nav_packet() -> dict:
     rows = warroom_operator_focus_nav_rows()
     route_rows = warroom_operator_focus_route_rows()
+    card_rows = warroom_operator_focus_card_rows()
     return {
         "ok": True,
         "focus_nav_version": WARROOM_OPERATOR_FOCUS_NAV_VERSION,
         "focus_visual_tune_version": WARROOM_OPERATOR_FOCUS_VISUAL_TUNE_VERSION,
+        "focus_command_cards_version": WARROOM_OPERATOR_FOCUS_COMMAND_CARDS_VERSION,
         "operator_first_navigation_visible": True,
         "visual_route_strip_visible": True,
+        "command_cards_visible": True,
         "visual_route_text": warroom_operator_focus_visual_route_text(),
+        "card_row_count": len(card_rows),
+        "card_rows": card_rows,
         "route_row_count": len(route_rows),
         "route_rows": route_rows,
         "row_count": len(rows),
@@ -105,12 +141,14 @@ def build_warroom_operator_focus_nav_packet() -> dict:
         "top_expanded_default": True,
         "reduces_first_screen_ambiguity": True,
         "improves_first_screen_scanability": True,
+        "improves_first_screen_glanceability": True,
         "visual_only_change": True,
         "keeps_existing_panels_available": True,
         "production_ui_code_changed": True,
         "layout_only_change": True,
         "externalized_panel_module": True,
         "warroom_page_changed": False,
+        "warroom_page_slimming_main_goal": False,
         "read_only": True,
         "display_only": True,
         "non_executing": True,
@@ -129,6 +167,12 @@ def build_warroom_operator_focus_nav_packet() -> dict:
     }
 
 
+def _render_focus_card(card: dict) -> None:
+    st.markdown(f"**{card['順']} {card['見出し']}**")
+    st.caption(str(card["主確認"]))
+    st.write(str(card["合図"]))
+
+
 def render_warroom_operator_focus_nav() -> None:
     """Render the compact WarRoom operator-first focus navigation block."""
     packet = build_warroom_operator_focus_nav_packet()
@@ -136,6 +180,10 @@ def render_warroom_operator_focus_nav() -> None:
     st.caption(
         "まずこの順番で見ます。詳細パネルは残していますが、最初は 1→2→3 だけで全体を把握します。"
     )
+    card_columns = st.columns(len(packet["card_rows"]))
+    for column, card in zip(card_columns, packet["card_rows"]):
+        with column:
+            _render_focus_card(card)
     st.markdown(f"**{packet['visual_route_text']}**")
     st.dataframe(packet["route_rows"], width="stretch", hide_index=True)
     st.caption("④⑤ は理由確認・背景確認用です。必要な時だけ開きます。")
