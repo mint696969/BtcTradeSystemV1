@@ -790,53 +790,55 @@ def _render_warroom_page_body() -> None:
 
     _record_warroom_operator_first_render_path_cleanup_state()
 
-    _render_warroom_primary_reading_overview(
+    with live_shell.render_folded_section(warroom_focus_section_label("header_alert_operator"), expanded=warroom_focus_section_expanded("header_alert_operator")):
+        _render_warroom_primary_reading_overview(
             fragment_enabled=fragment_enabled,
         )
 
-    with live_shell.zone_container(
-        label=get_text(lang, "ui_label_primary_live"),
-        zone_kind="primary_live",
-    ):
-        block_captions = _warroom_reading_block_captions()
-        _render_warroom_reading_caption(
-            "current_active_event_reading: "
-            + block_captions["current_active_event_reading"],
-            max_height_px=90,
-        )
-        _render_warroom_reading_caption(
-            "active_event_compact: "
-            + _warroom_active_event_reading_caption(),
-            max_height_px=120,
-        )
-        _render_warroom_active_event_and_graph_reading(
-            fragment_enabled=fragment_enabled,
-        )
-        _render_warroom_reading_caption(
-            "current_tactic_prediction_reading: "
-            + block_captions["current_tactic_prediction_reading"],
-            max_height_px=90,
-        )
-        _render_warroom_tactic_prediction_reading(
-            fragment_enabled=fragment_enabled,
-        )
-
-    with live_shell.zone_container(
-        label=get_text(lang, "ui_label_operator_support"),
-        zone_kind="secondary",
-    ):
-        block_captions = _warroom_reading_block_captions()
-        _render_warroom_reading_caption(
-            "operator_support_review_reading: "
-            + block_captions["operator_support_review_reading"],
-            max_height_px=90,
-        )
-        _render_warroom_operator_support_review()
-        with live_shell.slot_widget_from_meta(
-            warroom_widget_slot("evidence_presentation_panel")
+    with live_shell.render_folded_section(warroom_focus_section_label("market_evidence_detail"), expanded=warroom_focus_section_expanded("market_evidence_detail")):
+        with live_shell.zone_container(
+            label=get_text(lang, "ui_label_primary_live"),
+            zone_kind="primary_live",
         ):
-            _render_warroom_evidence_presentation()
+            block_captions = _warroom_reading_block_captions()
+            _render_warroom_reading_caption(
+                "current_active_event_reading: "
+                + block_captions["current_active_event_reading"],
+                max_height_px=90,
+            )
+            _render_warroom_reading_caption(
+                "active_event_compact: "
+                + _warroom_active_event_reading_caption(),
+                max_height_px=120,
+            )
+            _render_warroom_active_event_and_graph_reading(
+                fragment_enabled=fragment_enabled,
+            )
+            _render_warroom_reading_caption(
+                "current_tactic_prediction_reading: "
+                + block_captions["current_tactic_prediction_reading"],
+                max_height_px=90,
+            )
+            _render_warroom_tactic_prediction_reading(
+                fragment_enabled=fragment_enabled,
+            )
 
+    with live_shell.render_folded_section(warroom_focus_section_label("operator_support_detail"), expanded=warroom_focus_section_expanded("operator_support_detail")):
+        with live_shell.zone_container(
+            label=get_text(lang, "ui_label_operator_support"),
+            zone_kind="secondary",
+        ):
+            block_captions = _warroom_reading_block_captions()
+            _render_warroom_reading_caption(
+                "operator_support_review_reading: "
+                + block_captions["operator_support_review_reading"],
+                max_height_px=90,
+            )
+            _render_warroom_operator_support_review()
+            with live_shell.slot_widget_from_meta(
+                warroom_widget_slot("evidence_presentation_panel")
+            ):
+                _render_warroom_evidence_presentation()
 
     with live_shell.render_folded_section(get_text(lang, "ui_slot_diagnostics_title"), expanded=False):
         if _warroom_diagnostics_enabled(
