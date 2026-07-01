@@ -9,6 +9,7 @@ WARROOM_OPERATOR_FOCUS_NAV_VERSION = "prediction_warroom.operator_focus_nav.ps_q
 WARROOM_OPERATOR_FOCUS_VISUAL_TUNE_VERSION = "prediction_warroom.operator_focus_visual_tune.ps_q26s.v1"
 WARROOM_OPERATOR_FOCUS_COMMAND_CARDS_VERSION = "prediction_warroom.operator_focus_command_cards.ps_q26t.v1"
 WARROOM_OPERATOR_FOCUS_DETAIL_FOLD_VERSION = "prediction_warroom.operator_focus_detail_fold.ps_q26u.v1"
+WARROOM_OPERATOR_FOCUS_ROUTE_TABLE_FOLD_VERSION = "prediction_warroom.operator_focus_route_table_fold.ps_q26v.v1"
 
 
 def warroom_operator_focus_card_rows() -> list[dict]:
@@ -79,6 +80,10 @@ def warroom_operator_focus_visual_route_text() -> str:
     return "読む順: ① 現在状態 → ② 予測表示 → ③ alert/operator → ④⑤ 理由確認"
 
 
+def warroom_operator_focus_route_table_fold_label() -> str:
+    return "読む順の補足 / 4ステップ表"
+
+
 def warroom_operator_focus_detail_fold_label() -> str:
     return "詳細の読み方 / 5ステップ表"
 
@@ -134,8 +139,13 @@ def build_warroom_operator_focus_nav_packet() -> dict:
         "focus_visual_tune_version": WARROOM_OPERATOR_FOCUS_VISUAL_TUNE_VERSION,
         "focus_command_cards_version": WARROOM_OPERATOR_FOCUS_COMMAND_CARDS_VERSION,
         "focus_detail_fold_version": WARROOM_OPERATOR_FOCUS_DETAIL_FOLD_VERSION,
+        "focus_route_table_fold_version": WARROOM_OPERATOR_FOCUS_ROUTE_TABLE_FOLD_VERSION,
         "operator_first_navigation_visible": True,
         "visual_route_strip_visible": True,
+        "visual_route_text_visible": True,
+        "route_table_available": True,
+        "route_table_folded_default": True,
+        "route_table_label": warroom_operator_focus_route_table_fold_label(),
         "command_cards_visible": True,
         "detail_table_available": True,
         "detail_table_folded_default": True,
@@ -152,6 +162,7 @@ def build_warroom_operator_focus_nav_packet() -> dict:
         "improves_first_screen_scanability": True,
         "improves_first_screen_glanceability": True,
         "reduces_first_screen_density": True,
+        "reduces_first_screen_table_density": True,
         "visual_only_change": True,
         "keeps_existing_panels_available": True,
         "production_ui_code_changed": True,
@@ -195,7 +206,8 @@ def render_warroom_operator_focus_nav() -> None:
         with column:
             _render_focus_card(card)
     st.markdown(f"**{packet['visual_route_text']}**")
-    st.dataframe(packet["route_rows"], width="stretch", hide_index=True)
     st.caption("④⑤ は理由確認・背景確認用です。必要な時だけ開きます。")
+    with st.expander(str(packet["route_table_label"]), expanded=False):
+        st.dataframe(packet["route_rows"], width="stretch", hide_index=True)
     with st.expander(str(packet["detail_table_label"]), expanded=False):
         st.dataframe(packet["rows"], width="stretch", hide_index=True)
