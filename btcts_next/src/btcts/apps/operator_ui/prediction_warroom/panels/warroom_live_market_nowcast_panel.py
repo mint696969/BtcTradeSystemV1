@@ -20,6 +20,7 @@ WARROOM_LIVE_NOWCAST_COMPOSITE_SCORE_VERSION = "prediction_warroom.live_nowcast_
 WARROOM_LIVE_NOWCAST_HORIZON_READINESS_VERSION = "prediction_warroom.live_nowcast_horizon_readiness_prediction_input_handoff.ps_q25f.v1"
 WARROOM_LIVE_NOWCAST_JAPANESE_READING_LAYER_VERSION = "prediction_warroom.live_nowcast_japanese_reading_layer.ps_q26a.v1"
 WARROOM_LIVE_NOWCAST_JAPANESE_READING_DENSITY_POLISH_VERSION = "prediction_warroom.live_nowcast_japanese_reading_density_polish.ps_q26b.v1"
+WARROOM_LIVE_NOWCAST_JAPANESE_REMAINING_TOKEN_LOCALIZATION_VERSION = "prediction_warroom.live_nowcast_japanese_remaining_token_localization.ps_q26c.v1"
 WARROOM_LIVE_NOWCAST_HISTORY_SESSION_KEY = "warroom_live_nowcast_composite_score_history_ps_q25e"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_MODE = "poll_fast"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_SEC = 3
@@ -419,8 +420,8 @@ def _render_warroom_live_nowcast_operator_summary(packet: Mapping[str, Any], *, 
         st.success(message)
     else:
         st.info(message)
-    st.dataframe(warroom_live_nowcast_operator_summary_rows(summary), width="stretch", hide_index=True)
-    st.dataframe(summary.get("attention_rows") or [], width="stretch", hide_index=True)
+    st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(warroom_live_nowcast_operator_summary_rows(summary)), width="stretch", hide_index=True)
+    st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(summary.get("attention_rows") or []), width="stretch", hide_index=True)
     return summary
 
 
@@ -550,8 +551,8 @@ def warroom_live_nowcast_source_layer_summary_rows(layering: Mapping[str, Any]) 
 def _render_warroom_live_nowcast_source_layering(packet: Mapping[str, Any], summary: Mapping[str, Any]) -> Mapping[str, Any]:
     layering = build_warroom_live_nowcast_source_importance_packet(packet, summary, lang="ja")
     st.caption("PS-Q25D source importance / signal layering: read current-state sources before predictions. Display-only; no execution.")
-    st.dataframe(warroom_live_nowcast_source_layer_summary_rows(layering), width="stretch", hide_index=True)
-    st.dataframe(layering.get("source_importance_rows") or [], width="stretch", hide_index=True)
+    st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(warroom_live_nowcast_source_layer_summary_rows(layering)), width="stretch", hide_index=True)
+    st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(layering.get("source_importance_rows") or []), width="stretch", hide_index=True)
     return layering
 
 
@@ -752,7 +753,7 @@ def _render_warroom_live_nowcast_composite_score(packet: Mapping[str, Any], oper
     mini_trend = build_warroom_live_nowcast_history_mini_trend_packet(history)
     st.caption("PS-Q25E current-state composite score / mini trend: display-only session history, not persisted, not prediction.")
     st.metric("current-state score", str(composite.get("current_state_score")), delta=str(mini_trend.get("current_state_score_trend")))
-    st.dataframe(warroom_live_nowcast_composite_score_rows(composite, mini_trend), width="stretch", hide_index=True)
+    st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(warroom_live_nowcast_composite_score_rows(composite, mini_trend)), width="stretch", hide_index=True)
     return {"composite": composite, "mini_trend": mini_trend}
 
 
@@ -888,8 +889,8 @@ def _render_warroom_live_nowcast_horizon_readiness(
         st.error(readiness.get("operator_summary_text"))
     else:
         st.warning(readiness.get("operator_summary_text"))
-    st.dataframe(warroom_live_nowcast_horizon_readiness_summary_rows(readiness), width="stretch", hide_index=True)
-    st.dataframe(readiness.get("horizon_readiness_rows") or [], width="stretch", hide_index=True)
+    st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(warroom_live_nowcast_horizon_readiness_summary_rows(readiness)), width="stretch", hide_index=True)
+    st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(readiness.get("horizon_readiness_rows") or []), width="stretch", hide_index=True)
     return readiness
 
 
@@ -968,6 +969,131 @@ def warroom_live_nowcast_japanese_reading_rows(
     ]
 
 
+
+_Q26C_COLUMN_LABELS = {
+    "item": "項目",
+    "value": "値",
+    "note": "メモ",
+    "code": "コード",
+    "severity": "重要度",
+    "label": "説明",
+    "operator_note": "見るポイント",
+    "layer": "層",
+    "source": "データ源",
+    "role": "役割",
+    "importance": "重要度",
+    "status": "状態",
+    "reason": "理由",
+    "horizon": "時間軸",
+    "horizon_sec": "秒",
+    "readiness": "準備状態",
+    "score": "スコア",
+    "score_floor": "目安",
+    "prediction_input_gate": "予測入力状態",
+    "freshness": "鮮度",
+    "mini_trend": "短期変化",
+}
+
+_Q26C_VALUE_LABELS = {
+    "current_state_score": "現在状態スコア",
+    "score_note": "スコア説明",
+    "mini_trend": "短期変化",
+    "prediction_input_gate": "予測入力状態",
+    "penalty_reasons": "減点理由",
+    "high_quality_current_state": "現在状態の土台は良好",
+    "weak_current_state": "現在状態の土台が弱い",
+    "prediction_input_foundation_usable": "予測入力の土台として利用可",
+    "prediction_input_foundation_weak": "予測入力の土台が弱い",
+    "horizons_ready": "horizon は準備済み",
+    "horizons_not_ready": "horizon は未準備",
+    "read_as_context_only": "背景としてのみ読む",
+    "not_ready": "未準備",
+    "usable": "利用可",
+    "blocked": "利用不可",
+    "ok": "OK",
+    "none": "なし",
+    "warning": "注意",
+    "critical": "強い注意",
+    "live": "live",
+    "slightly_delayed": "やや遅延",
+    "stale_caution": "古い/注意",
+    "tight": "狭い",
+    "normal": "通常",
+    "wide_caution": "広い/注意",
+    "current_market_state_live_observable": "現在状態は観測可能",
+    "current_market_state_caution": "現在状態は注意して読む",
+    "current_market_state_stream_attention": "配信状態の確認が先",
+    "current_market_state_review_required": "現在状態は要確認",
+    "collector_freshness": "Collector鮮度",
+    "gap_resync": "gap/resync",
+    "board_spread": "板/spread",
+    "ws_board_state": "板WS状態",
+    "executions_flow": "約定フロー",
+    "rate_limit_pressure": "rate limit圧力",
+    "daemon_continuity": "daemon継続性",
+    "foundation_integrity": "土台の健全性",
+    "microstructure_now": "板・microstructure",
+    "trade_flow_now": "約定フロー",
+    "operational_pressure": "運用圧力",
+    "current-state trust gate": "現在状態の信頼ゲート",
+    "continuity gate": "連続性ゲート",
+    "best bid/ask and cost state": "bid/askとコスト状態",
+    "board stream liveness": "板ストリーム生存性",
+    "recent trade-flow liveness": "直近約定フロー",
+    "REST/API pressure context": "REST/API圧力",
+    "collector daemon continuity": "Collector daemon継続性",
+    "foundation before prediction": "予測を見る前の土台",
+}
+
+
+def _q26c_token_text(value: Any) -> Any:
+    if value is None or isinstance(value, (int, float, bool)):
+        return value
+    text = str(value)
+    if text in _Q26C_VALUE_LABELS:
+        return _Q26C_VALUE_LABELS[text]
+    for token, label in sorted(_Q26C_VALUE_LABELS.items(), key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(token, label)
+    return text
+
+
+def warroom_live_nowcast_q26c_localize_display_rows(rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(rows, list):
+        return []
+    localized: list[dict[str, Any]] = []
+    for item in rows:
+        if not isinstance(item, Mapping):
+            localized.append({"値": _q26c_token_text(item)})
+            continue
+        localized.append({_Q26C_COLUMN_LABELS.get(str(key), str(key)): _q26c_token_text(value) for key, value in item.items()})
+    return localized
+
+
+def build_warroom_live_nowcast_q26c_remaining_token_localization_packet() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "remaining_token_localization_version": WARROOM_LIVE_NOWCAST_JAPANESE_REMAINING_TOKEN_LOCALIZATION_VERSION,
+        "operator_visible_localized_detail_tables": True,
+        "localized_columns": dict(_Q26C_COLUMN_LABELS),
+        "localized_token_count": len(_Q26C_VALUE_LABELS),
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
 
 def _q26b_nowcast_label(value: Any) -> str:
     raw = _clean(value)
@@ -1143,11 +1269,12 @@ def render_warroom_live_market_nowcast_panel(*, fragment_enabled: bool = True) -
         japanese_reading_layer = build_warroom_live_nowcast_japanese_reading_layer_packet(packet, operator_summary, source_layering, composite_score, horizon_readiness)
         density_polish = build_warroom_live_nowcast_japanese_density_polish_packet(packet, operator_summary, source_layering, composite_score, horizon_readiness)
         st.caption("PS-Q26B 日本語要点: まず要点だけ確認し、必要なら下の詳細行を見ます。")
+        st.caption("PS-Q26C 日本語化: 詳細表の列名と状態 token を日本語化しています。")
         st.dataframe(density_polish.get("compact_rows") or [], width="stretch", hide_index=True)
         st.caption("PS-Q26A 日本語読み方: 現在状態 nowcast は、予測や売買指示ではなく、いまの市場データを読む順番です。")
         st.dataframe(japanese_reading_layer.get("rows") or [], width="stretch", hide_index=True)
 
-        st.dataframe(warroom_live_market_nowcast_metric_rows(packet), width="stretch", hide_index=True)
+        st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(warroom_live_market_nowcast_metric_rows(packet)), width="stretch", hide_index=True)
         st.text(
             "PS_Q25B_LIVE_MARKET_NOWCAST "
             f"current_state_summary={packet.get('current_state_summary')} "
