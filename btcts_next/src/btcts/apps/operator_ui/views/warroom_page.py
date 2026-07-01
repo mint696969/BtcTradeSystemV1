@@ -77,6 +77,8 @@ from btcts.apps.operator_ui.components.slot_definitions import (
 )
 
 
+WARROOM_HEADER_LEGACY_SECTION_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.header_legacy_section_japanese_localization.ps_q26d.v1"
+
 _GRAPH_WIDGET_RENDERERS = {
     "market_monitor": market_monitor.render,
     "liquidity_pressure": liquidity_pressure_panel.render,
@@ -266,6 +268,84 @@ def _bool_display(value: object) -> str:
     return str(value).lower() if value is not None else ""
 
 
+
+def _q26d_localize_observation_value(value: object) -> object:
+    if value is None or isinstance(value, (int, float, bool)):
+        return value
+    text = str(value)
+    mapping = {
+        "quick_status_then_searchable_tokens_then_legacy_preflight_details": "まず quick status、その後に検索用 token、必要時だけ旧preflight詳細",
+        "ready_for_operator_review": "オペレーター確認用に読める",
+        "pass": "通過",
+        "true": "はい",
+        "false": "いいえ",
+        "unknown": "不明",
+        "blocked_not_ready_to_enable": "有効化は不可・準備未完了",
+        "auto_refresh_source_packet_not_ok": "自動更新元 packet が未OK",
+        "source_generated_at_missing": "生成時刻が欠落",
+        "source_generated_at_unparseable": "生成時刻を解釈できない",
+    }
+    if text in mapping:
+        return mapping[text]
+    for token, label in sorted(mapping.items(), key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(token, label)
+    return text
+
+
+def _q26d_prediction_observation_quick_status_rows(packet: dict) -> list[dict]:
+    return [
+        {"確認項目": "読む順番", "状態": _q26d_localize_observation_value(packet.get("read_order")), "見るポイント": "最初にここだけ確認します。旧preflight詳細は必要時だけ開きます。"},
+        {"確認項目": "手動再確認", "状態": _q26d_localize_observation_value(packet.get("q18aq_manual_resmoke_result")), "見るポイント": "検索可能 token と heartbeat の確認結果です。"},
+        {"確認項目": "自動更新", "状態": _q26d_localize_observation_value(_bool_display(packet.get("q18aj_auto_refresh_enabled"))), "見るポイント": "画面fragmentの bounded refresh だけです。予測生成ではありません。"},
+        {"確認項目": "heartbeat", "状態": packet.get("q18aj_refresh_heartbeat_utc"), "見るポイント": "画面更新の確認用です。予測artifact更新とは別です。"},
+        {"確認項目": "鮮度", "状態": _q26d_localize_observation_value(packet.get("q18ak_freshness_state")), "見るポイント": "latest prediction の鮮度状態です。"},
+        {"確認項目": "安全fallback理由", "状態": _q26d_localize_observation_value(",".join(str(item) for item in packet.get("q18ak_safe_fallback_reason_codes") or [])), "見るポイント": "fallback理由は検索可能なまま、日本語で読めるようにしています。"},
+        {"確認項目": "実装ゲート", "状態": _q26d_localize_observation_value(packet.get("implementation_gate_review_result")), "見るポイント": "本物widget render はまだ blocked/not-ready です。"},
+        {"確認項目": "実render/runtime binding", "状態": "いいえ", "見るポイント": "real widget rendering と runtime props binding はありません。"},
+        {"確認項目": "AutoTrade/broker", "状態": "いいえ", "見るポイント": "AutoTrade trigger と broker/private API はありません。"},
+    ]
+
+
+def _q26d_prediction_observation_plain_text(packet: dict) -> str:
+    reasons = _q26d_localize_observation_value(",".join(str(item) for item in packet.get("q18ak_safe_fallback_reason_codes") or []))
+    return (
+        "PS-Q18AU 予測最新 quick status: "
+        f"状態={_q26d_localize_observation_value(packet.get('latest_prediction_observation_status'))} / "
+        f"手動確認={_q26d_localize_observation_value(packet.get('q18aq_manual_resmoke_result'))} / "
+        f"鮮度={_q26d_localize_observation_value(packet.get('q18ak_freshness_state'))} / "
+        f"fallback理由={reasons or '-'} / "
+        f"heartbeat={packet.get('q18aj_refresh_heartbeat_utc') or '-'} / "
+        f"実装ゲート={_q26d_localize_observation_value(packet.get('implementation_gate_review_result'))} / "
+        "実render=false / runtime binding=false / AutoTrade=false / broker=false"
+    )
+
+
+def build_warroom_q26d_header_legacy_section_localization_packet() -> dict:
+    return {
+        "ok": True,
+        "localization_version": WARROOM_HEADER_LEGACY_SECTION_JAPANESE_LOCALIZATION_VERSION,
+        "quick_status_japanese_localized": True,
+        "legacy_section_titles_japanese_localized": True,
+        "section_description_japanese_localized": True,
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
 def _prediction_warroom_latest_prediction_observation_cleanup_summary_packet(
     *,
     q18aj_packet: dict | object | None,
@@ -348,11 +428,10 @@ def _render_prediction_warroom_latest_prediction_observation_cleanup_summary_sec
     )
     st.session_state["warroom_latest_prediction_observation_cleanup_summary"] = dict(packet)
     st.caption(
-        "PS-Q18AU observation quick status: read this first for latest prediction status; "
-        "legacy preflight/detail sections remain available below. Display-only; no real render, no runtime binding, no AutoTrade, no broker."
+        "PS-Q26D 日本語化: 予測最新ステータスはまずここを確認します。旧preflight詳細は必要時だけ見ます。"
     )
-    st.text(str(packet.get("operator_plain_text") or ""))
-    rows = _prediction_warroom_latest_prediction_observation_cleanup_summary_rows(packet)
+    st.text(_q26d_prediction_observation_plain_text(packet))
+    rows = _q26d_prediction_observation_quick_status_rows(packet)
     if rows:
         st.dataframe(rows, width="stretch", hide_index=True)
 
@@ -561,13 +640,13 @@ def _render_warroom_page_body() -> None:
 
     prediction_fragment_enabled = _prediction_warroom_display_fragment_enabled(page_fragment_enabled=fragment_enabled)
 
-    with live_shell.render_folded_section("Prediction WarRoom latest summary observation quick status", expanded=True):
+    with live_shell.render_folded_section("予測最新ステータス / quick status", expanded=True):
         _render_prediction_warroom_latest_prediction_observation_cleanup_summary_section(fragment_enabled=prediction_fragment_enabled)
 
-    with live_shell.render_folded_section("PS-Q25B Live Market Nowcast / current state", expanded=True):
+    with live_shell.render_folded_section("現在状態 nowcast / board・freshness", expanded=True):
         render_warroom_live_market_nowcast_panel(fragment_enabled=fragment_enabled)
 
-    with live_shell.render_folded_section("PS-Q19D realtime prediction display", expanded=True):
+    with live_shell.render_folded_section("リアルタイム予測表示 / read model", expanded=True):
         render_latest_prediction_warroom_display_panel(fragment_enabled=prediction_fragment_enabled)
 
     _record_warroom_operator_first_render_path_cleanup_state()

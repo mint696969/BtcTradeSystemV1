@@ -51,7 +51,7 @@ DISPLAY_TEXTS = {
         "meaning_score": "ルール上の信号強度。勝率ではありません。0.49前後は弱〜中程度の参考値です。",
         "meaning_warnings": "その見立てを慎重に扱うべき理由。",
         "meaning_drivers": "その見立てになった主な根拠。",
-        "footer_token": "PS_Q19I_WARROOM_PREDICTION_BILINGUAL_EXPLANATION",
+        "footer_token": "PS-Q19I 予測表示の日本語説明",
     },
 }
 

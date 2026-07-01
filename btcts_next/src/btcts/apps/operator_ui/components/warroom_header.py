@@ -16,6 +16,47 @@ from btcts.apps.operator_ui.components.warroom_header_state import (
 )
 from btcts.apps.operator_ui.ui_text import get_text
 
+WARROOM_HEADER_SOURCE_JAPANESE_LOCALIZATION_VERSION = "warroom.header_source_japanese_localization.ps_q26d.v1"
+
+
+def _q26d_header_source_label(value: object) -> str:
+    text = str(value or "unknown")
+    mapping = {
+        "execution_market_live_canonical + research_experiment": "実行市場live基準 + research補助",
+        "execution_market_state + research_experiment": "実行市場state基準 + research補助",
+        "execution_market_live_canonical": "実行市場live基準",
+        "execution_market_state": "実行市場state基準",
+        "research_experiment": "research補助",
+        "unknown": get_text(st.session_state.get("ui_lang", "en"), "warroom_value_unknown"),
+    }
+    return mapping.get(text, text)
+
+
+def build_warroom_header_q26d_source_localization_packet() -> dict:
+    return {
+        "ok": True,
+        "localization_version": WARROOM_HEADER_SOURCE_JAPANESE_LOCALIZATION_VERSION,
+        "header_source_label_japanese_localized": True,
+        "source_example": _q26d_header_source_label("execution_market_live_canonical + research_experiment"),
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
 def _spread_state(spread: float | None, lang: str) -> str:
     if spread is None:
         return get_text(lang, "warroom_value_unknown")
@@ -192,7 +233,7 @@ def render():
     )
     st.caption(
         get_text(lang, "warroom_generic_source_caption").format(
-            source=state.get("source_label") or state.get("source", "unknown"),
+            source=_q26d_header_source_label(state.get("source_label") or state.get("source", "unknown")),
         )
     )
 
