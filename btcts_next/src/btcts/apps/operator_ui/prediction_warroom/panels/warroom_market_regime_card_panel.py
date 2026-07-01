@@ -209,23 +209,32 @@ def _text(value: Any) -> str:
     return escape("" if value is None else str(value))
 
 
+def _joined_detail_items(items: Iterable[Any], *, limit: int = 3) -> str:
+    values = [_text(item) for item in items if str(item) != ""]
+    if not values:
+        return ""
+    shown = values[:limit]
+    if len(values) > limit:
+        shown.append(f"+{len(values) - limit}")
+    return " / ".join(shown)
+
+
 def _detail_lines(card: Mapping[str, Any]) -> str:
     detail = card.get("detail") if isinstance(card.get("detail"), Mapping) else {}
     reason_lines = detail.get("reason_lines") if isinstance(detail.get("reason_lines"), list) else []
     source_lines = detail.get("source_lines") if isinstance(detail.get("source_lines"), list) else []
     warning_lines = detail.get("warning_lines") if isinstance(detail.get("warning_lines"), list) else []
-    reason = " / ".join(_text(item) for item in reason_lines) or "sample shell"
-    source = " / ".join(_text(item) for item in source_lines) or "Q26X sample card"
-    warning = " / ".join(_text(item) for item in warning_lines) or "live data not connected"
-    evidence = card.get("evidence_quality_style") if isinstance(card.get("evidence_quality_style"), Mapping) else {}
-    return (
-        f"<div class='mr-detail-title'>概要</div>"
-        f"<div class='mr-detail-line'><b>読み方:</b> {_text(detail.get('reading') or detail.get('summary') or '詳細は後続sliceで実データ接続後に拡張')}</div>"
-        f"<div class='mr-detail-line'><b>理由:</b> {reason}</div>"
-        f"<div class='mr-detail-line'><b>情報源:</b> {source}</div>"
-        f"<div class='mr-detail-line'><b>注意:</b> {warning}</div>"
-        f"<div class='mr-detail-line'><b>根拠:</b> {_text(evidence.get('label'))}</div>"
-    )
+    reason = _joined_detail_items(reason_lines)
+    source = _joined_detail_items(source_lines)
+    warning = _joined_detail_items(warning_lines)
+    lines = ["<div class='mr-detail-title'>概要</div>"]
+    if reason:
+        lines.append(f"<div class='mr-detail-line'><b>理由:</b> {reason}</div>")
+    if source:
+        lines.append(f"<div class='mr-detail-line'><b>情報源:</b> {source}</div>")
+    if warning:
+        lines.append(f"<div class='mr-detail-line'><b>注意:</b> {warning}</div>")
+    return "".join(lines)
 
 
 def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
