@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Callable
 import json
 import streamlit as st
@@ -90,12 +91,85 @@ from btcts.apps.operator_ui.components.slot_definitions import (
 WARROOM_HEADER_LEGACY_SECTION_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.header_legacy_section_japanese_localization.ps_q26d.v1"
 WARROOM_TOP_READING_CAPTION_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.top_reading_caption_japanese_localization.ps_q26h.v1"
 WARROOM_ALLOWED_TECH_TERM_LABEL_HELP_TEXT_VERSION = "prediction_warroom.allowed_tech_term_label_help_text.ps_q26k.v1"
+WARROOM_MARKET_REGIME_CARD_PREVIEW_ENABLEMENT_VERSION = "prediction_warroom.market_regime_card_preview_enablement.ps_q27p.v1"
+WARROOM_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT_HINT = r"D:\\btc_ts_hot"
 _GRAPH_WIDGET_RENDERERS = {
     "market_monitor": market_monitor.render,
     "liquidity_pressure": liquidity_pressure_panel.render,
     "trade_flow_monitor": trade_flow_monitor.render,
 }
 
+
+
+def _warroom_utc_now_iso_q27p() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def build_warroom_market_regime_card_preview_enablement_packet(
+    *,
+    preview_enabled: bool = False,
+    operator_confirmed_read_only: bool = False,
+    hot_root: str | None = WARROOM_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT_HINT,
+    generated_at: str = "",
+) -> dict:
+    """Return render kwargs for the market-regime card preview gate.
+
+    Default is disabled/sample-only. The D-hot preview root is passed to the panel
+    only when the operator explicitly checks the read-only preview checkbox.
+    """
+    requested = bool(preview_enabled)
+    confirmed = bool(operator_confirmed_read_only)
+    root = "" if hot_root is None else str(hot_root)
+    enabled = bool(requested and confirmed and root)
+    if not requested:
+        disabled_reason = "preview_checkbox_off"
+    elif not confirmed:
+        disabled_reason = "operator_read_only_confirmation_required"
+    elif not root:
+        disabled_reason = "explicit_hot_root_required"
+    else:
+        disabled_reason = ""
+    render_kwargs = {
+        "preview_enabled": False,
+        "hot_root": None,
+        "generated_at": generated_at,
+    }
+    if enabled:
+        render_kwargs = {
+            "preview_enabled": True,
+            "hot_root": root,
+            "generated_at": generated_at,
+        }
+    return {
+        "ok": True,
+        "enablement_version": WARROOM_MARKET_REGIME_CARD_PREVIEW_ENABLEMENT_VERSION,
+        "market_regime_only": True,
+        "preview_enabled_requested": requested,
+        "operator_confirmed_read_only": confirmed,
+        "preview_enabled_effective": enabled,
+        "disabled_reason": disabled_reason,
+        "render_kwargs": render_kwargs,
+        "warroom_page_preview_default_on": False,
+        "explicit_operator_checkbox_required": True,
+        "explicit_source_root_required": True,
+        "explicit_source_root_read_allowed": enabled,
+        "disabled_path_reads_root": False,
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
 
 def _warroom_reading_block_order() -> tuple[str, ...]:
     return (
@@ -542,7 +616,27 @@ def _render_warroom_page_body() -> None:
         render_warroom_operator_focus_nav()
 
     with render_warroom_focus_section("market_regime_card_sample"):
-        render_warroom_market_regime_card_shell()
+        market_regime_preview_enabled = bool(
+            st.checkbox(
+                "地合いカード preview を明示有効化（D-hot read-only / 実行系なし）",
+                value=False,
+                key="warroom_market_regime_card_preview_enabled_q27p",
+            )
+        )
+        market_regime_preview_enablement_packet = build_warroom_market_regime_card_preview_enablement_packet(
+            preview_enabled=market_regime_preview_enabled,
+            operator_confirmed_read_only=market_regime_preview_enabled,
+            hot_root=WARROOM_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT_HINT,
+            generated_at=_warroom_utc_now_iso_q27p(),
+        )
+        st.session_state["warroom_market_regime_card_preview_enablement_q27p"] = dict(
+            market_regime_preview_enablement_packet
+        )
+        if not market_regime_preview_enablement_packet["preview_enabled_effective"]:
+            st.caption("地合いカード preview はデフォルトOFFです。ON時のみ D-hot を read-only で読みます。")
+        render_warroom_market_regime_card_shell(
+            **market_regime_preview_enablement_packet["render_kwargs"]
+        )
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_guide"), expanded=False):
         st.caption(

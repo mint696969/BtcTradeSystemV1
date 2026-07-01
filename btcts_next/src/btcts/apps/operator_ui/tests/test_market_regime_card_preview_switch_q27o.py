@@ -116,9 +116,12 @@ def test_q27o_preview_switch_enabled_without_root_falls_back_to_sample() -> None
     assert packet["card_count"] == 8
 
 
-def test_q27o_preview_switch_keeps_page_default_call_unmodified() -> None:
+def test_q27o_preview_switch_keeps_page_default_preview_disabled() -> None:
     page_text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
-    assert "render_warroom_market_regime_card_shell()" in page_text
+    assert "build_warroom_market_regime_card_preview_enablement_packet" in page_text
+    assert "warroom_market_regime_card_preview_enabled_q27p" in page_text
+    assert "value=False" in page_text
+    assert "render_kwargs" in page_text
     assert "preview_enabled=True" not in page_text
     assert "build_warroom_market_regime_card_preview_switch_packet" not in page_text
     assert 'render_warroom_focus_section("market_regime_card_sample")' in page_text
