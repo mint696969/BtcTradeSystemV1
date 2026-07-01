@@ -78,6 +78,7 @@ from btcts.apps.operator_ui.components.slot_definitions import (
 
 
 WARROOM_HEADER_LEGACY_SECTION_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.header_legacy_section_japanese_localization.ps_q26d.v1"
+WARROOM_TOP_READING_CAPTION_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.top_reading_caption_japanese_localization.ps_q26h.v1"
 
 _GRAPH_WIDGET_RENDERERS = {
     "market_monitor": market_monitor.render,
@@ -98,16 +99,16 @@ def _warroom_reading_block_order() -> tuple[str, ...]:
 def _warroom_reading_block_captions() -> dict[str, str]:
     return {
         "current_market_summary_reading": (
-            "read current regime / source / compact market state first"
+            "現在の市場summary / source / compact market state を最初に確認します"
         ),
         "current_active_event_reading": (
-            "read active event / liquidity / graph context as current market evidence"
+            "現在のactive event / liquidity / graph context を市場証拠として確認します"
         ),
         "current_tactic_prediction_reading": (
-            "read tactic stance / prediction as review support, not execution"
+            "予測はreview補助として読みます。実行指示ではありません（tactic stance は参考情報です）"
         ),
         "operator_support_review_reading": (
-            "read watch / timeline / decision support as operator review context"
+            "watch / timeline / decision support はoperator reviewの文脈として確認します"
         ),
     }
 
@@ -346,6 +347,87 @@ def build_warroom_q26d_header_legacy_section_localization_packet() -> dict:
         "would_send_to_broker": False,
     }
 
+
+def _q26h_bool_ja(value: object) -> str:
+    if value is True:
+        return "はい"
+    if value is False:
+        return "いいえ"
+    text = str(value).lower() if value is not None else ""
+    if text == "true":
+        return "はい"
+    if text == "false":
+        return "いいえ"
+    return str(value) if value is not None else "-"
+
+
+def _q26h_observation_plain_text(packet: dict) -> str:
+    reasons = _q26d_localize_observation_value(",".join(str(item) for item in packet.get("q18ak_safe_fallback_reason_codes") or []))
+    return (
+        "PS-Q26H 予測最新ステータス: "
+        f"状態={_q26d_localize_observation_value(packet.get('latest_prediction_observation_status'))} / "
+        f"手動確認={_q26d_localize_observation_value(packet.get('q18aq_manual_resmoke_result'))} / "
+        f"鮮度={_q26d_localize_observation_value(packet.get('q18ak_freshness_state'))} / "
+        f"安全fallback理由={reasons or '-'} / "
+        f"画面heartbeat={packet.get('q18aj_refresh_heartbeat_utc') or '-'} / "
+        f"実装ゲート={_q26d_localize_observation_value(packet.get('implementation_gate_review_result'))} / "
+        "実render=なし / runtime binding=なし / AutoTrade=なし / broker=なし"
+    )
+
+
+def _q26h_observation_quick_status_rows(packet: dict) -> list[dict]:
+    return [
+        {"確認項目": "読む順番", "状態": _q26d_localize_observation_value(packet.get("read_order")), "見るポイント": "最初に quick status を確認し、必要な時だけ旧preflight詳細を開きます。"},
+        {"確認項目": "手動再確認", "状態": _q26d_localize_observation_value(packet.get("q18aq_manual_resmoke_result")), "見るポイント": "検索可能tokenとheartbeatの確認結果です。"},
+        {"確認項目": "自動更新", "状態": _q26h_bool_ja(packet.get("q18aj_auto_refresh_enabled")), "見るポイント": "WarRoom画面のbounded refreshです。予測生成ではありません。"},
+        {"確認項目": "画面heartbeat", "状態": packet.get("q18aj_refresh_heartbeat_utc") or "-", "見るポイント": "画面更新の確認用です。予測artifact更新とは別です。"},
+        {"確認項目": "鮮度", "状態": _q26d_localize_observation_value(packet.get("q18ak_freshness_state")), "見るポイント": "latest prediction の鮮度状態です。"},
+        {"確認項目": "安全fallback理由", "状態": _q26d_localize_observation_value(",".join(str(item) for item in packet.get("q18ak_safe_fallback_reason_codes") or [])) or "-", "見るポイント": "安全fallback理由です。実行挙動はありません。"},
+        {"確認項目": "実装ゲート", "状態": _q26d_localize_observation_value(packet.get("implementation_gate_review_result")), "見るポイント": "本物widget render は blocked/not-ready のままです。"},
+        {"確認項目": "実render / runtime binding", "状態": "なし", "見るポイント": "real widget rendering と runtime props binding はありません。"},
+        {"確認項目": "AutoTrade / broker", "状態": "なし", "見るポイント": "AutoTrade trigger と broker/private API はありません。"},
+    ]
+
+
+def build_warroom_q26h_top_reading_caption_japanese_localization_packet() -> dict:
+    sample = {
+        "latest_prediction_observation_status": "ready_for_operator_review",
+        "q18aq_manual_resmoke_result": "pass",
+        "q18ak_freshness_state": "unknown",
+        "q18ak_safe_fallback_reason_codes": ["source_generated_at_missing"],
+        "q18aj_refresh_heartbeat_utc": "2026-07-01T00:00:00Z",
+        "implementation_gate_review_result": "blocked_not_ready_to_enable",
+        "read_order": "quick_status_then_searchable_tokens_then_legacy_preflight_details",
+        "q18aj_auto_refresh_enabled": True,
+    }
+    return {
+        "ok": True,
+        "localization_version": WARROOM_TOP_READING_CAPTION_JAPANESE_LOCALIZATION_VERSION,
+        "reading_block_captions_japanese_localized": True,
+        "quick_status_plain_text_japanese_localized": True,
+        "quick_status_rows_japanese_localized": True,
+        "page_level_false_fragments_reduced": True,
+        "sample_plain_text": _q26h_observation_plain_text(sample),
+        "sample_row_count": len(_q26h_observation_quick_status_rows(sample)),
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
 def _prediction_warroom_latest_prediction_observation_cleanup_summary_packet(
     *,
     q18aj_packet: dict | object | None,
@@ -384,16 +466,7 @@ def _prediction_warroom_latest_prediction_observation_cleanup_summary_packet(
         "broker_private_api_allowed": False,
         "would_send_to_broker": False,
     }
-    packet["operator_plain_text"] = (
-        "PS_Q18AU_OBSERVATION_QUICK_STATUS "
-        f"latest_prediction_observation_status={packet['latest_prediction_observation_status']} "
-        f"manual_resmoke={packet['q18aq_manual_resmoke_result']} "
-        f"freshness_state={packet['q18ak_freshness_state']} "
-        f"safe_fallback_reason_codes={','.join(str(item) for item in packet['q18ak_safe_fallback_reason_codes'])} "
-        f"refresh_heartbeat_utc={packet['q18aj_refresh_heartbeat_utc']} "
-        f"implementation_gate={packet['implementation_gate_review_result']} "
-        "real_render=false component_runtime_binding=false autotrade=false broker=false"
-    )
+    packet["operator_plain_text"] = _q26h_observation_plain_text(packet)
     return packet
 
 
@@ -428,10 +501,10 @@ def _render_prediction_warroom_latest_prediction_observation_cleanup_summary_sec
     )
     st.session_state["warroom_latest_prediction_observation_cleanup_summary"] = dict(packet)
     st.caption(
-        "PS-Q26D 日本語化: 予測最新ステータスはまずここを確認します。旧preflight詳細は必要時だけ見ます。"
+        "PS-Q26H 日本語化: 予測最新ステータスは、状態・鮮度・fallback理由・安全境界の順で確認します。"
     )
-    st.text(_q26d_prediction_observation_plain_text(packet))
-    rows = _q26d_prediction_observation_quick_status_rows(packet)
+    st.text(_q26h_observation_plain_text(packet))
+    rows = _q26h_observation_quick_status_rows(packet)
     if rows:
         st.dataframe(rows, width="stretch", hide_index=True)
 
