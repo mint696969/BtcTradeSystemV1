@@ -47,10 +47,9 @@ def run_warroom_focus_layout_policy_diagnostic() -> dict:
         if marker not in doc:
             blockers.append(f"doc_marker_required:{marker}")
     for marker in (
-        "from btcts.apps.operator_ui.prediction_warroom.panels.warroom_focus_layout_policy import",
-        "warroom_focus_section_label",
-        "warroom_focus_section_expanded",
-        'warroom_focus_section_expanded("prediction_quick_status_detail")',
+        "from btcts.apps.operator_ui.prediction_warroom.panels.warroom_focus_sections import",
+        "render_warroom_focus_section",
+        'render_warroom_focus_section("prediction_quick_status_detail")',
     ):
         if marker not in page:
             blockers.append(f"page_marker_required:{marker}")

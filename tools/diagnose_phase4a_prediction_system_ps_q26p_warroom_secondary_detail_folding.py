@@ -46,11 +46,11 @@ def run_warroom_secondary_detail_folding_diagnostic() -> dict:
         if marker not in doc:
             blockers.append(f"doc_marker_required:{marker}")
     for marker in (
-        'warroom_focus_section_expanded("header_alert_operator")',
-        'warroom_focus_section_expanded("market_evidence_detail")',
-        'warroom_focus_section_expanded("operator_support_detail")',
-        'warroom_focus_section_label("market_evidence_detail")',
-        'warroom_focus_section_label("operator_support_detail")',
+        'render_warroom_focus_section("header_alert_operator")',
+        'render_warroom_focus_section("market_evidence_detail")',
+        'render_warroom_focus_section("operator_support_detail")',
+        'render_warroom_focus_section("market_evidence_detail")',
+        'render_warroom_focus_section("operator_support_detail")',
     ):
         if marker not in page:
             blockers.append(f"page_marker_required:{marker}")

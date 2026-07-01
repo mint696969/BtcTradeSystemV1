@@ -47,9 +47,7 @@ def test_q26p_secondary_detail_policy_folds_priority_4_and_5_sections() -> None:
 
 def test_q26p_warroom_page_wraps_secondary_details_in_policy_sections() -> None:
     text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
-    assert 'warroom_focus_section_expanded("header_alert_operator")' in text
-    assert 'warroom_focus_section_expanded("market_evidence_detail")' in text
-    assert 'warroom_focus_section_expanded("operator_support_detail")' in text
-    assert 'warroom_focus_section_label("market_evidence_detail")' in text
-    assert 'warroom_focus_section_label("operator_support_detail")' in text
-    assert text.index('warroom_focus_section_expanded("latest_prediction_read_model")') < text.index('warroom_focus_section_expanded("header_alert_operator")') < text.index('warroom_focus_section_expanded("market_evidence_detail")') < text.index('warroom_focus_section_expanded("operator_support_detail")')
+    assert 'render_warroom_focus_section("header_alert_operator")' in text
+    assert 'render_warroom_focus_section("market_evidence_detail")' in text
+    assert 'render_warroom_focus_section("operator_support_detail")' in text
+    assert text.index('render_warroom_focus_section("latest_prediction_read_model")') < text.index('render_warroom_focus_section("header_alert_operator")') < text.index('render_warroom_focus_section("market_evidence_detail")') < text.index('render_warroom_focus_section("operator_support_detail")')

@@ -45,10 +45,11 @@ def test_q26o_focus_layout_policy_folds_quick_status_detail_only() -> None:
 
 def test_q26o_warroom_page_uses_external_policy_for_top_focus_sections() -> None:
     text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
-    assert "from btcts.apps.operator_ui.prediction_warroom.panels.warroom_focus_layout_policy import" in text
-    assert "warroom_focus_section_label" in text
-    assert "warroom_focus_section_expanded" in text
+    assert "from btcts.apps.operator_ui.prediction_warroom.panels.warroom_focus_sections import" in text
+    assert "render_warroom_focus_section" in text
+    assert "warroom_focus_section_label" not in text
+    assert "warroom_focus_section_expanded" not in text
     assert 'render_folded_section("予測最新ステータス / quick status", expanded=True)' not in text
-    assert 'warroom_focus_section_expanded("prediction_quick_status_detail")' in text
-    assert 'warroom_focus_section_expanded("live_nowcast")' in text
-    assert 'warroom_focus_section_expanded("latest_prediction_read_model")' in text
+    assert 'render_warroom_focus_section("prediction_quick_status_detail")' in text
+    assert 'render_warroom_focus_section("live_nowcast")' in text
+    assert 'render_warroom_focus_section("latest_prediction_read_model")' in text

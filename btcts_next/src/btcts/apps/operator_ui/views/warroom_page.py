@@ -54,9 +54,8 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_live_market_nowcas
 from btcts.apps.operator_ui.prediction_warroom.panels.warroom_operator_focus_nav_panel import (
     render_warroom_operator_focus_nav,
 )
-from btcts.apps.operator_ui.prediction_warroom.panels.warroom_focus_layout_policy import (
-    warroom_focus_section_expanded,
-    warroom_focus_section_label,
+from btcts.apps.operator_ui.prediction_warroom.panels.warroom_focus_sections import (
+    render_warroom_focus_section,
 )
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
@@ -769,7 +768,7 @@ def _render_warroom_page_body() -> None:
 
     live_shell.render_compact_page_header(get_text(lang, "warroom_title"))
 
-    with live_shell.render_folded_section(warroom_focus_section_label("operator_focus_nav"), expanded=warroom_focus_section_expanded("operator_focus_nav")):
+    with render_warroom_focus_section("operator_focus_nav"):
         render_warroom_operator_focus_nav()
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_guide"), expanded=False):
@@ -779,23 +778,23 @@ def _render_warroom_page_body() -> None:
 
     prediction_fragment_enabled = _prediction_warroom_display_fragment_enabled(page_fragment_enabled=fragment_enabled)
 
-    with live_shell.render_folded_section(warroom_focus_section_label("prediction_quick_status_detail"), expanded=warroom_focus_section_expanded("prediction_quick_status_detail")):
+    with render_warroom_focus_section("prediction_quick_status_detail"):
         _render_prediction_warroom_latest_prediction_observation_cleanup_summary_section(fragment_enabled=prediction_fragment_enabled)
 
-    with live_shell.render_folded_section(warroom_focus_section_label("live_nowcast"), expanded=warroom_focus_section_expanded("live_nowcast")):
+    with render_warroom_focus_section("live_nowcast"):
         render_warroom_live_market_nowcast_panel(fragment_enabled=fragment_enabled)
 
-    with live_shell.render_folded_section(warroom_focus_section_label("latest_prediction_read_model"), expanded=warroom_focus_section_expanded("latest_prediction_read_model")):
+    with render_warroom_focus_section("latest_prediction_read_model"):
         render_latest_prediction_warroom_display_panel(fragment_enabled=prediction_fragment_enabled)
 
     _record_warroom_operator_first_render_path_cleanup_state()
 
-    with live_shell.render_folded_section(warroom_focus_section_label("header_alert_operator"), expanded=warroom_focus_section_expanded("header_alert_operator")):
+    with render_warroom_focus_section("header_alert_operator"):
         _render_warroom_primary_reading_overview(
             fragment_enabled=fragment_enabled,
         )
 
-    with live_shell.render_folded_section(warroom_focus_section_label("market_evidence_detail"), expanded=warroom_focus_section_expanded("market_evidence_detail")):
+    with render_warroom_focus_section("market_evidence_detail"):
         with live_shell.zone_container(
             label=get_text(lang, "ui_label_primary_live"),
             zone_kind="primary_live",
@@ -823,7 +822,7 @@ def _render_warroom_page_body() -> None:
                 fragment_enabled=fragment_enabled,
             )
 
-    with live_shell.render_folded_section(warroom_focus_section_label("operator_support_detail"), expanded=warroom_focus_section_expanded("operator_support_detail")):
+    with render_warroom_focus_section("operator_support_detail"):
         with live_shell.zone_container(
             label=get_text(lang, "ui_label_operator_support"),
             zone_kind="secondary",
