@@ -18,6 +18,7 @@ from .contracts import (
 from .freshness_policy import FreshnessThreshold, MarketRegimeFreshnessPolicy, build_default_freshness_policy
 from .features import FeatureBundleSafetyFlags, FeatureSignal, MarketRegimeFeatureBundle, build_market_regime_feature_bundle
 from .horizon_policy import MarketRegimeHorizon, MarketRegimeHorizonGroup, MarketRegimeHorizonPolicy, build_default_horizon_policy
+from .inference import MARKET_REGIME_CLASSIFIER_VERSION, classify_market_regime_feature_bundle
 from .parameter_set import MarketRegimeParameterSet, build_default_market_regime_parameter_set
 from .source_priority_policy import HorizonSourcePriority, SourcePriorityPolicy, build_default_source_priority_policy
 from .source_snapshot import (
@@ -39,6 +40,7 @@ __all__ = [
     "ForecastRecordsSnapshot",
     "HorizonSourcePriority",
     "JsonSourceArtifact",
+    "MARKET_REGIME_CLASSIFIER_VERSION",
     "MarketRegimeCode",
     "MarketRegimeFeatureBundle",
     "MarketRegimeFreshnessPolicy",
@@ -61,5 +63,6 @@ __all__ = [
     "build_default_source_priority_policy",
     "build_empty_market_regime_packet",
     "build_market_regime_feature_bundle",
+    "classify_market_regime_feature_bundle",
     "build_market_regime_source_snapshot",
 ]
