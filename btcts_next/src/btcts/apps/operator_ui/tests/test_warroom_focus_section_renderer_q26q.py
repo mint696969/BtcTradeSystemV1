@@ -26,8 +26,9 @@ def test_q26q_focus_section_renderer_packet_is_safe_and_policy_backed() -> None:
     assert packet["uses_externalized_layout_policy_module"] is True
     assert packet["section_renderer_externalized"] is True
     assert packet["warroom_page_change_boundary"] == "import_and_focus_section_renderer_calls_only"
-    assert packet["section_count"] == 7
+    assert packet["section_count"] == 8
     assert packet["operator_focus_nav_expanded_default"] is True
+    assert packet["market_regime_card_sample_expanded_default"] is True
     assert packet["quick_status_detail_folded_default"] is True
     assert packet["market_evidence_detail_folded_default"] is True
     assert packet["operator_support_detail_folded_default"] is True
@@ -49,6 +50,7 @@ def test_q26q_warroom_page_uses_focus_section_renderer_not_direct_policy_lookup(
     assert "warroom_focus_section_label" not in page_text
     for section_id in (
         "operator_focus_nav",
+        "market_regime_card_sample",
         "prediction_quick_status_detail",
         "live_nowcast",
         "latest_prediction_read_model",

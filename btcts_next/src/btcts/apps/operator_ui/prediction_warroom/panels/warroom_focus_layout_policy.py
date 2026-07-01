@@ -9,6 +9,7 @@ WARROOM_FOCUS_LAYOUT_POLICY_VERSION = "prediction_warroom.focus_layout_policy.ps
 
 _SECTION_LABELS: Mapping[str, str] = {
     "operator_focus_nav": "最初に見る場所 / WarRoom 入口",
+    "market_regime_card_sample": "地合いカード / sample preview",
     "prediction_quick_status_detail": "予測最新ステータス / quick status",
     "live_nowcast": "現在状態 nowcast / board・freshness",
     "latest_prediction_read_model": "リアルタイム予測表示 / read model",
@@ -19,6 +20,7 @@ _SECTION_LABELS: Mapping[str, str] = {
 
 _SECTION_EXPANDED_DEFAULTS: Mapping[str, bool] = {
     "operator_focus_nav": True,
+    "market_regime_card_sample": True,
     "prediction_quick_status_detail": False,
     "live_nowcast": True,
     "latest_prediction_read_model": True,
@@ -44,6 +46,13 @@ def warroom_focus_layout_rows() -> list[dict[str, object]]:
             "expanded_default": True,
             "operator_reason": "最初の読み順を示す入口なので常に開く",
             "priority": 0,
+        },
+        {
+            "section_id": "market_regime_card_sample",
+            "label": warroom_focus_section_label("market_regime_card_sample"),
+            "expanded_default": True,
+            "operator_reason": "地合いをカードで視覚確認する主要セクション。sample-onlyで開く",
+            "priority": 1,
         },
         {
             "section_id": "prediction_quick_status_detail",
@@ -97,6 +106,7 @@ def build_warroom_focus_layout_policy_packet() -> dict[str, object]:
         "focus_layout_policy_version": WARROOM_FOCUS_LAYOUT_POLICY_VERSION,
         "externalized_layout_policy_module": True,
         "warroom_page_change_boundary": "import_and_policy_lookup_only",
+        "market_regime_card_sample_expanded_default": warroom_focus_section_expanded("market_regime_card_sample") is True,
         "quick_status_detail_folded_default": warroom_focus_section_expanded("prediction_quick_status_detail") is False,
         "operator_focus_nav_expanded_default": warroom_focus_section_expanded("operator_focus_nav") is True,
         "live_nowcast_expanded_default": warroom_focus_section_expanded("live_nowcast") is True,

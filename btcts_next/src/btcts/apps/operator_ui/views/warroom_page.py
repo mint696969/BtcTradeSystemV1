@@ -54,6 +54,9 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_live_market_nowcas
 from btcts.apps.operator_ui.prediction_warroom.panels.warroom_operator_focus_nav_panel import (
     render_warroom_operator_focus_nav,
 )
+from btcts.apps.operator_ui.prediction_warroom.panels.warroom_market_regime_card_panel import (
+    render_warroom_market_regime_card_shell,
+)
 from btcts.apps.operator_ui.prediction_warroom.panels.warroom_focus_sections import (
     render_warroom_focus_section,
 )
@@ -537,6 +540,9 @@ def _render_warroom_page_body() -> None:
 
     with render_warroom_focus_section("operator_focus_nav"):
         render_warroom_operator_focus_nav()
+
+    with render_warroom_focus_section("market_regime_card_sample"):
+        render_warroom_market_regime_card_shell()
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_guide"), expanded=False):
         st.caption(

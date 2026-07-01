@@ -67,13 +67,14 @@ def run_market_regime_card_renderer_shell_diagnostic() -> dict:
     ):
         if marker not in panel:
             blockers.append(f"panel_marker_required:{marker}")
-    if "WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION" in page or "render_warroom_market_regime_card_shell" in page:
-        blockers.append("warroom_page_should_not_mount_q26y_renderer_yet")
+    q26z_sample_mount_present = "render_warroom_market_regime_card_shell" in page
+    if "WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION" in page:
+        blockers.append("warroom_page_should_not_import_q26y_version_constant")
     for marker in (
         "test_q26y_sample_cards_cover_horizons_and_unknown",
         "test_q26y_html_uses_horizontal_scroll_and_fixed_card_width",
         "test_q26y_packet_preserves_safety_and_no_page_mount",
-        "test_q26y_does_not_touch_warroom_page",
+        "test_q26y_renderer_shell_remains_safe_after_later_mount",
     ):
         if marker not in app_test:
             blockers.append(f"test_marker_required:{marker}")
@@ -106,6 +107,7 @@ def run_market_regime_card_renderer_shell_diagnostic() -> dict:
         "blockers": blockers,
         "packet": packet,
         "html_preview_contains_cards": "market-regime-card-shell" in html,
+        "q26z_sample_mount_present": q26z_sample_mount_present,
         "safety": {
             "market_regime_first": True,
             "sample_data_only": True,

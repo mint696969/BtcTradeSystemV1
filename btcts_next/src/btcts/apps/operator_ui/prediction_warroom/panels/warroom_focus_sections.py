@@ -34,6 +34,7 @@ def build_warroom_focus_section_renderer_packet() -> dict[str, object]:
         "section_count": policy_packet.get("section_count"),
         "rows": policy_packet.get("rows"),
         "operator_focus_nav_expanded_default": policy_packet.get("operator_focus_nav_expanded_default"),
+        "market_regime_card_sample_expanded_default": policy_packet.get("market_regime_card_sample_expanded_default"),
         "quick_status_detail_folded_default": policy_packet.get("quick_status_detail_folded_default"),
         "live_nowcast_expanded_default": policy_packet.get("live_nowcast_expanded_default"),
         "latest_prediction_read_model_expanded_default": policy_packet.get("latest_prediction_read_model_expanded_default"),

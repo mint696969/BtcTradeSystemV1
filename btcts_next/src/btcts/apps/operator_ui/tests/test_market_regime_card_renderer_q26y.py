@@ -68,10 +68,16 @@ def test_q26y_packet_preserves_safety_and_no_page_mount() -> None:
         assert packet[key] is False
 
 
-def test_q26y_does_not_touch_warroom_page() -> None:
+def test_q26y_renderer_shell_remains_safe_after_later_mount() -> None:
     page_text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
     panel_text = PANEL.read_text(encoding="utf-8-sig")
+    packet = build_warroom_market_regime_card_renderer_packet()
     assert "WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION" in panel_text
     assert "render_warroom_market_regime_card_shell" in panel_text
-    assert "WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION" not in page_text
-    assert "render_warroom_market_regime_card_shell" not in page_text
+    assert "render_warroom_market_regime_card_shell" in page_text  # mounted by PS-Q26Z
+    assert packet["sample_data_only"] is True
+    assert packet["live_data_connected"] is False
+    assert packet["warroom_page_changed"] is False
+    assert packet["warroom_page_mounted"] is False
+    assert packet["streamlit_render_invoked_by_page"] is False
+    assert packet["runtime_read_allowed"] is False
