@@ -23,6 +23,7 @@ WARROOM_MARKET_REGIME_CARD_VISUAL_TUNE_VERSION = "prediction_warroom.market_regi
 MARKET_REGIME_CARD_WIDTH_PX = 208
 MARKET_REGIME_CARD_HORIZON_FONT_SIZE_REM = "0.92rem"
 WARROOM_MARKET_REGIME_CARD_DETAIL_POPOVER_VERSION = "prediction_warroom.market_regime_card_detail_popover.ps_q27b.v1"
+WARROOM_MARKET_REGIME_CARD_SELECTED_DETAIL_PANEL_VERSION = "prediction_warroom.market_regime_card_selected_detail_panel.ps_q27c.v1"
 
 
 def build_sample_market_regime_cards() -> list[dict[str, Any]]:
@@ -84,10 +85,17 @@ def build_warroom_market_regime_card_renderer_packet(cards: Iterable[Mapping[str
         "detail_disclosure_available": True,
         "dialog_popup_planned_later": False,
         "detail_popover_version": WARROOM_MARKET_REGIME_CARD_DETAIL_POPOVER_VERSION,
-        "detail_disclosure_mode": "popover",
-        "detail_popover_enabled": True,
+        "selected_detail_panel_version": WARROOM_MARKET_REGIME_CARD_SELECTED_DETAIL_PANEL_VERSION,
+        "detail_disclosure_mode": "card_overlay",
+        "detail_popover_enabled": False,
+        "selected_detail_panel_enabled": False,
+        "card_detail_overlay_enabled": True,
+        "overlay_covers_card_row": True,
+        "overlay_close_button_enabled": True,
         "inline_detail_expansion_enabled": False,
+        "fixed_detail_panel_reserved": False,
         "no_vertical_layout_shift_on_detail_open": True,
+        "no_vertical_layout_shift_on_detail_select": False,
         "freshness_encoded_by_badge_only": True,
         "border_meaning": "evidence_quality",
         "background_tone_is_readability_first": True,
@@ -140,8 +148,26 @@ def _detail_lines(card: Mapping[str, Any]) -> str:
 
 
 def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
+    card_rows = [dict(card) for card in cards]
     card_html: list[str] = []
-    for card in cards:
+    detail_inputs: list[str] = [
+        "<input class='mr-detail-radio' type='radio' id='mr-detail-close' name='mr-detail-selected-card' checked>"
+    ]
+    overlay_panels: list[str] = []
+    select_css: list[str] = []
+
+    for idx, card in enumerate(card_rows):
+        detail_id = f"mr-detail-select-{idx}"
+        detail_class = f"mr-overlay-content-{idx}"
+        detail_inputs.append(
+            f"<input class='mr-detail-radio' type='radio' id='{detail_id}' name='mr-detail-selected-card'>"
+        )
+        select_css.append(
+            f"#mr-detail-select-{idx}:checked ~ .market-regime-card-stage .mr-card-detail-overlay {{ display: block; }}"
+        )
+        select_css.append(
+            f"#mr-detail-select-{idx}:checked ~ .market-regime-card-stage .{detail_class} {{ display: block; }}"
+        )
         bg = card.get("background_style") if isinstance(card.get("background_style"), Mapping) else {}
         evidence = card.get("evidence_quality_style") if isinstance(card.get("evidence_quality_style"), Mapping) else {}
         card_lines = card.get("card_lines") if isinstance(card.get("card_lines"), list) else []
@@ -162,23 +188,34 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
             f"<div class='mr-regime'>{_text(line1)}</div>"
             f"<div class='mr-confidence'>{_text(line2)}</div>"
             f"<div class='mr-tag'>{_text(line3)}</div>"
-            "<details class='mr-popover-details'>"
-            "<summary class='mr-detail-button'>詳細</summary>"
-            "<div class='mr-detail-popover'>"
-            + _detail_lines(card)
-            + "</div>"
-            + "</details>"
+            f"<label class='mr-detail-selector-button' for='{detail_id}'>詳細</label>"
             "</section>"
+        )
+        overlay_panels.append(
+            f"<section class='mr-overlay-detail-content {detail_class}'>"
+            f"<div class='mr-overlay-detail-kicker'>{_text(card.get('horizon'))} / {_text(line1)} / {_text(line2)}</div>"
+            + _detail_lines(card)
+            + "</section>"
         )
 
     css = """
 <style>
+.market-regime-card-root {
+  width: 100%;
+}
+.market-regime-card-root .mr-detail-radio {
+  display: none;
+}
+.market-regime-card-stage {
+  position: relative;
+  width: 100%;
+}
 .market-regime-card-shell {
   display: flex;
   flex-wrap: nowrap;
   gap: 12px;
   overflow-x: auto;
-  padding: 4px 2px 14px 2px;
+  padding: 4px 2px 12px 2px;
   scroll-snap-type: x proximity;
 }
 .market-regime-card-shell .mr-card {
@@ -209,13 +246,11 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
 .market-regime-card-shell .mr-regime { font-size: 1.02rem; font-weight: 800; line-height: 1.22; min-height: 2.42em; }
 .market-regime-card-shell .mr-confidence { font-size: 1.72rem; font-weight: 900; line-height: 1.08; margin-top: 5px; }
 .market-regime-card-shell .mr-tag { font-size: 0.88rem; font-weight: 800; margin-top: 4px; }
-.market-regime-card-shell .mr-popover-details { margin-top: 8px; font-size: 0.76rem; position: relative; }
-.market-regime-card-shell .mr-popover-details summary { list-style: none; }
-.market-regime-card-shell .mr-popover-details summary::-webkit-details-marker { display: none; }
-.market-regime-card-shell .mr-detail-button {
+.market-regime-card-shell .mr-detail-selector-button {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  margin-top: 8px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.78);
   border: 1px solid rgba(16, 24, 40, 0.14);
@@ -223,28 +258,81 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
   font-size: 0.75rem;
   font-weight: 900;
 }
-.market-regime-card-shell .mr-detail-popover {
+.market-regime-card-shell .mr-detail-selector-button:hover {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(16, 24, 40, 0.28);
+}
+.mr-card-detail-overlay {
+  display: none;
   position: absolute;
   left: 0;
-  top: 30px;
-  width: 298px;
-  max-width: 72vw;
+  right: 0;
+  top: 0;
+  bottom: 0;
   z-index: 40;
-  border-radius: 14px;
-  border: 1px solid rgba(16, 24, 40, 0.16);
-  background: rgba(255, 255, 255, 0.98);
+  border-radius: 16px;
+  border: 1px solid rgba(16, 24, 40, 0.18);
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 14px 32px rgba(16, 24, 40, 0.18);
   color: #101828;
-  box-shadow: 0 14px 32px rgba(16, 24, 40, 0.20);
-  padding: 11px 12px;
-  font-size: 0.86rem;
-  line-height: 1.42;
+  padding: 14px 16px;
+  overflow-y: auto;
 }
-.market-regime-card-shell .mr-detail-title { font-weight: 900; font-size: 0.92rem; margin-bottom: 6px; }
-.market-regime-card-shell .mr-detail-line { margin-top: 5px; line-height: 1.38; }
+.mr-card-detail-overlay .mr-overlay-close {
+  cursor: pointer;
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid rgba(16, 24, 40, 0.18);
+  background: #FFFFFF;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 0.92rem;
+}
+.mr-card-detail-overlay .mr-overlay-title {
+  padding-left: 34px;
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: #344054;
+  margin-bottom: 8px;
+}
+.mr-overlay-detail-content {
+  display: none;
+  padding-left: 34px;
+  max-width: 760px;
+  font-size: 0.9rem;
+  line-height: 1.46;
+}
+.mr-overlay-detail-kicker {
+  font-size: 0.88rem;
+  font-weight: 900;
+  color: #344054;
+  margin-bottom: 6px;
+}
+.market-regime-card-root .mr-detail-title { font-weight: 900; font-size: 0.96rem; margin-bottom: 6px; }
+.market-regime-card-root .mr-detail-line { margin-top: 4px; line-height: 1.38; }
+""" + "\n".join(select_css) + """
 </style>
-<div class='market-regime-card-shell'>
+<div class='market-regime-card-root'>
 """
-    return css + "\n".join(card_html) + "\n</div>"
+    return (
+        css
+        + "\n".join(detail_inputs)
+        + "\n<div class='market-regime-card-stage'>\n"
+        + "<div class='market-regime-card-shell'>\n"
+        + "\n".join(card_html)
+        + "\n</div>\n"
+        + "<div class='mr-card-detail-overlay'>\n"
+        + "<label class='mr-overlay-close' for='mr-detail-close'>×</label>\n"
+        + "<div class='mr-overlay-title'>地合いカード詳細</div>\n"
+        + "\n".join(overlay_panels)
+        + "\n</div>\n</div>\n</div>"
+    )
 
 def render_warroom_market_regime_card_shell(cards: Iterable[Mapping[str, Any]] | None = None) -> None:
     """Render the market-regime card shell when explicitly mounted by a future slice."""

@@ -46,12 +46,18 @@ def test_q26y_html_uses_horizontal_scroll_and_fixed_card_width() -> None:
     assert "予測不能" in html
     assert "LIVE" in html
     assert "MISSING" in html
-    assert "mr-popover-details" in html
-    assert "mr-detail-button" in html
-    assert "mr-detail-popover" in html
+    assert "market-regime-card-root" in html
+    assert "mr-detail-radio" in html
+    assert "mr-detail-selector-button" in html
+    assert "market-regime-card-stage" in html
+    assert "mr-card-detail-overlay" in html
+    assert "mr-overlay-close" in html
+    assert "mr-overlay-detail-content" in html
+    assert "地合いカード詳細" in html
     assert "position: absolute" in html
     assert "z-index: 40" in html
-    assert "summary class='mr-detail-button'" in html
+    assert "mr-detail-popover" not in html
+    assert "mr-selected-detail-panel" not in html
     assert "summary>詳細" not in html
 
 
@@ -68,8 +74,12 @@ def test_q26y_packet_preserves_safety_and_no_page_mount() -> None:
     assert packet["card_width_px"] == 208
     assert packet["horizon_font_size_rem"] == "0.92rem"
     assert packet["horizon_label_text_unchanged"] is True
-    assert packet["detail_disclosure_mode"] == "popover"
-    assert packet["detail_popover_enabled"] is True
+    assert packet["detail_disclosure_mode"] == "card_overlay"
+    assert packet["card_detail_overlay_enabled"] is True
+    assert packet["overlay_covers_card_row"] is True
+    assert packet["overlay_close_button_enabled"] is True
+    assert packet["selected_detail_panel_enabled"] is False
+    assert packet["detail_popover_enabled"] is False
     assert packet["inline_detail_expansion_enabled"] is False
     assert packet["no_vertical_layout_shift_on_detail_open"] is True
     assert packet["full_width_target_horizon"] == "24時間後"
