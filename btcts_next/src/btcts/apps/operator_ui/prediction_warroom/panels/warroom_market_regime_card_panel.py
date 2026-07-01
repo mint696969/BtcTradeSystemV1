@@ -26,6 +26,7 @@ MARKET_REGIME_CARD_HORIZON_FONT_SIZE_REM = "0.92rem"
 WARROOM_MARKET_REGIME_CARD_DETAIL_POPOVER_VERSION = "prediction_warroom.market_regime_card_detail_popover.ps_q27b.v1"
 WARROOM_MARKET_REGIME_CARD_SELECTED_DETAIL_PANEL_VERSION = "prediction_warroom.market_regime_card_selected_detail_panel.ps_q27c.v1"
 WARROOM_MARKET_REGIME_CARD_TYPOGRAPHY_BADGE_TUNE_VERSION = "prediction_warroom.market_regime_card_typography_badge_tune.ps_q27d.v1"
+WARROOM_MARKET_REGIME_CARD_SMALL_VISUAL_POLISH_VERSION = "prediction_warroom.market_regime_card_small_visual_polish.ps_q27s.v1"
 MARKET_REGIME_CARD_REGIME_FONT_SIZE_REM = "1.14rem"
 MARKET_REGIME_CARD_CONFIDENCE_FONT_SIZE_REM = "1.60rem"
 MARKET_REGIME_CARD_TAG_FONT_SIZE_REM = "1.04rem"
@@ -435,7 +436,7 @@ def render_warroom_market_regime_card_shell(
         )
     st.session_state["warroom_market_regime_card_renderer"] = dict(packet)
     if packet.get("preview_cards_used"):
-        st.caption("地合いカード preview / 明示root read-only。実行系には接続していません。")
+        st.caption("地合いカード: preview / read-only")
     else:
-        st.caption("地合いカード shell / sample only。実データ接続はまだ行っていません。")
+        st.caption("地合いカード: sample")
     st.markdown(market_regime_cards_html(packet["cards"]), unsafe_allow_html=True)

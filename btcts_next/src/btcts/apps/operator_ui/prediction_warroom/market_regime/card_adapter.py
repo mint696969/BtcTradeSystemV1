@@ -171,7 +171,7 @@ def adapt_market_regime_prediction_packet_to_cards(packet: MarketRegimePredictio
             evidence_quality=evidence,
             short_tag=tag,
             summary=_summary(prediction),
-            reading="地合い分類の確信度であり勝率ではありません。",
+            reading="",
             reason_lines=_reason_lines(prediction),
             source_lines=_source_lines(prediction),
             warning_lines=tuple(str(item) for item in prediction.warnings),
