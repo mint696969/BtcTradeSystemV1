@@ -8,9 +8,15 @@ from .card_adapter import (
     adapt_market_regime_prediction_packet_to_cards,
     build_warroom_market_regime_card_adapter_packet,
 )
+from .live_preview_dry_run import (
+    WARROOM_MARKET_REGIME_LIVE_PREVIEW_DRY_RUN_VERSION,
+    build_market_regime_live_preview_dry_run_packet,
+)
 
 __all__ = [
     "WARROOM_MARKET_REGIME_CARD_ADAPTER_VERSION",
+    "WARROOM_MARKET_REGIME_LIVE_PREVIEW_DRY_RUN_VERSION",
     "adapt_market_regime_prediction_packet_to_cards",
+    "build_market_regime_live_preview_dry_run_packet",
     "build_warroom_market_regime_card_adapter_packet",
 ]
