@@ -15,6 +15,7 @@ from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_
 
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_FRESHNESS_ERROR_FALLBACK_PANEL_VERSION = "prediction_warroom.latest_prediction_summary_widget.q18ak_freshness_error_fallback_panel.v1"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.latest_prediction_summary_widget.q18ak_japanese_localization.ps_q26g.v1"
+LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_ALLOWED_TECH_TERM_HELP_TEXT_VERSION = "prediction_warroom.latest_prediction_summary_widget.q18ak_allowed_tech_term_help_text.ps_q26k.v1"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_FRESHNESS_ERROR_FALLBACK_PANEL_ACK = "PS_Q18AK_ADD_FRESHNESS_ERROR_FALLBACK_POLISH_TO_AUTO_REFRESH_DISPLAY_ONLY"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_FRESHNESS_ERROR_FALLBACK_PANEL_STATE = "auto_refresh_display_freshness_error_fallback_visible"
 Q18AK_PAGE_ID = "warroom"
@@ -265,12 +266,12 @@ def latest_prediction_summary_widget_q18ak_visible_display_rows(packet: Mapping[
     return [
         {"確認項目": "鮮度", "状態": _q26g_freshness_ja(data.get("freshness_state")), "見るポイント": "fresh/delayed/stale/unknown を日本語で確認します。"},
         {"確認項目": "経過秒", "状態": _clean(data.get("source_age_sec")) or "-", "見るポイント": "予測生成時刻から観測時刻までの秒数です。"},
-        {"確認項目": "予測生成時刻", "状態": _clean(data.get("component_source_generated_at")) or "-", "見るポイント": "latest prediction artifact の生成時刻です。"},
+        {"確認項目": "予測生成時刻", "状態": _clean(data.get("component_source_generated_at")) or "-", "見るポイント": "latest prediction artifact（生成済み予測ファイル）の生成時刻です。"},
         {"確認項目": "観測時刻", "状態": _clean(data.get("observed_now_utc")) or "-", "見るポイント": "UIが鮮度を見た時刻です。"},
-        {"確認項目": "fallback理由", "状態": _q26g_reason_ja(data.get("safe_fallback_reason_codes")), "見るポイント": "表示用の安全fallback理由です。実行挙動はありません。"},
+        {"確認項目": "fallback理由", "状態": _q26g_reason_ja(data.get("safe_fallback_reason_codes")), "見るポイント": "fallbackは安全側の表示理由です。実行挙動はありません。"},
         {"確認項目": "自動更新", "状態": _q26g_bool_ja(data.get("auto_refresh_enabled")), "見るポイント": "WarRoom表示の自動更新です。予測生成ではありません。"},
-        {"確認項目": "広域ページreload", "状態": "なし", "見るポイント": "fragment path のみです。"},
-        {"確認項目": "AutoTrade / broker", "状態": "なし", "見るポイント": "AutoTrade trigger と broker/private API は無効です。"},
+        {"確認項目": "広域ページreload", "状態": "なし", "見るポイント": "fragment path（枠内更新経路）のみです。"},
+        {"確認項目": "AutoTrade / broker", "状態": "なし", "見るポイント": "AutoTrade triggerとbroker/private API（売買接続）は無効です。"},
     ]
 
 
@@ -306,6 +307,41 @@ def build_latest_prediction_summary_widget_q18ak_japanese_localization_packet() 
         "legacy_searchable_plain_text_preserved": True,
         "sample_visible_plain_text": latest_prediction_summary_widget_q18ak_visible_plain_text(sample),
         "sample_visible_row_count": len(latest_prediction_summary_widget_q18ak_visible_display_rows(sample)),
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def build_latest_prediction_summary_widget_q18ak_q26k_allowed_tech_term_help_text_packet() -> dict[str, Any]:
+    sample = build_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel_packet(
+        supplied_q18aj_bounded_auto_refresh_packet=_q26g_stale_q18aj_source_packet(),
+        now_utc="2026-06-24T04:57:45Z",
+    )
+    rows = latest_prediction_summary_widget_q18ak_visible_display_rows(sample)
+    joined = "\n".join(str(row) for row in rows)
+    return {
+        "ok": True,
+        "help_text_version": LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_ALLOWED_TECH_TERM_HELP_TEXT_VERSION,
+        "allowed_technical_terms_preserved": True,
+        "japanese_helper_wording_added": True,
+        "legacy_searchable_plain_text_preserved": True,
+        "visible_row_count": len(rows),
+        "sample_rows_joined": joined,
         "read_only": True,
         "display_only": True,
         "non_executing": True,
@@ -384,7 +420,7 @@ def render_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel
         Q18AK_WIDGET_ID,
         label="予測最新 鮮度 / fallback",
         tone="primary",
-        help_text="自動更新された latest prediction の鮮度と安全fallbackを表示します。AutoTrade、broker、parameter、ledger、runtime書込はありません。",
+        help_text="自動更新された latest prediction の鮮度と安全fallback（安全側の表示理由）を表示します。AutoTrade、broker、parameter、ledger、runtime書込はありません。",
         refresh_mode=Q18AK_REFRESH_MODE,
         priority=19,
         overlay_enabled=False,

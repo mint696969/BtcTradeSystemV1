@@ -79,6 +79,7 @@ from btcts.apps.operator_ui.components.slot_definitions import (
 
 WARROOM_HEADER_LEGACY_SECTION_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.header_legacy_section_japanese_localization.ps_q26d.v1"
 WARROOM_TOP_READING_CAPTION_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.top_reading_caption_japanese_localization.ps_q26h.v1"
+WARROOM_ALLOWED_TECH_TERM_LABEL_HELP_TEXT_VERSION = "prediction_warroom.allowed_tech_term_label_help_text.ps_q26k.v1"
 
 _GRAPH_WIDGET_RENDERERS = {
     "market_monitor": market_monitor.render,
@@ -298,12 +299,12 @@ def _q26d_prediction_observation_quick_status_rows(packet: dict) -> list[dict]:
         {"確認項目": "読む順番", "状態": _q26d_localize_observation_value(packet.get("read_order")), "見るポイント": "最初にここだけ確認します。旧preflight詳細は必要時だけ開きます。"},
         {"確認項目": "手動再確認", "状態": _q26d_localize_observation_value(packet.get("q18aq_manual_resmoke_result")), "見るポイント": "検索可能 token と heartbeat の確認結果です。"},
         {"確認項目": "自動更新", "状態": _q26d_localize_observation_value(_bool_display(packet.get("q18aj_auto_refresh_enabled"))), "見るポイント": "画面fragmentの bounded refresh だけです。予測生成ではありません。"},
-        {"確認項目": "heartbeat", "状態": packet.get("q18aj_refresh_heartbeat_utc"), "見るポイント": "画面更新の確認用です。予測artifact更新とは別です。"},
-        {"確認項目": "鮮度", "状態": _q26d_localize_observation_value(packet.get("q18ak_freshness_state")), "見るポイント": "latest prediction の鮮度状態です。"},
+        {"確認項目": "heartbeat", "状態": packet.get("q18aj_refresh_heartbeat_utc"), "見るポイント": "heartbeatは画面更新確認時刻です。予測artifact（生成済み予測ファイル）の更新とは別です。"},
+        {"確認項目": "鮮度", "状態": _q26d_localize_observation_value(packet.get("q18ak_freshness_state")), "見るポイント": "latest prediction（最新予測表示）の鮮度状態です。"},
         {"確認項目": "安全fallback理由", "状態": _q26d_localize_observation_value(",".join(str(item) for item in packet.get("q18ak_safe_fallback_reason_codes") or [])), "見るポイント": "fallback理由は検索可能なまま、日本語で読めるようにしています。"},
         {"確認項目": "実装ゲート", "状態": _q26d_localize_observation_value(packet.get("implementation_gate_review_result")), "見るポイント": "本物widget render はまだ blocked/not-ready です。"},
-        {"確認項目": "実render/runtime binding", "状態": "いいえ", "見るポイント": "real widget rendering と runtime props binding はありません。"},
-        {"確認項目": "AutoTrade/broker", "状態": "いいえ", "見るポイント": "AutoTrade trigger と broker/private API はありません。"},
+        {"確認項目": "実render/runtime binding", "状態": "いいえ", "見るポイント": "runtime bindingは実データprops接続のことです。ここではありません。"},
+        {"確認項目": "AutoTrade/broker", "状態": "いいえ", "見るポイント": "AutoTrade triggerとbroker/private API（売買接続）はありません。"},
     ]
 
 
@@ -378,14 +379,14 @@ def _q26h_observation_plain_text(packet: dict) -> str:
 def _q26h_observation_quick_status_rows(packet: dict) -> list[dict]:
     return [
         {"確認項目": "読む順番", "状態": _q26d_localize_observation_value(packet.get("read_order")), "見るポイント": "最初に quick status を確認し、必要な時だけ旧preflight詳細を開きます。"},
-        {"確認項目": "手動再確認", "状態": _q26d_localize_observation_value(packet.get("q18aq_manual_resmoke_result")), "見るポイント": "検索可能tokenとheartbeatの確認結果です。"},
-        {"確認項目": "自動更新", "状態": _q26h_bool_ja(packet.get("q18aj_auto_refresh_enabled")), "見るポイント": "WarRoom画面のbounded refreshです。予測生成ではありません。"},
-        {"確認項目": "画面heartbeat", "状態": packet.get("q18aj_refresh_heartbeat_utc") or "-", "見るポイント": "画面更新の確認用です。予測artifact更新とは別です。"},
-        {"確認項目": "鮮度", "状態": _q26d_localize_observation_value(packet.get("q18ak_freshness_state")), "見るポイント": "latest prediction の鮮度状態です。"},
-        {"確認項目": "安全fallback理由", "状態": _q26d_localize_observation_value(",".join(str(item) for item in packet.get("q18ak_safe_fallback_reason_codes") or [])) or "-", "見るポイント": "安全fallback理由です。実行挙動はありません。"},
+        {"確認項目": "手動再確認", "状態": _q26d_localize_observation_value(packet.get("q18aq_manual_resmoke_result")), "見るポイント": "検索可能tokenとheartbeat（画面更新確認時刻）の確認結果です。"},
+        {"確認項目": "自動更新", "状態": _q26h_bool_ja(packet.get("q18aj_auto_refresh_enabled")), "見るポイント": "WarRoom画面のbounded refresh（枠内だけの表示更新）です。予測生成ではありません。"},
+        {"確認項目": "画面heartbeat", "状態": packet.get("q18aj_refresh_heartbeat_utc") or "-", "見るポイント": "heartbeatは画面更新確認時刻です。予測artifact（生成済み予測ファイル）の更新とは別です。"},
+        {"確認項目": "鮮度", "状態": _q26d_localize_observation_value(packet.get("q18ak_freshness_state")), "見るポイント": "latest prediction（最新予測表示）の鮮度状態です。"},
+        {"確認項目": "安全fallback理由", "状態": _q26d_localize_observation_value(",".join(str(item) for item in packet.get("q18ak_safe_fallback_reason_codes") or [])) or "-", "見るポイント": "fallbackは安全側の表示理由です。実行挙動はありません。"},
         {"確認項目": "実装ゲート", "状態": _q26d_localize_observation_value(packet.get("implementation_gate_review_result")), "見るポイント": "本物widget render は blocked/not-ready のままです。"},
-        {"確認項目": "実render / runtime binding", "状態": "なし", "見るポイント": "real widget rendering と runtime props binding はありません。"},
-        {"確認項目": "AutoTrade / broker", "状態": "なし", "見るポイント": "AutoTrade trigger と broker/private API はありません。"},
+        {"確認項目": "実render / runtime binding", "状態": "なし", "見るポイント": "runtime bindingは実データprops接続のことです。ここではありません。"},
+        {"確認項目": "AutoTrade / broker", "状態": "なし", "見るポイント": "AutoTrade triggerとbroker/private API（売買接続）はありません。"},
     ]
 
 
@@ -409,6 +410,62 @@ def build_warroom_q26h_top_reading_caption_japanese_localization_packet() -> dic
         "page_level_false_fragments_reduced": True,
         "sample_plain_text": _q26h_observation_plain_text(sample),
         "sample_row_count": len(_q26h_observation_quick_status_rows(sample)),
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def warroom_allowed_tech_term_help_rows() -> list[dict]:
+    return [
+        {"技術語": "heartbeat", "日本語補助": "画面更新確認時刻", "残す理由": "更新確認で検索・照合しやすい標準語です。"},
+        {"技術語": "fallback", "日本語補助": "安全側の表示理由", "残す理由": "異常時の安全表示理由として意味が明確です。"},
+        {"技術語": "runtime binding", "日本語補助": "実データprops接続", "残す理由": "未接続であることを安全境界として確認します。"},
+        {"技術語": "AutoTrade", "日本語補助": "自動売買トリガー", "残す理由": "無効状態を明示する安全境界語です。"},
+        {"技術語": "broker", "日本語補助": "broker/private API 接続", "残す理由": "売買接続がないことを確認する境界語です。"},
+        {"技術語": "artifact", "日本語補助": "生成済みファイル/成果物", "残す理由": "予測生成時刻と画面更新を区別するために必要です。"},
+        {"技術語": "fragment", "日本語補助": "枠内だけの表示更新", "残す理由": "親ページ全体reloadではない表示更新経路を表します。"},
+    ]
+
+
+def build_warroom_q26k_allowed_tech_term_label_help_text_packet() -> dict:
+    rows = warroom_allowed_tech_term_help_rows()
+    joined = "\n".join(f"{row['技術語']}={row['日本語補助']}" for row in rows)
+    sample = {
+        "latest_prediction_observation_status": "ready_for_operator_review",
+        "q18aq_manual_resmoke_result": "pass",
+        "q18ak_freshness_state": "unknown",
+        "q18ak_safe_fallback_reason_codes": ["source_generated_at_missing"],
+        "q18aj_refresh_heartbeat_utc": "2026-07-01T00:00:00Z",
+        "implementation_gate_review_result": "blocked_not_ready_to_enable",
+        "read_order": "quick_status_then_searchable_tokens_then_legacy_preflight_details",
+        "q18aj_auto_refresh_enabled": True,
+    }
+    return {
+        "ok": True,
+        "help_text_version": WARROOM_ALLOWED_TECH_TERM_LABEL_HELP_TEXT_VERSION,
+        "allowed_technical_terms_preserved": True,
+        "japanese_helper_wording_added": True,
+        "legacy_searchable_compatibility_preserved": True,
+        "term_count": len(rows),
+        "terms": [row["技術語"] for row in rows],
+        "help_rows": rows,
+        "sample_help_text": joined,
+        "sample_quick_status_rows": _q26h_observation_quick_status_rows(sample),
         "read_only": True,
         "display_only": True,
         "non_executing": True,

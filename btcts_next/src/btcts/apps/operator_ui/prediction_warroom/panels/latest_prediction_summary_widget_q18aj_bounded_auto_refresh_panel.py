@@ -15,6 +15,7 @@ from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_
 
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AJ_BOUNDED_AUTO_REFRESH_PANEL_VERSION = "prediction_warroom.latest_prediction_summary_widget.q18aj_bounded_auto_refresh_panel.v1"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AJ_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.latest_prediction_summary_widget.q18aj_japanese_localization.ps_q26g.v1"
+LATEST_PREDICTION_SUMMARY_WIDGET_Q18AJ_ALLOWED_TECH_TERM_HELP_TEXT_VERSION = "prediction_warroom.latest_prediction_summary_widget.q18aj_allowed_tech_term_help_text.ps_q26k.v1"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AJ_BOUNDED_AUTO_REFRESH_PANEL_ACK = "PS_Q18AJ_ENABLE_BOUNDED_WARROOM_FRAGMENT_AUTO_REFRESH_FOR_LATEST_PREDICTION_DISPLAY_ONLY"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AJ_BOUNDED_AUTO_REFRESH_PANEL_STATE = "bounded_fragment_auto_refresh_enabled_for_latest_prediction_display_only"
 Q18AJ_PAGE_ID = "warroom"
@@ -184,14 +185,14 @@ def latest_prediction_summary_widget_q18aj_visible_display_rows(packet: Mapping[
     data = _as_mapping(packet)
     return [
         {"確認項目": "自動更新", "状態": _q26g_bool_ja(data.get("auto_refresh_enabled")), "見るポイント": "latest prediction 表示だけの bounded refresh です。予測生成ではありません。"},
-        {"確認項目": "更新方式", "状態": _clean(data.get("refresh_mode")) or "-", "見るポイント": "Streamlit fragment slot の表示更新方式です。"},
+        {"確認項目": "更新方式", "状態": _clean(data.get("refresh_mode")) or "-", "見るポイント": "Streamlit fragment slot（枠内だけの表示更新）の方式です。"},
         {"確認項目": "更新間隔", "状態": f"{_clean(data.get('refresh_interval_sec')) or '-'}秒", "見るポイント": "画面表示の再描画間隔です。"},
-        {"確認項目": "heartbeat", "状態": _clean(data.get("refresh_heartbeat_utc")) or "-", "見るポイント": "画面が更新されているかの確認用時刻です。"},
-        {"確認項目": "予測生成時刻", "状態": _clean(data.get("component_source_generated_at")) or "-", "見るポイント": "予測artifactそのものの生成時刻です。heartbeatとは別です。"},
+        {"確認項目": "heartbeat（画面更新確認時刻）", "状態": _clean(data.get("refresh_heartbeat_utc")) or "-", "見るポイント": "画面が更新されているかを確認する時刻です。"},
+        {"確認項目": "予測生成時刻", "状態": _clean(data.get("component_source_generated_at")) or "-", "見るポイント": "予測artifact（生成済み予測ファイル）そのものの生成時刻です。heartbeatとは別です。"},
         {"確認項目": "mapped record", "状態": _clean(data.get("mapped_record_count")) or "0", "見るポイント": "表示用に変換された forecast_batch 件数です。"},
-        {"確認項目": "広域ページreload", "状態": "なし", "見るポイント": "fragment slot のみで、親ページ全体reloadは使いません。"},
+        {"確認項目": "広域ページreload", "状態": "なし", "見るポイント": "fragment path（枠内更新経路）のみで、親ページ全体reloadは使いません。"},
         {"確認項目": "実widget render", "状態": "なし", "見るポイント": "実prediction widget renderは呼びません。"},
-        {"確認項目": "AutoTrade / broker", "状態": "なし", "見るポイント": "AutoTrade trigger と broker/private API は無効です。"},
+        {"確認項目": "AutoTrade / broker", "状態": "なし", "見るポイント": "AutoTrade triggerとbroker/private API（売買接続）は無効です。"},
     ]
 
 
@@ -205,6 +206,38 @@ def build_latest_prediction_summary_widget_q18aj_japanese_localization_packet() 
         "legacy_searchable_plain_text_preserved": True,
         "sample_visible_plain_text": latest_prediction_summary_widget_q18aj_visible_plain_text(sample),
         "sample_visible_row_count": len(latest_prediction_summary_widget_q18aj_visible_display_rows(sample)),
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def build_latest_prediction_summary_widget_q18aj_q26k_allowed_tech_term_help_text_packet() -> dict[str, Any]:
+    sample = build_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel_packet()
+    rows = latest_prediction_summary_widget_q18aj_visible_display_rows(sample)
+    joined = "\n".join(str(row) for row in rows)
+    return {
+        "ok": True,
+        "help_text_version": LATEST_PREDICTION_SUMMARY_WIDGET_Q18AJ_ALLOWED_TECH_TERM_HELP_TEXT_VERSION,
+        "allowed_technical_terms_preserved": True,
+        "japanese_helper_wording_added": True,
+        "legacy_searchable_plain_text_preserved": True,
+        "visible_row_count": len(rows),
+        "sample_rows_joined": joined,
         "read_only": True,
         "display_only": True,
         "non_executing": True,
@@ -281,7 +314,7 @@ def render_latest_prediction_summary_widget_q18aj_bounded_auto_refresh_panel(
         Q18AJ_WIDGET_ID,
         label="予測最新 自動更新表示",
         tone="primary",
-        help_text="latest prediction 表示だけの bounded fragment refresh です。AutoTrade、broker、parameter、ledger、runtime書込はありません。",
+        help_text="latest prediction 表示だけの bounded fragment refresh（枠内だけの表示更新）です。AutoTrade、broker、parameter、ledger、runtime書込はありません。",
         refresh_mode=Q18AJ_REFRESH_MODE,
         priority=18,
         overlay_enabled=False,
