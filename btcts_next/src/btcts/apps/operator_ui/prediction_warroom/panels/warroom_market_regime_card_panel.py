@@ -1,0 +1,205 @@
+# path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/panels/warroom_market_regime_card_panel.py
+# desc: PS-Q26Y market regime card renderer shell. Static/sample UI shell only; no live data read, WarRoom page mount, runtime writes, producer/scheduler, AutoTrade, broker, ledger, mode, or parameter behavior.
+
+from __future__ import annotations
+
+from html import escape
+from typing import Any, Iterable, Mapping
+
+import streamlit as st
+
+from btcts.apps.operator_ui.prediction_warroom.contracts.market_regime_card_contract import (
+    BackgroundTone,
+    EvidenceQuality,
+    FreshnessBadge,
+    MarketRegimeCode,
+    ShortTag,
+    build_market_regime_card_spec,
+)
+
+WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION = "prediction_warroom.market_regime_card_renderer.ps_q26y.v1"
+WARROOM_MARKET_REGIME_CARD_RENDERER_ACK = "PS_Q26Y_MARKET_REGIME_CARD_RENDERER_SHELL_UI_ONLY"
+
+
+def build_sample_market_regime_cards() -> list[dict[str, Any]]:
+    """Build static sample market-regime cards for renderer validation.
+
+    This intentionally does not read D-hot/latest/runtime artifacts. It gives the
+    UI shell stable examples covering GOOD/CAUTION/DANGER/UNKNOWN, freshness
+    badges, and evidence border styles.
+    """
+    sample_specs = [
+        ("現在", MarketRegimeCode.UP_TREND, 72, BackgroundTone.GOOD, FreshnessBadge.LIVE, EvidenceQuality.STRONG, ShortTag.PULLBACK_CANDIDATE),
+        ("5分後", MarketRegimeCode.UP_TREND, 64, BackgroundTone.CAUTION, FreshnessBadge.LIVE, EvidenceQuality.PARTIAL, ShortTag.HIGH_ZONE),
+        ("15分後", MarketRegimeCode.UNKNOWN, 83, BackgroundTone.UNKNOWN, FreshnessBadge.WARM, EvidenceQuality.CONFLICTED, ShortTag.SIGNAL_CONFLICT),
+        ("30分後", MarketRegimeCode.RANGE, 58, BackgroundTone.CAUTION, FreshnessBadge.WARM, EvidenceQuality.PARTIAL, ShortTag.NO_DIRECTION),
+        ("60分後", MarketRegimeCode.BREAKOUT, 61, BackgroundTone.GOOD, FreshnessBadge.WARM, EvidenceQuality.WEAK, ShortTag.PULLBACK_CANDIDATE),
+        ("6時間後", MarketRegimeCode.HIGH_VOL_CHOP, 70, BackgroundTone.DANGER, FreshnessBadge.STALE, EvidenceQuality.CONFLICTED, ShortTag.NO_NEW_ENTRY),
+        ("12時間後", MarketRegimeCode.REVERSAL_WATCH, 49, BackgroundTone.CAUTION, FreshnessBadge.STALE, EvidenceQuality.WEAK, ShortTag.REVERSAL_WATCH),
+        ("24時間後", MarketRegimeCode.UNKNOWN, 55, BackgroundTone.UNKNOWN, FreshnessBadge.MISSING, EvidenceQuality.MISSING, ShortTag.DATA_MISSING),
+    ]
+    return [
+        build_market_regime_card_spec(
+            horizon=horizon,
+            regime_code=regime,
+            confidence_percent=confidence,
+            background_tone=tone,
+            freshness_badge=freshness,
+            evidence_quality=evidence,
+            short_tag=tag,
+            extra={"sample_only": True},
+        ).to_dict()
+        for horizon, regime, confidence, tone, freshness, evidence, tag in sample_specs
+    ]
+
+
+def build_warroom_market_regime_card_renderer_packet(cards: Iterable[Mapping[str, Any]] | None = None) -> dict[str, Any]:
+    card_rows = [dict(card) for card in (cards or build_sample_market_regime_cards())]
+    return {
+        "ok": True,
+        "renderer_version": WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION,
+        "renderer_ack": WARROOM_MARKET_REGIME_CARD_RENDERER_ACK,
+        "market_regime_first": True,
+        "sample_data_only": cards is None,
+        "live_data_connected": False,
+        "warroom_page_changed": False,
+        "warroom_page_mounted": False,
+        "other_prediction_cards_implemented": False,
+        "streamlit_render_function_declared": True,
+        "streamlit_render_invoked_by_page": False,
+        "horizontal_scroll_required": True,
+        "cards_do_not_shrink": True,
+        "full_width_target_horizon": "24時間後",
+        "detail_disclosure_available": True,
+        "dialog_popup_planned_later": True,
+        "freshness_encoded_by_badge_only": True,
+        "border_meaning": "evidence_quality",
+        "background_tone_is_readability_first": True,
+        "confidence_meaning": "market_regime_classification_certainty_not_win_rate",
+        "card_count": len(card_rows),
+        "horizons": [str(card.get("horizon", "")) for card in card_rows],
+        "cards": card_rows,
+        "production_ui_code_changed": True,
+        "layout_only_change": True,
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "runtime_read_allowed": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def _text(value: Any) -> str:
+    return escape("" if value is None else str(value))
+
+
+def _detail_lines(card: Mapping[str, Any]) -> str:
+    detail = card.get("detail") if isinstance(card.get("detail"), Mapping) else {}
+    reason_lines = detail.get("reason_lines") if isinstance(detail.get("reason_lines"), list) else []
+    source_lines = detail.get("source_lines") if isinstance(detail.get("source_lines"), list) else []
+    warning_lines = detail.get("warning_lines") if isinstance(detail.get("warning_lines"), list) else []
+    reason = " / ".join(_text(item) for item in reason_lines) or "sample shell"
+    source = " / ".join(_text(item) for item in source_lines) or "Q26X sample card"
+    warning = " / ".join(_text(item) for item in warning_lines) or "live data not connected"
+    evidence = card.get("evidence_quality_style") if isinstance(card.get("evidence_quality_style"), Mapping) else {}
+    return (
+        f"<div class='mr-detail-line'><b>読み方:</b> {_text(detail.get('reading') or detail.get('summary') or '詳細は後続sliceで実データ接続後に拡張')}</div>"
+        f"<div class='mr-detail-line'><b>理由:</b> {reason}</div>"
+        f"<div class='mr-detail-line'><b>情報源:</b> {source}</div>"
+        f"<div class='mr-detail-line'><b>注意:</b> {warning}</div>"
+        f"<div class='mr-detail-line'><b>根拠:</b> {_text(evidence.get('label'))}</div>"
+    )
+
+
+def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
+    card_html: list[str] = []
+    for card in cards:
+        bg = card.get("background_style") if isinstance(card.get("background_style"), Mapping) else {}
+        evidence = card.get("evidence_quality_style") if isinstance(card.get("evidence_quality_style"), Mapping) else {}
+        card_lines = card.get("card_lines") if isinstance(card.get("card_lines"), list) else []
+        line1 = card_lines[0] if len(card_lines) > 0 else card.get("regime_label", "")
+        line2 = card_lines[1] if len(card_lines) > 1 else f"{card.get('confidence_percent', '')}%"
+        line3 = card_lines[2] if len(card_lines) > 2 else card.get("short_tag_label", "")
+        style = (
+            f"background:{_text(bg.get('background') or '#F2F4F7')};"
+            f"color:{_text(bg.get('text') or '#101828')};"
+            f"border:3px {_text(evidence.get('border_style') or 'solid')} {_text(evidence.get('border_color') or '#98A2B3')};"
+        )
+        card_html.append(
+            "<section class='mr-card' style='" + style + "'>"
+            "<div class='mr-topline'>"
+            f"<span class='mr-horizon'>{_text(card.get('horizon'))}</span>"
+            f"<span class='mr-badge'>{_text(card.get('freshness_badge'))}</span>"
+            "</div>"
+            f"<div class='mr-regime'>{_text(line1)}</div>"
+            f"<div class='mr-confidence'>{_text(line2)}</div>"
+            f"<div class='mr-tag'>{_text(line3)}</div>"
+            "<details class='mr-details'>"
+            "<summary>詳細</summary>"
+            + _detail_lines(card)
+            + "</details>"
+            "</section>"
+        )
+    return """
+<style>
+.market-regime-card-shell {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 4px 2px 14px 2px;
+  scroll-snap-type: x proximity;
+}
+.market-regime-card-shell .mr-card {
+  min-width: 168px;
+  max-width: 168px;
+  flex: 0 0 168px;
+  border-radius: 16px;
+  padding: 10px 10px 9px 10px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.10);
+  scroll-snap-align: start;
+}
+.market-regime-card-shell .mr-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.market-regime-card-shell .mr-horizon { font-size: 0.82rem; font-weight: 700; }
+.market-regime-card-shell .mr-badge {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(16, 24, 40, 0.12);
+  padding: 2px 7px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+.market-regime-card-shell .mr-regime { font-size: 1.02rem; font-weight: 800; line-height: 1.22; min-height: 2.42em; }
+.market-regime-card-shell .mr-confidence { font-size: 1.72rem; font-weight: 900; line-height: 1.08; margin-top: 5px; }
+.market-regime-card-shell .mr-tag { font-size: 0.88rem; font-weight: 800; margin-top: 4px; }
+.market-regime-card-shell .mr-details { margin-top: 8px; font-size: 0.75rem; }
+.market-regime-card-shell .mr-details summary { cursor: pointer; font-weight: 800; }
+.market-regime-card-shell .mr-detail-line { margin-top: 4px; line-height: 1.25; }
+</style>
+<div class='market-regime-card-shell'>
+""" + "\n".join(card_html) + "\n</div>"
+
+
+def render_warroom_market_regime_card_shell(cards: Iterable[Mapping[str, Any]] | None = None) -> None:
+    """Render the market-regime card shell when explicitly mounted by a future slice."""
+    packet = build_warroom_market_regime_card_renderer_packet(cards)
+    st.session_state["warroom_market_regime_card_renderer"] = dict(packet)
+    st.caption("地合いカード shell / sample only。実データ接続はまだ行っていません。")
+    st.markdown(market_regime_cards_html(packet["cards"]), unsafe_allow_html=True)
