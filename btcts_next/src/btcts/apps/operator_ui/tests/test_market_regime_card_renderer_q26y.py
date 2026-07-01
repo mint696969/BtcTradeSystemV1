@@ -39,9 +39,10 @@ def test_q26y_html_uses_horizontal_scroll_and_fixed_card_width() -> None:
     html = market_regime_cards_html(build_sample_market_regime_cards())
     assert "market-regime-card-shell" in html
     assert "overflow-x: auto" in html
-    assert "min-width: 168px" in html
-    assert "flex: 0 0 168px" in html
+    assert "min-width: 208px" in html
+    assert "flex: 0 0 208px" in html
     assert "scroll-snap-type" in html
+    assert "font-size: 0.92rem" in html
     assert "予測不能" in html
     assert "LIVE" in html
     assert "MISSING" in html
@@ -59,6 +60,9 @@ def test_q26y_packet_preserves_safety_and_no_page_mount() -> None:
     assert packet["freshness_encoded_by_badge_only"] is True
     assert packet["border_meaning"] == "evidence_quality"
     assert packet["cards_do_not_shrink"] is True
+    assert packet["card_width_px"] == 208
+    assert packet["horizon_font_size_rem"] == "0.92rem"
+    assert packet["horizon_label_text_unchanged"] is True
     assert packet["full_width_target_horizon"] == "24時間後"
     assert packet["production_ui_code_changed"] is True
     assert packet["read_only"] is True

@@ -19,6 +19,9 @@ from btcts.apps.operator_ui.prediction_warroom.contracts.market_regime_card_cont
 
 WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION = "prediction_warroom.market_regime_card_renderer.ps_q26y.v1"
 WARROOM_MARKET_REGIME_CARD_RENDERER_ACK = "PS_Q26Y_MARKET_REGIME_CARD_RENDERER_SHELL_UI_ONLY"
+WARROOM_MARKET_REGIME_CARD_VISUAL_TUNE_VERSION = "prediction_warroom.market_regime_card_visual_tune.ps_q27a.v1"
+MARKET_REGIME_CARD_WIDTH_PX = 208
+MARKET_REGIME_CARD_HORIZON_FONT_SIZE_REM = "0.92rem"
 
 
 def build_sample_market_regime_cards() -> list[dict[str, Any]]:
@@ -69,6 +72,13 @@ def build_warroom_market_regime_card_renderer_packet(cards: Iterable[Mapping[str
         "streamlit_render_invoked_by_page": False,
         "horizontal_scroll_required": True,
         "cards_do_not_shrink": True,
+        "visual_tune_version": WARROOM_MARKET_REGIME_CARD_VISUAL_TUNE_VERSION,
+        "card_width_px": MARKET_REGIME_CARD_WIDTH_PX,
+        "card_width_px_before_q27a": 168,
+        "card_width_expanded_by_px": MARKET_REGIME_CARD_WIDTH_PX - 168,
+        "horizon_font_size_rem": MARKET_REGIME_CARD_HORIZON_FONT_SIZE_REM,
+        "horizon_font_size_rem_before_q27a": "0.82rem",
+        "horizon_label_text_unchanged": True,
         "full_width_target_horizon": "24時間後",
         "detail_disclosure_available": True,
         "dialog_popup_planned_later": True,
@@ -151,7 +161,8 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
             + "</details>"
             "</section>"
         )
-    return """
+
+    css = """
 <style>
 .market-regime-card-shell {
   display: flex;
@@ -162,9 +173,9 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
   scroll-snap-type: x proximity;
 }
 .market-regime-card-shell .mr-card {
-  min-width: 168px;
-  max-width: 168px;
-  flex: 0 0 168px;
+  min-width: """ + str(MARKET_REGIME_CARD_WIDTH_PX) + """px;
+  max-width: """ + str(MARKET_REGIME_CARD_WIDTH_PX) + """px;
+  flex: 0 0 """ + str(MARKET_REGIME_CARD_WIDTH_PX) + """px;
   border-radius: 16px;
   padding: 10px 10px 9px 10px;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.10);
@@ -177,7 +188,7 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
   gap: 6px;
   margin-bottom: 8px;
 }
-.market-regime-card-shell .mr-horizon { font-size: 0.82rem; font-weight: 700; }
+.market-regime-card-shell .mr-horizon { font-size: """ + MARKET_REGIME_CARD_HORIZON_FONT_SIZE_REM + """; font-weight: 700; }
 .market-regime-card-shell .mr-badge {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.82);
@@ -194,8 +205,8 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
 .market-regime-card-shell .mr-detail-line { margin-top: 4px; line-height: 1.25; }
 </style>
 <div class='market-regime-card-shell'>
-""" + "\n".join(card_html) + "\n</div>"
-
+"""
+    return css + "\n".join(card_html) + "\n</div>"
 
 def render_warroom_market_regime_card_shell(cards: Iterable[Mapping[str, Any]] | None = None) -> None:
     """Render the market-regime card shell when explicitly mounted by a future slice."""
