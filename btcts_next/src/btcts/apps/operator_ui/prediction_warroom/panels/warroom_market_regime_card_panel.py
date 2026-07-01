@@ -22,6 +22,7 @@ WARROOM_MARKET_REGIME_CARD_RENDERER_ACK = "PS_Q26Y_MARKET_REGIME_CARD_RENDERER_S
 WARROOM_MARKET_REGIME_CARD_VISUAL_TUNE_VERSION = "prediction_warroom.market_regime_card_visual_tune.ps_q27a.v1"
 MARKET_REGIME_CARD_WIDTH_PX = 208
 MARKET_REGIME_CARD_HORIZON_FONT_SIZE_REM = "0.92rem"
+WARROOM_MARKET_REGIME_CARD_DETAIL_POPOVER_VERSION = "prediction_warroom.market_regime_card_detail_popover.ps_q27b.v1"
 
 
 def build_sample_market_regime_cards() -> list[dict[str, Any]]:
@@ -81,7 +82,12 @@ def build_warroom_market_regime_card_renderer_packet(cards: Iterable[Mapping[str
         "horizon_label_text_unchanged": True,
         "full_width_target_horizon": "24時間後",
         "detail_disclosure_available": True,
-        "dialog_popup_planned_later": True,
+        "dialog_popup_planned_later": False,
+        "detail_popover_version": WARROOM_MARKET_REGIME_CARD_DETAIL_POPOVER_VERSION,
+        "detail_disclosure_mode": "popover",
+        "detail_popover_enabled": True,
+        "inline_detail_expansion_enabled": False,
+        "no_vertical_layout_shift_on_detail_open": True,
         "freshness_encoded_by_badge_only": True,
         "border_meaning": "evidence_quality",
         "background_tone_is_readability_first": True,
@@ -124,6 +130,7 @@ def _detail_lines(card: Mapping[str, Any]) -> str:
     warning = " / ".join(_text(item) for item in warning_lines) or "live data not connected"
     evidence = card.get("evidence_quality_style") if isinstance(card.get("evidence_quality_style"), Mapping) else {}
     return (
+        f"<div class='mr-detail-title'>概要</div>"
         f"<div class='mr-detail-line'><b>読み方:</b> {_text(detail.get('reading') or detail.get('summary') or '詳細は後続sliceで実データ接続後に拡張')}</div>"
         f"<div class='mr-detail-line'><b>理由:</b> {reason}</div>"
         f"<div class='mr-detail-line'><b>情報源:</b> {source}</div>"
@@ -155,9 +162,11 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
             f"<div class='mr-regime'>{_text(line1)}</div>"
             f"<div class='mr-confidence'>{_text(line2)}</div>"
             f"<div class='mr-tag'>{_text(line3)}</div>"
-            "<details class='mr-details'>"
-            "<summary>詳細</summary>"
+            "<details class='mr-popover-details'>"
+            "<summary class='mr-detail-button'>詳細</summary>"
+            "<div class='mr-detail-popover'>"
             + _detail_lines(card)
+            + "</div>"
             + "</details>"
             "</section>"
         )
@@ -200,9 +209,38 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
 .market-regime-card-shell .mr-regime { font-size: 1.02rem; font-weight: 800; line-height: 1.22; min-height: 2.42em; }
 .market-regime-card-shell .mr-confidence { font-size: 1.72rem; font-weight: 900; line-height: 1.08; margin-top: 5px; }
 .market-regime-card-shell .mr-tag { font-size: 0.88rem; font-weight: 800; margin-top: 4px; }
-.market-regime-card-shell .mr-details { margin-top: 8px; font-size: 0.75rem; }
-.market-regime-card-shell .mr-details summary { cursor: pointer; font-weight: 800; }
-.market-regime-card-shell .mr-detail-line { margin-top: 4px; line-height: 1.25; }
+.market-regime-card-shell .mr-popover-details { margin-top: 8px; font-size: 0.76rem; position: relative; }
+.market-regime-card-shell .mr-popover-details summary { list-style: none; }
+.market-regime-card-shell .mr-popover-details summary::-webkit-details-marker { display: none; }
+.market-regime-card-shell .mr-detail-button {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(16, 24, 40, 0.14);
+  padding: 3px 9px;
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+.market-regime-card-shell .mr-detail-popover {
+  position: absolute;
+  left: 0;
+  top: 30px;
+  width: 298px;
+  max-width: 72vw;
+  z-index: 40;
+  border-radius: 14px;
+  border: 1px solid rgba(16, 24, 40, 0.16);
+  background: rgba(255, 255, 255, 0.98);
+  color: #101828;
+  box-shadow: 0 14px 32px rgba(16, 24, 40, 0.20);
+  padding: 11px 12px;
+  font-size: 0.86rem;
+  line-height: 1.42;
+}
+.market-regime-card-shell .mr-detail-title { font-weight: 900; font-size: 0.92rem; margin-bottom: 6px; }
+.market-regime-card-shell .mr-detail-line { margin-top: 5px; line-height: 1.38; }
 </style>
 <div class='market-regime-card-shell'>
 """

@@ -46,8 +46,13 @@ def test_q26y_html_uses_horizontal_scroll_and_fixed_card_width() -> None:
     assert "予測不能" in html
     assert "LIVE" in html
     assert "MISSING" in html
-    assert "details" in html
-    assert "summary>詳細" in html
+    assert "mr-popover-details" in html
+    assert "mr-detail-button" in html
+    assert "mr-detail-popover" in html
+    assert "position: absolute" in html
+    assert "z-index: 40" in html
+    assert "summary class='mr-detail-button'" in html
+    assert "summary>詳細" not in html
 
 
 def test_q26y_packet_preserves_safety_and_no_page_mount() -> None:
@@ -63,6 +68,10 @@ def test_q26y_packet_preserves_safety_and_no_page_mount() -> None:
     assert packet["card_width_px"] == 208
     assert packet["horizon_font_size_rem"] == "0.92rem"
     assert packet["horizon_label_text_unchanged"] is True
+    assert packet["detail_disclosure_mode"] == "popover"
+    assert packet["detail_popover_enabled"] is True
+    assert packet["inline_detail_expansion_enabled"] is False
+    assert packet["no_vertical_layout_shift_on_detail_open"] is True
     assert packet["full_width_target_horizon"] == "24時間後"
     assert packet["production_ui_code_changed"] is True
     assert packet["read_only"] is True

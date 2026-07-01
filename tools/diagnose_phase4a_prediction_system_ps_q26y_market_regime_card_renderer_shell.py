@@ -64,6 +64,9 @@ def run_market_regime_card_renderer_shell_diagnostic() -> dict:
         "MARKET_REGIME_CARD_WIDTH_PX = 208",
         "MARKET_REGIME_CARD_HORIZON_FONT_SIZE_REM",
         "unsafe_allow_html=True",
+        "mr-popover-details",
+        "mr-detail-popover",
+        "position: absolute",
     ):
         if marker not in panel:
             blockers.append(f"panel_marker_required:{marker}")
@@ -96,7 +99,7 @@ def run_market_regime_card_renderer_shell_diagnostic() -> dict:
     for key in ("live_data_connected", "warroom_page_changed", "warroom_page_mounted", "other_prediction_cards_implemented", "streamlit_render_invoked_by_page", "runtime_read_allowed", "runtime_artifact_write_allowed", "status_artifact_write_allowed", "prediction_artifact_write_allowed", "view_artifact_write_allowed", "scheduler_enabled", "producer_enabled", "autotrade_trigger_allowed", "broker_private_api_allowed", "ledger_append_allowed", "mode_apply_allowed", "parameter_apply_allowed", "would_send_to_broker"):
         if packet.get(key) is not False:
             blockers.append(f"packet_false_required:{key}")
-    for marker in ("overflow-x: auto", "min-width: 208px", "flex: 0 0 208px", "予測不能", "24時間後", "summary>詳細"):
+    for marker in ("overflow-x: auto", "min-width: 208px", "flex: 0 0 208px", "予測不能", "24時間後", "summary class='mr-detail-button'"):
         if marker not in html:
             blockers.append(f"html_marker_required:{marker}")
 
