@@ -22,6 +22,7 @@ WARROOM_LIVE_NOWCAST_JAPANESE_READING_LAYER_VERSION = "prediction_warroom.live_n
 WARROOM_LIVE_NOWCAST_JAPANESE_READING_DENSITY_POLISH_VERSION = "prediction_warroom.live_nowcast_japanese_reading_density_polish.ps_q26b.v1"
 WARROOM_LIVE_NOWCAST_JAPANESE_REMAINING_TOKEN_LOCALIZATION_VERSION = "prediction_warroom.live_nowcast_japanese_remaining_token_localization.ps_q26c.v1"
 WARROOM_LIVE_NOWCAST_TELEMETRY_FOOTER_DETAIL_NOTE_LOCALIZATION_VERSION = "prediction_warroom.live_nowcast_telemetry_footer_detail_note_localization.ps_q26e.v1"
+WARROOM_LIVE_NOWCAST_REVIEW_CANDIDATE_POLISH_VERSION = "prediction_warroom.live_nowcast_review_candidate_polish.ps_q26j.v1"
 WARROOM_LIVE_NOWCAST_HISTORY_SESSION_KEY = "warroom_live_nowcast_composite_score_history_ps_q25e"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_MODE = "poll_fast"
 WARROOM_LIVE_MARKET_NOWCAST_REFRESH_SEC = 3
@@ -236,7 +237,7 @@ def build_warroom_live_market_nowcast_packet(
     }
     packet["nowcast_freshness_state"] = _freshness_state(health=health, market_state=market_state, executions=executions, now=now_utc)
     packet["current_state_summary"] = _live_state_summary(packet)
-    packet["operator_note"] = "current-state nowcast; not a future prediction and not a trade instruction"
+    packet["operator_note"] = "現在状態nowcastです。未来予測でも売買指示でもありません。"
     packet["attention_flags"] = [
         name
         for name, active in (
@@ -255,6 +256,47 @@ def build_warroom_live_market_nowcast_packet(
     ]
     return packet
 
+
+
+
+def build_warroom_live_nowcast_q26j_review_candidate_polish_packet() -> dict[str, Any]:
+    sample = build_warroom_live_market_nowcast_packet(sources={}, fragment_enabled=True)
+    summary = build_warroom_live_nowcast_operator_summary_packet(sample, lang="ja")
+    layering = build_warroom_live_nowcast_source_importance_packet(sample, summary, lang="ja")
+    joined = json.dumps(
+        {
+            "operator_note": sample.get("operator_note"),
+            "summary_rows": warroom_live_nowcast_operator_summary_rows(summary),
+            "layer_rows": warroom_live_nowcast_source_layer_summary_rows(layering),
+        },
+        ensure_ascii=False,
+    )
+    return {
+        "ok": True,
+        "polish_version": WARROOM_LIVE_NOWCAST_REVIEW_CANDIDATE_POLISH_VERSION,
+        "operator_visible_review_candidates_polished": True,
+        "operator_note_japanese_localized": "current-state nowcast; not a future prediction" not in joined,
+        "source_layer_summary_notes_japanese_localized": "display-only current-state layer" not in joined,
+        "raw_current_state_false_fragments_reduced": "current-state guidance only" not in joined,
+        "sample_joined": joined,
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
 
 def warroom_live_market_nowcast_metric_rows(packet: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [
@@ -296,7 +338,7 @@ _ATTENTION_DESCRIPTIONS_JA = {
 
 _ATTENTION_DESCRIPTIONS_EN = {
     "collector_not_ok": ("critical", "Collector is not healthy", "Do not use this current state as a decision basis."),
-    "market_lane_not_live": ("critical", "Market lane is not live", "Board/current-state updates may be stopped."),
+    "market_lane_not_live": ("critical", "Market lane is not live", "Board/current state updates may be stopped."),
     "board_not_live": ("critical", "Board WS is not LIVE", "Price/spread reliability is reduced."),
     "spread_wide_caution": ("warning", "Spread is wide", "Watch execution cost, slippage, and thin liquidity."),
     "gap_detected": ("critical", "Data gap detected", "Current-state continuity is broken."),
@@ -318,7 +360,7 @@ def classify_warroom_live_nowcast_attention(packet: Mapping[str, Any], *, lang: 
         return rows
     if lang == "ja":
         return [{"code": "none", "severity": "ok", "label": "現在状態の重大な注意フラグはありません", "operator_note": "ただしこれは予測ではなく、現在状態の観測です。"}]
-    return [{"code": "none", "severity": "ok", "label": "No major current-state attention flags", "operator_note": "This is current-state observation, not prediction."}]
+    return [{"code": "none", "severity": "ok", "label": "No major current state attention flags", "operator_note": "This is current state observation, not prediction."}]
 
 
 def _max_attention_severity(rows: list[Mapping[str, Any]]) -> str:
@@ -403,7 +445,7 @@ def warroom_live_nowcast_operator_summary_rows(summary: Mapping[str, Any]) -> li
     return [
         {"item": "operator_state_grade", "value": summary.get("operator_state_grade"), "note": summary.get("operator_summary_text")},
         {"item": "attention_severity", "value": summary.get("operator_attention_severity"), "note": f"flags={summary.get('attention_flag_count')}"},
-        {"item": "operator_instruction", "value": summary.get("operator_instruction_text"), "note": "current-state guidance only"},
+        {"item": "operator_instruction", "value": summary.get("operator_instruction_text"), "note": "現在状態の確認のみ"},
         {"item": "freshness", "value": summary.get("nowcast_freshness_state"), "note": f"market_age={summary.get('market_event_age_sec')}s"},
         {"item": "spread", "value": summary.get("spread_state"), "note": f"{summary.get('spread_bps')} bps"},
     ]
@@ -509,7 +551,7 @@ def build_warroom_live_nowcast_source_importance_packet(packet: Mapping[str, Any
     if lang == "ja":
         instruction = "予測を見る前に foundation_integrity → microstructure_now → trade_flow_now の順で確認してください。これは現在状態の信号レイヤーであり、売買指示ではありません。"
     else:
-        instruction = "Before reading predictions, check foundation_integrity → microstructure_now → trade_flow_now. This is current-state signal layering, not a trade instruction."
+        instruction = "Before reading predictions, check foundation_integrity → microstructure_now → trade_flow_now. This is current state signal layering, not a trade instruction."
     return {
         "ok": True,
         "source_layering_version": WARROOM_LIVE_NOWCAST_SOURCE_LAYERING_VERSION,
@@ -542,16 +584,16 @@ def build_warroom_live_nowcast_source_importance_packet(packet: Mapping[str, Any
 
 def warroom_live_nowcast_source_layer_summary_rows(layering: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [
-        {"item": "source_layering_version", "value": layering.get("source_layering_version"), "note": "display-only current-state layer"},
-        {"item": "prediction_input_gate", "value": layering.get("prediction_input_gate"), "note": "whether current state is a usable foundation before prediction"},
+        {"item": "source_layering_version", "value": layering.get("source_layering_version"), "note": "表示専用の現在状態レイヤー"},
+        {"item": "prediction_input_gate", "value": layering.get("prediction_input_gate"), "note": "予測を見る前の土台として現在状態を使えるか"},
         {"item": "read_order", "value": " → ".join(str(item) for item in layering.get("read_order") or []), "note": "operator read order"},
-        {"item": "operator_instruction", "value": layering.get("operator_instruction_text"), "note": "not a trade instruction"},
+        {"item": "operator_instruction", "value": layering.get("operator_instruction_text"), "note": "売買指示ではありません"},
     ]
 
 
 def _render_warroom_live_nowcast_source_layering(packet: Mapping[str, Any], summary: Mapping[str, Any]) -> Mapping[str, Any]:
     layering = build_warroom_live_nowcast_source_importance_packet(packet, summary, lang="ja")
-    st.caption("PS-Q25D source importance / signal layering: read current-state sources before predictions. Display-only; no execution.")
+    st.caption("PS-Q25D source importance / signal layering: 予測を見る前に現在状態sourceを確認します。表示専用・実行なしです。")
     st.dataframe(warroom_live_nowcast_q26e_localize_display_rows(warroom_live_nowcast_source_layer_summary_rows(layering)), width="stretch", hide_index=True)
     st.dataframe(warroom_live_nowcast_q26c_localize_display_rows(layering.get("source_importance_rows") or []), width="stretch", hide_index=True)
     return layering
@@ -753,7 +795,7 @@ def _render_warroom_live_nowcast_composite_score(packet: Mapping[str, Any], oper
     history = _append_warroom_live_nowcast_session_history(composite, packet)
     mini_trend = build_warroom_live_nowcast_history_mini_trend_packet(history)
     st.caption("PS-Q25E current-state composite score / mini trend: 表示専用のセッション履歴です。永続化なし・予測ではありません。")
-    st.metric("current-state score", str(composite.get("current_state_score")), delta=str(mini_trend.get("current_state_score_trend")))
+    st.metric("現在状態スコア", str(composite.get("current_state_score")), delta=str(mini_trend.get("current_state_score_trend")))
     st.dataframe(warroom_live_nowcast_q26e_localize_display_rows(warroom_live_nowcast_composite_score_rows(composite, mini_trend)), width="stretch", hide_index=True)
     return {"composite": composite, "mini_trend": mini_trend}
 
@@ -868,7 +910,7 @@ def build_warroom_live_nowcast_horizon_readiness_packet(
 
 def warroom_live_nowcast_horizon_readiness_summary_rows(readiness: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [
-        {"item": "horizon_readiness_version", "value": readiness.get("horizon_readiness_version"), "note": "display-only prediction-input handoff"},
+        {"item": "horizon_readiness_version", "value": readiness.get("horizon_readiness_version"), "note": "表示専用の予測入力handoff"},
         {"item": "overall_horizon_readiness", "value": readiness.get("overall_horizon_readiness"), "note": readiness.get("operator_summary_text")},
         {"item": "current_state_score", "value": readiness.get("current_state_score"), "note": f"trend={readiness.get('mini_trend')}"},
         {"item": "prediction_input_gate", "value": readiness.get("prediction_input_gate"), "note": "current-state foundation before prediction"},
@@ -914,7 +956,7 @@ def warroom_live_nowcast_japanese_reading_rows(
 ) -> list[dict[str, Any]]:
     """Return compact Japanese operator reading rows for current-state nowcast.
 
-    PS-Q26A is display-only. These rows explain how to read the current state;
+    PS-Q26A は表示専用です。これらの行は現在状態の読み方を説明します。
     they are not prediction, trading advice, or execution instructions.
     """
     nowcast = _as_mapping(packet)

@@ -37,6 +37,7 @@ WARROOM_PREDICTION_JAPANESE_READING_LAYER_VERSION = "prediction_warroom.predicti
 WARROOM_PREDICTION_JAPANESE_READING_DENSITY_POLISH_VERSION = "prediction_warroom.prediction_display_japanese_reading_density_polish.ps_q26b.v1"
 WARROOM_PREDICTION_JAPANESE_REMAINING_TOKEN_LOCALIZATION_VERSION = "prediction_warroom.prediction_display_japanese_remaining_token_localization.ps_q26c.v1"
 WARROOM_PREDICTION_TELEMETRY_FOOTER_DETAIL_NOTE_LOCALIZATION_VERSION = "prediction_warroom.telemetry_footer_detail_note_localization.ps_q26e.v1"
+WARROOM_PREDICTION_REVIEW_CANDIDATE_POLISH_VERSION = "prediction_warroom.prediction_review_candidate_polish.ps_q26j.v1"
 LATEST_PREDICTION_WARROOM_DISPLAY_PANEL_STATE = "warroom_realtime_prediction_display_only_panel_mounted"
 Q19D_PAGE_ID = "warroom"
 Q19D_ZONE_ID = "prediction_overview_zone"
@@ -458,7 +459,7 @@ def latest_prediction_warroom_q26e_telemetry_footer_text(packet: Mapping[str, An
             f"freshness_state={_q26e_safe_value(data, 'freshness_state')} "
             f"prediction_row_count={_q26e_safe_value(data, 'prediction_row_count', 'row_count')} "
             f"generated_at={_q26e_safe_value(data, 'generated_at', 'prediction_data_generated_at_utc')} "
-            "view_artifact_write_allowed=false autotrade=false broker=false"
+            "view artifact write=none AutoTrade=none broker=none"
         )
     return (
         "PS-Q26E telemetry: "
@@ -478,6 +479,33 @@ def build_latest_prediction_warroom_q26e_telemetry_footer_detail_note_localizati
         "telemetry_footer_japanese_localized": True,
         "detail_note_token_fragments_localized": True,
         "sample_footer": sample,
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def build_latest_prediction_warroom_q26j_review_candidate_polish_packet() -> dict[str, Any]:
+    sample_footer = latest_prediction_warroom_q26e_telemetry_footer_text({"freshness_state": "fresh", "prediction_row_count": 3, "generated_at": "2026-07-01T00:00:00Z"}, lang="en")
+    return {
+        "ok": True,
+        "polish_version": WARROOM_PREDICTION_REVIEW_CANDIDATE_POLISH_VERSION,
+        "telemetry_footer_false_fragments_polished": "view_artifact_write_allowed=false" not in sample_footer and "autotrade=false" not in sample_footer and "broker=false" not in sample_footer,
+        "sample_footer_en": sample_footer,
         "read_only": True,
         "display_only": True,
         "non_executing": True,
@@ -872,17 +900,17 @@ def latest_prediction_warroom_operator_action_guidance_packet(packet: Mapping[st
         else:
             summary = "予測 artifact は表示 horizon の範囲で読めます。ただし売買指示ではありません。"
         wait_note = "generated_at が更新されるまで短期予測を tactical に扱わないでください。"
-        nowcast_note = "現在判断は Live Market Nowcast / current-state score を優先してください。"
+        nowcast_note = "現在判断は Live Market Nowcast / 現在状態スコア を優先してください。"
         heartbeat_note = "UI heartbeat は画面更新の確認であり、予測データ生成の更新ではありません。"
     else:
         if severity == "critical":
-            summary = "Do not read short-horizon predictions as live tactical guidance. Wait for a new artifact and prioritize current-state nowcast."
+            summary = "Do not read short-horizon predictions as live tactical guidance. Wait for a new artifact and prioritize live nowcast."
         elif severity == "warning":
             summary = "Prediction data needs caution; de-weight expired horizons and read as context-only where applicable."
         else:
             summary = "Prediction artifact is readable within displayed horizon TTL. Not a trade instruction."
         wait_note = "Do not treat short predictions as tactical until generated_at changes."
-        nowcast_note = "Prioritize Live Market Nowcast / current-state score for current decisions."
+        nowcast_note = "Prioritize Live Market Nowcast / current state score for current decisions."
         heartbeat_note = "UI heartbeat confirms panel refresh, not prediction data generation."
     action_rows = [
         {"action": "ignore_live_tactical_horizons", "target": ",".join(ignore_horizons) or "none", "severity": severity if ignore_horizons else "ok", "operator_note": summary if ignore_horizons else ("期限切れ短期 horizon はありません。" if lang == "ja" else "No expired short horizon.")},
