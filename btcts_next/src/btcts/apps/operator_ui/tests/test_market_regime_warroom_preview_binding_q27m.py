@@ -129,8 +129,16 @@ def test_q27m_does_not_mount_page_or_renderer() -> None:
     renderer_text = RENDERER.read_text(encoding="utf-8-sig")
     assert "build_market_regime_warroom_preview_binding_packet" not in page_text
     assert "WARROOM_MARKET_REGIME_PREVIEW_BINDING_VERSION" not in page_text
-    assert "build_market_regime_warroom_preview_binding_packet" not in renderer_text
-    assert "WARROOM_MARKET_REGIME_PREVIEW_BINDING_VERSION" not in renderer_text
+    assert "preview_enabled=True" not in page_text
+    assert "render_warroom_market_regime_card_shell()" in page_text
+
+    # PS-Q27O intentionally allows the renderer/panel to call the gated binding
+    # only through an explicit preview switch. This is not a WarRoom page mount.
+    assert "build_warroom_market_regime_card_preview_switch_packet" in renderer_text
+    assert "build_market_regime_warroom_preview_binding_packet" in renderer_text
+    assert "preview_enabled: bool = False" in renderer_text
+    assert "default_sample_only_when_disabled" in renderer_text
+    assert "warroom_page_mounted" in renderer_text
 
 
 def test_q27m_binding_module_has_no_streamlit_or_write_paths() -> None:

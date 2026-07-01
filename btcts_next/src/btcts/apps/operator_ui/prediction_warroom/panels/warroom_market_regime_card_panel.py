@@ -18,6 +18,7 @@ from btcts.apps.operator_ui.prediction_warroom.contracts.market_regime_card_cont
 )
 
 WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION = "prediction_warroom.market_regime_card_renderer.ps_q26y.v1"
+WARROOM_MARKET_REGIME_CARD_PREVIEW_SWITCH_VERSION = "prediction_warroom.market_regime_card_preview_switch.ps_q27o.v1"
 WARROOM_MARKET_REGIME_CARD_RENDERER_ACK = "PS_Q26Y_MARKET_REGIME_CARD_RENDERER_SHELL_UI_ONLY"
 WARROOM_MARKET_REGIME_CARD_VISUAL_TUNE_VERSION = "prediction_warroom.market_regime_card_visual_tune.ps_q27a.v1"
 MARKET_REGIME_CARD_WIDTH_PX = 208
@@ -141,6 +142,67 @@ def build_warroom_market_regime_card_renderer_packet(cards: Iterable[Mapping[str
         "would_send_to_broker": False,
     }
 
+
+
+def build_warroom_market_regime_card_preview_switch_packet(
+    *,
+    preview_enabled: bool = False,
+    hot_root: str | Any | None = None,
+    generated_at: str = "",
+) -> dict[str, Any]:
+    """Build renderer packet using sample cards by default, or gated preview cards when explicitly enabled."""
+    preview_cards: list[dict[str, Any]] | None = None
+    binding_packet: dict[str, Any] | None = None
+    preview_disabled_reason = "preview_enabled_false" if not preview_enabled else ""
+
+    if preview_enabled and hot_root is not None and str(hot_root) != "":
+        from btcts.apps.operator_ui.prediction_warroom.market_regime import build_market_regime_warroom_preview_binding_packet
+
+        binding_packet = build_market_regime_warroom_preview_binding_packet(
+            preview_enabled=True,
+            hot_root=hot_root,
+            generated_at=generated_at,
+        )
+        candidate_cards = binding_packet.get("cards") if isinstance(binding_packet, Mapping) else None
+        if bool(binding_packet.get("ok")) and isinstance(candidate_cards, list) and candidate_cards:
+            preview_cards = [dict(card) for card in candidate_cards if isinstance(card, Mapping)]
+        if preview_cards is None:
+            preview_disabled_reason = str(binding_packet.get("disabled_reason") or "preview_cards_unavailable")
+    elif preview_enabled:
+        preview_disabled_reason = "explicit_hot_root_required"
+
+    renderer_packet = build_warroom_market_regime_card_renderer_packet(preview_cards)
+    renderer_packet.update(
+        {
+            "preview_switch_version": WARROOM_MARKET_REGIME_CARD_PREVIEW_SWITCH_VERSION,
+            "preview_switch_added": True,
+            "preview_enabled": bool(preview_enabled),
+            "preview_cards_used": preview_cards is not None,
+            "preview_disabled_reason": preview_disabled_reason,
+            "default_sample_only_when_disabled": True,
+            "explicit_source_root_required": True,
+            "explicit_source_root_read_performed": bool(binding_packet.get("explicit_source_root_read_performed")) if isinstance(binding_packet, Mapping) else False,
+            "dry_run_invoked": bool(binding_packet.get("dry_run_invoked")) if isinstance(binding_packet, Mapping) else False,
+            "source_snapshot_ok": bool(binding_packet.get("source_snapshot_ok")) if isinstance(binding_packet, Mapping) and "source_snapshot_ok" in binding_packet else None,
+            "live_data_connected": False,
+            "warroom_page_changed": False,
+            "warroom_page_mounted": False,
+            "streamlit_render_invoked_by_page": False,
+            "runtime_artifact_write_allowed": False,
+            "status_artifact_write_allowed": False,
+            "prediction_artifact_write_allowed": False,
+            "view_artifact_write_allowed": False,
+            "scheduler_enabled": False,
+            "producer_enabled": False,
+            "autotrade_trigger_allowed": False,
+            "broker_private_api_allowed": False,
+            "ledger_append_allowed": False,
+            "mode_apply_allowed": False,
+            "parameter_apply_allowed": False,
+            "would_send_to_broker": False,
+        }
+    )
+    return renderer_packet
 
 def _text(value: Any) -> str:
     return escape("" if value is None else str(value))
@@ -355,9 +417,25 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
         + "\n</div>\n</div>\n</div>"
     )
 
-def render_warroom_market_regime_card_shell(cards: Iterable[Mapping[str, Any]] | None = None) -> None:
-    """Render the market-regime card shell when explicitly mounted by a future slice."""
-    packet = build_warroom_market_regime_card_renderer_packet(cards)
+def render_warroom_market_regime_card_shell(
+    cards: Iterable[Mapping[str, Any]] | None = None,
+    *,
+    preview_enabled: bool = False,
+    hot_root: str | Any | None = None,
+    generated_at: str = "",
+) -> None:
+    """Render market-regime cards. Default remains sample-only; preview requires explicit args."""
+    if cards is not None:
+        packet = build_warroom_market_regime_card_renderer_packet(cards)
+    else:
+        packet = build_warroom_market_regime_card_preview_switch_packet(
+            preview_enabled=preview_enabled,
+            hot_root=hot_root,
+            generated_at=generated_at,
+        )
     st.session_state["warroom_market_regime_card_renderer"] = dict(packet)
-    st.caption("地合いカード shell / sample only。実データ接続はまだ行っていません。")
+    if packet.get("preview_cards_used"):
+        st.caption("地合いカード preview / 明示root read-only。実行系には接続していません。")
+    else:
+        st.caption("地合いカード shell / sample only。実データ接続はまだ行っていません。")
     st.markdown(market_regime_cards_html(packet["cards"]), unsafe_allow_html=True)
