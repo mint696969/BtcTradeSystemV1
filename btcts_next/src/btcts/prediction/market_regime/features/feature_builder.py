@@ -37,6 +37,19 @@ def _latest_market_regime_record(snapshot: MarketRegimeSourceSnapshot, horizon_s
     return records[-1] if records else None
 
 
+
+
+def _record_values(record: Mapping[str, Any] | None) -> Mapping[str, Any]:
+    if not isinstance(record, Mapping):
+        return {}
+    values = record.get("values")
+    if isinstance(values, Mapping):
+        return values
+    values_snapshot = record.get("values_snapshot")
+    if isinstance(values_snapshot, Mapping):
+        return values_snapshot
+    return {}
+
 def _signal(group: FeatureGroup, name: str, value: Any, *, available: bool, source_refs: Tuple[str, ...], warnings: Tuple[str, ...] = (), weight_hint: float = 0.0) -> FeatureSignal:
     return FeatureSignal(
         feature_group=group,
@@ -100,8 +113,8 @@ def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[Feat
 
 def _volatility_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[FeatureSignal, ...]:
     latest = _latest_market_regime_record(snapshot)
-    values = latest.get("values") if isinstance(latest, Mapping) else None
-    volatility_state = values.get("volatility_state") if isinstance(values, Mapping) else None
+    values = _record_values(latest)
+    volatility_state = values.get("volatility_state")
     return (
         _signal(FeatureGroup.VOLATILITY, "volatility_state", volatility_state, available=volatility_state is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=1.0),
     )
@@ -109,8 +122,8 @@ def _volatility_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[FeatureSi
 
 def _cross_venue_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[FeatureSignal, ...]:
     latest = _latest_market_regime_record(snapshot)
-    values = latest.get("values") if isinstance(latest, Mapping) else None
-    agreement = values.get("cross_venue_agreement") if isinstance(values, Mapping) else None
+    values = _record_values(latest)
+    agreement = values.get("cross_venue_agreement")
     latest_prediction_ok = snapshot.latest_prediction.ok
     return (
         _signal(FeatureGroup.CROSS_VENUE, "cross_venue_agreement", agreement, available=agreement is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.60),

@@ -16,13 +16,21 @@ from .preview_binding import (
     WARROOM_MARKET_REGIME_PREVIEW_BINDING_VERSION,
     build_market_regime_warroom_preview_binding_packet,
 )
+from .real_dhot_preview_probe import (
+    WARROOM_MARKET_REGIME_REAL_DHOT_PREVIEW_PROBE_VERSION,
+    build_market_regime_real_dhot_preview_probe_packet,
+    build_market_regime_real_dhot_preview_probe_summary,
+)
 
 __all__ = [
     "WARROOM_MARKET_REGIME_CARD_ADAPTER_VERSION",
     "WARROOM_MARKET_REGIME_LIVE_PREVIEW_DRY_RUN_VERSION",
     "WARROOM_MARKET_REGIME_PREVIEW_BINDING_VERSION",
+    "WARROOM_MARKET_REGIME_REAL_DHOT_PREVIEW_PROBE_VERSION",
     "adapt_market_regime_prediction_packet_to_cards",
     "build_market_regime_live_preview_dry_run_packet",
+    "build_market_regime_real_dhot_preview_probe_packet",
+    "build_market_regime_real_dhot_preview_probe_summary",
     "build_market_regime_warroom_preview_binding_packet",
     "build_warroom_market_regime_card_adapter_packet",
 ]
