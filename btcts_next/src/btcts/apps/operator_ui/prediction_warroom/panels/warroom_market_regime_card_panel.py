@@ -24,6 +24,13 @@ MARKET_REGIME_CARD_WIDTH_PX = 208
 MARKET_REGIME_CARD_HORIZON_FONT_SIZE_REM = "0.92rem"
 WARROOM_MARKET_REGIME_CARD_DETAIL_POPOVER_VERSION = "prediction_warroom.market_regime_card_detail_popover.ps_q27b.v1"
 WARROOM_MARKET_REGIME_CARD_SELECTED_DETAIL_PANEL_VERSION = "prediction_warroom.market_regime_card_selected_detail_panel.ps_q27c.v1"
+WARROOM_MARKET_REGIME_CARD_TYPOGRAPHY_BADGE_TUNE_VERSION = "prediction_warroom.market_regime_card_typography_badge_tune.ps_q27d.v1"
+MARKET_REGIME_CARD_REGIME_FONT_SIZE_REM = "1.14rem"
+MARKET_REGIME_CARD_CONFIDENCE_FONT_SIZE_REM = "1.60rem"
+MARKET_REGIME_CARD_TAG_FONT_SIZE_REM = "1.04rem"
+MARKET_REGIME_CARD_FRESHNESS_BADGE_FONT_SIZE_REM = "0.78rem"
+MARKET_REGIME_CARD_FRESHNESS_BADGE_MIN_WIDTH_PX = 42
+MARKET_REGIME_CARD_UNKNOWN_BACKGROUND = "#F2F4F7"
 
 
 def build_sample_market_regime_cards() -> list[dict[str, Any]]:
@@ -81,6 +88,17 @@ def build_warroom_market_regime_card_renderer_packet(cards: Iterable[Mapping[str
         "horizon_font_size_rem": MARKET_REGIME_CARD_HORIZON_FONT_SIZE_REM,
         "horizon_font_size_rem_before_q27a": "0.82rem",
         "horizon_label_text_unchanged": True,
+        "typography_badge_tune_version": WARROOM_MARKET_REGIME_CARD_TYPOGRAPHY_BADGE_TUNE_VERSION,
+        "time_axis_font_size_unchanged": True,
+        "regime_font_size_rem": MARKET_REGIME_CARD_REGIME_FONT_SIZE_REM,
+        "confidence_font_size_rem": MARKET_REGIME_CARD_CONFIDENCE_FONT_SIZE_REM,
+        "tag_font_size_rem": MARKET_REGIME_CARD_TAG_FONT_SIZE_REM,
+        "freshness_badge_visibility_tuned": True,
+        "freshness_badge_font_size_rem": MARKET_REGIME_CARD_FRESHNESS_BADGE_FONT_SIZE_REM,
+        "freshness_badge_font_weight": 900,
+        "freshness_badge_min_width_px": MARKET_REGIME_CARD_FRESHNESS_BADGE_MIN_WIDTH_PX,
+        "detail_overlay_background": MARKET_REGIME_CARD_UNKNOWN_BACKGROUND,
+        "detail_overlay_background_matches_unknown": True,
         "full_width_target_horizon": "24時間後",
         "detail_disclosure_available": True,
         "dialog_popup_planned_later": False,
@@ -238,14 +256,17 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
 .market-regime-card-shell .mr-badge {
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(16, 24, 40, 0.12);
-  padding: 2px 7px;
-  font-size: 0.72rem;
-  font-weight: 800;
+  border: 1px solid rgba(16, 24, 40, 0.22);
+  padding: 3px 8px;
+  min-width: """ + str(MARKET_REGIME_CARD_FRESHNESS_BADGE_MIN_WIDTH_PX) + """px;
+  text-align: center;
+  letter-spacing: 0.02em;
+  font-size: """ + MARKET_REGIME_CARD_FRESHNESS_BADGE_FONT_SIZE_REM + """;
+  font-weight: 900;
 }
-.market-regime-card-shell .mr-regime { font-size: 1.02rem; font-weight: 800; line-height: 1.22; min-height: 2.42em; }
-.market-regime-card-shell .mr-confidence { font-size: 1.72rem; font-weight: 900; line-height: 1.08; margin-top: 5px; }
-.market-regime-card-shell .mr-tag { font-size: 0.88rem; font-weight: 800; margin-top: 4px; }
+.market-regime-card-shell .mr-regime { font-size: """ + MARKET_REGIME_CARD_REGIME_FONT_SIZE_REM + """; font-weight: 800; line-height: 1.22; min-height: 2.42em; }
+.market-regime-card-shell .mr-confidence { font-size: """ + MARKET_REGIME_CARD_CONFIDENCE_FONT_SIZE_REM + """; font-weight: 900; line-height: 1.08; margin-top: 5px; }
+.market-regime-card-shell .mr-tag { font-size: """ + MARKET_REGIME_CARD_TAG_FONT_SIZE_REM + """; font-weight: 800; margin-top: 4px; }
 .market-regime-card-shell .mr-detail-selector-button {
   cursor: pointer;
   display: inline-flex;
@@ -272,7 +293,7 @@ def market_regime_cards_html(cards: Iterable[Mapping[str, Any]]) -> str:
   z-index: 40;
   border-radius: 16px;
   border: 1px solid rgba(16, 24, 40, 0.18);
-  background: rgba(255, 255, 255, 0.97);
+  background: """ + MARKET_REGIME_CARD_UNKNOWN_BACKGROUND + """;
   box-shadow: 0 14px 32px rgba(16, 24, 40, 0.18);
   color: #101828;
   padding: 14px 16px;

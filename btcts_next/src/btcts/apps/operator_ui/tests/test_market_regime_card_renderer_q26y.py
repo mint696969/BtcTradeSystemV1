@@ -43,6 +43,11 @@ def test_q26y_html_uses_horizontal_scroll_and_fixed_card_width() -> None:
     assert "flex: 0 0 208px" in html
     assert "scroll-snap-type" in html
     assert "font-size: 0.92rem" in html
+    assert "font-size: 1.14rem" in html
+    assert "font-size: 1.60rem" in html
+    assert "font-size: 1.04rem" in html
+    assert "font-size: 0.78rem" in html
+    assert "min-width: 42px" in html
     assert "予測不能" in html
     assert "LIVE" in html
     assert "MISSING" in html
@@ -56,6 +61,7 @@ def test_q26y_html_uses_horizontal_scroll_and_fixed_card_width() -> None:
     assert "地合いカード詳細" in html
     assert "position: absolute" in html
     assert "z-index: 40" in html
+    assert "background: #F2F4F7" in html
     assert "mr-detail-popover" not in html
     assert "mr-selected-detail-panel" not in html
     assert "summary>詳細" not in html
@@ -74,6 +80,16 @@ def test_q26y_packet_preserves_safety_and_no_page_mount() -> None:
     assert packet["card_width_px"] == 208
     assert packet["horizon_font_size_rem"] == "0.92rem"
     assert packet["horizon_label_text_unchanged"] is True
+    assert packet["time_axis_font_size_unchanged"] is True
+    assert packet["regime_font_size_rem"] == "1.14rem"
+    assert packet["confidence_font_size_rem"] == "1.60rem"
+    assert packet["tag_font_size_rem"] == "1.04rem"
+    assert packet["freshness_badge_visibility_tuned"] is True
+    assert packet["freshness_badge_font_size_rem"] == "0.78rem"
+    assert packet["freshness_badge_font_weight"] == 900
+    assert packet["freshness_badge_min_width_px"] == 42
+    assert packet["detail_overlay_background"] == "#F2F4F7"
+    assert packet["detail_overlay_background_matches_unknown"] is True
     assert packet["detail_disclosure_mode"] == "card_overlay"
     assert packet["card_detail_overlay_enabled"] is True
     assert packet["overlay_covers_card_row"] is True
