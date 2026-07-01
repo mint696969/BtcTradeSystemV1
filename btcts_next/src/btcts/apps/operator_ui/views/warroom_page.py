@@ -54,6 +54,10 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_live_market_nowcas
 from btcts.apps.operator_ui.prediction_warroom.panels.warroom_operator_focus_nav_panel import (
     render_warroom_operator_focus_nav,
 )
+from btcts.apps.operator_ui.prediction_warroom.panels.warroom_focus_layout_policy import (
+    warroom_focus_section_expanded,
+    warroom_focus_section_label,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -765,7 +769,7 @@ def _render_warroom_page_body() -> None:
 
     live_shell.render_compact_page_header(get_text(lang, "warroom_title"))
 
-    with live_shell.render_folded_section("最初に見る場所 / WarRoom 入口", expanded=True):
+    with live_shell.render_folded_section(warroom_focus_section_label("operator_focus_nav"), expanded=warroom_focus_section_expanded("operator_focus_nav")):
         render_warroom_operator_focus_nav()
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_guide"), expanded=False):
@@ -775,13 +779,13 @@ def _render_warroom_page_body() -> None:
 
     prediction_fragment_enabled = _prediction_warroom_display_fragment_enabled(page_fragment_enabled=fragment_enabled)
 
-    with live_shell.render_folded_section("予測最新ステータス / quick status", expanded=True):
+    with live_shell.render_folded_section(warroom_focus_section_label("prediction_quick_status_detail"), expanded=warroom_focus_section_expanded("prediction_quick_status_detail")):
         _render_prediction_warroom_latest_prediction_observation_cleanup_summary_section(fragment_enabled=prediction_fragment_enabled)
 
-    with live_shell.render_folded_section("現在状態 nowcast / board・freshness", expanded=True):
+    with live_shell.render_folded_section(warroom_focus_section_label("live_nowcast"), expanded=warroom_focus_section_expanded("live_nowcast")):
         render_warroom_live_market_nowcast_panel(fragment_enabled=fragment_enabled)
 
-    with live_shell.render_folded_section("リアルタイム予測表示 / read model", expanded=True):
+    with live_shell.render_folded_section(warroom_focus_section_label("latest_prediction_read_model"), expanded=warroom_focus_section_expanded("latest_prediction_read_model")):
         render_latest_prediction_warroom_display_panel(fragment_enabled=prediction_fragment_enabled)
 
     _record_warroom_operator_first_render_path_cleanup_state()

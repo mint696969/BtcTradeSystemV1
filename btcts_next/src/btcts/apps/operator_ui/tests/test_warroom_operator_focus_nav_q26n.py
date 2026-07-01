@@ -56,6 +56,9 @@ def test_q26n_render_body_places_focus_nav_before_guide_with_external_panel() ->
     assert "def build_warroom_operator_focus_nav_packet()" not in page_text
     assert "def render_warroom_operator_focus_nav()" in panel_text
     header_index = page_text.index('live_shell.render_compact_page_header(get_text(lang, "warroom_title"))')
-    nav_index = page_text.index('live_shell.render_folded_section("最初に見る場所 / WarRoom 入口", expanded=True)')
+    literal_nav = 'live_shell.render_folded_section("最初に見る場所 / WarRoom 入口", expanded=True)'
+    policy_nav = 'live_shell.render_folded_section(warroom_focus_section_label("operator_focus_nav"), expanded=warroom_focus_section_expanded("operator_focus_nav"))'
+    assert literal_nav in page_text or policy_nav in page_text
+    nav_index = page_text.index(policy_nav if policy_nav in page_text else literal_nav)
     guide_index = page_text.index('live_shell.render_folded_section(get_text(lang, "ui_label_guide"), expanded=False)')
     assert header_index < nav_index < guide_index
