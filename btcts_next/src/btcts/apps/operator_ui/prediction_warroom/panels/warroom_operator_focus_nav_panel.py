@@ -6,6 +6,45 @@ from __future__ import annotations
 import streamlit as st
 
 WARROOM_OPERATOR_FOCUS_NAV_VERSION = "prediction_warroom.operator_focus_nav.ps_q26n.v1"
+WARROOM_OPERATOR_FOCUS_VISUAL_TUNE_VERSION = "prediction_warroom.operator_focus_visual_tune.ps_q26s.v1"
+
+
+def warroom_operator_focus_route_rows() -> list[dict]:
+    """Return a compact visual route for the first screen.
+
+    This is intentionally short and visual. It does not replace the existing
+    detailed navigation rows; it gives the operator a quick reading rhythm.
+    """
+    return [
+        {
+            "順": "①",
+            "見る": "現在状態",
+            "意味": "live / board / freshness",
+            "初期": "開く",
+        },
+        {
+            "順": "②",
+            "見る": "予測表示",
+            "意味": "generated_at / horizon",
+            "初期": "開く",
+        },
+        {
+            "順": "③",
+            "見る": "alert / operator",
+            "意味": "注意・要約・安全境界",
+            "初期": "開く",
+        },
+        {
+            "順": "④⑤",
+            "見る": "理由と履歴",
+            "意味": "graph / evidence / timeline",
+            "初期": "必要時だけ開く",
+        },
+    ]
+
+
+def warroom_operator_focus_visual_route_text() -> str:
+    return "読む順: ① 現在状態 → ② 予測表示 → ③ alert/operator → ④⑤ 理由確認"
 
 
 def warroom_operator_focus_nav_rows() -> list[dict]:
@@ -51,18 +90,27 @@ def warroom_operator_focus_nav_rows() -> list[dict]:
 
 def build_warroom_operator_focus_nav_packet() -> dict:
     rows = warroom_operator_focus_nav_rows()
+    route_rows = warroom_operator_focus_route_rows()
     return {
         "ok": True,
         "focus_nav_version": WARROOM_OPERATOR_FOCUS_NAV_VERSION,
+        "focus_visual_tune_version": WARROOM_OPERATOR_FOCUS_VISUAL_TUNE_VERSION,
         "operator_first_navigation_visible": True,
+        "visual_route_strip_visible": True,
+        "visual_route_text": warroom_operator_focus_visual_route_text(),
+        "route_row_count": len(route_rows),
+        "route_rows": route_rows,
         "row_count": len(rows),
         "rows": rows,
         "top_expanded_default": True,
         "reduces_first_screen_ambiguity": True,
+        "improves_first_screen_scanability": True,
+        "visual_only_change": True,
         "keeps_existing_panels_available": True,
         "production_ui_code_changed": True,
         "layout_only_change": True,
         "externalized_panel_module": True,
+        "warroom_page_changed": False,
         "read_only": True,
         "display_only": True,
         "non_executing": True,
@@ -88,4 +136,7 @@ def render_warroom_operator_focus_nav() -> None:
     st.caption(
         "まずこの順番で見ます。詳細パネルは残していますが、最初は 1→2→3 だけで全体を把握します。"
     )
+    st.markdown(f"**{packet['visual_route_text']}**")
+    st.dataframe(packet["route_rows"], width="stretch", hide_index=True)
+    st.caption("④⑤ は理由確認・背景確認用です。必要な時だけ開きます。")
     st.dataframe(packet["rows"], width="stretch", hide_index=True)
