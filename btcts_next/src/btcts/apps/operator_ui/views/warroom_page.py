@@ -51,6 +51,9 @@ from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_warroom_
 from btcts.apps.operator_ui.prediction_warroom.panels.warroom_live_market_nowcast_panel import (
     render_warroom_live_market_nowcast_panel,
 )
+from btcts.apps.operator_ui.prediction_warroom.panels.warroom_operator_focus_nav_panel import (
+    render_warroom_operator_focus_nav,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
@@ -80,7 +83,6 @@ from btcts.apps.operator_ui.components.slot_definitions import (
 WARROOM_HEADER_LEGACY_SECTION_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.header_legacy_section_japanese_localization.ps_q26d.v1"
 WARROOM_TOP_READING_CAPTION_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.top_reading_caption_japanese_localization.ps_q26h.v1"
 WARROOM_ALLOWED_TECH_TERM_LABEL_HELP_TEXT_VERSION = "prediction_warroom.allowed_tech_term_label_help_text.ps_q26k.v1"
-
 _GRAPH_WIDGET_RENDERERS = {
     "market_monitor": market_monitor.render,
     "liquidity_pressure": liquidity_pressure_panel.render,
@@ -762,6 +764,9 @@ def _render_warroom_page_body() -> None:
     fragment_enabled = bool(st.session_state.get("ui_auto_refresh", True))
 
     live_shell.render_compact_page_header(get_text(lang, "warroom_title"))
+
+    with live_shell.render_folded_section("最初に見る場所 / WarRoom 入口", expanded=True):
+        render_warroom_operator_focus_nav()
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_guide"), expanded=False):
         st.caption(
