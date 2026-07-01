@@ -14,6 +14,7 @@ from btcts.apps.operator_ui.prediction_warroom.panels.latest_prediction_summary_
 )
 
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_FRESHNESS_ERROR_FALLBACK_PANEL_VERSION = "prediction_warroom.latest_prediction_summary_widget.q18ak_freshness_error_fallback_panel.v1"
+LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_JAPANESE_LOCALIZATION_VERSION = "prediction_warroom.latest_prediction_summary_widget.q18ak_japanese_localization.ps_q26g.v1"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_FRESHNESS_ERROR_FALLBACK_PANEL_ACK = "PS_Q18AK_ADD_FRESHNESS_ERROR_FALLBACK_POLISH_TO_AUTO_REFRESH_DISPLAY_ONLY"
 LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_FRESHNESS_ERROR_FALLBACK_PANEL_STATE = "auto_refresh_display_freshness_error_fallback_visible"
 Q18AK_PAGE_ID = "warroom"
@@ -190,8 +191,8 @@ def build_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel_
         "zone_id": Q18AK_ZONE_ID,
         "widget_id": Q18AK_WIDGET_ID,
         "panel_failures": failures,
-        "operator_caption": "PS-Q18AK shows freshness and safe fallback reasons for the automatically refreshed latest prediction display. This is UI-only; trading/runtime behavior remains disabled.",
-        "recommended_next_slice": "intermediate-goal close docs or UI smoke/manual visual check; keep AutoTrade, broker, parameter, ledger, and runtime writes disabled.",
+        "operator_caption": "PS-Q26G Q18AK: 自動更新された latest prediction の鮮度と安全fallback理由を表示します。UI表示のみで、売買/runtime挙動はありません。",
+        "recommended_next_slice": "UI smoke/manual visual check へ進みます。AutoTrade・broker・parameter・ledger・runtime書込は無効のままです。",
     }
     packet.update({key: ok for key in TRUE_BOUNDARIES})
     packet.update({key: False for key in FALSE_BOUNDARIES})
@@ -204,6 +205,125 @@ def build_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel_
     packet["broad_page_reload_disabled"] = True
     return packet
 
+
+
+def _q26g_bool_ja(value: Any) -> str:
+    if value is True:
+        return "はい"
+    if value is False:
+        return "いいえ"
+    text = _clean(value).lower()
+    if text == "true":
+        return "はい"
+    if text == "false":
+        return "いいえ"
+    return _clean(value) or "-"
+
+
+def _q26g_freshness_ja(value: Any) -> str:
+    return {
+        "fresh": "新しい",
+        "delayed": "やや遅延",
+        "stale": "古い",
+        "unknown": "不明",
+    }.get(_clean(value), _clean(value) or "-")
+
+
+def _q26g_reason_ja(value: Any) -> str:
+    mapping = {
+        "auto_refresh_source_packet_not_ok": "自動更新元packetが未OK",
+        "source_generated_at_missing": "生成時刻が欠落",
+        "source_generated_at_unparseable": "生成時刻を解釈できない",
+        "source_generated_at_delayed": "生成時刻がやや古い",
+        "source_generated_at_stale": "生成時刻が古い",
+        "source_freshness_ok": "鮮度OK",
+    }
+    if isinstance(value, (list, tuple)):
+        return ", ".join(mapping.get(str(item), str(item)) for item in value) or "なし"
+    text = _clean(value)
+    for token, label in sorted(mapping.items(), key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(token, label)
+    return text or "なし"
+
+
+def latest_prediction_summary_widget_q18ak_visible_plain_text(packet: Mapping[str, Any] | Any) -> str:
+    data = _as_mapping(packet)
+    return (
+        "PS-Q26G Q18AK 鮮度/fallback確認: "
+        f"鮮度={_q26g_freshness_ja(data.get('freshness_state'))} / "
+        f"経過={_clean(data.get('source_age_sec')) or '-'}秒 / "
+        f"fallback理由={_q26g_reason_ja(data.get('safe_fallback_reason_codes'))} / "
+        f"観測時刻={_clean(data.get('observed_now_utc')) or '-'} / "
+        f"予測生成時刻={_clean(data.get('component_source_generated_at')) or '-'} / "
+        f"自動更新={_q26g_bool_ja(data.get('auto_refresh_enabled'))} / "
+        "広域ページreload=なし / 書込=なし / AutoTrade=なし / broker=なし"
+    )
+
+
+def latest_prediction_summary_widget_q18ak_visible_display_rows(packet: Mapping[str, Any] | Any) -> list[dict[str, Any]]:
+    data = _as_mapping(packet)
+    return [
+        {"確認項目": "鮮度", "状態": _q26g_freshness_ja(data.get("freshness_state")), "見るポイント": "fresh/delayed/stale/unknown を日本語で確認します。"},
+        {"確認項目": "経過秒", "状態": _clean(data.get("source_age_sec")) or "-", "見るポイント": "予測生成時刻から観測時刻までの秒数です。"},
+        {"確認項目": "予測生成時刻", "状態": _clean(data.get("component_source_generated_at")) or "-", "見るポイント": "latest prediction artifact の生成時刻です。"},
+        {"確認項目": "観測時刻", "状態": _clean(data.get("observed_now_utc")) or "-", "見るポイント": "UIが鮮度を見た時刻です。"},
+        {"確認項目": "fallback理由", "状態": _q26g_reason_ja(data.get("safe_fallback_reason_codes")), "見るポイント": "表示用の安全fallback理由です。実行挙動はありません。"},
+        {"確認項目": "自動更新", "状態": _q26g_bool_ja(data.get("auto_refresh_enabled")), "見るポイント": "WarRoom表示の自動更新です。予測生成ではありません。"},
+        {"確認項目": "広域ページreload", "状態": "なし", "見るポイント": "fragment path のみです。"},
+        {"確認項目": "AutoTrade / broker", "状態": "なし", "見るポイント": "AutoTrade trigger と broker/private API は無効です。"},
+    ]
+
+
+
+def _q26g_stale_q18aj_source_packet() -> dict[str, Any]:
+    return {
+        "ok": True,
+        "component_source_generated_at": "2026-06-24T03:00:00Z",
+        "auto_refresh_enabled": True,
+        "fragment_slot_refresh_path_enabled": True,
+        "partial_update_enabled": True,
+        "broad_page_reload_disabled": True,
+        "refresh_mode": Q18AK_REFRESH_MODE,
+        "refresh_interval_sec": Q18AK_DEFAULT_REFRESH_SEC,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "parameter_apply_allowed": False,
+        "ledger_append_allowed": False,
+    }
+
+def build_latest_prediction_summary_widget_q18ak_japanese_localization_packet() -> dict[str, Any]:
+    sample = build_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel_packet(
+        supplied_q18aj_bounded_auto_refresh_packet=_q26g_stale_q18aj_source_packet(),
+        now_utc="2026-06-24T04:57:45Z",
+    )
+    return {
+        "ok": True,
+        "localization_version": LATEST_PREDICTION_SUMMARY_WIDGET_Q18AK_JAPANESE_LOCALIZATION_VERSION,
+        "visible_plain_text_japanese_localized": True,
+        "visible_rows_japanese_localized": True,
+        "legacy_searchable_plain_text_preserved": True,
+        "sample_visible_plain_text": latest_prediction_summary_widget_q18ak_visible_plain_text(sample),
+        "sample_visible_row_count": len(latest_prediction_summary_widget_q18ak_visible_display_rows(sample)),
+        "read_only": True,
+        "display_only": True,
+        "non_executing": True,
+        "trade_guidance_added": False,
+        "trade_signal_added": False,
+        "runtime_artifact_write_allowed": False,
+        "status_artifact_write_allowed": False,
+        "prediction_artifact_write_allowed": False,
+        "view_artifact_write_allowed": False,
+        "scheduler_enabled": False,
+        "producer_enabled": False,
+        "autotrade_trigger_allowed": False,
+        "broker_private_api_allowed": False,
+        "ledger_append_allowed": False,
+        "mode_apply_allowed": False,
+        "parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+    }
 
 def latest_prediction_summary_widget_q18ak_searchable_plain_text(packet: Mapping[str, Any] | Any) -> str:
     data = _as_mapping(packet)
@@ -241,16 +361,9 @@ def _render_q18ak_body() -> dict[str, Any]:
         ui_auto_refresh=True,
     )
     st.caption(str(packet.get("operator_caption") or "PS-Q18AK freshness/error fallback panel"))
-    st.caption(
-        "freshness={state} / age={age}s / fallback={reasons} / auto_refresh={auto} / writes=false / autotrade=false / broker=false".format(
-            state=packet.get("freshness_state"),
-            age=packet.get("source_age_sec"),
-            reasons=packet.get("safe_fallback_reason_codes"),
-            auto=packet.get("auto_refresh_enabled"),
-        )
-    )
-    st.text(latest_prediction_summary_widget_q18ak_searchable_plain_text(packet))
-    rows = latest_prediction_summary_widget_q18ak_display_rows(packet)
+    st.caption(latest_prediction_summary_widget_q18ak_visible_plain_text(packet))
+    st.text(latest_prediction_summary_widget_q18ak_visible_plain_text(packet))
+    rows = latest_prediction_summary_widget_q18ak_visible_display_rows(packet)
     if rows:
         st.dataframe(rows, width="stretch", hide_index=True)
     return packet
@@ -269,9 +382,9 @@ def render_latest_prediction_summary_widget_q18ak_freshness_error_fallback_panel
         Q18AK_PAGE_ID,
         Q18AK_ZONE_ID,
         Q18AK_WIDGET_ID,
-        label="Latest prediction freshness / fallback",
+        label="予測最新 鮮度 / fallback",
         tone="primary",
-        help_text="Freshness and safe fallback display for the auto-refreshed latest prediction panel. No AutoTrade, broker, parameter, ledger, or runtime writes.",
+        help_text="自動更新された latest prediction の鮮度と安全fallbackを表示します。AutoTrade、broker、parameter、ledger、runtime書込はありません。",
         refresh_mode=Q18AK_REFRESH_MODE,
         priority=19,
         overlay_enabled=False,
