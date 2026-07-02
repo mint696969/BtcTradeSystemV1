@@ -8,8 +8,10 @@ from typing import Any
 import streamlit as st
 
 from btcts.apps.operator_ui.prediction_warroom.panels.warroom_v2 import (
+    build_warroom_v2_auto_refresh_control_packet,
     build_warroom_v2_chart_review_panel_packet,
     build_warroom_v2_market_snapshot_strip_packet,
+    render_warroom_v2_auto_refresh_control,
     render_warroom_v2_chart_review_panel,
     render_warroom_v2_debug_preview,
     render_warroom_v2_market_snapshot_strip,
@@ -21,7 +23,7 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_v2 import (
 from btcts.apps.operator_ui.prediction_warroom.panels.warroom_v2.market_snapshot_read_model import build_warroom_v2_market_snapshot_dhot_read_model
 from btcts.apps.operator_ui.prediction_warroom.v2 import build_warroom_v2_shell_preview_packet
 
-WARROOM_V2_SHELL_PREVIEW_PANEL_VERSION = "prediction_warroom.v2.shell_preview_panel.ps_q29r.v1"
+WARROOM_V2_SHELL_PREVIEW_PANEL_VERSION = "prediction_warroom.v2.shell_preview_panel.ps_q29t.v1"
 
 
 def _placeholder_source() -> dict[str, Any]:
@@ -34,12 +36,13 @@ def build_warroom_v2_shell_preview_panel_packet(*, page_mount_packet: dict | Non
     source = dict(source_packet or _placeholder_source())
     snapshot = build_warroom_v2_market_snapshot_strip_packet(source_packet=source)
     chart = build_warroom_v2_chart_review_panel_packet(source_packet=source)
+    refresh = build_warroom_v2_auto_refresh_control_packet()
     connected = bool(source.get("data_connected"))
     return {
         "ok": True, "panel_version": WARROOM_V2_SHELL_PREVIEW_PANEL_VERSION, "page_mount_packet": page, "shell_preview": shell,
-        "market_snapshot_source": source, "market_snapshot_strip": snapshot, "chart_review_panel": chart,
-        "market_snapshot_strip_above_prediction_cards": True, "chart_review_panel_bottom": True, "display_only": True,
-        "renderer_split": True, "push_ready": True, "auto_refresh_ready": True, "data_connected": connected,
+        "auto_refresh_control": refresh, "market_snapshot_source": source, "market_snapshot_strip": snapshot, "chart_review_panel": chart,
+        "auto_refresh_control_below_top_bar": True, "market_snapshot_strip_above_prediction_cards": True, "chart_review_panel_bottom": True,
+        "display_only": True, "renderer_split": True, "push_ready": True, "auto_refresh_ready": True, "data_connected": connected,
         "runtime_connected": False, "push_connected": False, "websocket_enabled": False, "sse_enabled": False,
         "dhot_read_in_panel": connected, "classifier_invoked_in_panel": False, "would_send_to_broker": False,
     }
@@ -49,8 +52,9 @@ def render_warroom_v2_shell_preview_panel(*, page_mount_packet: dict | None = No
     source = build_warroom_v2_market_snapshot_dhot_read_model()
     packet = build_warroom_v2_shell_preview_panel_packet(page_mount_packet=page_mount_packet, source_packet=source)
     shell = packet["shell_preview"]
-    st.caption("WarRoom v2 shell preview / D-hot read-only market snapshot / no push transport")
+    st.caption("WarRoom v2 shell preview / browser-timer auto refresh available / no push transport")
     render_warroom_v2_top_bar(warroom_v2_models_by_zone(shell, "top"))
+    packet["auto_refresh_control"] = render_warroom_v2_auto_refresh_control()
     st.divider()
     render_warroom_v2_market_snapshot_strip(source_packet=source)
     st.divider()
