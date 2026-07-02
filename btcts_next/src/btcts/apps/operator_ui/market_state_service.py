@@ -281,6 +281,20 @@ def market_state_diagnostics(
     return info
 
 
+
+def load_recent_market_states(
+    *,
+    exchange: str = "bitflyer",
+    symbol_raw: str = "BTC_JPY",
+    state_type: str = "market.overview",
+    max_lines: int = 240,
+    max_bytes: int = 4 * 1024 * 1024,
+) -> list[dict[str, Any]]:
+    latest_part = _latest_market_state_part_file(exchange=exchange, symbol_raw=symbol_raw, state_type=state_type)
+    if latest_part is None:
+        return []
+    return _read_jsonl_recent_rows(latest_part, max_lines=max_lines, max_bytes=max_bytes)
+
 def load_latest_market_state(
     *,
     exchange: str = "bitflyer",
