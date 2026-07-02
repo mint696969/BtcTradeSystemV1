@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_v2_shell_preview_contract_q29b.py
-# desc: PS-Q29B guards for WarRoom v2 shell preview contract. No app route, legacy WarRoom, runtime, or push mount.
+# desc: PS-Q29B guards for WarRoom v2 shell preview contract. Legacy WarRoom stays detached from v2 runtime/push ownership.
 
 from __future__ import annotations
 
@@ -18,7 +18,6 @@ from btcts.apps.operator_ui.prediction_warroom.v2 import (  # noqa: E402
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[6]
-APP = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/app.py"
 WARROOM_PAGE = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/views/warroom_page.py"
 V2_DIR = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2"
 DOC = REPO_ROOT / "docs/strategy/PREDICTION_SYSTEM_PS_Q29B_WARROOM_V2_SHELL_PREVIEW_CONTRACT_2026-07-02.md"
@@ -80,14 +79,15 @@ def test_q29b_shell_preview_does_not_own_runtime_or_transport() -> None:
     assert packet["would_send_to_broker"] is False
 
 
-def test_q29b_app_and_legacy_warroom_are_not_mounted_to_v2() -> None:
-    app_text = APP.read_text(encoding="utf-8-sig")
+def test_q29b_shell_contract_does_not_mount_legacy_warroom_to_v2() -> None:
+    # Q29C may mount a separate WarRoom v2 route in app.py. Q29B's durable
+    # responsibility guard is that the legacy WarRoom page itself does not own
+    # or import v2 contracts, runtime, or shell-preview rendering.
     warroom_text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
-    assert "warroom_v2" not in app_text
-    assert "prediction_warroom.v2" not in app_text
-    assert "build_warroom_v2_shell_preview_packet" not in app_text
+    assert "warroom_v2_page" not in warroom_text
     assert "prediction_warroom.v2" not in warroom_text
     assert "build_warroom_v2_shell_preview_packet" not in warroom_text
+    assert "warroom_v2_shell_preview_panel" not in warroom_text
 
 
 def test_q29b_v2_shell_files_are_small_and_side_effect_free() -> None:
