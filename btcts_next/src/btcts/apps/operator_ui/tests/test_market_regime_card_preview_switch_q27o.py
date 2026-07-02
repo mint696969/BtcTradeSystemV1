@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_market_regime_card_preview_switch_q27o.py
-# desc: PS-Q27O tests for WarRoom market-regime sample-to-gated-preview switch. Default remains sample-only.
+# desc: PS-Q27O tests for WarRoom market-regime sample-to-preview switch. Operator can still choose sample-only.
 
 from __future__ import annotations
 
@@ -116,11 +116,11 @@ def test_q27o_preview_switch_enabled_without_root_falls_back_to_sample() -> None
     assert packet["card_count"] == 8
 
 
-def test_q27o_preview_switch_keeps_page_default_preview_disabled() -> None:
+def test_q27o_preview_switch_page_default_preview_enabled_read_only() -> None:
     page_text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
     assert "build_warroom_market_regime_card_preview_enablement_packet" in page_text
     assert "warroom_market_regime_card_preview_enabled_q27p" in page_text
-    assert "value=False" in page_text
+    assert "value=True" in page_text
     assert "render_kwargs" in page_text
     assert "preview_enabled=True" not in page_text
     assert "build_warroom_market_regime_card_preview_switch_packet" not in page_text

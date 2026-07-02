@@ -184,6 +184,8 @@ def build_warroom_market_regime_card_preview_switch_packet(
             "explicit_source_root_required": True,
             "explicit_source_root_read_performed": bool(binding_packet.get("explicit_source_root_read_performed")) if isinstance(binding_packet, Mapping) else False,
             "dry_run_invoked": bool(binding_packet.get("dry_run_invoked")) if isinstance(binding_packet, Mapping) else False,
+            "dry_run_version": binding_packet.get("dry_run_version") if isinstance(binding_packet, Mapping) else None,
+            "stage_versions": dict(binding_packet.get("stage_versions", {})) if isinstance(binding_packet, Mapping) else {},
             "source_snapshot_ok": bool(binding_packet.get("source_snapshot_ok")) if isinstance(binding_packet, Mapping) and "source_snapshot_ok" in binding_packet else None,
             "live_data_connected": False,
             "warroom_page_changed": False,

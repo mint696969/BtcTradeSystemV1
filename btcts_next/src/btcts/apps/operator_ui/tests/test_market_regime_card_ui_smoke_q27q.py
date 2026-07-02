@@ -104,7 +104,7 @@ def test_q27q_specs_are_loaded_and_match_current_card_ui_contract() -> None:
 
 
 def test_q27q_preview_off_smoke_is_sample_only_and_does_not_read_root(tmp_path: Path) -> None:
-    enablement = build_warroom_market_regime_card_preview_enablement_packet(generated_at="2026-07-01T18:30:03Z")
+    enablement = build_warroom_market_regime_card_preview_enablement_packet(preview_enabled=False, operator_confirmed_read_only=False, generated_at="2026-07-01T18:30:03Z")
     assert enablement["preview_enabled_effective"] is False
     assert enablement["render_kwargs"] == {"preview_enabled": False, "hot_root": None, "generated_at": "2026-07-01T18:30:03Z"}
     packet = build_warroom_market_regime_card_preview_switch_packet(**enablement["render_kwargs"])
@@ -157,7 +157,7 @@ def test_q27q_page_and_panel_remain_read_only_and_no_auto_preview_literal() -> N
     page_text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
     panel_text = PANEL.read_text(encoding="utf-8-sig")
     assert "preview_enabled=True" not in page_text
-    assert "value=False" in page_text
+    assert "value=True" in page_text
     assert "warroom_market_regime_card_preview_enabled_q27p" in page_text
     for text in (page_text, panel_text):
         for token in (

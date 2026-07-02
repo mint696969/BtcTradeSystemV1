@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_market_regime_card_preview_enablement_q27p.py
-# desc: PS-Q27P tests for WarRoom market-regime preview enablement decision. Default off; explicit checkbox/read-only root required.
+# desc: PS-Q27P tests for WarRoom market-regime preview enablement decision. Default is real D-hot read-only preview; checkbox can disable to sample.
 
 from __future__ import annotations
 
@@ -21,16 +21,17 @@ WARROOM_PAGE = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/views/warroom_
 PANEL = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/panels/warroom_market_regime_card_panel.py"
 
 
-def test_q27p_enablement_default_is_off_and_sample_only() -> None:
+def test_q27p_enablement_default_is_real_preview_read_only() -> None:
     packet = build_warroom_market_regime_card_preview_enablement_packet(generated_at="2026-07-01T18:20:03Z")
     assert packet["enablement_version"] == WARROOM_MARKET_REGIME_CARD_PREVIEW_ENABLEMENT_VERSION
-    assert packet["preview_enabled_requested"] is False
-    assert packet["operator_confirmed_read_only"] is False
-    assert packet["preview_enabled_effective"] is False
-    assert packet["disabled_reason"] == "preview_checkbox_off"
-    assert packet["render_kwargs"] == {"preview_enabled": False, "hot_root": None, "generated_at": "2026-07-01T18:20:03Z"}
+    assert packet["preview_enabled_requested"] is True
+    assert packet["operator_confirmed_read_only"] is True
+    assert packet["preview_enabled_effective"] is True
+    assert packet["disabled_reason"] == ""
+    assert packet["render_kwargs"] == {"preview_enabled": True, "hot_root": WARROOM_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT_HINT, "generated_at": "2026-07-01T18:20:03Z"}
     assert packet["disabled_path_reads_root"] is False
-    assert packet["warroom_page_preview_default_on"] is False
+    assert packet["warroom_page_preview_default_on"] is True
+    assert packet["explicit_operator_checkbox_required"] is False
 
 
 def test_q27p_enablement_requires_operator_confirmation() -> None:
@@ -68,11 +69,11 @@ def test_q27p_enablement_on_uses_explicit_hot_root_read_only() -> None:
     assert packet["would_send_to_broker"] is False
 
 
-def test_q27p_warroom_page_has_checkbox_default_off_and_no_auto_preview() -> None:
+def test_q27p_warroom_page_has_checkbox_default_on_without_preview_literal() -> None:
     page_text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
     assert "WARROOM_MARKET_REGIME_CARD_PREVIEW_ENABLEMENT_VERSION" in page_text
     assert "warroom_market_regime_card_preview_enabled_q27p" in page_text
-    assert "value=False" in page_text
+    assert "value=True" in page_text
     assert "render_kwargs" in page_text
     assert "render_warroom_market_regime_card_shell(" in page_text
     assert '**market_regime_preview_enablement_packet["render_kwargs"]' in page_text

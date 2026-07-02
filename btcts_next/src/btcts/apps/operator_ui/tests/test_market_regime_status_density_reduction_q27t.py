@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_market_regime_status_density_reduction_q27t.py
-# desc: PS-Q27T guard. Reduces WarRoom market-regime status/caption density without changing preview gating or card specs.
+# desc: PS-Q27T guard. Reduces WarRoom market-regime status/caption density while preserving compact UI and card specs.
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def test_q27t_warroom_page_uses_short_checkbox_and_no_default_explainer_caption(
     assert "preview はデフォルトOFF" not in text
     assert "ON時のみ D-hot" not in text
     assert "warroom_market_regime_card_preview_enabled_q27p" in text
-    assert "value=False" in text
+    assert "value=True" in text
     assert "preview_enabled=True" not in text
 
 
@@ -49,18 +49,20 @@ def test_q27t_panel_removes_card_level_caption_copy() -> None:
     assert "st.markdown(market_regime_cards_html(packet[\"cards\"]), unsafe_allow_html=True)" in text
 
 
-def test_q27t_preview_gate_packet_still_defaults_off_and_on_requires_confirmation() -> None:
-    off = build_warroom_market_regime_card_preview_enablement_packet(generated_at="2026-07-01T19:45:03Z")
-    assert off["preview_enabled_effective"] is False
-    assert off["render_kwargs"]["preview_enabled"] is False
-    assert off["render_kwargs"]["hot_root"] is None
-    on_without_confirm = build_warroom_market_regime_card_preview_enablement_packet(
-        preview_enabled=True,
+def test_q27t_preview_gate_packet_default_on_but_explicit_off_keeps_sample_fallback() -> None:
+    default_on = build_warroom_market_regime_card_preview_enablement_packet(generated_at="2026-07-01T19:45:03Z")
+    assert default_on["preview_enabled_effective"] is True
+    assert default_on["render_kwargs"]["preview_enabled"] is True
+    assert default_on["warroom_page_preview_default_on"] is True
+    explicit_off = build_warroom_market_regime_card_preview_enablement_packet(
+        preview_enabled=False,
         operator_confirmed_read_only=False,
         generated_at="2026-07-01T19:45:03Z",
     )
-    assert on_without_confirm["preview_enabled_effective"] is False
-    assert on_without_confirm["disabled_reason"] == "operator_read_only_confirmation_required"
+    assert explicit_off["preview_enabled_effective"] is False
+    assert explicit_off["disabled_reason"] == "preview_checkbox_off"
+    assert explicit_off["render_kwargs"]["preview_enabled"] is False
+    assert explicit_off["render_kwargs"]["hot_root"] is None
     on = build_warroom_market_regime_card_preview_enablement_packet(
         preview_enabled=True,
         operator_confirmed_read_only=True,

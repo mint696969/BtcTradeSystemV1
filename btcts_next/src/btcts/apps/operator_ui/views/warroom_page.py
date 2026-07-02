@@ -107,15 +107,15 @@ def _warroom_utc_now_iso_q27p() -> str:
 
 def build_warroom_market_regime_card_preview_enablement_packet(
     *,
-    preview_enabled: bool = False,
-    operator_confirmed_read_only: bool = False,
+    preview_enabled: bool = True,
+    operator_confirmed_read_only: bool = True,
     hot_root: str | None = WARROOM_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT_HINT,
     generated_at: str = "",
 ) -> dict:
     """Return render kwargs for the market-regime card preview gate.
 
-    Default is disabled/sample-only. The D-hot preview root is passed to the panel
-    only when the operator explicitly checks the read-only preview checkbox.
+    Default is real D-hot read-only preview for personal WarRoom use. The
+    operator can turn the existing checkbox off to fall back to sample cards.
     """
     requested = bool(preview_enabled)
     confirmed = bool(operator_confirmed_read_only)
@@ -149,8 +149,8 @@ def build_warroom_market_regime_card_preview_enablement_packet(
         "preview_enabled_effective": enabled,
         "disabled_reason": disabled_reason,
         "render_kwargs": render_kwargs,
-        "warroom_page_preview_default_on": False,
-        "explicit_operator_checkbox_required": True,
+        "warroom_page_preview_default_on": True,
+        "explicit_operator_checkbox_required": False,
         "explicit_source_root_required": True,
         "explicit_source_root_read_allowed": enabled,
         "disabled_path_reads_root": False,
@@ -619,7 +619,7 @@ def _render_warroom_page_body() -> None:
         market_regime_preview_enabled = bool(
             st.checkbox(
                 "地合い preview",
-                value=False,
+                value=True,
                 key="warroom_market_regime_card_preview_enabled_q27p",
             )
         )
