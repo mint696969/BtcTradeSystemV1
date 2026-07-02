@@ -9,7 +9,7 @@ from ..contracts import EvidenceQuality, FeatureGroup, FreshnessState, MarketReg
 from ..features import FeatureSignal, MarketRegimeFeatureBundle
 from ..horizon_policy import build_default_horizon_policy
 
-MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27w.v1"
+MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27y.v1"
 
 
 def _signals(bundle: MarketRegimeFeatureBundle, group: FeatureGroup) -> Mapping[str, FeatureSignal]:
@@ -39,6 +39,25 @@ def _labels_by_horizon(bundle: MarketRegimeFeatureBundle) -> Mapping[str, str]:
     if not isinstance(value, Mapping):
         return {}
     return {str(key): str(val) for key, val in value.items() if val}
+
+
+def _float_map_by_horizon(bundle: MarketRegimeFeatureBundle, name: str) -> Mapping[str, float]:
+    value = _value(bundle, FeatureGroup.PRICE_STRUCTURE, name, {})
+    if not isinstance(value, Mapping):
+        return {}
+    result: dict[str, float] = {}
+    for key, val in value.items():
+        try:
+            result[str(key)] = float(val)
+        except Exception:
+            continue
+    return result
+
+
+def _selected_forecast_metric(bundle: MarketRegimeFeatureBundle, name: str, selected_horizon_sec: int | None) -> float | None:
+    if selected_horizon_sec is None:
+        return None
+    return _float_map_by_horizon(bundle, name).get(str(int(selected_horizon_sec)))
 
 
 def _selected_label_for_horizon(bundle: MarketRegimeFeatureBundle, horizon_sec: int) -> tuple[Any, int | None, str]:
@@ -108,22 +127,46 @@ def _evidence_quality(bundle: MarketRegimeFeatureBundle, *, crossed_or_negative_
     return EvidenceQuality.MISSING
 
 
-def _confidence_percent(bundle: MarketRegimeFeatureBundle, regime: MarketRegimeCode, *, crossed_or_negative_spread: bool) -> int:
+def _confidence_percent(
+    bundle: MarketRegimeFeatureBundle,
+    regime: MarketRegimeCode,
+    *,
+    crossed_or_negative_spread: bool,
+    forecast_score: float | None = None,
+    signal_strength_percent: float | None = None,
+    reference_hit_rate_percent: float | None = None,
+) -> int:
     if regime == MarketRegimeCode.UNKNOWN or not bundle.source_snapshot_ok:
         return 15
     source_score = _float(bundle, FeatureGroup.SOURCE_QUALITY, "source_quality_score", 0.0)
     available_count = min(bundle.available_signal_count(), 12)
-    base_by_regime = {
-        MarketRegimeCode.RANGE: 52,
-        MarketRegimeCode.UP_TREND: 56,
-        MarketRegimeCode.DOWN_TREND: 56,
-        MarketRegimeCode.HIGH_VOL_CHOP: 58,
-        MarketRegimeCode.BREAKOUT: 55,
-        MarketRegimeCode.REVERSAL_WATCH: 49,
-        MarketRegimeCode.LOW_VOL_COMPRESSION: 50,
-        MarketRegimeCode.PANIC_SPIKE: 60,
-    }.get(regime, 20)
-    confidence = base_by_regime + int(source_score * 18) + int(available_count / 12 * 8)
+    if forecast_score is None and signal_strength_percent is None and reference_hit_rate_percent is None:
+        base_by_regime = {
+            MarketRegimeCode.RANGE: 52,
+            MarketRegimeCode.UP_TREND: 56,
+            MarketRegimeCode.DOWN_TREND: 56,
+            MarketRegimeCode.HIGH_VOL_CHOP: 58,
+            MarketRegimeCode.BREAKOUT: 55,
+            MarketRegimeCode.REVERSAL_WATCH: 49,
+            MarketRegimeCode.LOW_VOL_COMPRESSION: 50,
+            MarketRegimeCode.PANIC_SPIKE: 60,
+        }.get(regime, 20)
+        confidence = base_by_regime + int(source_score * 18) + int(available_count / 12 * 8)
+    else:
+        base_by_regime = {
+            MarketRegimeCode.RANGE: 40,
+            MarketRegimeCode.UP_TREND: 43,
+            MarketRegimeCode.DOWN_TREND: 43,
+            MarketRegimeCode.HIGH_VOL_CHOP: 44,
+            MarketRegimeCode.BREAKOUT: 42,
+            MarketRegimeCode.REVERSAL_WATCH: 38,
+            MarketRegimeCode.LOW_VOL_COMPRESSION: 39,
+            MarketRegimeCode.PANIC_SPIKE: 46,
+        }.get(regime, 20)
+        score_component = int(max(0.0, min(float(forecast_score or 0.0), 1.0)) * 14)
+        strength_component = int(max(0.0, min(float(signal_strength_percent or 0.0), 100.0)) * 0.14)
+        reference_component = int(max(0.0, min(float(reference_hit_rate_percent or 0.0), 100.0)) * 0.05)
+        confidence = base_by_regime + int(source_score * 9) + int(available_count / 12 * 5) + score_component + strength_component + reference_component
     if crossed_or_negative_spread:
         confidence -= 10
     return max(0, min(confidence, 99))
@@ -184,7 +227,17 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
             crossed_or_negative_spread=crossed_or_negative_spread,
             source_snapshot_ok=bundle.source_snapshot_ok,
         )
-        confidence = _confidence_percent(bundle, regime, crossed_or_negative_spread=crossed_or_negative_spread)
+        forecast_score = _selected_forecast_metric(bundle, "market_regime_scores_by_horizon_sec", selected_horizon_sec)
+        signal_strength_percent = _selected_forecast_metric(bundle, "market_regime_signal_strength_percent_by_horizon_sec", selected_horizon_sec)
+        reference_hit_rate_percent = _selected_forecast_metric(bundle, "market_regime_reference_hit_rate_percent_by_horizon_sec", selected_horizon_sec)
+        confidence = _confidence_percent(
+            bundle,
+            regime,
+            crossed_or_negative_spread=crossed_or_negative_spread,
+            forecast_score=forecast_score,
+            signal_strength_percent=signal_strength_percent,
+            reference_hit_rate_percent=reference_hit_rate_percent,
+        )
         tactical_hint = _tactical_hint(
             regime,
             crossed_or_negative_spread=crossed_or_negative_spread,
@@ -218,6 +271,10 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
                     "available_signal_count": bundle.available_signal_count(),
                     "selected_forecast_label": str(selected_label or ""),
                     "selected_forecast_horizon_sec": selected_horizon_sec,
+                    "selected_forecast_score": forecast_score,
+                    "selected_signal_strength_percent": signal_strength_percent,
+                    "selected_reference_hit_rate_percent": reference_hit_rate_percent,
+                    "confidence_calibrated_from_forecast_metric": forecast_score is not None or signal_strength_percent is not None or reference_hit_rate_percent is not None,
                     "label_selection_reason": label_selection_reason,
                     "horizon_specific_classifier": True,
                     "source_snapshot_input_only": True,

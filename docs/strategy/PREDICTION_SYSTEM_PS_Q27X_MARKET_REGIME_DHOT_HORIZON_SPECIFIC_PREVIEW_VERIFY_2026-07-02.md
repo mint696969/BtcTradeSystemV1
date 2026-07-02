@@ -16,7 +16,7 @@ runtime_code_changed=false
 real_dhot_probe_runner_added=true
 dhot_like_test_fixture_added=true
 horizon_specific_dhot_preview_guard_added=true
-classifier_version=prediction.market_regime.regime_classifier.ps_q27w.v1
+classifier_version=prediction.market_regime.regime_classifier.ps_q27y.v1
 market_regime_only=true
 read_only=true
 display_only=true
@@ -37,7 +37,7 @@ would_send_to_broker=false
 
 ## Purpose
 
-Verify that the PS-Q27W horizon-specific classifier works through the D-hot preview path before any further UI or artifact-writing work.
+Verify that the current horizon-specific classifier works through the D-hot preview path before any further UI or artifact-writing work.
 
 The test uses a D-hot-like fixture. The tmp runner can read real `D:\btc_ts_hot` explicitly and prints a compact JSON summary only.
 
@@ -46,11 +46,11 @@ The test uses a D-hot-like fixture. The tmp runner can read real `D:\btc_ts_hot`
 ```text
 latest_manifest_read=true
 forecast_records_market_regime_labels_by_horizon_sec_built=true
-classifier_stage_version=prediction.market_regime.regime_classifier.ps_q27w.v1
+classifier_stage_version=prediction.market_regime.regime_classifier.ps_q27y.v1
 current_horizon_uses_shortest_forecast_label=true
 exact_horizon_label_preferred=true
 latest_label_fallback_preserved=true
-warroom_preview_binding_stage_version_ps_q27w=true
+warroom_preview_binding_stage_version_ps_q27y=true
 would_send_to_broker=false
 ```
 

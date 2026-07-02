@@ -109,17 +109,34 @@ def _labels_by_horizon_sec(records: Tuple[Mapping[str, Any], ...]) -> dict[str, 
     return labels
 
 
+def _numeric_by_horizon_sec(records: Tuple[Mapping[str, Any], ...], field: str, *, values_field: str | None = None) -> dict[str, float]:
+    values_by_horizon: dict[str, float] = {}
+    for record in records:
+        horizon = _as_int(record.get("horizon_sec"))
+        raw = _record_values(record).get(values_field) if values_field else record.get(field)
+        value = _as_float(raw)
+        if horizon is not None and value is not None:
+            values_by_horizon[str(horizon)] = value
+    return values_by_horizon
+
+
 def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[FeatureSignal, ...]:
     records = snapshot.forecast_records.market_regime_records
     latest = _latest_market_regime_record(snapshot)
     label = latest.get("primary_label") if latest else None
     horizons = tuple(snapshot.forecast_records.market_regime_horizons_sec)
     labels_by_horizon = _labels_by_horizon_sec(records)
+    scores_by_horizon = _numeric_by_horizon_sec(records, "score")
+    signal_strength_by_horizon = _numeric_by_horizon_sec(records, "estimated_signal_strength_percent", values_field="estimated_signal_strength_percent")
+    reference_hit_rate_by_horizon = _numeric_by_horizon_sec(records, "estimated_reference_hit_rate_percent", values_field="estimated_reference_hit_rate_percent")
     return (
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_record_count", len(records), available=True, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.25),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_horizons_sec", list(horizons), available=bool(horizons), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.25),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label", label, available=label is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.25),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_labels_by_horizon_sec", labels_by_horizon, available=bool(labels_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.25),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_record_count", len(records), available=True, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.18),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_horizons_sec", list(horizons), available=bool(horizons), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.18),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label", label, available=label is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.16),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_labels_by_horizon_sec", labels_by_horizon, available=bool(labels_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.16),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_scores_by_horizon_sec", scores_by_horizon, available=bool(scores_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.12),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_signal_strength_percent_by_horizon_sec", signal_strength_by_horizon, available=bool(signal_strength_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.10),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_reference_hit_rate_percent_by_horizon_sec", reference_hit_rate_by_horizon, available=bool(reference_hit_rate_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.10),
     )
 
 
