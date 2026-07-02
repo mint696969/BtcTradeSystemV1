@@ -64,6 +64,7 @@ def test_q29g_prediction_cards_no_longer_use_streamlit_columns_for_matrix() -> N
     assert "warroom_v2_prediction_matrix_html" in text
     assert "unsafe_allow_html=True" in text
     assert "build_warroom_v2_card_detail_balloon_packet" in text
+    assert "build_warroom_v2_card_visual_semantics_packet" in text
     assert 'with st.expander("詳細"' not in text
     assert WARROOM_V2_MATRIX_CARD_WIDTH_PX == 208
 

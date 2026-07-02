@@ -9,8 +9,9 @@ from typing import Any
 import streamlit as st
 
 from .card_detail_balloon import build_warroom_v2_card_detail_balloon_packet
+from .card_visual_semantics import build_warroom_v2_card_visual_semantics_packet, warroom_v2_card_visual_semantics_css
 
-WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION = "prediction_warroom.v2.prediction_cards_renderer.ps_q29g.v1"
+WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION = "prediction_warroom.v2.prediction_cards_renderer.ps_q29i.v1"
 WARROOM_V2_MATRIX_CARD_WIDTH_PX = 208
 WARROOM_V2_MATRIX_CARD_MIN_HEIGHT_PX = 128
 
@@ -39,9 +40,11 @@ def _card_html(parent: dict[str, Any], horizon_card: dict[str, Any]) -> str:
     model = _horizon_card_model(parent, horizon_card)
     payload = model["payload"]
     detail = _detail_html(model)
+    visual = build_warroom_v2_card_visual_semantics_packet(payload)
+    classes = f"wv2-card {visual['background_class']} {visual['evidence_class']}"
     return f"""
-    <div class='wv2-card wv2-tone-unknown wv2-evidence-missing'>
-      <div class='wv2-card-top'><span>{_text(payload.get('horizon'))}</span><span class='wv2-badge'>{_text(payload.get('freshness_badge', 'NO_DATA'))}</span></div>
+    <div class='{classes}'>
+      <div class='wv2-card-top'><span>{_text(payload.get('horizon'))}</span><span class='wv2-badge {visual['freshness_class']}'>{_text(payload.get('freshness_badge', 'NO_DATA'))}</span></div>
       <div class='wv2-primary'>{_text(payload.get('primary_label', '未接続'))}</div>
       <div class='wv2-score'>{_text(payload.get('confidence_or_score', '--'))}</div>
       <div class='wv2-tag'>{_text(payload.get('short_tag', 'PREVIEW_ONLY'))}</div>
@@ -61,7 +64,8 @@ def warroom_v2_prediction_matrix_html(models: list[dict[str, Any]]) -> str:
 .wv2-matrix {{ display: flex; flex-direction: column; gap: 14px; }}
 .wv2-row h3 {{ margin: 0 0 6px 0; font-size: 1.0rem; color: #101828; }}
 .wv2-strip {{ display: flex; gap: 12px; overflow-x: auto; padding: 2px 2px 10px 2px; scroll-snap-type: x proximity; }}
-.wv2-card {{ position: relative; flex: 0 0 {WARROOM_V2_MATRIX_CARD_WIDTH_PX}px; min-width: {WARROOM_V2_MATRIX_CARD_WIDTH_PX}px; min-height: {WARROOM_V2_MATRIX_CARD_MIN_HEIGHT_PX}px; border-radius: 16px; padding: 10px 10px 9px 10px; background: #F2F4F7; color: #101828; border: 2px dotted rgba(102,112,133,.9); scroll-snap-align: start; box-sizing: border-box; }}
+.wv2-card {{ position: relative; flex: 0 0 {WARROOM_V2_MATRIX_CARD_WIDTH_PX}px; min-width: {WARROOM_V2_MATRIX_CARD_WIDTH_PX}px; min-height: {WARROOM_V2_MATRIX_CARD_MIN_HEIGHT_PX}px; border-radius: 16px; padding: 10px 10px 9px 10px; color: #101828; scroll-snap-align: start; box-sizing: border-box; }}
+{warroom_v2_card_visual_semantics_css()}
 .wv2-card-top {{ display: flex; justify-content: space-between; align-items: center; font-size: .92rem; font-weight: 800; }}
 .wv2-badge {{ min-width: 42px; padding: 3px 8px; border-radius: 999px; border: 1px solid rgba(16,24,40,.22); background: rgba(255,255,255,.82); text-align: center; font-size: .78rem; font-weight: 900; }}
 .wv2-primary {{ margin-top: 8px; font-size: 1.14rem; font-weight: 850; }}
@@ -86,6 +90,11 @@ def build_warroom_v2_prediction_matrix_renderer_packet(models: list[dict[str, An
         "horizontal_scroll_required": True,
         "card_width_px": WARROOM_V2_MATRIX_CARD_WIDTH_PX,
         "card_shape": "horizontal_rectangle",
+        "visual_semantics_from_payload": True,
+        "background_color_never_encodes_freshness": True,
+        "freshness_encoded_by_badge_only": True,
+        "freshness_not_encoded_by_border": True,
+        "border_meaning": "evidence_quality",
         "detail_disclosure_mode": "card_overlay",
         "runtime_connected": False,
         "push_connected": False,
