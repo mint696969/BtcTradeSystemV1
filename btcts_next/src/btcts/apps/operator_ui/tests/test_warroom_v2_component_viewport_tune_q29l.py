@@ -1,5 +1,5 @@
-# path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_v2_matrix_raw_html_render_fix_q29k.py
-# desc: PS-Q29K guards for WarRoom v2 matrix raw HTML render fix.
+# path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_v2_component_viewport_tune_q29l.py
+# desc: PS-Q29L guards for WarRoom v2 component viewport tuning.
 
 from __future__ import annotations
 
@@ -21,56 +21,53 @@ REPO_ROOT = Path(__file__).resolve().parents[6]
 PREDICTION_CARDS = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/panels/warroom_v2/prediction_cards.py"
 LEGACY_WARROOM = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/views/warroom_page.py"
 APP = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/app.py"
-DOC = REPO_ROOT / "docs/strategy/PREDICTION_SYSTEM_PS_Q29K_WARROOM_V2_MATRIX_RAW_HTML_RENDER_FIX_2026-07-02.md"
+DOC = REPO_ROOT / "docs/strategy/PREDICTION_SYSTEM_PS_Q29L_WARROOM_V2_COMPONENT_VIEWPORT_TUNE_2026-07-02.md"
 
 
 def _prediction_models() -> list[dict]:
-    packet = build_warroom_v2_placeholder_read_models_packet(generated_at="2026-07-02T07:40:00Z")
+    packet = build_warroom_v2_placeholder_read_models_packet(generated_at="2026-07-02T08:00:00Z")
     return [model for model in packet["read_models"] if model["payload"].get("zone") == "prediction_cards"]
 
 
-def test_q29k_renderer_packet_uses_components_html_not_markdown_unsafe_html() -> None:
+def test_q29l_renderer_packet_disables_component_internal_vertical_scroll() -> None:
     packet = build_warroom_v2_prediction_matrix_renderer_packet(_prediction_models())
     assert packet["streamlit_components_html_used"] is True
-    assert packet["markdown_unsafe_html_used"] is False
-    assert packet["raw_html_visible_guard"] is True
-    assert packet["html_matrix_renderer"] is True
+    assert packet["component_scrolling_enabled"] is False
+    assert packet["page_scroll_owns_vertical_flow"] is True
+    assert packet["internal_vertical_scroll_avoided"] is True
+    assert packet["row_horizontal_scroll_preserved"] is True
     assert packet["cards_do_not_shrink"] is True
-    assert packet["horizontal_scroll_required"] is True
-    assert packet["visual_semantics_from_payload"] is True
     assert packet["runtime_connected"] is False
     assert packet["push_connected"] is False
 
 
-def test_q29k_prediction_cards_calls_components_html() -> None:
+def test_q29l_prediction_renderer_calls_components_without_scrolling() -> None:
     text = PREDICTION_CARDS.read_text(encoding="utf-8-sig")
-    assert "from streamlit.components.v1 import html as st_html" in text
     assert "st_html(warroom_v2_prediction_matrix_html(models)" in text
     assert "scrolling=False" in text
     assert "scrolling=True" not in text
     assert "unsafe_allow_html=True" not in text
     assert "st.markdown(warroom_v2_prediction_matrix_html" not in text
-    assert "st.columns(max(1, len(horizon_cards)))" not in text
 
 
-def test_q29k_card_html_has_no_markdown_code_block_indentation() -> None:
+def test_q29l_html_hides_component_body_vertical_overflow_but_keeps_row_x_scroll() -> None:
     html = warroom_v2_prediction_matrix_html(_prediction_models())
-    assert "\n    <div class='wv2-card" not in html
-    assert "<div class='wv2-card" in html
-    assert "<style>" in html
+    assert "overflow-y: hidden" in html
+    assert "overflow-x: auto" in html
     assert "wv2-strip" in html
-    assert "wv2-detail-overlay" in html
+    assert "wv2-card" in html
+    assert "NO_DATA" in html
 
 
-def test_q29k_component_height_is_bounded_and_scales_by_rows() -> None:
+def test_q29l_component_height_remains_large_enough_for_all_rows() -> None:
     models = _prediction_models()
     height = warroom_v2_prediction_matrix_height_px(models)
-    assert height >= 280
+    assert len(models) >= 8
+    assert height >= 38 + (len(models) * 188)
     assert height <= 1800
-    assert height > 38 + (3 * 188)
 
 
-def test_q29k_no_route_legacy_or_runtime_ownership_changed() -> None:
+def test_q29l_no_route_legacy_or_runtime_ownership_changed() -> None:
     app_text = APP.read_text(encoding="utf-8-sig")
     legacy_text = LEGACY_WARROOM.read_text(encoding="utf-8-sig")
     pred_text = PREDICTION_CARDS.read_text(encoding="utf-8-sig")
@@ -81,10 +78,11 @@ def test_q29k_no_route_legacy_or_runtime_ownership_changed() -> None:
         assert token not in pred_text
 
 
-def test_q29k_doc_records_raw_html_fix_non_goals() -> None:
+def test_q29l_doc_records_viewport_non_goals() -> None:
     text = DOC.read_text(encoding="utf-8-sig")
-    assert "streamlit_components_html_used=true" in text
-    assert "markdown_unsafe_html_used=false" in text
-    assert "raw_html_visible_guard=true" in text
+    assert "component_scrolling_enabled=false" in text
+    assert "page_scroll_owns_vertical_flow=true" in text
+    assert "internal_vertical_scroll_avoided=true" in text
+    assert "row_horizontal_scroll_preserved=true" in text
     assert "not_connecting_dhot=true" in text
     assert "not_changing_legacy_warroom=true" in text

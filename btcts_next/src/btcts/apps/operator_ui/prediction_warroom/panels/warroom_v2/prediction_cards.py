@@ -12,15 +12,11 @@ from streamlit.components.v1 import html as st_html
 from .card_detail_balloon import build_warroom_v2_card_detail_balloon_packet
 from .card_visual_semantics import build_warroom_v2_card_visual_semantics_packet, warroom_v2_card_visual_semantics_css
 
-WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION = "prediction_warroom.v2.prediction_cards_renderer.ps_q29k.v1"
-WARROOM_V2_MATRIX_CARD_WIDTH_PX = 208
-WARROOM_V2_MATRIX_CARD_MIN_HEIGHT_PX = 128
-WARROOM_V2_MATRIX_ROW_HEIGHT_PX = 188
-
+WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION = "prediction_warroom.v2.prediction_cards_renderer.ps_q29l.v1"
+WARROOM_V2_MATRIX_CARD_WIDTH_PX, WARROOM_V2_MATRIX_CARD_MIN_HEIGHT_PX, WARROOM_V2_MATRIX_ROW_HEIGHT_PX = 208, 128, 188
 
 def _text(value: Any) -> str:
     return escape("" if value is None else str(value))
-
 
 def _detail_html(model: dict[str, Any]) -> str:
     packet = build_warroom_v2_card_detail_balloon_packet(model)
@@ -31,12 +27,10 @@ def _detail_html(model: dict[str, Any]) -> str:
         sections.append(f"<div class='wv2-detail-section'><b>{_text(section['label'])}</b><ul>{items}</ul></div>")
     return "".join(sections)
 
-
 def _horizon_card_model(parent: dict[str, Any], horizon_card: dict[str, Any]) -> dict[str, Any]:
     payload = dict(parent.get("payload", {}))
     payload.update(horizon_card)
     return {"widget_id": parent.get("widget_id", ""), "topic": parent.get("topic", ""), "title": parent.get("title", ""), "payload": payload}
-
 
 def _card_html(parent: dict[str, Any], horizon_card: dict[str, Any]) -> str:
     model = _horizon_card_model(parent, horizon_card)
@@ -54,7 +48,6 @@ def _card_html(parent: dict[str, Any], horizon_card: dict[str, Any]) -> str:
         "</div>",
     ])
 
-
 def warroom_v2_prediction_matrix_html(models: list[dict[str, Any]]) -> str:
     rows: list[str] = []
     for model in models:
@@ -63,7 +56,8 @@ def warroom_v2_prediction_matrix_html(models: list[dict[str, Any]]) -> str:
         rows.append(f"<section class='wv2-row'><h3>{title}</h3><div class='wv2-strip'>{cards}</div></section>")
     style = f"""
 <style>
-body {{ margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #101828; }}
+html, body {{ margin: 0; overflow-y: hidden; }}
+body {{ font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #101828; }}
 .wv2-matrix {{ display: flex; flex-direction: column; gap: 14px; width: 100%; }}
 .wv2-row h3 {{ margin: 0 0 6px 0; font-size: 1.0rem; color: #101828; }}
 .wv2-strip {{ display: flex; gap: 12px; overflow-x: auto; padding: 2px 2px 10px 2px; scroll-snap-type: x proximity; }}
@@ -82,10 +76,8 @@ body {{ margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'S
 """.strip()
     return f"{style}<div class='wv2-matrix'>{''.join(rows)}</div>"
 
-
 def warroom_v2_prediction_matrix_height_px(models: list[dict[str, Any]]) -> int:
     return max(280, min(1800, 38 + (len(models) * WARROOM_V2_MATRIX_ROW_HEIGHT_PX)))
-
 
 def build_warroom_v2_prediction_matrix_renderer_packet(models: list[dict[str, Any]]) -> dict[str, Any]:
     return {
@@ -95,6 +87,10 @@ def build_warroom_v2_prediction_matrix_renderer_packet(models: list[dict[str, An
         "streamlit_components_html_used": True,
         "markdown_unsafe_html_used": False,
         "raw_html_visible_guard": True,
+        "component_scrolling_enabled": False,
+        "page_scroll_owns_vertical_flow": True,
+        "internal_vertical_scroll_avoided": True,
+        "row_horizontal_scroll_preserved": True,
         "streamlit_columns_used": False,
         "cards_do_not_shrink": True,
         "horizontal_scroll_required": True,
@@ -113,7 +109,6 @@ def build_warroom_v2_prediction_matrix_renderer_packet(models: list[dict[str, An
         "component_height_px": warroom_v2_prediction_matrix_height_px(models),
     }
 
-
 def render_warroom_v2_prediction_cards(models: list[dict[str, Any]]) -> None:
     st.subheader("Prediction cards")
-    st_html(warroom_v2_prediction_matrix_html(models), height=warroom_v2_prediction_matrix_height_px(models), scrolling=True)
+    st_html(warroom_v2_prediction_matrix_html(models), height=warroom_v2_prediction_matrix_height_px(models), scrolling=False)
