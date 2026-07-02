@@ -99,15 +99,27 @@ def _orderflow_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[FeatureSig
     )
 
 
+def _labels_by_horizon_sec(records: Tuple[Mapping[str, Any], ...]) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    for record in records:
+        horizon = _as_int(record.get("horizon_sec"))
+        label = record.get("primary_label")
+        if horizon is not None and label:
+            labels[str(horizon)] = str(label)
+    return labels
+
+
 def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[FeatureSignal, ...]:
     records = snapshot.forecast_records.market_regime_records
     latest = _latest_market_regime_record(snapshot)
     label = latest.get("primary_label") if latest else None
     horizons = tuple(snapshot.forecast_records.market_regime_horizons_sec)
+    labels_by_horizon = _labels_by_horizon_sec(records)
     return (
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_record_count", len(records), available=True, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.30),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_horizons_sec", list(horizons), available=bool(horizons), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.30),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label", label, available=label is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.40),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_record_count", len(records), available=True, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.25),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_horizons_sec", list(horizons), available=bool(horizons), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.25),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label", label, available=label is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.25),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_labels_by_horizon_sec", labels_by_horizon, available=bool(labels_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.25),
     )
 
 

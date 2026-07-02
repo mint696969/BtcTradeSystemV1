@@ -9,7 +9,7 @@ from ..contracts import EvidenceQuality, FeatureGroup, FreshnessState, MarketReg
 from ..features import FeatureSignal, MarketRegimeFeatureBundle
 from ..horizon_policy import build_default_horizon_policy
 
-MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27j.v1"
+MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27w.v1"
 
 
 def _signals(bundle: MarketRegimeFeatureBundle, group: FeatureGroup) -> Mapping[str, FeatureSignal]:
@@ -32,6 +32,25 @@ def _float(bundle: MarketRegimeFeatureBundle, group: FeatureGroup, name: str, de
         return float(_value(bundle, group, name, default))
     except Exception:
         return default
+
+
+def _labels_by_horizon(bundle: MarketRegimeFeatureBundle) -> Mapping[str, str]:
+    value = _value(bundle, FeatureGroup.PRICE_STRUCTURE, "market_regime_labels_by_horizon_sec", {})
+    if not isinstance(value, Mapping):
+        return {}
+    return {str(key): str(val) for key, val in value.items() if val}
+
+
+def _selected_label_for_horizon(bundle: MarketRegimeFeatureBundle, horizon_sec: int) -> tuple[Any, int | None, str]:
+    labels = _labels_by_horizon(bundle)
+    fallback = _value(bundle, FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label")
+    if labels:
+        if int(horizon_sec) == 0:
+            shortest = min(int(key) for key in labels.keys() if str(key).lstrip('-').isdigit())
+            return labels.get(str(shortest), fallback), shortest, "shortest_forecast_for_current"
+        if str(int(horizon_sec)) in labels:
+            return labels[str(int(horizon_sec))], int(horizon_sec), "exact_forecast_horizon"
+    return fallback, None, "latest_label_fallback"
 
 
 def _label_to_regime(label: Any, *, crossed_or_negative_spread: bool, source_snapshot_ok: bool) -> MarketRegimeCode:
@@ -110,14 +129,23 @@ def _confidence_percent(bundle: MarketRegimeFeatureBundle, regime: MarketRegimeC
     return max(0, min(confidence, 99))
 
 
-def _drivers(bundle: MarketRegimeFeatureBundle, regime: MarketRegimeCode) -> Tuple[str, ...]:
+def _drivers(
+    bundle: MarketRegimeFeatureBundle,
+    regime: MarketRegimeCode,
+    *,
+    selected_label: Any,
+    selected_horizon_sec: int | None,
+    label_selection_reason: str,
+) -> Tuple[str, ...]:
     drivers: list[str] = []
-    label = _value(bundle, FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label")
     horizons = _value(bundle, FeatureGroup.PRICE_STRUCTURE, "market_regime_horizons_sec", [])
     volatility_state = _value(bundle, FeatureGroup.VOLATILITY, "volatility_state")
     cross_venue = _value(bundle, FeatureGroup.CROSS_VENUE, "cross_venue_agreement")
-    if label:
-        drivers.append(f"forecast_label:{label}")
+    if selected_label:
+        drivers.append(f"forecast_label:{selected_label}")
+    if selected_horizon_sec is not None:
+        drivers.append(f"forecast_horizon_sec:{selected_horizon_sec}")
+    drivers.append(f"forecast_label_selection:{label_selection_reason}")
     if horizons:
         drivers.append(f"forecast_horizons:{','.join(str(item) for item in horizons)}")
     if volatility_state:
@@ -144,41 +172,62 @@ def _missing_sources(bundle: MarketRegimeFeatureBundle) -> Tuple[str, ...]:
 
 def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, generated_at: str) -> MarketRegimePredictionPacket:
     crossed_or_negative_spread = _bool(bundle, FeatureGroup.LIQUIDITY, "crossed_or_negative_spread")
-    label = _value(bundle, FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label")
-    regime = _label_to_regime(label, crossed_or_negative_spread=crossed_or_negative_spread, source_snapshot_ok=bundle.source_snapshot_ok)
     evidence = _evidence_quality(bundle, crossed_or_negative_spread=crossed_or_negative_spread)
-    confidence = _confidence_percent(bundle, regime, crossed_or_negative_spread=crossed_or_negative_spread)
-    tactical_hint = _tactical_hint(regime, crossed_or_negative_spread=crossed_or_negative_spread, source_snapshot_ok=bundle.source_snapshot_ok)
-    drivers = _drivers(bundle, regime)
     warnings = _warnings(bundle, crossed_or_negative_spread=crossed_or_negative_spread)
     missing_sources = _missing_sources(bundle)
 
-    predictions = tuple(
-        MarketRegimePrediction(
-            horizon_label=horizon.label,
-            horizon_sec=horizon.horizon_sec,
-            regime_code=regime,
-            confidence_percent=confidence,
-            evidence_quality=evidence,
-            freshness_state=FreshnessState.LIVE if bundle.source_snapshot_ok else FreshnessState.MISSING,
-            tactical_hint=tactical_hint,
-            drivers=drivers,
-            warnings=warnings,
-            missing_sources=missing_sources,
-            invalidation_hints=("source_quality_drops", "spread_widens_or_crosses", "forecast_label_changes"),
-            parameter_set_id="market_regime_engine_parameter_set.v1",
-            source_priority_policy_id="market_regime_source_priority.v1",
-            diagnostic_record={
-                "classifier_version": MARKET_REGIME_CLASSIFIER_VERSION,
-                "source_snapshot_ok": bundle.source_snapshot_ok,
-                "available_signal_count": bundle.available_signal_count(),
-                "source_snapshot_input_only": True,
-                "execution_enabled": False,
-                "runtime_write_requested": False,
-            },
+    prediction_rows: list[MarketRegimePrediction] = []
+    for horizon in build_default_horizon_policy().horizons:
+        selected_label, selected_horizon_sec, label_selection_reason = _selected_label_for_horizon(bundle, horizon.horizon_sec)
+        regime = _label_to_regime(
+            selected_label,
+            crossed_or_negative_spread=crossed_or_negative_spread,
+            source_snapshot_ok=bundle.source_snapshot_ok,
         )
-        for horizon in build_default_horizon_policy().horizons
-    )
+        confidence = _confidence_percent(bundle, regime, crossed_or_negative_spread=crossed_or_negative_spread)
+        tactical_hint = _tactical_hint(
+            regime,
+            crossed_or_negative_spread=crossed_or_negative_spread,
+            source_snapshot_ok=bundle.source_snapshot_ok,
+        )
+        drivers = _drivers(
+            bundle,
+            regime,
+            selected_label=selected_label,
+            selected_horizon_sec=selected_horizon_sec,
+            label_selection_reason=label_selection_reason,
+        )
+        prediction_rows.append(
+            MarketRegimePrediction(
+                horizon_label=horizon.label,
+                horizon_sec=horizon.horizon_sec,
+                regime_code=regime,
+                confidence_percent=confidence,
+                evidence_quality=evidence,
+                freshness_state=FreshnessState.LIVE if bundle.source_snapshot_ok else FreshnessState.MISSING,
+                tactical_hint=tactical_hint,
+                drivers=drivers,
+                warnings=warnings,
+                missing_sources=missing_sources,
+                invalidation_hints=("source_quality_drops", "spread_widens_or_crosses", "forecast_label_changes"),
+                parameter_set_id="market_regime_engine_parameter_set.v1",
+                source_priority_policy_id="market_regime_source_priority.v1",
+                diagnostic_record={
+                    "classifier_version": MARKET_REGIME_CLASSIFIER_VERSION,
+                    "source_snapshot_ok": bundle.source_snapshot_ok,
+                    "available_signal_count": bundle.available_signal_count(),
+                    "selected_forecast_label": str(selected_label or ""),
+                    "selected_forecast_horizon_sec": selected_horizon_sec,
+                    "label_selection_reason": label_selection_reason,
+                    "horizon_specific_classifier": True,
+                    "source_snapshot_input_only": True,
+                    "execution_enabled": False,
+                    "runtime_write_requested": False,
+                },
+            )
+        )
+
+    predictions = tuple(prediction_rows)
     return MarketRegimePredictionPacket(
         generated_at=generated_at,
         predictions=predictions,
