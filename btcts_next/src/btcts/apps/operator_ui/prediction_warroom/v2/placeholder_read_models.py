@@ -9,7 +9,7 @@ from .card_axis_policy import WARROOM_V2_HORIZON_LABELS
 from .contracts import build_empty_widget_read_model
 from .scenario_placeholder import build_warroom_v2_scenario_placeholder_payload
 
-WARROOM_V2_PLACEHOLDER_READ_MODELS_VERSION = "prediction_warroom.v2.placeholder_read_models.ps_q29h.v1"
+WARROOM_V2_PLACEHOLDER_READ_MODELS_VERSION = "prediction_warroom.v2.placeholder_read_models.ps_q29j.v1"
 
 _WIDGET_TITLES: dict[str, str] = {
     "current_state_mini_bar": "現在状態",
@@ -25,6 +25,25 @@ _WIDGET_TITLES: dict[str, str] = {
     "prediction_card_human_technical": "人間テクニカル",
     "prediction_scenario_ja": "日本語シナリオ",
 }
+
+
+def _placeholder_top_payload(widget_id: str) -> dict[str, Any]:
+    summaries = {
+        "current_state_mini_bar": "現在状態は placeholder です。実データ状態は未接続です。",
+        "safety_mini_bar": "安全境界は read-only / display-only のままです。",
+        "alert_summary": "アラートは未接続です。実通知や push はまだありません。",
+    }
+    return {
+        "state_label": "未接続",
+        "status_badge": "NO_DATA",
+        "status_source": "placeholder_read_model",
+        "status_summary": summaries.get(widget_id, "placeholder / display-only"),
+        "status_lines": [
+            "runtime_connected=false",
+            "push_connected=false",
+            "dhot_classifier_not_connected=true",
+        ],
+    }
 
 
 def _placeholder_detail_payload() -> dict[str, Any]:
@@ -90,6 +109,8 @@ def build_warroom_v2_placeholder_read_models(*, generated_at: str = "") -> list[
             "runtime_connected": False,
             "push_connected": False,
         }
+        if zone == "top":
+            payload.update(_placeholder_top_payload(widget_id))
         if zone == "prediction_cards":
             horizon_cards = _placeholder_horizon_cards(widget_id, topic)
             payload.update({
