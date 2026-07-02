@@ -8,7 +8,11 @@ from typing import Any
 import streamlit as st
 
 from btcts.apps.operator_ui.prediction_warroom.panels.warroom_v2 import (
+    build_warroom_v2_chart_review_panel_packet,
+    build_warroom_v2_market_snapshot_strip_packet,
+    render_warroom_v2_chart_review_panel,
     render_warroom_v2_debug_preview,
+    render_warroom_v2_market_snapshot_strip,
     render_warroom_v2_prediction_cards,
     render_warroom_v2_scenario_area,
     render_warroom_v2_top_bar,
@@ -16,19 +20,28 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_v2 import (
 )
 from btcts.apps.operator_ui.prediction_warroom.v2 import build_warroom_v2_shell_preview_packet
 
-WARROOM_V2_SHELL_PREVIEW_PANEL_VERSION = "prediction_warroom.v2.shell_preview_panel.ps_q29d.v1"
+WARROOM_V2_SHELL_PREVIEW_PANEL_VERSION = "prediction_warroom.v2.shell_preview_panel.ps_q29q.v1"
 
 
 def build_warroom_v2_shell_preview_panel_packet(*, page_mount_packet: dict | None = None) -> dict[str, Any]:
     shell = build_warroom_v2_shell_preview_packet()
     page = dict(page_mount_packet or {})
+    snapshot = build_warroom_v2_market_snapshot_strip_packet()
+    chart = build_warroom_v2_chart_review_panel_packet()
     return {
         "ok": True,
         "panel_version": WARROOM_V2_SHELL_PREVIEW_PANEL_VERSION,
         "page_mount_packet": page,
         "shell_preview": shell,
+        "market_snapshot_strip": snapshot,
+        "chart_review_panel": chart,
+        "market_snapshot_strip_above_prediction_cards": True,
+        "chart_review_panel_bottom": True,
         "display_only": True,
         "renderer_split": True,
+        "push_ready": True,
+        "auto_refresh_ready": True,
+        "data_connected": False,
         "runtime_connected": False,
         "push_connected": False,
         "websocket_enabled": False,
@@ -45,8 +58,12 @@ def render_warroom_v2_shell_preview_panel(*, page_mount_packet: dict | None = No
     st.caption("WarRoom v2 shell preview / contract-only")
     render_warroom_v2_top_bar(warroom_v2_models_by_zone(shell, "top"))
     st.divider()
+    render_warroom_v2_market_snapshot_strip()
+    st.divider()
     render_warroom_v2_prediction_cards(warroom_v2_models_by_zone(shell, "prediction_cards"))
     st.divider()
     render_warroom_v2_scenario_area(warroom_v2_models_by_zone(shell, "scenario"))
     render_warroom_v2_debug_preview(packet, shell)
+    st.divider()
+    render_warroom_v2_chart_review_panel()
     return packet
