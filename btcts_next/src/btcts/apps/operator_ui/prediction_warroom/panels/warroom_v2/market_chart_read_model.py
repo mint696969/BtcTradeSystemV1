@@ -5,7 +5,8 @@ from __future__ import annotations
 
 from typing import Any
 
-WARROOM_V2_MARKET_CHART_READ_MODEL_VERSION = "prediction_warroom.v2.market_chart_read_model.ps_q29s.v1"
+WARROOM_V2_MARKET_CHART_READ_MODEL_VERSION = "prediction_warroom.v2.market_chart_read_model.ps_q29v.v1"
+WARROOM_V2_CHART_WINDOW_ROWS = {"1m": 60, "5m": 240, "15m": 720, "1h": 1440, "1d": 2880}
 
 
 def _f(value: Any) -> float | None:
@@ -13,6 +14,10 @@ def _f(value: Any) -> float | None:
         return float(value)
     except Exception:
         return None
+
+
+def chart_window_rows_for_timeframe(timeframe: str) -> int:
+    return int(WARROOM_V2_CHART_WINDOW_ROWS.get(str(timeframe), WARROOM_V2_CHART_WINDOW_ROWS["5m"]))
 
 
 def _mid(row: dict[str, Any]) -> float | None:
@@ -34,11 +39,7 @@ def _chart_row(row: dict[str, Any]) -> dict[str, Any] | None:
     if not ts or mid is None:
         return None
     spread = row.get("spread")
-    return {
-        "ts": str(ts), "mid_price": mid, "best_bid": _f(row.get("best_bid")), "best_ask": _f(row.get("best_ask")),
-        "spread": _f(spread), "spread_bps": _bps(spread, mid), "trust_state": row.get("trust_state"),
-        "continuity_state": row.get("continuity_state"), "interpretation_bucket": row.get("interpretation_bucket"),
-    }
+    return {"ts": str(ts), "mid_price": mid, "best_bid": _f(row.get("best_bid")), "best_ask": _f(row.get("best_ask")), "spread": _f(spread), "spread_bps": _bps(spread, mid), "trust_state": row.get("trust_state"), "continuity_state": row.get("continuity_state"), "interpretation_bucket": row.get("interpretation_bucket")}
 
 
 def _load_rows(max_lines: int) -> tuple[list[dict[str, Any]], str | None]:
@@ -58,23 +59,16 @@ def _summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     if not mids:
         return {"open": None, "high": None, "low": None, "close": None, "change_pct": None, "range_pct": None, "row_count": 0}
     open_, close = mids[0], mids[-1]
-    change_pct = ((close - open_) / open_ * 100.0) if open_ else None
-    range_pct = ((max(mids) - min(mids)) / close * 100.0) if close else None
-    return {"open": open_, "high": max(mids), "low": min(mids), "close": close, "change_pct": change_pct, "range_pct": range_pct, "row_count": len(mids)}
+    return {"open": open_, "high": max(mids), "low": min(mids), "close": close, "change_pct": ((close - open_) / open_ * 100.0) if open_ else None, "range_pct": ((max(mids) - min(mids)) / close * 100.0) if close else None, "row_count": len(mids)}
 
 
-def build_warroom_v2_market_chart_read_model(*, rows: list[dict[str, Any]] | None = None, timeframe: str = "5m", max_lines: int = 240) -> dict[str, Any]:
+def build_warroom_v2_market_chart_read_model(*, rows: list[dict[str, Any]] | None = None, timeframe: str = "5m", max_lines: int | None = None) -> dict[str, Any]:
+    window_rows = int(max_lines or chart_window_rows_for_timeframe(timeframe))
     source_error = None
     source_rows = [dict(row) for row in rows] if rows is not None else []
     if rows is None:
-        source_rows, source_error = _load_rows(max_lines)
-    chart_rows = [item for item in (_chart_row(row) for row in source_rows[-max_lines:]) if item is not None]
+        source_rows, source_error = _load_rows(window_rows)
+    chart_rows = [item for item in (_chart_row(row) for row in source_rows[-window_rows:]) if item is not None]
     summary = _summary(chart_rows)
     connected = bool(chart_rows)
-    return {
-        "ok": connected, "read_model_version": WARROOM_V2_MARKET_CHART_READ_MODEL_VERSION,
-        "source_kind": "dhot_market_state_chart_series_read_only", "timeframe": timeframe, "max_lines": max_lines,
-        "chart_rows": chart_rows, "chart_row_count": len(chart_rows), "range_summary": summary, "source_error": source_error,
-        "actual_chart_series_bound": connected, "chart_series_connected": connected, "read_only": True, "display_only": True,
-        "runtime_connected": False, "push_connected": False, "websocket_enabled": False, "sse_enabled": False, "would_send_to_broker": False,
-    }
+    return {"ok": connected, "read_model_version": WARROOM_V2_MARKET_CHART_READ_MODEL_VERSION, "source_kind": "dhot_market_state_chart_series_read_only", "timeframe": timeframe, "max_lines": window_rows, "chart_window": {"timeframe": timeframe, "row_limit": window_rows, "window_policy": "bounded_recent_rows"}, "chart_rows": chart_rows, "chart_row_count": len(chart_rows), "range_summary": summary, "source_error": source_error, "actual_chart_series_bound": connected, "chart_series_connected": connected, "read_only": True, "display_only": True, "runtime_connected": False, "push_connected": False, "websocket_enabled": False, "sse_enabled": False, "would_send_to_broker": False}
