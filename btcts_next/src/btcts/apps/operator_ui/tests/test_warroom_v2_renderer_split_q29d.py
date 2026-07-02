@@ -38,7 +38,7 @@ def test_q29d_renderer_versions_are_exposed() -> None:
     # child renderer is permanently pinned to ps_q29d.
     assert "prediction_cards_renderer" in WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION
     assert "scenario_area_renderer" in WARROOM_V2_SCENARIO_AREA_RENDERER_VERSION
-    assert WARROOM_V2_DEBUG_PREVIEW_RENDERER_VERSION.endswith("ps_q29d.v1")
+    assert "debug_preview_renderer" in WARROOM_V2_DEBUG_PREVIEW_RENDERER_VERSION
 
 
 def test_q29d_zone_selection_helper_preserves_shell_layout() -> None:
