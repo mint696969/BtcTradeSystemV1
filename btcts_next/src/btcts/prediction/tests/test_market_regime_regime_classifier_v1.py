@@ -62,7 +62,7 @@ def _packet(root: Path, *, label: str = "range_candidate", spread: float = -1479
 def test_q27j_classifier_emits_all_canonical_horizons(tmp_path: Path) -> None:
     packet = _packet(tmp_path)
     data = packet.to_dict()
-    assert data["logic_version"] == "prediction.market_regime.regime_classifier.ps_q27y.v1"
+    assert data["logic_version"] == "prediction.market_regime.regime_classifier.ps_q27z.v1"
     assert data["horizons_present_sec"] == [0, 300, 900, 1800, 3600, 21600, 43200, 86400]
     assert [item["horizon_label"] for item in data["predictions"]] == ["現在", "5分後", "15分後", "30分後", "60分後", "6時間後", "12時間後", "24時間後"]
     assert data["safety"]["read_only"] is True
@@ -104,7 +104,7 @@ def test_q27j_packet_preserves_feature_coverage_and_diagnostics(tmp_path: Path) 
     packet = _packet(tmp_path, label="range_candidate", spread=1200.0)
     assert {coverage.feature_group for coverage in packet.source_coverage} >= {FeatureGroup.PRICE_STRUCTURE, FeatureGroup.LIQUIDITY, FeatureGroup.SOURCE_QUALITY}
     first = packet.predictions[0]
-    assert first.diagnostic_record["classifier_version"] == "prediction.market_regime.regime_classifier.ps_q27y.v1"
+    assert first.diagnostic_record["classifier_version"] == "prediction.market_regime.regime_classifier.ps_q27z.v1"
     assert first.diagnostic_record["source_snapshot_input_only"] is True
     assert first.diagnostic_record["execution_enabled"] is False
     assert first.diagnostic_record["runtime_write_requested"] is False
@@ -209,7 +209,55 @@ def test_q27y_classifier_calibrates_confidence_from_selected_forecast_metrics(tm
     assert by_horizon[900].diagnostic_record["selected_signal_strength_percent"] == 85.0
     assert by_horizon[900].diagnostic_record["selected_reference_hit_rate_percent"] == 80.0
     assert by_horizon[300].diagnostic_record["confidence_calibrated_from_forecast_metric"] is True
-    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27y.v1"
+    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v1"
+
+
+def test_q27z_classifier_calibrates_evidence_quality_from_selected_forecast_metrics(tmp_path: Path) -> None:
+    forecast_path = tmp_path / "prediction/runs/2026-07-01/174000/forecast_records.jsonl"
+    _write_json(tmp_path / "prediction/latest_manifest.json", {
+        "generated_at": "2026-07-01T17:40:00Z",
+        "legacy_latest_path": "prediction/latest_prediction_system_result.json",
+        "sidecars": {"forecast_records": "prediction/runs/2026-07-01/174000/forecast_records.jsonl"},
+    })
+    _write_json(tmp_path / "prediction/latest_prediction_system_result.json", {"read_only": True, "non_executing": True})
+    _write_jsonl(forecast_path, [
+        {
+            "family": "market_regime",
+            "horizon_sec": 300,
+            "primary_label": "range_candidate",
+            "score": 0.20,
+            "values_snapshot": {"estimated_signal_strength_percent": 20, "estimated_reference_hit_rate_percent": 30, "volatility_state": "normal", "cross_venue_agreement": "aligned"},
+        },
+        {
+            "family": "market_regime",
+            "horizon_sec": 900,
+            "primary_label": "range_candidate",
+            "score": 0.92,
+            "values_snapshot": {"estimated_signal_strength_percent": 90, "estimated_reference_hit_rate_percent": 85, "volatility_state": "normal", "cross_venue_agreement": "aligned"},
+        },
+    ])
+    _write_json(tmp_path / "state/collector_vnext/unified_market_state_status.json", {
+        "last_symbol_raw": "FX_BTC_JPY",
+        "last_best_bid": 9729064.0,
+        "last_best_ask": 9730264.0,
+        "last_spread": 1200.0,
+        "read_only": True,
+        "would_send_to_broker": False,
+    })
+    _write_json(tmp_path / "state/collector_vnext/unified_health.json", {"ok": True, "ws_state": "LIVE", "read_only": True, "would_send_to_broker": False})
+    _write_json(tmp_path / "state/collector_vnext/unified_executions_status.json", {"ws_state": "LIVE", "trade_count": 20450, "read_only": True, "would_send_to_broker": False})
+    _write_json(tmp_path / "state/collector_vnext/unified_daemon_status.json", {"read_only": True, "would_send_to_broker": False})
+
+    snapshot = build_market_regime_source_snapshot(tmp_path)
+    bundle = build_market_regime_feature_bundle(snapshot, generated_at="2026-07-01T17:40:02Z")
+    packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-01T17:40:03Z")
+    by_horizon = {prediction.horizon_sec: prediction for prediction in packet.predictions}
+    assert by_horizon[300].evidence_quality.value == "WEAK"
+    assert by_horizon[900].evidence_quality.value == "STRONG"
+    assert by_horizon[300].diagnostic_record["selected_evidence_quality_reason"] == "forecast_metric_weak"
+    assert by_horizon[900].diagnostic_record["selected_evidence_quality_reason"] == "forecast_metric_strong"
+    assert by_horizon[900].diagnostic_record["evidence_quality_calibrated_from_forecast_metric"] is True
+    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v1"
 
 
 def test_q27j_classifier_safety_flags_remain_false(tmp_path: Path) -> None:

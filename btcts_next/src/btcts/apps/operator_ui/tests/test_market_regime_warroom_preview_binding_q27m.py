@@ -91,7 +91,7 @@ def test_q27m_enabled_binding_composes_cards_from_tmp_path_only(tmp_path: Path) 
     assert packet["horizons"] == ["現在", "5分後", "15分後", "30分後", "60分後", "6時間後", "12時間後", "24時間後"]
     assert packet["cards"][0]["regime_code"] == "RANGE"
     assert packet["cards"][0]["short_tag"] == "NO_NEW_ENTRY"
-    assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27y.v1"
+    assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27z.v1"
 
 
 def test_q27m_binding_flags_stay_preview_gated_and_display_only(tmp_path: Path) -> None:

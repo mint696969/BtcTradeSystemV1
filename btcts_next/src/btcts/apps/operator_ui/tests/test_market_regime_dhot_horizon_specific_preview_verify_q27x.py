@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_market_regime_dhot_horizon_specific_preview_verify_q27x.py
-# desc: PS-Q27X guard. Verifies D-hot-like read-only preview path uses PS-Q27W horizon-specific classifier. No production code change.
+# desc: PS-Q27X guard. Verifies D-hot-like read-only preview path uses the current horizon-specific classifier. No production code change.
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ def test_q27x_doc_records_dhot_horizon_specific_verify_boundary() -> None:
     assert "production_code_changed=false" in text
     assert "production_ui_code_changed=false" in text
     assert "real_dhot_probe_runner_added=true" in text
-    assert "classifier_version=prediction.market_regime.regime_classifier.ps_q27y.v1" in text
+    assert "classifier_version=prediction.market_regime.regime_classifier.ps_q27z.v1" in text
     assert "would_send_to_broker=false" in text
 
 
@@ -107,7 +107,7 @@ def test_q27x_classifier_uses_dhot_like_horizon_specific_labels(tmp_path: Path) 
     bundle = build_market_regime_feature_bundle(snapshot, generated_at="2026-07-02T01:20:23Z")
     packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-02T01:20:24Z")
     by_horizon = {prediction.horizon_sec: prediction for prediction in packet.predictions}
-    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27y.v1"
+    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v1"
     assert by_horizon[0].diagnostic_record["selected_forecast_horizon_sec"] == 15
     assert by_horizon[0].regime_code == MarketRegimeCode.RANGE
     assert by_horizon[300].regime_code == MarketRegimeCode.UP_TREND
@@ -119,14 +119,14 @@ def test_q27x_classifier_uses_dhot_like_horizon_specific_labels(tmp_path: Path) 
     assert packet.safety.would_send_to_broker is False
 
 
-def test_q27x_warroom_preview_binding_uses_ps_q27y_stage_version_without_ui_change(tmp_path: Path) -> None:
+def test_q27x_warroom_preview_binding_uses_ps_q27z_stage_version_without_ui_change(tmp_path: Path) -> None:
     _build_dhot_like_fixture(tmp_path)
     packet = build_market_regime_warroom_preview_binding_packet(preview_enabled=True, hot_root=tmp_path, generated_at="2026-07-02T01:20:24Z")
     assert packet["ok"] is True
     assert packet["dry_run_invoked"] is True
     assert packet["explicit_source_root_read_performed"] is True
     assert packet["source_snapshot_ok"] is True
-    assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27y.v1"
+    assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27z.v1"
     assert packet["card_count"] == 8
     by_horizon = {card["horizon"]: card for card in packet["cards"]}
     assert by_horizon["現在"]["regime_code"] == "RANGE"

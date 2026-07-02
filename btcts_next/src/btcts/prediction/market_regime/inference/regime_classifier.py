@@ -9,7 +9,7 @@ from ..contracts import EvidenceQuality, FeatureGroup, FreshnessState, MarketReg
 from ..features import FeatureSignal, MarketRegimeFeatureBundle
 from ..horizon_policy import build_default_horizon_policy
 
-MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27y.v1"
+MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27z.v1"
 
 
 def _signals(bundle: MarketRegimeFeatureBundle, group: FeatureGroup) -> Mapping[str, FeatureSignal]:
@@ -111,20 +111,39 @@ def _tactical_hint(regime: MarketRegimeCode, *, crossed_or_negative_spread: bool
     return TacticalHint.UNKNOWN_HOLD
 
 
-def _evidence_quality(bundle: MarketRegimeFeatureBundle, *, crossed_or_negative_spread: bool) -> EvidenceQuality:
+def _evidence_quality(
+    bundle: MarketRegimeFeatureBundle,
+    *,
+    crossed_or_negative_spread: bool,
+    forecast_score: float | None = None,
+    signal_strength_percent: float | None = None,
+    reference_hit_rate_percent: float | None = None,
+) -> tuple[EvidenceQuality, str]:
     if not bundle.source_snapshot_ok:
-        return EvidenceQuality.MISSING
+        return EvidenceQuality.MISSING, "source_snapshot_missing"
     available_count = bundle.available_signal_count()
     source_score = _float(bundle, FeatureGroup.SOURCE_QUALITY, "source_quality_score", 0.0)
+    if forecast_score is not None or signal_strength_percent is not None or reference_hit_rate_percent is not None:
+        score = max(0.0, min(float(forecast_score or 0.0), 1.0))
+        strength = max(0.0, min(float(signal_strength_percent or 0.0), 100.0))
+        reference = max(0.0, min(float(reference_hit_rate_percent or 0.0), 100.0))
+        metric_quality = (score * 0.45) + (strength / 100.0 * 0.35) + (reference / 100.0 * 0.20)
+        if crossed_or_negative_spread:
+            return (EvidenceQuality.PARTIAL if metric_quality >= 0.72 and source_score >= 0.70 else EvidenceQuality.WEAK), "forecast_metric_with_crossed_or_negative_spread"
+        if metric_quality >= 0.72 and source_score >= 0.80 and available_count >= 10:
+            return EvidenceQuality.STRONG, "forecast_metric_strong"
+        if metric_quality >= 0.48 and source_score >= 0.60 and available_count >= 6:
+            return EvidenceQuality.PARTIAL, "forecast_metric_partial"
+        return EvidenceQuality.WEAK, "forecast_metric_weak"
     if crossed_or_negative_spread:
-        return EvidenceQuality.PARTIAL if source_score >= 0.70 and available_count >= 8 else EvidenceQuality.WEAK
+        return (EvidenceQuality.PARTIAL if source_score >= 0.70 and available_count >= 8 else EvidenceQuality.WEAK), "legacy_source_fallback_crossed_or_negative_spread"
     if source_score >= 0.90 and available_count >= 10:
-        return EvidenceQuality.STRONG
+        return EvidenceQuality.STRONG, "legacy_source_fallback_strong"
     if source_score >= 0.65 and available_count >= 6:
-        return EvidenceQuality.PARTIAL
+        return EvidenceQuality.PARTIAL, "legacy_source_fallback_partial"
     if available_count > 0:
-        return EvidenceQuality.WEAK
-    return EvidenceQuality.MISSING
+        return EvidenceQuality.WEAK, "legacy_source_fallback_weak"
+    return EvidenceQuality.MISSING, "legacy_source_fallback_missing"
 
 
 def _confidence_percent(
@@ -215,7 +234,6 @@ def _missing_sources(bundle: MarketRegimeFeatureBundle) -> Tuple[str, ...]:
 
 def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, generated_at: str) -> MarketRegimePredictionPacket:
     crossed_or_negative_spread = _bool(bundle, FeatureGroup.LIQUIDITY, "crossed_or_negative_spread")
-    evidence = _evidence_quality(bundle, crossed_or_negative_spread=crossed_or_negative_spread)
     warnings = _warnings(bundle, crossed_or_negative_spread=crossed_or_negative_spread)
     missing_sources = _missing_sources(bundle)
 
@@ -233,6 +251,13 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
         confidence = _confidence_percent(
             bundle,
             regime,
+            crossed_or_negative_spread=crossed_or_negative_spread,
+            forecast_score=forecast_score,
+            signal_strength_percent=signal_strength_percent,
+            reference_hit_rate_percent=reference_hit_rate_percent,
+        )
+        evidence, evidence_quality_reason = _evidence_quality(
+            bundle,
             crossed_or_negative_spread=crossed_or_negative_spread,
             forecast_score=forecast_score,
             signal_strength_percent=signal_strength_percent,
@@ -275,6 +300,8 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
                     "selected_signal_strength_percent": signal_strength_percent,
                     "selected_reference_hit_rate_percent": reference_hit_rate_percent,
                     "confidence_calibrated_from_forecast_metric": forecast_score is not None or signal_strength_percent is not None or reference_hit_rate_percent is not None,
+                    "selected_evidence_quality_reason": evidence_quality_reason,
+                    "evidence_quality_calibrated_from_forecast_metric": evidence_quality_reason.startswith("forecast_metric_"),
                     "label_selection_reason": label_selection_reason,
                     "horizon_specific_classifier": True,
                     "source_snapshot_input_only": True,
