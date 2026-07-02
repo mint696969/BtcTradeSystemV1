@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from .auto_refresh_control import WARROOM_V2_AUTO_REFRESH_CONTROL_RENDERER_VERSION, build_warroom_v2_auto_refresh_control_packet, render_warroom_v2_auto_refresh_control
+from .auto_refresh_control import WARROOM_V2_AUTO_REFRESH_CONTROL_RENDERER_VERSION, build_warroom_v2_auto_refresh_control_packet, render_warroom_v2_auto_refresh_control, render_warroom_v2_auto_refresh_status_strip, sidebar_auto_refresh_settings
 from .card_visual_semantics import WARROOM_V2_CARD_VISUAL_SEMANTICS_VERSION
 from .card_detail_overlay_html import WARROOM_V2_CARD_DETAIL_OVERLAY_HTML_VERSION
 from .card_detail_balloon import WARROOM_V2_CARD_DETAIL_BALLOON_RENDERER_VERSION, render_warroom_v2_card_detail_balloon
@@ -16,27 +16,12 @@ from .scenario_area import WARROOM_V2_SCENARIO_AREA_RENDERER_VERSION, render_war
 from .top_bar import WARROOM_V2_TOP_BAR_RENDERER_VERSION, render_warroom_v2_top_bar
 
 __all__ = [
-    "WARROOM_V2_AUTO_REFRESH_CONTROL_RENDERER_VERSION",
-    "WARROOM_V2_CARD_DETAIL_OVERLAY_HTML_VERSION",
-    "WARROOM_V2_CARD_VISUAL_SEMANTICS_VERSION",
-    "WARROOM_V2_CARD_DETAIL_BALLOON_RENDERER_VERSION",
-    "WARROOM_V2_CHART_REVIEW_PANEL_RENDERER_VERSION",
-    "WARROOM_V2_DEBUG_PREVIEW_RENDERER_VERSION",
-    "WARROOM_V2_MARKET_SNAPSHOT_STRIP_RENDERER_VERSION",
-    "WARROOM_V2_MODEL_VIEWS_VERSION",
-    "WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION",
-    "WARROOM_V2_SCENARIO_AREA_RENDERER_VERSION",
-    "WARROOM_V2_TOP_BAR_RENDERER_VERSION",
-    "build_warroom_v2_auto_refresh_control_packet",
-    "build_warroom_v2_chart_review_panel_packet",
-    "build_warroom_v2_market_snapshot_strip_packet",
-    "render_warroom_v2_auto_refresh_control",
-    "render_warroom_v2_card_detail_balloon",
-    "render_warroom_v2_chart_review_panel",
-    "render_warroom_v2_debug_preview",
-    "render_warroom_v2_market_snapshot_strip",
-    "render_warroom_v2_prediction_cards",
-    "render_warroom_v2_scenario_area",
-    "render_warroom_v2_top_bar",
-    "warroom_v2_models_by_zone",
+    "WARROOM_V2_AUTO_REFRESH_CONTROL_RENDERER_VERSION", "WARROOM_V2_CARD_DETAIL_OVERLAY_HTML_VERSION", "WARROOM_V2_CARD_VISUAL_SEMANTICS_VERSION",
+    "WARROOM_V2_CARD_DETAIL_BALLOON_RENDERER_VERSION", "WARROOM_V2_CHART_REVIEW_PANEL_RENDERER_VERSION", "WARROOM_V2_DEBUG_PREVIEW_RENDERER_VERSION",
+    "WARROOM_V2_MARKET_SNAPSHOT_STRIP_RENDERER_VERSION", "WARROOM_V2_MODEL_VIEWS_VERSION", "WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION",
+    "WARROOM_V2_SCENARIO_AREA_RENDERER_VERSION", "WARROOM_V2_TOP_BAR_RENDERER_VERSION", "build_warroom_v2_auto_refresh_control_packet",
+    "build_warroom_v2_chart_review_panel_packet", "build_warroom_v2_market_snapshot_strip_packet", "render_warroom_v2_auto_refresh_control",
+    "render_warroom_v2_auto_refresh_status_strip", "render_warroom_v2_card_detail_balloon", "render_warroom_v2_chart_review_panel",
+    "render_warroom_v2_debug_preview", "render_warroom_v2_market_snapshot_strip", "render_warroom_v2_prediction_cards",
+    "render_warroom_v2_scenario_area", "render_warroom_v2_top_bar", "sidebar_auto_refresh_settings", "warroom_v2_models_by_zone",
 ]
