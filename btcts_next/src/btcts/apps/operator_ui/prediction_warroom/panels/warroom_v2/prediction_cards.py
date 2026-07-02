@@ -7,7 +7,9 @@ from typing import Any
 
 import streamlit as st
 
-WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION = "prediction_warroom.v2.prediction_cards_renderer.ps_q29d.v1"
+from .card_detail_balloon import render_warroom_v2_card_detail_balloon
+
+WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION = "prediction_warroom.v2.prediction_cards_renderer.ps_q29e.v1"
 
 
 def _chunk(models: list[dict[str, Any]], size: int) -> list[list[dict[str, Any]]]:
@@ -25,10 +27,4 @@ def render_warroom_v2_prediction_cards(models: list[dict[str, Any]]) -> None:
                     st.subheader(str(model.get("title") or model.get("widget_id")))
                     st.metric(payload.get("state_label", "未接続"), payload.get("confidence_label", "--"))
                     st.caption(f"{payload.get('freshness_badge', 'NO_DATA')} / {payload.get('short_tag', 'PREVIEW_ONLY')}")
-                    with st.expander("詳細", expanded=False):
-                        st.write("placeholder only")
-                        st.json({
-                            "topic": model.get("topic"),
-                            "runtime_connected": payload.get("runtime_connected"),
-                            "push_connected": payload.get("push_connected"),
-                        })
+                    render_warroom_v2_card_detail_balloon(model)

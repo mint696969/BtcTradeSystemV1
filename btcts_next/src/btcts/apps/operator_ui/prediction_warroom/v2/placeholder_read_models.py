@@ -29,10 +29,22 @@ _CARD_PAYLOAD: dict[str, Any] = {
     "confidence_label": "--",
     "freshness_badge": "NO_DATA",
     "short_tag": "PREVIEW_ONLY",
-    "detail_lines": [],
-    "source_lines": [],
-    "warning_lines": [],
-    "invalidation_lines": [],
+    "detail_lines": [
+        "このカードは placeholder です。実データ評価はまだ接続していません。",
+        "将来は read model builder が理由をここへ渡します。",
+    ],
+    "source_lines": [
+        "source=placeholder_read_model",
+        "transport=not_connected",
+    ],
+    "warning_lines": [
+        "売買判断には使わないでください。",
+        "D-hot / classifier / push は未接続です。",
+    ],
+    "invalidation_lines": [
+        "runtime_connected=false",
+        "freshness_badge=NO_DATA",
+    ],
     "placeholder_only": True,
 }
 

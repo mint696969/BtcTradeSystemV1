@@ -33,7 +33,10 @@ DOC = REPO_ROOT / "docs/strategy/PREDICTION_SYSTEM_PS_Q29D_WARROOM_V2_RENDERER_S
 def test_q29d_renderer_versions_are_exposed() -> None:
     assert WARROOM_V2_MODEL_VIEWS_VERSION.endswith("ps_q29d.v1")
     assert WARROOM_V2_TOP_BAR_RENDERER_VERSION.endswith("ps_q29d.v1")
-    assert WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION.endswith("ps_q29d.v1")
+    # Later visual slices may advance individual renderer versions. Q29D's
+    # durable guard is that the split renderer remains exposed, not that every
+    # child renderer is permanently pinned to ps_q29d.
+    assert "prediction_cards_renderer" in WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION
     assert WARROOM_V2_SCENARIO_AREA_RENDERER_VERSION.endswith("ps_q29d.v1")
     assert WARROOM_V2_DEBUG_PREVIEW_RENDERER_VERSION.endswith("ps_q29d.v1")
 

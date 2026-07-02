@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from .card_detail_balloon import WARROOM_V2_CARD_DETAIL_BALLOON_RENDERER_VERSION, render_warroom_v2_card_detail_balloon
 from .debug_preview import WARROOM_V2_DEBUG_PREVIEW_RENDERER_VERSION, render_warroom_v2_debug_preview
 from .model_views import WARROOM_V2_MODEL_VIEWS_VERSION, warroom_v2_models_by_zone
 from .prediction_cards import WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION, render_warroom_v2_prediction_cards
@@ -10,11 +11,13 @@ from .scenario_area import WARROOM_V2_SCENARIO_AREA_RENDERER_VERSION, render_war
 from .top_bar import WARROOM_V2_TOP_BAR_RENDERER_VERSION, render_warroom_v2_top_bar
 
 __all__ = [
+    "WARROOM_V2_CARD_DETAIL_BALLOON_RENDERER_VERSION",
     "WARROOM_V2_DEBUG_PREVIEW_RENDERER_VERSION",
     "WARROOM_V2_MODEL_VIEWS_VERSION",
     "WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION",
     "WARROOM_V2_SCENARIO_AREA_RENDERER_VERSION",
     "WARROOM_V2_TOP_BAR_RENDERER_VERSION",
+    "render_warroom_v2_card_detail_balloon",
     "render_warroom_v2_debug_preview",
     "render_warroom_v2_prediction_cards",
     "render_warroom_v2_scenario_area",
