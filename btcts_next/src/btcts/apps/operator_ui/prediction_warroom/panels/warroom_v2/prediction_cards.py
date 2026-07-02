@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/panels/warroom_v2/prediction_cards.py
-# desc: WarRoom v2 prediction-card horizon matrix HTML renderer. Placeholder-only; no live data ownership.
+# desc: WarRoom v2 prediction-card horizon matrix components renderer. Placeholder-only; no live data ownership.
 
 from __future__ import annotations
 
@@ -7,13 +7,15 @@ from html import escape
 from typing import Any
 
 import streamlit as st
+from streamlit.components.v1 import html as st_html
 
 from .card_detail_balloon import build_warroom_v2_card_detail_balloon_packet
 from .card_visual_semantics import build_warroom_v2_card_visual_semantics_packet, warroom_v2_card_visual_semantics_css
 
-WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION = "prediction_warroom.v2.prediction_cards_renderer.ps_q29i.v1"
+WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION = "prediction_warroom.v2.prediction_cards_renderer.ps_q29k.v1"
 WARROOM_V2_MATRIX_CARD_WIDTH_PX = 208
 WARROOM_V2_MATRIX_CARD_MIN_HEIGHT_PX = 128
+WARROOM_V2_MATRIX_ROW_HEIGHT_PX = 188
 
 
 def _text(value: Any) -> str:
@@ -42,15 +44,15 @@ def _card_html(parent: dict[str, Any], horizon_card: dict[str, Any]) -> str:
     detail = _detail_html(model)
     visual = build_warroom_v2_card_visual_semantics_packet(payload)
     classes = f"wv2-card {visual['background_class']} {visual['evidence_class']}"
-    return f"""
-    <div class='{classes}'>
-      <div class='wv2-card-top'><span>{_text(payload.get('horizon'))}</span><span class='wv2-badge {visual['freshness_class']}'>{_text(payload.get('freshness_badge', 'NO_DATA'))}</span></div>
-      <div class='wv2-primary'>{_text(payload.get('primary_label', '未接続'))}</div>
-      <div class='wv2-score'>{_text(payload.get('confidence_or_score', '--'))}</div>
-      <div class='wv2-tag'>{_text(payload.get('short_tag', 'PREVIEW_ONLY'))}</div>
-      <details class='wv2-detail'><summary>詳細</summary><div class='wv2-detail-overlay'>{detail}</div></details>
-    </div>
-    """
+    return "".join([
+        f"<div class='{classes}'>",
+        f"<div class='wv2-card-top'><span>{_text(payload.get('horizon'))}</span><span class='wv2-badge {visual['freshness_class']}'>{_text(payload.get('freshness_badge', 'NO_DATA'))}</span></div>",
+        f"<div class='wv2-primary'>{_text(payload.get('primary_label', '未接続'))}</div>",
+        f"<div class='wv2-score'>{_text(payload.get('confidence_or_score', '--'))}</div>",
+        f"<div class='wv2-tag'>{_text(payload.get('short_tag', 'PREVIEW_ONLY'))}</div>",
+        f"<details class='wv2-detail'><summary>詳細</summary><div class='wv2-detail-overlay'>{detail}</div></details>",
+        "</div>",
+    ])
 
 
 def warroom_v2_prediction_matrix_html(models: list[dict[str, Any]]) -> str:
@@ -59,9 +61,10 @@ def warroom_v2_prediction_matrix_html(models: list[dict[str, Any]]) -> str:
         title = _text(model.get("title") or model.get("widget_id"))
         cards = "".join(_card_html(model, dict(card)) for card in list(model.get("payload", {}).get("horizon_cards") or []))
         rows.append(f"<section class='wv2-row'><h3>{title}</h3><div class='wv2-strip'>{cards}</div></section>")
-    return f"""
+    style = f"""
 <style>
-.wv2-matrix {{ display: flex; flex-direction: column; gap: 14px; }}
+body {{ margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #101828; }}
+.wv2-matrix {{ display: flex; flex-direction: column; gap: 14px; width: 100%; }}
 .wv2-row h3 {{ margin: 0 0 6px 0; font-size: 1.0rem; color: #101828; }}
 .wv2-strip {{ display: flex; gap: 12px; overflow-x: auto; padding: 2px 2px 10px 2px; scroll-snap-type: x proximity; }}
 .wv2-card {{ position: relative; flex: 0 0 {WARROOM_V2_MATRIX_CARD_WIDTH_PX}px; min-width: {WARROOM_V2_MATRIX_CARD_WIDTH_PX}px; min-height: {WARROOM_V2_MATRIX_CARD_MIN_HEIGHT_PX}px; border-radius: 16px; padding: 10px 10px 9px 10px; color: #101828; scroll-snap-align: start; box-sizing: border-box; }}
@@ -76,8 +79,12 @@ def warroom_v2_prediction_matrix_html(models: list[dict[str, Any]]) -> str:
 .wv2-detail:not([open]) .wv2-detail-overlay {{ display: none; }}
 .wv2-detail-section ul {{ margin: 4px 0 8px 18px; padding: 0; }}
 </style>
-<div class='wv2-matrix'>{''.join(rows)}</div>
-"""
+""".strip()
+    return f"{style}<div class='wv2-matrix'>{''.join(rows)}</div>"
+
+
+def warroom_v2_prediction_matrix_height_px(models: list[dict[str, Any]]) -> int:
+    return max(280, min(1800, 38 + (len(models) * WARROOM_V2_MATRIX_ROW_HEIGHT_PX)))
 
 
 def build_warroom_v2_prediction_matrix_renderer_packet(models: list[dict[str, Any]]) -> dict[str, Any]:
@@ -85,6 +92,9 @@ def build_warroom_v2_prediction_matrix_renderer_packet(models: list[dict[str, An
         "ok": True,
         "renderer_version": WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION,
         "html_matrix_renderer": True,
+        "streamlit_components_html_used": True,
+        "markdown_unsafe_html_used": False,
+        "raw_html_visible_guard": True,
         "streamlit_columns_used": False,
         "cards_do_not_shrink": True,
         "horizontal_scroll_required": True,
@@ -100,9 +110,10 @@ def build_warroom_v2_prediction_matrix_renderer_packet(models: list[dict[str, An
         "push_connected": False,
         "would_send_to_broker": False,
         "row_count": len(models),
+        "component_height_px": warroom_v2_prediction_matrix_height_px(models),
     }
 
 
 def render_warroom_v2_prediction_cards(models: list[dict[str, Any]]) -> None:
     st.subheader("Prediction cards")
-    st.markdown(warroom_v2_prediction_matrix_html(models), unsafe_allow_html=True)
+    st_html(warroom_v2_prediction_matrix_html(models), height=warroom_v2_prediction_matrix_height_px(models), scrolling=True)

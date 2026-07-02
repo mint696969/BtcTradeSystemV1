@@ -62,7 +62,8 @@ def test_q29g_prediction_cards_no_longer_use_streamlit_columns_for_matrix() -> N
     text = PREDICTION_CARDS.read_text(encoding="utf-8-sig")
     assert "st.columns(max(1, len(horizon_cards)))" not in text
     assert "warroom_v2_prediction_matrix_html" in text
-    assert "unsafe_allow_html=True" in text
+    assert "st_html(warroom_v2_prediction_matrix_html(models)" in text
+    assert "unsafe_allow_html=True" not in text
     assert "build_warroom_v2_card_detail_balloon_packet" in text
     assert "build_warroom_v2_card_visual_semantics_packet" in text
     assert 'with st.expander("詳細"' not in text
