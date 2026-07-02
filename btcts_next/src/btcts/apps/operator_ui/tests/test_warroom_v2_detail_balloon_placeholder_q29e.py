@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_v2_detail_balloon_placeholder_q29e.py
-# desc: PS-Q29E guards for WarRoom v2 card detail-balloon placeholder renderer. Allows later Q29F horizon-matrix placeholder expansion.
+# desc: PS-Q29E guards for WarRoom v2 card detail-balloon placeholder renderer. Allows later Q29F/Q29G matrix renderer evolution.
 
 from __future__ import annotations
 
@@ -49,7 +49,8 @@ def test_q29e_detail_balloon_packet_exposes_placeholder_sections() -> None:
 
 def test_q29e_prediction_cards_delegate_detail_rendering() -> None:
     text = PREDICTION_CARDS.read_text(encoding="utf-8-sig")
-    assert "render_warroom_v2_card_detail_balloon" in text
+    assert "card_detail_balloon" in text
+    assert "build_warroom_v2_card_detail_balloon_packet" in text
     assert 'with st.expander("詳細"' not in text
     assert "placeholder detail balloon" not in text
 

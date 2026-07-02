@@ -67,10 +67,13 @@ def test_q29f_prediction_read_models_have_horizon_cards_per_item_row() -> None:
 def test_q29f_prediction_renderer_uses_item_rows_and_horizon_columns() -> None:
     text = PREDICTION_CARDS.read_text(encoding="utf-8-sig")
     assert "horizon_cards" in text
-    assert "_render_horizon_card" in text
-    assert "st.markdown(f"### {model.get('title')" in text
-    assert "st.columns(max(1, len(horizon_cards)))" in text
-    assert "render_warroom_v2_card_detail_balloon" in text
+    # Q29G may render the Q29F matrix contract through HTML/CSS instead of
+    # Streamlit columns. Q29F's durable guard is item rows by horizon columns.
+    assert "warroom_v2_prediction_matrix_html" in text
+    assert "wv2-strip" in text
+    assert "wv2-card" in text
+    assert "build_warroom_v2_card_detail_balloon_packet" in text
+    assert "st.columns(max(1, len(horizon_cards)))" not in text
 
 
 def test_q29f_no_route_legacy_or_runtime_ownership_changed() -> None:
