@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_v2_detail_balloon_placeholder_q29e.py
-# desc: PS-Q29E guards for WarRoom v2 card detail-balloon placeholder renderer.
+# desc: PS-Q29E guards for WarRoom v2 card detail-balloon placeholder renderer. Allows later Q29F horizon-matrix placeholder expansion.
 
 from __future__ import annotations
 
@@ -86,7 +86,7 @@ def test_q29e_renderer_files_are_small_and_side_effect_free() -> None:
         assert len(text.splitlines()) <= 120, f"renderer file is too large: {path}"
         for token in forbidden:
             assert token not in text, f"forbidden token {token!r} found in {path}"
-    assert len(PLACEHOLDERS.read_text(encoding="utf-8-sig").splitlines()) <= 140
+    assert len(PLACEHOLDERS.read_text(encoding="utf-8-sig").splitlines()) <= 170
 
 
 def test_q29e_legacy_warroom_is_not_changed_to_own_detail_balloon() -> None:

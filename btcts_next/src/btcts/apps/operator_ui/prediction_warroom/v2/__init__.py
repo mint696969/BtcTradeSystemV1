@@ -3,6 +3,11 @@
 
 from __future__ import annotations
 
+from .card_axis_policy import (
+    WARROOM_V2_CARD_AXIS_POLICY_VERSION,
+    WARROOM_V2_HORIZON_LABELS,
+    build_warroom_v2_card_axis_policy,
+)
 from .contracts import (
     WARROOM_V2_WIDGET_READ_MODEL_VERSION,
     WARROOM_V2_WIDGET_UPDATE_EVENT_VERSION,
@@ -32,6 +37,9 @@ from .topics import (
 )
 
 __all__ = [
+    "build_warroom_v2_card_axis_policy",
+    "WARROOM_V2_HORIZON_LABELS",
+    "WARROOM_V2_CARD_AXIS_POLICY_VERSION",
     "WARROOM_V2_LAYOUT_POLICY_VERSION",
     "WARROOM_V2_PLACEHOLDER_READ_MODELS_VERSION",
     "WARROOM_V2_SHELL_PREVIEW_VERSION",
