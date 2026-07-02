@@ -7,8 +7,9 @@ from typing import Any
 
 from .card_axis_policy import WARROOM_V2_HORIZON_LABELS
 from .contracts import build_empty_widget_read_model
+from .scenario_placeholder import build_warroom_v2_scenario_placeholder_payload
 
-WARROOM_V2_PLACEHOLDER_READ_MODELS_VERSION = "prediction_warroom.v2.placeholder_read_models.ps_q29f.v1"
+WARROOM_V2_PLACEHOLDER_READ_MODELS_VERSION = "prediction_warroom.v2.placeholder_read_models.ps_q29h.v1"
 
 _WIDGET_TITLES: dict[str, str] = {
     "current_state_mini_bar": "現在状態",
@@ -106,13 +107,8 @@ def build_warroom_v2_placeholder_read_models(*, generated_at: str = "") -> list[
                 **_placeholder_detail_payload(),
             })
         if zone == "scenario":
-            payload.update({
-                "scenario_lines": [
-                    "ここに全予測カードを統合した日本語シナリオを表示します。",
-                    "まだ実データ・push・D-hot 読み込みには接続していません。",
-                ],
-                "scenario_area_below_cards": True,
-            })
+            prediction_titles = [title for key, title in _WIDGET_TITLES.items() if key.startswith("prediction_card_")]
+            payload.update(build_warroom_v2_scenario_placeholder_payload(item_titles=prediction_titles, generated_at=generated_at))
         models.append(
             build_empty_widget_read_model(
                 widget_id=widget_id,

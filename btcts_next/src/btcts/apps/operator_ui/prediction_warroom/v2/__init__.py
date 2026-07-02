@@ -29,6 +29,7 @@ from .shell_preview import (
     WARROOM_V2_SHELL_PREVIEW_VERSION,
     build_warroom_v2_shell_preview_packet,
 )
+from .scenario_placeholder import WARROOM_V2_SCENARIO_PLACEHOLDER_VERSION, build_warroom_v2_scenario_placeholder_payload
 from .safety import WidgetSafetyFlags, warroom_v2_safety_flags
 from .topics import (
     WARROOM_V2_TOPIC_CATALOG_VERSION,
@@ -37,6 +38,8 @@ from .topics import (
 )
 
 __all__ = [
+    "build_warroom_v2_scenario_placeholder_payload",
+    "WARROOM_V2_SCENARIO_PLACEHOLDER_VERSION",
     "build_warroom_v2_card_axis_policy",
     "WARROOM_V2_HORIZON_LABELS",
     "WARROOM_V2_CARD_AXIS_POLICY_VERSION",
