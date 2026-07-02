@@ -42,7 +42,7 @@ def test_q29f_axis_policy_matches_q26w_q27e_card_specs() -> None:
     assert packet["card_body_three_lines"] is True
     assert packet["freshness_badge"] == "top_right_badge_only"
     assert packet["border_meaning"] == "evidence_quality"
-    assert packet["detail_disclosure_mode"] == "card_overlay"
+    assert packet["detail_disclosure_mode"] in {"card_overlay", "row_level_overlay_panel"}
 
 
 def test_q29f_prediction_read_models_have_horizon_cards_per_item_row() -> None:
@@ -74,7 +74,8 @@ def test_q29f_prediction_renderer_uses_item_rows_and_horizon_columns() -> None:
     assert "wv2-strip" in text
     assert "wv2-card" in text
     overlay_text = DETAIL_OVERLAY.read_text(encoding="utf-8-sig")
-    assert "warroom_v2_detail_overlay_html" in text
+    assert "warroom_v2_detail_button_html" in text
+    assert "warroom_v2_detail_overlay_panel_html" in text
     assert "build_warroom_v2_card_detail_balloon_packet" in overlay_text
     assert "st.columns(max(1, len(horizon_cards)))" not in text
 

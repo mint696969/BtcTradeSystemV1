@@ -64,7 +64,7 @@ def test_q29l_component_height_remains_large_enough_for_all_rows() -> None:
     height = warroom_v2_prediction_matrix_height_px(models)
     assert len(models) >= 8
     assert height >= 38 + (len(models) * 188)
-    assert height <= 1800
+    assert height <= 2200
 
 
 def test_q29l_no_route_legacy_or_runtime_ownership_changed() -> None:

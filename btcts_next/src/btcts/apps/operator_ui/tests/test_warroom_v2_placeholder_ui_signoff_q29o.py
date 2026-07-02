@@ -45,7 +45,8 @@ def test_q29o_warroom_v2_placeholder_ui_contract_is_signoff_ready() -> None:
     assert cards["markdown_unsafe_html_used"] is False
     assert cards["component_scrolling_enabled"] is False
     assert cards["row_horizontal_scroll_preserved"] is True
-    assert cards["detail_disclosure_mode"] == "card_overlay"
+    assert cards["detail_disclosure_mode"] == "row_level_overlay_panel"
+    assert cards["detail_overlay_close_button_required"] is True
     assert debug["compact_debug_preview"] is True
     assert debug["expanded_by_default"] is False
     for part in (packet, top, cards, debug):
@@ -63,6 +64,8 @@ def test_q29o_prediction_matrix_html_is_renderable_without_raw_html_text_regress
     assert "overflow-x: auto" in html
     assert "overflow-y: hidden" in html
     assert "wv2-detail-button" in html
+    assert "wv2-row-detail-panel" in html
+    assert "wv2-detail-close" in html
     assert "role='dialog'" in html
     assert "Debug / raw preview packet" not in html
 
@@ -74,9 +77,10 @@ def test_q29o_detail_overlay_and_debug_preview_are_display_only() -> None:
     detail_html = warroom_v2_detail_overlay_html(first_card)
     debug = build_warroom_v2_debug_preview_packet(packet, shell)
     assert detail["summary_button_label"] == "詳細"
+    assert detail["close_button_required"] is True
     assert detail["aria_labels_present"] is True
-    assert detail["overlay_max_height_px"] == 230
-    assert "display-only" in detail_html
+    assert detail["overlay_max_height_px"] == 260
+    assert "row-level overlay / display-only" in detail_html
     assert debug["model_count"] >= 12
     assert debug["zones"]["top"] == 3
     assert debug["zones"]["prediction_cards"] >= 8

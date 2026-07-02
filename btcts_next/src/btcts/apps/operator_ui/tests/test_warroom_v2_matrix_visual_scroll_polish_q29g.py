@@ -40,7 +40,8 @@ def test_q29g_renderer_packet_preserves_no_shrink_scroll_contract() -> None:
     assert packet["horizontal_scroll_required"] is True
     assert packet["card_width_px"] == 208
     assert packet["card_shape"] == "horizontal_rectangle"
-    assert packet["detail_disclosure_mode"] == "card_overlay"
+    assert packet["detail_disclosure_mode"] == "row_level_overlay_panel"
+    assert packet["detail_overlay_close_button_required"] is True
     assert packet["runtime_connected"] is False
     assert packet["push_connected"] is False
 
@@ -66,7 +67,8 @@ def test_q29g_prediction_cards_no_longer_use_streamlit_columns_for_matrix() -> N
     assert "st_html(warroom_v2_prediction_matrix_html(models)" in text
     assert "unsafe_allow_html=True" not in text
     overlay_text = DETAIL_OVERLAY.read_text(encoding="utf-8-sig")
-    assert "warroom_v2_detail_overlay_html" in text
+    assert "warroom_v2_detail_button_html" in text
+    assert "warroom_v2_detail_overlay_panel_html" in text
     assert "build_warroom_v2_card_detail_balloon_packet" in overlay_text
     assert "build_warroom_v2_card_visual_semantics_packet" in text
     assert 'with st.expander("詳細"' not in text

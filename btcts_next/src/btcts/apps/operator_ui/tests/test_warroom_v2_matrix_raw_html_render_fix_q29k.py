@@ -59,14 +59,15 @@ def test_q29k_card_html_has_no_markdown_code_block_indentation() -> None:
     assert "<div class='wv2-card" in html
     assert "<style>" in html
     assert "wv2-strip" in html
-    assert "wv2-detail-overlay" in html
+    assert "wv2-row-detail-panel" in html
+    assert "wv2-detail-backdrop" in html
 
 
 def test_q29k_component_height_is_bounded_and_scales_by_rows() -> None:
     models = _prediction_models()
     height = warroom_v2_prediction_matrix_height_px(models)
     assert height >= 280
-    assert height <= 1800
+    assert height <= 2200
     assert height > 38 + (3 * 188)
 
 

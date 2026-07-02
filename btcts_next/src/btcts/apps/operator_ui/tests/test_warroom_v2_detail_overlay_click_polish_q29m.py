@@ -39,10 +39,12 @@ def _first_prediction_card() -> dict:
 def test_q29m_detail_overlay_packet_is_click_polish_display_only() -> None:
     packet = build_warroom_v2_detail_overlay_renderer_packet(_first_prediction_card())
     assert packet["detail_overlay_html_version"] == WARROOM_V2_CARD_DETAIL_OVERLAY_HTML_VERSION
-    assert packet["detail_disclosure_mode"] == "card_overlay"
+    assert packet["detail_disclosure_mode"] == "row_level_overlay_panel"
     assert packet["summary_button_label"] == "詳細"
     assert packet["aria_labels_present"] is True
-    assert packet["overlay_max_height_px"] == 230
+    assert packet["overlay_max_height_px"] == 260
+    assert packet["close_button_required"] is True
+    assert packet["card_width_constrained"] is False
     assert packet["display_only"] is True
     assert packet["runtime_connected"] is False
     assert packet["push_connected"] is False
@@ -50,24 +52,23 @@ def test_q29m_detail_overlay_packet_is_click_polish_display_only() -> None:
 
 def test_q29m_overlay_html_has_accessible_click_detail_markup() -> None:
     html = warroom_v2_detail_overlay_html(_first_prediction_card())
-    assert "<details class='wv2-detail'>" in html
-    assert "class='wv2-detail-button'" in html
-    assert "aria-label='カード詳細を開く'" in html
+    assert "class='wv2-row-detail-panel'" in html
+    assert "class='wv2-detail-close'" in html
+    assert "aria-label='詳細を閉じる'" in html
     assert "role='dialog'" in html
-    assert "Placeholder detail" in html
-    assert "display-only" in html
+    assert "row-level overlay / display-only" in html
 
 
 def test_q29m_prediction_matrix_uses_overlay_helper_css() -> None:
     pred_text = PREDICTION_CARDS.read_text(encoding="utf-8-sig")
-    assert "warroom_v2_detail_overlay_html(model)" in pred_text
+    assert "warroom_v2_detail_button_html(toggle_id)" in pred_text
     assert "warroom_v2_detail_overlay_css()" in pred_text
     assert "build_warroom_v2_card_detail_balloon_packet" not in pred_text
     assert "wv2-detail-overlay { position: absolute" not in pred_text
     matrix_html = warroom_v2_prediction_matrix_html([_first_prediction_card()])
     assert "wv2-detail-button" in matrix_html
-    assert "max-height: 230px" in matrix_html
-    assert "クリックで開閉" in matrix_html
+    assert "max-height: 260px" in matrix_html
+    assert "row-level overlay / display-only" in matrix_html
 
 
 def test_q29m_renderer_files_stay_small_and_side_effect_free() -> None:
@@ -99,7 +100,7 @@ def test_q29m_no_route_or_legacy_warroom_change() -> None:
 
 def test_q29m_doc_records_detail_overlay_non_goals() -> None:
     text = DOC.read_text(encoding="utf-8-sig")
-    assert "detail_disclosure_mode=card_overlay" in text
+    assert "detail_disclosure_mode=card_overlay" in text or "detail_disclosure_mode=row_level_overlay_panel" in text
     assert "aria_labels_present=true" in text
     assert "prediction_cards_line_budget_preserved=true" in text
     assert "not_connecting_dhot=true" in text
