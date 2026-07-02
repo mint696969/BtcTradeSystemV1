@@ -19,6 +19,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2 import (  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[6]
 PREDICTION_CARDS = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/panels/warroom_v2/prediction_cards.py"
+DETAIL_OVERLAY = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/panels/warroom_v2/card_detail_overlay_html.py"
 PLACEHOLDERS = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/placeholder_read_models.py"
 LEGACY_WARROOM = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/views/warroom_page.py"
 APP = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/app.py"
@@ -72,7 +73,9 @@ def test_q29f_prediction_renderer_uses_item_rows_and_horizon_columns() -> None:
     assert "warroom_v2_prediction_matrix_html" in text
     assert "wv2-strip" in text
     assert "wv2-card" in text
-    assert "build_warroom_v2_card_detail_balloon_packet" in text
+    overlay_text = DETAIL_OVERLAY.read_text(encoding="utf-8-sig")
+    assert "warroom_v2_detail_overlay_html" in text
+    assert "build_warroom_v2_card_detail_balloon_packet" in overlay_text
     assert "st.columns(max(1, len(horizon_cards)))" not in text
 
 

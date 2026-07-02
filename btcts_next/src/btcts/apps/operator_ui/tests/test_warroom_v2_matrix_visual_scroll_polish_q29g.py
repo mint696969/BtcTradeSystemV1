@@ -20,6 +20,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2 import build_warroom_v2_placeh
 
 REPO_ROOT = Path(__file__).resolve().parents[6]
 PREDICTION_CARDS = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/panels/warroom_v2/prediction_cards.py"
+DETAIL_OVERLAY = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/panels/warroom_v2/card_detail_overlay_html.py"
 LEGACY_WARROOM = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/views/warroom_page.py"
 APP = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/app.py"
 DOC = REPO_ROOT / "docs/strategy/PREDICTION_SYSTEM_PS_Q29G_WARROOM_V2_MATRIX_VISUAL_SCROLL_POLISH_2026-07-02.md"
@@ -64,7 +65,9 @@ def test_q29g_prediction_cards_no_longer_use_streamlit_columns_for_matrix() -> N
     assert "warroom_v2_prediction_matrix_html" in text
     assert "st_html(warroom_v2_prediction_matrix_html(models)" in text
     assert "unsafe_allow_html=True" not in text
-    assert "build_warroom_v2_card_detail_balloon_packet" in text
+    overlay_text = DETAIL_OVERLAY.read_text(encoding="utf-8-sig")
+    assert "warroom_v2_detail_overlay_html" in text
+    assert "build_warroom_v2_card_detail_balloon_packet" in overlay_text
     assert "build_warroom_v2_card_visual_semantics_packet" in text
     assert 'with st.expander("詳細"' not in text
     assert WARROOM_V2_MATRIX_CARD_WIDTH_PX == 208
