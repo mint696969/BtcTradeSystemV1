@@ -105,6 +105,12 @@ from .replay import (
     build_warroom_v2_replay_response,
     select_warroom_v2_replay_events_after_cursor,
 )
+from .ws_display_client_observation import (
+    WARROOM_V2_WS_DISPLAY_CLIENT_OBSERVATION_STATE_KEY,
+    WARROOM_V2_WS_DISPLAY_CLIENT_OBSERVATION_VERSION,
+    build_warroom_v2_ws_display_client_observation_contract,
+    build_warroom_v2_ws_display_client_observation_packet,
+)
 from .ws_display_client import (
     WARROOM_V2_WS_DISPLAY_CLIENT_VERSION,
     build_warroom_v2_ws_display_client_contract,
