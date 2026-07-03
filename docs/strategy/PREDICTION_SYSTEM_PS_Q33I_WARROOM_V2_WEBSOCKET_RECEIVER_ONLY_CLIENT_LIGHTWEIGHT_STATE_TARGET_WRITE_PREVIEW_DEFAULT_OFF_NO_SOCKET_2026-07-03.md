@@ -1,0 +1,89 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_PS_Q33I_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_LIGHTWEIGHT_STATE_TARGET_WRITE_PREVIEW_DEFAULT_OFF_NO_SOCKET_2026-07-03.md
+# desc: PS-Q33I WarRoom v2 WebSocket receiver-only client lightweight-state target write preview. Default-off, no socket open, and no target write.
+
+# PS-Q33I WarRoom v2 WebSocket receiver-only client lightweight-state target write preview default-off no-socket
+
+Date: 2026-07-03
+Profile: BtcTradeSystem
+Base gate: PS_Q33H_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_LIGHTWEIGHT_STATE_TARGET_APPLY_GATE_DEFAULT_OFF_NO_SOCKET_DONE
+Slice: PS-Q33I_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_LIGHTWEIGHT_STATE_TARGET_WRITE_PREVIEW_DEFAULT_OFF_NO_SOCKET
+
+## Decision
+
+PS-Q33I adds a pure target write preview for the future lightweight receiver state session_state write. It composes the Q33H target apply gate and builds the concrete target value preview that a later write slice may store. This slice does not write target session_state, does not apply state, does not modify WarRoom page, does not open sockets, does not start a client, does not subscribe live, and does not send messages.
+
+```text
+target_write_preview_module=btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/transport/ws_receiver_only_client_lightweight_state_target_write_preview.py
+target_write_preview_kind=warroom_v2_ws_receiver_only_client_lightweight_state_target_write_preview_default_off_no_socket
+input_pipeline=q33h_lightweight_state_target_apply_gate,q33g_session_state_apply_hidden_record,q33f_session_state_apply_preview
+lightweight_state_target_write_preview_requested_default=false
+operator_lightweight_state_target_write_preview_ack_default=false
+target_write_preview_status_default=lightweight_state_target_write_preview_hidden_default
+target_write_preview_status_ready=lightweight_state_target_write_preview_ready_for_next_slice_no_socket
+target_write_preview_allowed_for_next_slice_default=false
+target_write_allowed_effective=false
+target_session_state_write_allowed_effective=false
+target_session_state_write_applied=false
+target_session_state_mutated=false
+state_mutated=false
+messages_committed_now=0
+warroom_page_modified=false
+visible_controls_added=false
+receiver_only=true
+send_disabled=true
+socket_opened=false
+client_started=false
+client_sends_messages=false
+external_message_send_enabled=false
+websocket_enabled=false
+runtime_connected=false
+push_connected=false
+```
+
+## Preview semantics
+
+```text
+target_write_preview_source=q33h_target_session_state_write_preview
+target_write_preview_target=future_lightweight_receiver_state_session_state_write_slice
+target_write_value_kind=receiver_only_lightweight_state_value_preview
+target_write_preview_checks_gate_ready=true
+target_write_preview_checks_message_count=true
+target_write_preview_effective_mutation=false
+```
+
+## Non-goals
+
+```text
+not_modifying_warroom_page=true
+not_adding_visible_controls=true
+not_rendering_target_write_preview=true
+not_writing_target_lightweight_state=true
+not_applying_state_update=true
+not_opening_socket=true
+not_starting_client=true
+not_subscribing_live=true
+not_sending_external_messages=true
+not_using_polling_fallback=true
+not_using_browser_timer_reload=true
+not_submitting_order_intent=true
+not_sending_order_to_broker=true
+not_appending_live_order_ledger=true
+not_applying_mode=true
+not_applying_parameter=true
+not_invoking_prediction_generation=true
+not_invoking_prediction_inference=true
+not_invoking_classifier=true
+```
+
+## Acceptance criteria
+
+```text
+- ws_receiver_only_client_lightweight_state_target_write_preview.py exists and stays pure.
+- Default packet status is lightweight_state_target_write_preview_hidden_default.
+- Ready requires lightweight_state_target_write_preview_requested=true, operator_lightweight_state_target_write_preview_ack=true, Q33H target-apply gate next-slice eligibility=true, and a non-empty target write preview.
+- Ready packet may expose target_lightweight_state_value_preview.
+- Ready packet still has target_write_allowed_effective=false, target_session_state_write_allowed_effective=false, target_session_state_write_applied=false, messages_committed_now=0, and target_session_state_mutated=false.
+- WarRoom page is not modified.
+- socket_opened=false, client_started=false, client_sends_messages=false, websocket_enabled=false.
+- Existing Q33H-Q30C guards remain green.
+```
