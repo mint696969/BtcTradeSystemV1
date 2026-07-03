@@ -1,0 +1,103 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_PS_Q32W_WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_RENDER_MOUNT_GATE_DEFAULT_OFF_2026-07-03.md
+# desc: PS-Q32W WarRoom v2 compact WS status line top minimal visible render mount gate. Default-off; no WarRoom page mount and no socket open.
+
+# PS-Q32W WarRoom v2 compact WS status line Streamlit top minimal visible render mount gate default-off
+
+Date: 2026-07-03
+Profile: BtcTradeSystem
+Base gate: PS_Q32V_WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_RENDER_ADAPTER_OBSERVATION_TO_HIDDEN_SESSION_STATE_NO_UI_MOUNT_DONE
+Slice: PS-Q32W_WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_RENDER_MOUNT_GATE_DEFAULT_OFF
+
+## Decision
+
+PS-Q32W defines a default-off visible render mount gate for the compact WS status line top minimal Streamlit status line. It consumes Q32V hidden visible render adapter observation and decides whether a later WarRoom page slice may mount the prepared render payload. It still does not import Streamlit, call Streamlit, open sockets, or modify WarRoom page.
+
+```text
+gate_module=btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/transport/compact_ws_status_line_streamlit_top_minimal_status_line_visible_render_mount_gate.py
+current_small_goal=warroom_tab_ws_push_realtime_update_and_japanese_readability
+agreed_refresh_policy=push_first_fragment_render_lightweight_state_pluggable_widget_custom_component_island_ready_later
+gate_kind=warroom_v2_compact_ws_status_line_streamlit_top_minimal_status_line_visible_render_mount_gate_default_off
+input_pipeline=q32v_compact_ws_status_line_streamlit_top_minimal_status_line_visible_render_adapter_observation
+visible_render_mount_requested_default=false
+operator_visible_render_mount_ack_default=false
+visible_render_adapter_requested_default=false
+operator_visible_render_ack_default=false
+actual_mount_requested_default=false
+operator_actual_mount_ack_default=false
+default_gate_status=compact_ws_status_line_streamlit_top_minimal_status_line_visible_render_mount_hidden_default
+ready_gate_status=compact_ws_status_line_streamlit_top_minimal_status_line_visible_render_mount_ready_not_mounted
+ready_requires=visible_render_mount_requested_true_and_operator_ack_true_and_upstream_render_payload_ready_true
+upstream_render_payload_ready_for_future_streamlit_mount_default=false
+render_mount_ready_for_future_streamlit_mount_default=false
+warroom_mount_surface=top_minimal_operator_status_line
+warroom_mount_position=after_header_before_focus_nav_later
+warroom_page_modified=false
+future_streamlit_call_model_preserved=true
+future_streamlit_call_name=markdown
+streamlit_imported=false
+streamlit_render_invoked=false
+status_line_visible_now=false
+status_line_mounted_now=false
+renderer_model_preserved=true
+display_item_count=6
+display_item_labels_ja=WS状態,データ鮮度,最終更新,受信数,破棄数,案内
+compact_line_ja_preserved=true
+compact_status_only=true
+detailed_diagnostics_default_surface=audit_or_diagnostics_tab
+socket_opened=false
+client_started=false
+client_sends_messages=false
+external_message_send_enabled=false
+websocket_enabled=false
+runtime_connected=false
+push_connected=false
+```
+
+## Refresh policy agreement carried forward
+
+```text
+primary_refresh_path=websocket_push_receiver_future
+ui_refresh_model=streamlit_fragment_first
+state_model=lightweight_receiver_state_in_session_state
+render_scope=top_minimal_status_line_first_selected_live_widgets_second
+broad_page_reload=avoided_by_default
+browser_timer_reload=legacy_fallback_only
+component_island_strategy=available_later_for_high_frequency_surfaces
+receiver_boundary=receive_only_no_external_send
+extensibility_boundary=topic_policy_message_schema_read_model_adapter_widget_fragment_adapter
+```
+
+## Non-goals
+
+```text
+not_mounting_status_line_into_warroom=true
+not_modifying_warroom_page=true
+not_importing_streamlit=true
+not_rendering_streamlit=true
+not_enabling_websocket=true
+not_opening_socket=true
+not_sending_external_messages=true
+not_using_polling_fallback=true
+not_using_browser_timer_reload=true
+not_submitting_order_intent=true
+not_sending_order_to_broker=true
+not_appending_live_order_ledger=true
+not_applying_mode=true
+not_applying_parameter=true
+not_invoking_prediction_generation=true
+not_invoking_prediction_inference=true
+not_invoking_classifier=true
+```
+
+## Acceptance criteria
+
+```text
+- compact_ws_status_line_streamlit_top_minimal_status_line_visible_render_mount_gate.py exists and stays pure.
+- Default visible render mount gate is hidden/off.
+- Ready state requires visible_render_mount_requested=true, operator_visible_render_mount_ack=true, and upstream Q32V render_payload_ready_for_future_streamlit_mount=true.
+- Ready state may set render_mount_ready_for_future_streamlit_mount=true but still reports visible_now=false, mounted_now=false, and streamlit_render_invoked=false.
+- The gate packet preserves future_streamlit_call_model, renderer_model, display_items, compact_line_ja, and the six Japanese item labels.
+- WarRoom page is not modified in this slice.
+- no Streamlit import, no UI mount, no socket open, no external send, no OrderIntent, no broker, no ledger, no mode, no parameter, and no prediction generation/inference/classifier.
+- existing Q32V-Q30C guards remain green.
+```
