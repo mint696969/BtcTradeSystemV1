@@ -29,6 +29,12 @@ from .schema import (
     normalize_warroom_v2_transport_message,
     validate_warroom_v2_transport_message,
 )
+from .shadow_integration import (
+    WARROOM_V2_STREAMLIT_SHADOW_INTEGRATION_VERSION,
+    WARROOM_V2_STREAMLIT_SHADOW_STATE_KEY,
+    build_warroom_v2_streamlit_shadow_integration_contract,
+    build_warroom_v2_streamlit_shadow_integration_packet,
+)
 from .simulator import (
     WARROOM_V2_DISABLED_TRANSPORT_SIMULATOR_VERSION,
     WARROOM_V2_DISPLAY_TARGET_TOPICS,

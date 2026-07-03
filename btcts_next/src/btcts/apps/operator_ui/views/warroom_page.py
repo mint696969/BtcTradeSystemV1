@@ -63,6 +63,10 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_focus_sections imp
 )
 from btcts.apps.operator_ui.prediction_warroom.panels import warroom_latest_prediction_quick_status_panel as quick_status_panel
 from btcts.apps.operator_ui.ui_text import get_text
+from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
+    WARROOM_V2_STREAMLIT_SHADOW_STATE_KEY,
+    build_warroom_v2_streamlit_shadow_integration_packet,
+)
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
 from btcts.apps.operator_ui.components.live_shell import get_registered_slots
@@ -543,6 +547,21 @@ def _warroom_refresh_diagnostics_summary(
     }
 
 
+
+
+def _record_warroom_v2_transport_shadow_integration_state(*, fragment_enabled: bool, prediction_fragment_enabled: bool) -> None:
+    # Hidden session_state key: warroom_v2_transport_shadow_integration_q31e
+    fragment_summary = dict(_warroom_refresh_diagnostics_summary())
+    fragment_summary["page_fragment_enabled"] = bool(fragment_enabled)
+    fragment_summary["prediction_fragment_enabled"] = bool(prediction_fragment_enabled)
+    st.session_state[WARROOM_V2_STREAMLIT_SHADOW_STATE_KEY] = build_warroom_v2_streamlit_shadow_integration_packet(
+        fragment_summary=fragment_summary,
+        messages=[],
+        consumer_state=None,
+        subscribed_topics=None,
+        frame_id="warroom-page-shadow",
+    )
+
 def _warroom_operator_first_render_path_cleanup_packet() -> dict:
     """Return PS-Q18AZ normal UI cleanup state; keeps reusable legacy code out of normal render path."""
     return {
@@ -642,6 +661,12 @@ def _render_warroom_page_body() -> None:
         )
 
     prediction_fragment_enabled = _prediction_warroom_display_fragment_enabled(page_fragment_enabled=fragment_enabled)
+
+
+    _record_warroom_v2_transport_shadow_integration_state(
+        fragment_enabled=fragment_enabled,
+        prediction_fragment_enabled=prediction_fragment_enabled,
+    )
 
     # Prediction WarRoom latest summary observation quick status
     with render_warroom_focus_section("prediction_quick_status_detail"):
