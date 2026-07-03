@@ -32,6 +32,11 @@ from .operator_diagnostic_gate import (
     build_warroom_v2_operator_review_diagnostic_gate_contract,
     build_warroom_v2_operator_review_diagnostic_gate_packet,
 )
+from .operator_diagnostic_panel import (
+    WARROOM_V2_OPERATOR_DIAGNOSTIC_PANEL_VERSION,
+    build_warroom_v2_operator_review_diagnostic_panel_contract,
+    build_warroom_v2_operator_review_diagnostic_panel_packet,
+)
 from .operator_review import (
     WARROOM_V2_OPERATOR_REVIEW_PACKET_VERSION,
     build_warroom_v2_operator_shadow_renderer_review_contract,
