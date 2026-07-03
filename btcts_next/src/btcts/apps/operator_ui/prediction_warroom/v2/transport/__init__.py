@@ -130,6 +130,7 @@ from .ws_display_connection_status import (
     build_warroom_v2_ws_display_connection_status_contract,
     build_warroom_v2_ws_display_connection_status_packet,
 )
+from .ws_receiver_only_client_enable_gate import WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_ENABLE_GATE_VERSION, build_warroom_v2_ws_receiver_only_client_enable_gate_contract, build_warroom_v2_ws_receiver_only_client_enable_gate_packet
 from .ws_display_client_observation import (
     WARROOM_V2_WS_DISPLAY_CLIENT_OBSERVATION_STATE_KEY,
     WARROOM_V2_WS_DISPLAY_CLIENT_OBSERVATION_VERSION,
