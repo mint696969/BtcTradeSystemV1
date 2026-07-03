@@ -81,6 +81,11 @@ from .operator_visible_panel_plan import (
     build_warroom_v2_operator_visible_panel_plan_contract,
     build_warroom_v2_operator_visible_panel_plan_packet,
 )
+from .realtime_read_surface import (
+    WARROOM_V2_REALTIME_READ_SURFACE_VERSION,
+    build_warroom_v2_realtime_japanese_read_surface_contract,
+    build_warroom_v2_realtime_japanese_read_surface_packet,
+)
 from .readiness import (
     WARROOM_V2_DISPLAY_UPDATE_READINESS_VERSION,
     build_warroom_v2_display_update_readiness_contract,
