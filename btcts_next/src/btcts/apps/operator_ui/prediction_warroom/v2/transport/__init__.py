@@ -3,6 +3,11 @@
 
 from __future__ import annotations
 
+from .bidirectional_order_boundary import (
+    WARROOM_V2_BIDIRECTIONAL_ORDER_BOUNDARY_VERSION,
+    build_warroom_v2_bidirectional_order_boundary_contract,
+    build_warroom_v2_bidirectional_order_boundary_flow,
+)
 from .consumer_state import (
     WARROOM_V2_CONSUMER_STATE_VERSION,
     apply_warroom_v2_consumer_message,
