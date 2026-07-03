@@ -138,8 +138,12 @@ def test_q31v_doc_modules_and_warroom_page_preserve_no_side_effect_boundary() ->
     assert "not_using_polling_fallback=true" in text
     assert "not_mounting_panel_into_warroom=true" in text
     page = WARROOM_PAGE.read_text(encoding="utf-8-sig")
-    assert "operator_visible_panel_gate" not in page
+    # Later slices may record hidden gate-observation state in WarRoom page.
+    # Q31V must continue to forbid direct visible-panel gate mount/render usage.
     assert "WARROOM_V2_OPERATOR_VISIBLE_PANEL_GATE_VERSION" not in page
+    assert "build_warroom_v2_operator_visible_panel_gate_packet" not in page
+    assert "visible_panel_gate_requested=True" not in page
+    assert "visible_panel_gate_read_only_ack=True" not in page
     forbidden = (
         "import streamlit",
         "from streamlit",
