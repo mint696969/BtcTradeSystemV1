@@ -1,0 +1,105 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_PS_Q33D_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_LIGHTWEIGHT_STATE_DRAIN_PREVIEW_DEFAULT_OFF_NO_SOCKET_2026-07-03.md
+# desc: PS-Q33D WarRoom v2 WebSocket receiver-only client lightweight state drain preview. Default-off, no socket open, and no state mutation.
+
+# PS-Q33D WarRoom v2 WebSocket receiver-only client lightweight state drain preview default-off no-socket
+
+Date: 2026-07-03
+Profile: BtcTradeSystem
+Base gate: PS_Q33C_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_RECEIVE_BUFFER_DRAIN_CONTRACT_DEFAULT_OFF_NO_SOCKET_DONE
+Slice: PS-Q33D_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_LIGHTWEIGHT_STATE_DRAIN_PREVIEW_DEFAULT_OFF_NO_SOCKET
+
+## Decision
+
+PS-Q33D adds a pure lightweight receiver-state drain preview packet. It composes the Q33C receive-buffer drain contract and shapes the accepted drain preview messages into a future lightweight receiver state update candidate. This slice is preview-only: it does not mutate `session_state`, does not apply a state update, does not open sockets, does not start a client, does not subscribe live, and does not send messages.
+
+```text
+preview_module=btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/transport/ws_receiver_only_client_lightweight_state_drain_preview.py
+preview_kind=warroom_v2_ws_receiver_only_client_lightweight_state_drain_preview_default_off_no_socket
+input_pipeline=q33c_receive_buffer_drain_contract,q33b_receiver_only_client_hidden_state,q32a_ws_display_client_receive_buffer
+current_small_goal=warroom_tab_ws_push_realtime_update_and_japanese_readability
+agreed_refresh_policy=push_first_fragment_render_lightweight_state_pluggable_widget_custom_component_island_ready_later
+lightweight_state_update_requested_default=false
+operator_lightweight_state_ack_default=false
+lightweight_state_drain_preview_status_default=lightweight_state_drain_preview_hidden_default
+lightweight_state_drain_preview_status_ready=lightweight_state_drain_preview_ready_for_next_slice_no_socket
+lightweight_state_drain_allowed_for_next_slice_default=false
+lightweight_state_update_allowed_effective=false
+candidate_state_update_is_preview_only=true
+candidate_state_update_applied=false
+messages_committed_now=0
+state_mutated=false
+session_state_write_allowed=false
+warroom_page_modified=false
+visible_controls_added=false
+receiver_only=true
+send_disabled=true
+socket_opened=false
+client_started=false
+client_sends_messages=false
+external_message_send_enabled=false
+websocket_enabled=false
+runtime_connected=false
+push_connected=false
+```
+
+## Preview semantics
+
+```text
+preview_source=q33c_drain_preview_messages
+preview_target=future_lightweight_receiver_state_update_next_slice
+preview_includes_latest_message_sequence=true
+preview_includes_message_count=true
+preview_includes_topics=true
+preview_effective_mutation=false
+```
+
+## Refresh policy agreement carried forward
+
+```text
+primary_refresh_path=websocket_push_receiver_future
+ui_refresh_model=streamlit_fragment_first
+state_model=lightweight_receiver_state_in_session_state
+render_scope=top_minimal_status_line_first_selected_live_widgets_second
+broad_page_reload=avoided_by_default
+browser_timer_reload=legacy_fallback_only
+component_island_strategy=available_later_for_high_frequency_surfaces
+receiver_boundary=receive_only_no_external_send
+extensibility_boundary=topic_policy_message_schema_read_model_adapter_widget_fragment_adapter
+```
+
+## Non-goals
+
+```text
+not_modifying_warroom_page=true
+not_adding_visible_controls=true
+not_rendering_lightweight_state_preview=true
+not_mutating_session_state=true
+not_applying_state_update=true
+not_opening_socket=true
+not_starting_client=true
+not_subscribing_live=true
+not_sending_external_messages=true
+not_using_polling_fallback=true
+not_using_browser_timer_reload=true
+not_submitting_order_intent=true
+not_sending_order_to_broker=true
+not_appending_live_order_ledger=true
+not_applying_mode=true
+not_applying_parameter=true
+not_invoking_prediction_generation=true
+not_invoking_prediction_inference=true
+not_invoking_classifier=true
+```
+
+## Acceptance criteria
+
+```text
+- ws_receiver_only_client_lightweight_state_drain_preview.py exists and stays pure.
+- Default packet status is lightweight_state_drain_preview_hidden_default.
+- Ready requires lightweight_state_update_requested=true, operator_lightweight_state_ack=true, and Q33C drain next-slice eligibility=true.
+- Ready packet may expose candidate_state_update_preview from Q33C drain_preview_messages.
+- Ready packet still has lightweight_state_update_allowed_effective=false, candidate_state_update_applied=false, messages_committed_now=0, and state_mutated=false.
+- WarRoom page is not modified.
+- socket_opened=false, client_started=false, client_sends_messages=false, websocket_enabled=false.
+- Existing Q33C-Q30C guards remain green.
+```
