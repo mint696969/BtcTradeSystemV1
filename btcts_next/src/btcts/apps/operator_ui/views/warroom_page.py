@@ -70,6 +70,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     WARROOM_V2_COMPACT_WS_STATUS_LINE_GATE_OBSERVATION_STATE_KEY,
     WARROOM_V2_COMPACT_WS_STATUS_LINE_VISIBLE_MOUNT_GATE_OBSERVATION_STATE_KEY,
     WARROOM_V2_COMPACT_WS_STATUS_LINE_VISIBLE_RENDER_ADAPTER_OBSERVATION_STATE_KEY,
+    WARROOM_V2_COMPACT_WS_STATUS_LINE_VISIBLE_RENDER_MOUNT_GATE_OBSERVATION_STATE_KEY,
     WARROOM_V2_WS_DISPLAY_ADAPTER_OBSERVATION_STATE_KEY,
     WARROOM_V2_WS_DISPLAY_CLIENT_OBSERVATION_STATE_KEY,
     WARROOM_V2_WS_DISPLAY_CONNECTION_STATUS_OBSERVATION_STATE_KEY,
@@ -83,6 +84,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     build_warroom_v2_compact_ws_status_line_gate_observation_packet,
     build_warroom_v2_compact_ws_status_line_visible_mount_gate_observation_packet,
     build_warroom_v2_compact_ws_status_line_visible_render_adapter_observation_packet,
+    build_warroom_v2_compact_ws_status_line_visible_render_mount_gate_observation_packet,
     build_warroom_v2_ws_display_adapter_observation_packet,
     build_warroom_v2_ws_display_client_observation_packet,
     build_warroom_v2_ws_display_connection_status_observation_packet,
@@ -668,6 +670,19 @@ def _record_warroom_v2_transport_shadow_integration_state(*, fragment_enabled: b
     st.session_state[WARROOM_V2_COMPACT_WS_STATUS_LINE_VISIBLE_RENDER_ADAPTER_OBSERVATION_STATE_KEY] = build_warroom_v2_compact_ws_status_line_visible_render_adapter_observation_packet(
         fragment_summary=fragment_summary,
         messages=[],
+        visible_render_adapter_requested=False,
+        operator_visible_render_ack=False,
+        visible_mount_requested=False,
+        operator_visible_mount_ack=False,
+        status_gate_render_requested=False,
+        status_gate_read_only_ack=False,
+    )
+    # Hidden session_state key: warroom_v2_compact_ws_status_line_visible_render_mount_gate_observation_q32l
+    st.session_state[WARROOM_V2_COMPACT_WS_STATUS_LINE_VISIBLE_RENDER_MOUNT_GATE_OBSERVATION_STATE_KEY] = build_warroom_v2_compact_ws_status_line_visible_render_mount_gate_observation_packet(
+        fragment_summary=fragment_summary,
+        messages=[],
+        visible_render_mount_requested=False,
+        operator_visible_render_mount_ack=False,
         visible_render_adapter_requested=False,
         operator_visible_render_ack=False,
         visible_mount_requested=False,
