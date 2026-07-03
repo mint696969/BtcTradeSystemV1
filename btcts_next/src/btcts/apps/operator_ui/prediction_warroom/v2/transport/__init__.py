@@ -105,6 +105,11 @@ from .replay import (
     build_warroom_v2_replay_response,
     select_warroom_v2_replay_events_after_cursor,
 )
+from .compact_ws_status_line_gate import (
+    WARROOM_V2_COMPACT_WS_STATUS_LINE_GATE_VERSION,
+    build_warroom_v2_compact_ws_status_line_gate_contract,
+    build_warroom_v2_compact_ws_status_line_gate_packet,
+)
 from .ws_display_connection_status_observation import (
     WARROOM_V2_WS_DISPLAY_CONNECTION_STATUS_OBSERVATION_STATE_KEY,
     WARROOM_V2_WS_DISPLAY_CONNECTION_STATUS_OBSERVATION_VERSION,
