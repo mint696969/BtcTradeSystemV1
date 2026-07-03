@@ -32,6 +32,12 @@ from .operator_review import (
     build_warroom_v2_operator_shadow_renderer_review_contract,
     build_warroom_v2_operator_shadow_renderer_review_packet,
 )
+from .operator_review_observation import (
+    WARROOM_V2_OPERATOR_REVIEW_OBSERVATION_STATE_KEY,
+    WARROOM_V2_OPERATOR_REVIEW_OBSERVATION_VERSION,
+    build_warroom_v2_operator_review_observation_contract,
+    build_warroom_v2_operator_review_observation_packet,
+)
 from .readiness import (
     WARROOM_V2_DISPLAY_UPDATE_READINESS_VERSION,
     build_warroom_v2_display_update_readiness_contract,
