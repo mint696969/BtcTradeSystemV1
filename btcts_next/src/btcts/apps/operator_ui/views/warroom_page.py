@@ -65,11 +65,13 @@ from btcts.apps.operator_ui.prediction_warroom.panels import warroom_latest_pred
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     WARROOM_V2_OPERATOR_DIAGNOSTIC_OBSERVATION_STATE_KEY,
+    WARROOM_V2_OPERATOR_VISIBLE_PANEL_OBSERVATION_STATE_KEY,
     WARROOM_V2_OPERATOR_REVIEW_OBSERVATION_STATE_KEY,
     WARROOM_V2_SHADOW_RENDERER_OBSERVATION_STATE_KEY,
     WARROOM_V2_STREAMLIT_LOCAL_LOOP_OBSERVATION_STATE_KEY,
     WARROOM_V2_STREAMLIT_SHADOW_STATE_KEY,
     build_warroom_v2_operator_diagnostic_observation_packet,
+    build_warroom_v2_operator_visible_panel_observation_packet,
     build_warroom_v2_operator_review_observation_packet,
     build_warroom_v2_shadow_renderer_observation_packet,
     build_warroom_v2_streamlit_local_loop_observation_packet,
@@ -593,6 +595,16 @@ def _record_warroom_v2_transport_shadow_integration_state(*, fragment_enabled: b
         messages=[],
         consumer_state=None,
         visible_diagnostic_requested=False,
+        operator_read_only_ack=False,
+    )
+    # Hidden session_state key: warroom_v2_operator_visible_panel_observation_q31u
+    st.session_state[WARROOM_V2_OPERATOR_VISIBLE_PANEL_OBSERVATION_STATE_KEY] = build_warroom_v2_operator_visible_panel_observation_packet(
+        fragment_summary=fragment_summary,
+        messages=[],
+        consumer_state=None,
+        visible_diagnostic_requested=False,
+        diagnostic_read_only_ack=False,
+        operator_visible_panel_requested=False,
         operator_read_only_ack=False,
     )
 

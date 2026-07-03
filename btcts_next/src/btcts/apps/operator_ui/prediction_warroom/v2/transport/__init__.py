@@ -59,6 +59,12 @@ from .operator_review_observation import (
     build_warroom_v2_operator_review_observation_contract,
     build_warroom_v2_operator_review_observation_packet,
 )
+from .operator_visible_panel_observation import (
+    WARROOM_V2_OPERATOR_VISIBLE_PANEL_OBSERVATION_STATE_KEY,
+    WARROOM_V2_OPERATOR_VISIBLE_PANEL_OBSERVATION_VERSION,
+    build_warroom_v2_operator_visible_panel_observation_contract,
+    build_warroom_v2_operator_visible_panel_observation_packet,
+)
 from .operator_visible_panel_plan import (
     WARROOM_V2_OPERATOR_VISIBLE_PANEL_PLAN_VERSION,
     build_warroom_v2_operator_visible_panel_plan_contract,
