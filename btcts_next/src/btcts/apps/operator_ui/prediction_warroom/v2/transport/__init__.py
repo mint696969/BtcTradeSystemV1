@@ -66,6 +66,12 @@ from .shadow_renderer import (
     build_warroom_v2_shadow_renderer_adapter_contract,
     build_warroom_v2_shadow_renderer_adapter_packet,
 )
+from .shadow_renderer_observation import (
+    WARROOM_V2_SHADOW_RENDERER_OBSERVATION_STATE_KEY,
+    WARROOM_V2_SHADOW_RENDERER_OBSERVATION_VERSION,
+    build_warroom_v2_shadow_renderer_observation_contract,
+    build_warroom_v2_shadow_renderer_observation_packet,
+)
 from .simulator import (
     WARROOM_V2_DISABLED_TRANSPORT_SIMULATOR_VERSION,
     WARROOM_V2_DISPLAY_TARGET_TOPICS,
