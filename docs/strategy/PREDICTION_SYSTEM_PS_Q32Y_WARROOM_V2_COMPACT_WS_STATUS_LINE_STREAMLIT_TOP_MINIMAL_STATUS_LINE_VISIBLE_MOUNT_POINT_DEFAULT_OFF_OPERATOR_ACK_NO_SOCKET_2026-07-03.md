@@ -1,0 +1,92 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_PS_Q32Y_WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_MOUNT_POINT_DEFAULT_OFF_OPERATOR_ACK_NO_SOCKET_2026-07-03.md
+# desc: PS-Q32Y WarRoom v2 compact WS status line top minimal visible mount point. Default-off/operator-ack/no-socket.
+
+# PS-Q32Y WarRoom v2 compact WS status line Streamlit top minimal visible mount point default-off
+
+Date: 2026-07-03
+Profile: BtcTradeSystem
+Base gate: PS_Q32X_WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_RENDER_MOUNT_GATE_OBSERVATION_TO_HIDDEN_SESSION_STATE_NO_UI_MOUNT_DONE
+Slice: PS-Q32Y_WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_MOUNT_POINT_DEFAULT_OFF_OPERATOR_ACK_NO_SOCKET
+
+## Decision
+
+PS-Q32Y introduces the first WarRoom top-minimal visible mount point for the compact WS status line. The mount point is default-off and operator-ack-gated. It records a mount point packet and may call the preserved future Streamlit `markdown` model only when the explicit request, operator acknowledgement, and Q32X ready observation are all true. The default WarRoom UI remains unchanged.
+
+```text
+mount_point_module=btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/transport/compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point.py
+state_key=warroom_v2_compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_q32y
+request_state_key=warroom_v2_compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_requested_q32y
+operator_ack_state_key=warroom_v2_compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_operator_ack_q32y
+input_pipeline=q32x_compact_ws_status_line_streamlit_top_minimal_status_line_visible_render_mount_gate_observation
+current_small_goal=warroom_tab_ws_push_realtime_update_and_japanese_readability
+agreed_refresh_policy=push_first_fragment_render_lightweight_state_pluggable_widget_custom_component_island_ready_later
+mount_point_kind=warroom_v2_compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_default_off_operator_ack
+visible_mount_point_requested_default=false
+operator_visible_mount_point_ack_default=false
+q32x_ready_required=true
+mount_point_status_default=compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_hidden_default
+mount_point_status_ready=compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_markdown_allowed
+warroom_mount_surface=top_minimal_operator_status_line
+warroom_mount_position=after_header_before_focus_nav_later
+streamlit_call_name=markdown
+streamlit_markdown_allowed_default=false
+streamlit_markdown_invoked_default=false
+status_line_visible_now_default=false
+status_line_mounted_now_default=false
+status_line_visible_when_allowed=true
+status_line_mounted_when_allowed=true
+warroom_page_mount_point_added=true
+warroom_page_default_visible_ui_unchanged=true
+socket_opened=false
+client_started=false
+client_sends_messages=false
+external_message_send_enabled=false
+websocket_enabled=false
+runtime_connected=false
+push_connected=false
+```
+
+## Refresh policy agreement carried forward
+
+```text
+primary_refresh_path=websocket_push_receiver_future
+ui_refresh_model=streamlit_fragment_first
+state_model=lightweight_receiver_state_in_session_state
+render_scope=top_minimal_status_line_first_selected_live_widgets_second
+broad_page_reload=avoided_by_default
+browser_timer_reload=legacy_fallback_only
+component_island_strategy=available_later_for_high_frequency_surfaces
+receiver_boundary=receive_only_no_external_send
+extensibility_boundary=topic_policy_message_schema_read_model_adapter_widget_fragment_adapter
+```
+
+## Non-goals
+
+```text
+not_enabling_websocket=true
+not_opening_socket=true
+not_sending_external_messages=true
+not_using_polling_fallback=true
+not_using_browser_timer_reload=true
+not_submitting_order_intent=true
+not_sending_order_to_broker=true
+not_appending_live_order_ledger=true
+not_applying_mode=true
+not_applying_parameter=true
+not_invoking_prediction_generation=true
+not_invoking_prediction_inference=true
+not_invoking_classifier=true
+```
+
+## Acceptance criteria
+
+```text
+- compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point.py exists and stays pure.
+- WarRoom page has a top-minimal mount point call after the compact page header and before focus nav.
+- Default state does not call st.markdown because request and operator acknowledgement are false.
+- If request, operator acknowledgement, and Q32X ready observation are true, the mount point packet allows the preserved markdown call model.
+- The WarRoom page records the mount point packet under hidden session_state.
+- The request and acknowledgement state keys are off by default and not rendered as visible controls in this slice.
+- No socket open, no client start, no external send, no OrderIntent, no broker, no ledger, no mode, no parameter, and no prediction generation/inference/classifier.
+- Existing Q32X-Q30C guards remain green.
+```
