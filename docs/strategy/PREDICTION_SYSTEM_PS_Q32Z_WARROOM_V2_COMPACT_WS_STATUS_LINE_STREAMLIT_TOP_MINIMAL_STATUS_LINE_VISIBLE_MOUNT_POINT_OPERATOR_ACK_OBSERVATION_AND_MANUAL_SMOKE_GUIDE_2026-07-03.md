@@ -1,0 +1,109 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_PS_Q32Z_WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_MOUNT_POINT_OPERATOR_ACK_OBSERVATION_AND_MANUAL_SMOKE_GUIDE_2026-07-03.md
+# desc: PS-Q32Z WarRoom v2 compact WS status line top minimal visible mount point operator ack observation and manual smoke guide. No socket and no visible controls.
+
+# PS-Q32Z WarRoom v2 compact WS status line top minimal visible mount point operator ack observation and manual smoke guide
+
+Date: 2026-07-03
+Profile: BtcTradeSystem
+Base gate: PS_Q32Y_WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_MOUNT_POINT_DEFAULT_OFF_OPERATOR_ACK_NO_SOCKET_DONE
+Slice: PS-Q32Z_WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_MOUNT_POINT_OPERATOR_ACK_OBSERVATION_AND_MANUAL_SMOKE_GUIDE
+
+## Decision
+
+PS-Q32Z adds a pure operator acknowledgement observation packet and manual smoke guide for the Q32Y top-minimal visible mount point. This slice does not add visible controls and does not change WarRoom page rendering. It documents and tests the manual-only path for validating that the Q32Y mount point remains default-off, then becomes eligible only when request, operator acknowledgement, and Q32X ready observation are all true.
+
+```text
+observation_module=btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/transport/compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_operator_ack_observation.py
+observation_kind=warroom_v2_compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_operator_ack_observation_packet
+input_pipeline=q32x_visible_render_mount_gate_observation,q32y_visible_mount_point
+current_small_goal=warroom_tab_ws_push_realtime_update_and_japanese_readability
+agreed_refresh_policy=push_first_fragment_render_lightweight_state_pluggable_widget_custom_component_island_ready_later
+manual_smoke_guide_added=true
+manual_smoke_default_enabled=false
+manual_smoke_requires_operator_ack=true
+visible_controls_added=false
+warroom_page_modified=false
+visible_mount_point_requested_default=false
+operator_visible_mount_point_ack_default=false
+operator_ack_observed_default=false
+mount_point_status_default=compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_hidden_default
+manual_smoke_status_default=manual_smoke_not_requested
+manual_smoke_status_ready=manual_smoke_ready_for_operator_visual_check_no_socket
+streamlit_markdown_allowed_default=false
+streamlit_markdown_invoked_default=false
+status_line_visible_now_default=false
+status_line_mounted_now_default=false
+socket_opened=false
+client_started=false
+client_sends_messages=false
+external_message_send_enabled=false
+websocket_enabled=false
+runtime_connected=false
+push_connected=false
+```
+
+## Manual smoke guide
+
+```text
+purpose=verify_q32y_default_off_and_operator_ack_gated_visible_mount_point_without_socket
+step_1=open_WarRoom_normally
+step_2_confirm_default_UI_unchanged_and_no_top_minimal_WS_line
+step_3_inspect_hidden_session_state_packet_if_needed
+step_4_only_in_manual_dev_session_set_request_key_true_and_operator_ack_key_true
+step_5_use_prepared_q32x_ready_observation_fixture_or_future_ack_observation_slice
+step_6_confirm_compact_line_can_render_only_when_gate_allows_markdown
+step_7=reset_request_key_false_and_operator_ack_key_false
+do_not_open_socket=true
+do_not_start_client=true
+do_not_send_external_message=true
+do_not_trigger_prediction=true
+do_not_send_order=true
+rollback=reset_hidden_request_and_operator_ack_keys_to_false
+```
+
+## Refresh policy agreement carried forward
+
+```text
+primary_refresh_path=websocket_push_receiver_future
+ui_refresh_model=streamlit_fragment_first
+state_model=lightweight_receiver_state_in_session_state
+render_scope=top_minimal_status_line_first_selected_live_widgets_second
+broad_page_reload=avoided_by_default
+browser_timer_reload=legacy_fallback_only
+component_island_strategy=available_later_for_high_frequency_surfaces
+receiver_boundary=receive_only_no_external_send
+extensibility_boundary=topic_policy_message_schema_read_model_adapter_widget_fragment_adapter
+```
+
+## Non-goals
+
+```text
+not_modifying_warroom_page=true
+not_adding_visible_controls=true
+not_enabling_websocket=true
+not_opening_socket=true
+not_sending_external_messages=true
+not_using_polling_fallback=true
+not_using_browser_timer_reload=true
+not_submitting_order_intent=true
+not_sending_order_to_broker=true
+not_appending_live_order_ledger=true
+not_applying_mode=true
+not_applying_parameter=true
+not_invoking_prediction_generation=true
+not_invoking_prediction_inference=true
+not_invoking_classifier=true
+```
+
+## Acceptance criteria
+
+```text
+- compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_operator_ack_observation.py exists and stays pure.
+- Observation packet composes Q32Y mount point packet.
+- Default manual smoke status is manual_smoke_not_requested.
+- Manual smoke ready requires manual_smoke_requested=true, operator_manual_smoke_ack=true, and Q32Y mount point markdown allowed.
+- WarRoom page is not modified in this slice.
+- No visible controls are added.
+- no socket open, no client start, no external send, no OrderIntent, no broker, no ledger, no mode, no parameter, and no prediction generation/inference/classifier.
+- existing Q32Y-Q30C guards remain green.
+```
