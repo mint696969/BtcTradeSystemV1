@@ -37,6 +37,12 @@ from .operator_diagnostic_panel import (
     build_warroom_v2_operator_review_diagnostic_panel_contract,
     build_warroom_v2_operator_review_diagnostic_panel_packet,
 )
+from .operator_diagnostic_observation import (
+    WARROOM_V2_OPERATOR_DIAGNOSTIC_OBSERVATION_STATE_KEY,
+    WARROOM_V2_OPERATOR_DIAGNOSTIC_OBSERVATION_VERSION,
+    build_warroom_v2_operator_diagnostic_observation_contract,
+    build_warroom_v2_operator_diagnostic_observation_packet,
+)
 from .operator_review import (
     WARROOM_V2_OPERATOR_REVIEW_PACKET_VERSION,
     build_warroom_v2_operator_shadow_renderer_review_contract,
