@@ -19,6 +19,14 @@ from .gates import (
     build_warroom_v2_operator_reviewed_gate_contract,
     evaluate_warroom_v2_operator_reviewed_gate,
 )
+from .local_loop import (
+    WARROOM_V2_LOCAL_ONLY_TRANSPORT_EXPERIMENT_VERSION,
+    apply_warroom_v2_local_only_transport_outbox,
+    build_warroom_v2_local_only_transport_experiment_contract,
+    build_warroom_v2_local_only_transport_outbox,
+    build_warroom_v2_local_only_transport_session,
+    run_warroom_v2_local_only_transport_experiment,
+)
 from .replay import (
     DEFAULT_REPLAY_BOUND,
     WARROOM_V2_REPLAY_VERSION,
