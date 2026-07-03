@@ -61,6 +61,11 @@ from .shadow_integration import (
     build_warroom_v2_streamlit_shadow_integration_contract,
     build_warroom_v2_streamlit_shadow_integration_packet,
 )
+from .shadow_renderer import (
+    WARROOM_V2_SHADOW_RENDERER_ADAPTER_VERSION,
+    build_warroom_v2_shadow_renderer_adapter_contract,
+    build_warroom_v2_shadow_renderer_adapter_packet,
+)
 from .simulator import (
     WARROOM_V2_DISABLED_TRANSPORT_SIMULATOR_VERSION,
     WARROOM_V2_DISPLAY_TARGET_TOPICS,
