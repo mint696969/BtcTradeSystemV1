@@ -27,6 +27,11 @@ from .local_loop import (
     build_warroom_v2_local_only_transport_session,
     run_warroom_v2_local_only_transport_experiment,
 )
+from .operator_diagnostic_gate import (
+    WARROOM_V2_OPERATOR_DIAGNOSTIC_GATE_VERSION,
+    build_warroom_v2_operator_review_diagnostic_gate_contract,
+    build_warroom_v2_operator_review_diagnostic_gate_packet,
+)
 from .operator_review import (
     WARROOM_V2_OPERATOR_REVIEW_PACKET_VERSION,
     build_warroom_v2_operator_shadow_renderer_review_contract,
