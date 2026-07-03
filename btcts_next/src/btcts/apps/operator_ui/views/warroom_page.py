@@ -82,6 +82,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_MOUNT_POINT_STATE_KEY,
     WARROOM_V2_WS_DISPLAY_ADAPTER_OBSERVATION_STATE_KEY,
     WARROOM_V2_WS_DISPLAY_CLIENT_OBSERVATION_STATE_KEY,
+    WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_HIDDEN_STATE_KEY,
     WARROOM_V2_WS_DISPLAY_CONNECTION_STATUS_OBSERVATION_STATE_KEY,
     WARROOM_V2_OPERATOR_REVIEW_OBSERVATION_STATE_KEY,
     WARROOM_V2_SHADOW_RENDERER_OBSERVATION_STATE_KEY,
@@ -103,6 +104,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     build_warroom_v2_compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_packet,
     build_warroom_v2_ws_display_adapter_observation_packet,
     build_warroom_v2_ws_display_client_observation_packet,
+    build_warroom_v2_ws_receiver_only_client_hidden_state_packet,
     build_warroom_v2_ws_display_connection_status_observation_packet,
     build_warroom_v2_operator_review_observation_packet,
     build_warroom_v2_shadow_renderer_observation_packet,
@@ -672,6 +674,11 @@ def _record_warroom_v2_transport_shadow_integration_state(*, fragment_enabled: b
     st.session_state[WARROOM_V2_WS_DISPLAY_CLIENT_OBSERVATION_STATE_KEY] = build_warroom_v2_ws_display_client_observation_packet(
         fragment_summary=fragment_summary,
         messages=[],
+    )
+    # Hidden session_state key: warroom_v2_ws_receiver_only_client_hidden_state_q33b
+    st.session_state[WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_HIDDEN_STATE_KEY] = build_warroom_v2_ws_receiver_only_client_hidden_state_packet(
+        fragment_summary=fragment_summary,
+        ws_display_client_observation_packet=st.session_state.get(WARROOM_V2_WS_DISPLAY_CLIENT_OBSERVATION_STATE_KEY),
     )
     # Hidden session_state key: warroom_v2_ws_display_connection_status_observation_q32d
     st.session_state[WARROOM_V2_WS_DISPLAY_CONNECTION_STATUS_OBSERVATION_STATE_KEY] = build_warroom_v2_ws_display_connection_status_observation_packet(
