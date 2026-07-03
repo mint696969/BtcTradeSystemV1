@@ -106,7 +106,15 @@ def test_q32e_doc_modules_and_warroom_page_preserve_no_side_effect_boundary() ->
     page = WARROOM_PAGE.read_text(encoding="utf-8-sig")
     assert "build_warroom_v2_compact_ws_status_line_gate_packet" not in page
     assert "WARROOM_V2_COMPACT_WS_STATUS_LINE_GATE_VERSION" not in page
-    assert "compact_ws_status_line" not in page
+    # Later slices may record hidden observation state in WarRoom page, but must not mount
+    # the Q32E direct gate packet/version or any visible status-line label.
+    visible_status_labels = (
+        "compact WS status line",
+        "WS未接続（準備中）",
+        "Enable compact WS status line",
+    )
+    for label in visible_status_labels:
+        assert label not in page
     forbidden = (
         "import streamlit",
         "from streamlit",
