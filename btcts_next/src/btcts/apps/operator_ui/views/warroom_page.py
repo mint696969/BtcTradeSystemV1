@@ -64,7 +64,9 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_focus_sections imp
 from btcts.apps.operator_ui.prediction_warroom.panels import warroom_latest_prediction_quick_status_panel as quick_status_panel
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
+    WARROOM_V2_STREAMLIT_LOCAL_LOOP_OBSERVATION_STATE_KEY,
     WARROOM_V2_STREAMLIT_SHADOW_STATE_KEY,
+    build_warroom_v2_streamlit_local_loop_observation_packet,
     build_warroom_v2_streamlit_shadow_integration_packet,
 )
 from btcts.apps.operator_ui.components import warroom_alert_engine
@@ -560,6 +562,12 @@ def _record_warroom_v2_transport_shadow_integration_state(*, fragment_enabled: b
         consumer_state=None,
         subscribed_topics=None,
         frame_id="warroom-page-shadow",
+    )
+    # Hidden session_state key: warroom_v2_streamlit_local_loop_observation_q31i
+    st.session_state[WARROOM_V2_STREAMLIT_LOCAL_LOOP_OBSERVATION_STATE_KEY] = build_warroom_v2_streamlit_local_loop_observation_packet(
+        fragment_summary=fragment_summary,
+        messages=[],
+        consumer_state=None,
     )
 
 def _warroom_operator_first_render_path_cleanup_packet() -> dict:

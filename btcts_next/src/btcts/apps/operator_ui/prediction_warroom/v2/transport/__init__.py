@@ -67,6 +67,12 @@ from .skeleton import (
     build_warroom_v2_local_disabled_skeleton_contract,
     build_warroom_v2_local_disabled_transport_flags,
 )
+from .streamlit_observation import (
+    WARROOM_V2_STREAMLIT_LOCAL_LOOP_OBSERVATION_STATE_KEY,
+    WARROOM_V2_STREAMLIT_LOCAL_LOOP_OBSERVATION_VERSION,
+    build_warroom_v2_streamlit_local_loop_observation_contract,
+    build_warroom_v2_streamlit_local_loop_observation_packet,
+)
 from .topic_policy import (
     BOTTOM_CHART_TOPICS,
     PREDICTION_DISPLAY_TOPICS,
