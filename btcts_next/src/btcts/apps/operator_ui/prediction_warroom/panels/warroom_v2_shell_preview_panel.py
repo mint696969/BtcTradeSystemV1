@@ -11,6 +11,7 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_v2 import (
     build_warroom_v2_auto_refresh_control_packet,
     build_warroom_v2_chart_review_panel_packet,
     build_warroom_v2_market_snapshot_strip_packet,
+    build_warroom_v2_panel_event_bridge_packet,
     render_warroom_v2_auto_refresh_control,
     render_warroom_v2_chart_review_panel,
     render_warroom_v2_debug_preview,
@@ -24,7 +25,7 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_v2 import (
 from btcts.apps.operator_ui.prediction_warroom.panels.warroom_v2.market_snapshot_read_model import build_warroom_v2_market_snapshot_dhot_read_model
 from btcts.apps.operator_ui.prediction_warroom.v2 import build_warroom_v2_shell_preview_packet
 
-WARROOM_V2_SHELL_PREVIEW_PANEL_VERSION = "prediction_warroom.v2.shell_preview_panel.ps_q29y.v1"
+WARROOM_V2_SHELL_PREVIEW_PANEL_VERSION = "prediction_warroom.v2.shell_preview_panel.ps_q30e.v1"
 
 
 def _placeholder_source() -> dict[str, Any]:
@@ -35,7 +36,10 @@ def build_warroom_v2_shell_preview_panel_packet(*, page_mount_packet: dict | Non
     shell = build_warroom_v2_shell_preview_packet()
     source = dict(source_packet or _placeholder_source())
     refresh = build_warroom_v2_auto_refresh_control_packet()
-    return {"ok": True, "panel_version": WARROOM_V2_SHELL_PREVIEW_PANEL_VERSION, "page_mount_packet": dict(page_mount_packet or {}), "shell_preview": shell, "auto_refresh_control": refresh, "market_snapshot_source": source, "market_snapshot_strip": build_warroom_v2_market_snapshot_strip_packet(source_packet=source), "chart_review_panel": build_warroom_v2_chart_review_panel_packet(source_packet=source), "fragment_refresh_enabled": False, "page_reload_enabled": False, "auto_refresh_control_below_top_bar": True, "market_snapshot_strip_above_prediction_cards": True, "chart_review_panel_bottom": True, "display_only": True, "renderer_split": True, "push_ready": True, "auto_refresh_ready": True, "data_connected": bool(source.get("data_connected")), "runtime_connected": False, "push_connected": False, "websocket_enabled": False, "sse_enabled": False, "dhot_read_in_panel": bool(source.get("data_connected")), "classifier_invoked_in_panel": False, "would_send_to_broker": False}
+    market_snapshot = build_warroom_v2_market_snapshot_strip_packet(source_packet=source)
+    chart_review = build_warroom_v2_chart_review_panel_packet(source_packet=source)
+    event_bridge = build_warroom_v2_panel_event_bridge_packet(market_snapshot_packet=market_snapshot, chart_review_packet=chart_review)
+    return {"ok": True, "panel_version": WARROOM_V2_SHELL_PREVIEW_PANEL_VERSION, "page_mount_packet": dict(page_mount_packet or {}), "shell_preview": shell, "auto_refresh_control": refresh, "market_snapshot_source": source, "market_snapshot_strip": market_snapshot, "chart_review_panel": chart_review, "read_model_event_bridge": event_bridge, "panel_packet_event_bridge_bound": True, "fragment_refresh_enabled": False, "page_reload_enabled": False, "auto_refresh_control_below_top_bar": True, "market_snapshot_strip_above_prediction_cards": True, "chart_review_panel_bottom": True, "display_only": True, "renderer_split": True, "push_ready": True, "auto_refresh_ready": True, "data_connected": bool(source.get("data_connected")), "runtime_connected": False, "push_connected": False, "websocket_enabled": False, "sse_enabled": False, "dhot_read_in_panel": bool(source.get("data_connected")), "classifier_invoked_in_panel": False, "would_send_to_broker": False}
 
 
 def render_warroom_v2_shell_preview_panel(*, page_mount_packet: dict | None = None) -> dict[str, Any]:

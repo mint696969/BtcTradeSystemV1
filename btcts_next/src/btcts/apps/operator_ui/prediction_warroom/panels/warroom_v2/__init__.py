@@ -12,6 +12,7 @@ from .debug_preview import WARROOM_V2_DEBUG_PREVIEW_RENDERER_VERSION, render_war
 from .fragment_refresh import WARROOM_V2_FRAGMENT_REFRESH_VERSION, build_warroom_v2_fragment_refresh_packet, render_warroom_v2_fragment_refresh_block
 from .market_snapshot_strip import WARROOM_V2_MARKET_SNAPSHOT_STRIP_RENDERER_VERSION, build_warroom_v2_market_snapshot_strip_packet, render_warroom_v2_market_snapshot_strip
 from .model_views import WARROOM_V2_MODEL_VIEWS_VERSION, warroom_v2_models_by_zone
+from .panel_event_bridge import WARROOM_V2_PANEL_EVENT_BRIDGE_ADAPTER_VERSION, build_warroom_v2_panel_event_bridge_packet, chart_review_event_payload_from_panel_packet, market_snapshot_event_payload_from_strip_packet
 from .prediction_cards import WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION, render_warroom_v2_prediction_cards
 from .scenario_area import WARROOM_V2_SCENARIO_AREA_RENDERER_VERSION, render_warroom_v2_scenario_area
 from .top_bar import WARROOM_V2_TOP_BAR_RENDERER_VERSION, render_warroom_v2_top_bar
@@ -20,9 +21,10 @@ __all__ = [
     "WARROOM_V2_AUTO_REFRESH_CONTROL_RENDERER_VERSION", "WARROOM_V2_CARD_DETAIL_OVERLAY_HTML_VERSION", "WARROOM_V2_CARD_VISUAL_SEMANTICS_VERSION",
     "WARROOM_V2_CARD_DETAIL_BALLOON_RENDERER_VERSION", "WARROOM_V2_CHART_REVIEW_PANEL_RENDERER_VERSION", "WARROOM_V2_DEBUG_PREVIEW_RENDERER_VERSION",
     "WARROOM_V2_FRAGMENT_REFRESH_VERSION", "WARROOM_V2_MARKET_SNAPSHOT_STRIP_RENDERER_VERSION", "WARROOM_V2_MODEL_VIEWS_VERSION",
-    "WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION", "WARROOM_V2_SCENARIO_AREA_RENDERER_VERSION", "WARROOM_V2_TOP_BAR_RENDERER_VERSION",
+    "WARROOM_V2_PANEL_EVENT_BRIDGE_ADAPTER_VERSION", "WARROOM_V2_PREDICTION_CARDS_RENDERER_VERSION", "WARROOM_V2_SCENARIO_AREA_RENDERER_VERSION", "WARROOM_V2_TOP_BAR_RENDERER_VERSION",
     "build_warroom_v2_auto_refresh_control_packet", "build_warroom_v2_chart_review_panel_packet", "build_warroom_v2_fragment_refresh_packet",
-    "build_warroom_v2_market_snapshot_strip_packet", "render_warroom_v2_auto_refresh_control", "render_warroom_v2_auto_refresh_status_strip",
+    "build_warroom_v2_market_snapshot_strip_packet", "build_warroom_v2_panel_event_bridge_packet", "chart_review_event_payload_from_panel_packet",
+    "market_snapshot_event_payload_from_strip_packet", "render_warroom_v2_auto_refresh_control", "render_warroom_v2_auto_refresh_status_strip",
     "render_warroom_v2_card_detail_balloon", "render_warroom_v2_chart_review_panel", "render_warroom_v2_debug_preview",
     "render_warroom_v2_fragment_refresh_block", "render_warroom_v2_market_snapshot_strip", "render_warroom_v2_prediction_cards",
     "render_warroom_v2_scenario_area", "render_warroom_v2_top_bar", "sidebar_auto_refresh_settings", "warroom_v2_models_by_zone",
