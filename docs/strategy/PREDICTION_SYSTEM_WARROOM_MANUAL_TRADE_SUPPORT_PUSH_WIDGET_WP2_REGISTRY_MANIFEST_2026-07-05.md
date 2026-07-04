@@ -1,0 +1,50 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_WP2_REGISTRY_MANIFEST_2026-07-05.md
+# desc: WP2 WarRoom manual trade support push-widget registry and manifest. Stable catalog before state store/router implementation.
+
+# WP2 WarRoom widget registry and manifest
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Roadmap: PREDICTION_SYSTEM_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_ROADMAP_WP1_WP13_2026-07-05.md
+Base gate: PS_WP1_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_ARCHITECTURE_DONE
+Slice: PS-WP2_WARROOM_MANUAL_TRADE_SUPPORT_WIDGET_REGISTRY_AND_MANIFEST
+
+## Goal
+
+WP2 makes the WarRoom push-widget catalog manifest-driven. Each initial widget declares id, display name, kind, topic bindings, reducer key, render adapter key, layout zone, stale/heartbeat requirements, and extension metadata.
+
+```text
+wp2_completed=true
+next_checkpoint=WP3_Per_widget_state_store
+primary_goal=WarRoom_manual_trade_support_completion
+first_priority=independent_WebSocket_push_auto_updating_widgets
+widget_registry_manifest_ready=true
+stable_registry_ready=true
+manifest_driven_widgets_ready=true
+topic_bindings_ready=true
+future_widget_extension_metadata_ready=true
+initial_widget_count=5
+initial_topic_binding_count=7
+initial_widgets=market_depth_widget,recent_trades_widget,spread_liquidity_widget,receiver_lifecycle_widget,summary_alerts_widget
+architecture_only=true
+manual_trade_support_read_only=true
+warroom_page_modified=false
+warroom_page_mount_added=false
+websocket_opened=false
+websocket_receive_loop_started=false
+websocket_send_enabled=false
+websocket_subscribe_invoked=false
+external_network_used=false
+raw_payload_rendered=false
+endpoint_value_rendered=false
+token_value_rendered=false
+callable_value_rendered=false
+secret_exposure=false
+broker_send_enabled=false
+would_send_to_broker=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+```
