@@ -10,6 +10,8 @@ from .ws_receiver_only_client_guarded_socket_open import SocketOpenFn
 WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_NO_SEND_ADAPTER_VERSION = "prediction_warroom.v2.transport.ws_receiver_only_client_no_send_adapter.ps_q35o.v1"
 LowLevelConnectFn = Callable[[str, Mapping[str, Any]], Mapping[str, Any] | object]
 _SENSITIVE_KEY_PARTS = ("endpoint", "url", "token", "secret", "password", "auth", "credential", "key")
+_OPEN_KIND = "warroom_v2_ws_receiver_only_client_no_send_adapter_open_packet"
+_PACKET_KIND = "warroom_v2_ws_receiver_only_client_no_send_adapter_packet"
 
 
 def _config_keys(config: Mapping[str, Any]) -> list[str]:
@@ -20,22 +22,21 @@ def _redacted_config(config: Mapping[str, Any]) -> dict[str, Any]:
     return {"present": bool(config), "keys": _config_keys(config)}
 
 
+def _false_open_fields() -> dict[str, Any]:
+    return {
+        "connect_called": False, "connect_result": {}, "connect_error": {},
+        "socket_opened": False, "client_started": False, "websocket_enabled": False,
+        "runtime_connected": False, "push_connected": False,
+        "client_sends_messages": False, "external_message_send_enabled": False, "send_disabled": True,
+    }
+
+
 def _sanitize_mapping(data: Mapping[str, Any]) -> dict[str, Any]:
-    sanitized: dict[str, Any] = {}
-    for key, value in data.items():
-        key_text = str(key)
-        lowered = key_text.lower()
-        if any(part in lowered for part in _SENSITIVE_KEY_PARTS):
-            sanitized[key_text] = "<redacted>"
-        else:
-            sanitized[key_text] = value
-    return sanitized
+    return {str(k): "<redacted>" if any(p in str(k).lower() for p in _SENSITIVE_KEY_PARTS) else v for k, v in data.items()}
 
 
 def _result_mapping(result: Mapping[str, Any] | object) -> dict[str, Any]:
-    if isinstance(result, Mapping):
-        return dict(result)
-    return {"result_object_type": type(result).__name__, "opened": bool(result)}
+    return dict(result) if isinstance(result, Mapping) else {"result_object_type": type(result).__name__, "opened": bool(result)}
 
 
 def build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract() -> dict[str, Any]:
@@ -89,6 +90,26 @@ def build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract() -> dict[
     }
 
 
+def _packet(*, status: str, endpoint_url_present: bool, endpoint_url_redacted: str, runtime_config: Mapping[str, Any], packet_kind: str = _OPEN_KIND, allow_adapter_open: bool | None = None, extra: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    packet = {
+        **build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract(),
+        "packet_kind": packet_kind,
+        "adapter_open_status": status,
+        "endpoint_url_present": endpoint_url_present,
+        "endpoint_url_redacted": endpoint_url_redacted,
+        "runtime_config_redacted": _redacted_config(runtime_config),
+        "runtime_config_keys": _config_keys(runtime_config),
+        **_false_open_fields(),
+        "order_intent_submitted": False,
+        "would_send_to_broker": False,
+    }
+    if allow_adapter_open is not None:
+        packet["allow_adapter_open"] = allow_adapter_open
+    if extra:
+        packet.update(extra)
+    return packet
+
+
 class WarRoomV2ReceiverOnlyClientNoSendAdapter:
     """Receiver-only adapter wrapper around an explicitly injected low-level connect function."""
 
@@ -103,50 +124,9 @@ class WarRoomV2ReceiverOnlyClientNoSendAdapter:
     def open(self, endpoint_url: str) -> dict[str, Any]:
         endpoint = str(endpoint_url or "")
         if not endpoint.strip():
-            return {
-                **build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract(),
-                "packet_kind": "warroom_v2_ws_receiver_only_client_no_send_adapter_open_packet",
-                "adapter_open_status": "receiver_only_client_no_send_adapter_blocked_endpoint_required",
-                "endpoint_url_present": False,
-                "endpoint_url_redacted": "",
-                "runtime_config_redacted": _redacted_config(self._runtime_config),
-                "runtime_config_keys": _config_keys(self._runtime_config),
-                "connect_called": False,
-                "connect_result": {},
-                "connect_error": {},
-                "socket_opened": False,
-                "client_started": False,
-                "websocket_enabled": False,
-                "runtime_connected": False,
-                "push_connected": False,
-                "client_sends_messages": False,
-                "external_message_send_enabled": False,
-                "send_disabled": True,
-            }
+            return _packet(status="receiver_only_client_no_send_adapter_blocked_endpoint_required", endpoint_url_present=False, endpoint_url_redacted="", runtime_config=self._runtime_config)
         if not self._allow_adapter_open:
-            return {
-                **build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract(),
-                "packet_kind": "warroom_v2_ws_receiver_only_client_no_send_adapter_open_packet",
-                "adapter_open_status": "receiver_only_client_no_send_adapter_blocked_allow_adapter_open_flag_required",
-                "endpoint_url_present": True,
-                "endpoint_url_redacted": "<provided>",
-                "runtime_config_redacted": _redacted_config(self._runtime_config),
-                "runtime_config_keys": _config_keys(self._runtime_config),
-                "allow_adapter_open": False,
-                "connect_called": False,
-                "connect_result": {},
-                "connect_error": {},
-                "socket_opened": False,
-                "client_started": False,
-                "websocket_enabled": False,
-                "runtime_connected": False,
-                "push_connected": False,
-                "client_sends_messages": False,
-                "external_message_send_enabled": False,
-                "send_disabled": True,
-                "order_intent_submitted": False,
-                "would_send_to_broker": False,
-            }
+            return _packet(status="receiver_only_client_no_send_adapter_blocked_allow_adapter_open_flag_required", endpoint_url_present=True, endpoint_url_redacted="<provided>", runtime_config=self._runtime_config, allow_adapter_open=False)
         raw_result: dict[str, Any] = {}
         error: dict[str, Any] = {}
         try:
@@ -154,99 +134,35 @@ class WarRoomV2ReceiverOnlyClientNoSendAdapter:
         except Exception as exc:  # noqa: BLE001 - adapter reports connect failure as data.
             error = {"error_type": type(exc).__name__, "error_message": str(exc)}
         opened = bool(raw_result.get("socket_opened") or raw_result.get("connected") or raw_result.get("opened")) and not error
-        sanitized_result = _sanitize_mapping(raw_result)
-        return {
-            **build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract(),
-            "packet_kind": "warroom_v2_ws_receiver_only_client_no_send_adapter_open_packet",
-            "adapter_open_status": "receiver_only_client_no_send_adapter_opened_no_send" if opened else "receiver_only_client_no_send_adapter_attempt_failed_no_send",
-            "endpoint_url_present": True,
-            "endpoint_url_redacted": "<provided>",
-            "runtime_config_redacted": _redacted_config(self._runtime_config),
-            "runtime_config_keys": _config_keys(self._runtime_config),
-            "allow_adapter_open": True,
-            "connect_called": True,
-            "connect_result": sanitized_result,
-            "connect_error": error,
-            "socket_opened": opened,
-            "client_started": opened,
-            "websocket_enabled": opened,
-            "runtime_connected": opened,
-            "push_connected": opened,
-            "client_sends_messages": False,
-            "external_message_send_enabled": False,
-            "send_disabled": True,
-            "order_intent_submitted": False,
-            "would_send_to_broker": False,
-        }
+        return _packet(
+            status="receiver_only_client_no_send_adapter_opened_no_send" if opened else "receiver_only_client_no_send_adapter_attempt_failed_no_send",
+            endpoint_url_present=True,
+            endpoint_url_redacted="<provided>",
+            runtime_config=self._runtime_config,
+            allow_adapter_open=True,
+            extra={"connect_called": True, "connect_result": _sanitize_mapping(raw_result), "connect_error": error, "socket_opened": opened, "client_started": opened, "websocket_enabled": opened, "runtime_connected": opened, "push_connected": opened},
+        )
 
 
-def build_warroom_v2_ws_receiver_only_client_no_send_adapter_factory(
-    *,
-    connect_fn: LowLevelConnectFn,
-    base_runtime_config: Mapping[str, Any] | None = None,
-) -> Callable[[Mapping[str, Any]], SocketOpenFn]:
+def build_warroom_v2_ws_receiver_only_client_no_send_adapter_factory(*, connect_fn: LowLevelConnectFn, base_runtime_config: Mapping[str, Any] | None = None) -> Callable[[Mapping[str, Any]], SocketOpenFn]:
     base_config = dict(base_runtime_config or {})
 
     def adapter_factory(runtime_config: Mapping[str, Any]) -> SocketOpenFn:
         merged_config = {**base_config, **dict(runtime_config or {})}
-        allow_adapter_open = bool(merged_config.get("allow_adapter_open"))
-        adapter = WarRoomV2ReceiverOnlyClientNoSendAdapter(connect_fn=connect_fn, runtime_config=merged_config, allow_adapter_open=allow_adapter_open)
+        adapter = WarRoomV2ReceiverOnlyClientNoSendAdapter(connect_fn=connect_fn, runtime_config=merged_config, allow_adapter_open=bool(merged_config.get("allow_adapter_open")))
         return adapter.open
 
     return adapter_factory
 
 
-def build_warroom_v2_ws_receiver_only_client_no_send_adapter_packet(
-    *,
-    endpoint_url: str = "",
-    runtime_config: Mapping[str, Any] | None = None,
-    connect_fn: LowLevelConnectFn | None = None,
-    allow_adapter_open: bool = False,
-) -> dict[str, Any]:
+def build_warroom_v2_ws_receiver_only_client_no_send_adapter_packet(*, endpoint_url: str = "", runtime_config: Mapping[str, Any] | None = None, connect_fn: LowLevelConnectFn | None = None, allow_adapter_open: bool = False) -> dict[str, Any]:
     config = dict(runtime_config or {})
+    endpoint = str(endpoint_url or "")
+    endpoint_present = bool(endpoint.strip())
+    endpoint_redacted = "<provided>" if endpoint_present else ""
     if connect_fn is None:
-        return {
-            **build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract(),
-            "packet_kind": "warroom_v2_ws_receiver_only_client_no_send_adapter_packet",
-            "adapter_open_status": "receiver_only_client_no_send_adapter_blocked_injected_connect_fn_required",
-            "endpoint_url_present": bool(str(endpoint_url or "").strip()),
-            "endpoint_url_redacted": "<provided>" if str(endpoint_url or "").strip() else "",
-            "runtime_config_redacted": _redacted_config(config),
-            "runtime_config_keys": _config_keys(config),
-            "allow_adapter_open": bool(allow_adapter_open),
-            "connect_called": False,
-            "connect_result": {},
-            "connect_error": {},
-            "socket_opened": False,
-            "client_started": False,
-            "websocket_enabled": False,
-            "runtime_connected": False,
-            "push_connected": False,
-            "client_sends_messages": False,
-            "external_message_send_enabled": False,
-            "send_disabled": True,
-        }
+        return _packet(status="receiver_only_client_no_send_adapter_blocked_injected_connect_fn_required", endpoint_url_present=endpoint_present, endpoint_url_redacted=endpoint_redacted, runtime_config=config, packet_kind=_PACKET_KIND, allow_adapter_open=bool(allow_adapter_open))
     if not allow_adapter_open:
-        return {
-            **build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract(),
-            "packet_kind": "warroom_v2_ws_receiver_only_client_no_send_adapter_packet",
-            "adapter_open_status": "receiver_only_client_no_send_adapter_blocked_allow_adapter_open_flag_required",
-            "endpoint_url_present": bool(str(endpoint_url or "").strip()),
-            "endpoint_url_redacted": "<provided>" if str(endpoint_url or "").strip() else "",
-            "runtime_config_redacted": _redacted_config(config),
-            "runtime_config_keys": _config_keys(config),
-            "allow_adapter_open": False,
-            "connect_called": False,
-            "connect_result": {},
-            "connect_error": {},
-            "socket_opened": False,
-            "client_started": False,
-            "websocket_enabled": False,
-            "runtime_connected": False,
-            "push_connected": False,
-            "client_sends_messages": False,
-            "external_message_send_enabled": False,
-            "send_disabled": True,
-        }
+        return _packet(status="receiver_only_client_no_send_adapter_blocked_allow_adapter_open_flag_required", endpoint_url_present=endpoint_present, endpoint_url_redacted=endpoint_redacted, runtime_config=config, packet_kind=_PACKET_KIND, allow_adapter_open=False)
     adapter = WarRoomV2ReceiverOnlyClientNoSendAdapter(connect_fn=connect_fn, runtime_config=config, allow_adapter_open=True)
-    return {**adapter.open(endpoint_url), "allow_adapter_open": True}
+    return {**adapter.open(endpoint_url), "packet_kind": _PACKET_KIND, "allow_adapter_open": True}
