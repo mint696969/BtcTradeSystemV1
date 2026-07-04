@@ -1,0 +1,63 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_PS_Q41F_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_CP11_DEFAULT_OFF_TOPIC_WIDGET_MOUNT_GATE_NO_SEND_2026-07-05.md
+# desc: PS-Q41F WarRoom v2 receiver-only client cp11_default_off_topic_widget_mount_gate no-send. Read-only topic widgets; no subscription, no socket, no controls.
+
+# PS-Q41F WarRoom v2 receiver-only client cp11_default_off_topic_widget_mount_gate no-send
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Base gate: PS_CP10_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_RECONNECT_HEARTBEAT_BACKPRESSURE_DANGER_ZONE_DONE
+Slice: PS-Q41F_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_CP11_DEFAULT_OFF_TOPIC_WIDGET_MOUNT_GATE_NO_SEND
+
+## Decision
+
+Default-off topic widget mount gate prepares future mount metadata without page change.
+
+```text
+default_off_topic_widget_mount_gate_ready=true
+topic_widgets_ready=true
+topic_widgets_read_only=true
+topic_widgets_default_off=true
+```
+
+```text
+topic_widgets_read_only=true
+topic_widgets_default_off=true
+topic_widgets_metadata_only=true
+topic_subscription_requested=false
+topic_subscribe_invoked=false
+topic_unsubscribe_invoked=false
+topic_filter_mutation_enabled=false
+topic_widget_controls_added=false
+raw_payload_returned=false
+endpoint_value_returned=false
+token_value_returned=false
+callable_values_returned=false
+secret_exposure=false
+warroom_page_modified=false
+warroom_page_visible_ui_modified=false
+visible_controls_added=false
+operator_action_controls_added=false
+auto_start_added=false
+receive_loop_started=false
+external_network_used=false
+websocket_imported=false
+socket_opened=false
+client_started=false
+connect_invoked=false
+reconnect_invoked=false
+heartbeat_sent=false
+heartbeat_received=false
+backpressure_runtime_started=false
+receive_invoked=false
+client_sends_messages=false
+external_message_send_enabled=false
+not_sending_external_messages=true
+send_disabled=true
+broker_send_enabled=false
+would_send_to_broker=false
+order_intent_submitted=false
+ledger_append_allowed=false
+prediction_generation_invoked=false
+prediction_inference_invoked=false
+classifier_invoked=false
+```
