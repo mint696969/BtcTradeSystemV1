@@ -122,6 +122,10 @@ from btcts.apps.operator_ui.prediction_warroom.v2.transport.ws_receiver_only_cli
     WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_TARGET_READBACK_STATE_KEY,
     build_warroom_v2_ws_receiver_only_client_page_mount_path_hidden_observation_packet,
 )
+from btcts.apps.operator_ui.prediction_warroom.v2.transport.ws_receiver_only_client_page_mount_path_compact_status_badge import (
+    WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_KEY,
+    build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet,
+)
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
 from btcts.apps.operator_ui.components.live_shell import get_registered_slots
@@ -616,6 +620,16 @@ def _render_warroom_v2_top_minimal_status_line_mount_q32y() -> None:
     if bool(mount_point_packet.get("streamlit_markdown_allowed")):
         st.markdown(str(mount_point_packet.get("compact_line_ja") or ""))
 
+
+
+def _render_warroom_v2_receiver_page_mount_compact_status_badge_q35g() -> None:
+    mount_point_packet = st.session_state.get(WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_MOUNT_POINT_STATE_KEY)
+    badge_packet = build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet(
+        visible_mount_point_packet=mount_point_packet if isinstance(mount_point_packet, dict) else None,
+    )
+    st.session_state[WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_KEY] = badge_packet
+    if bool(badge_packet.get("streamlit_markdown_allowed")):
+        st.markdown(str(badge_packet.get("compact_badge_markdown") or ""))
 def _record_warroom_v2_transport_shadow_integration_state(*, fragment_enabled: bool, prediction_fragment_enabled: bool) -> None:
     # Hidden session_state key: warroom_v2_transport_shadow_integration_q31e
     fragment_summary = dict(_warroom_refresh_diagnostics_summary())
@@ -939,6 +953,7 @@ def _render_warroom_page_body() -> None:
     live_shell.render_compact_page_header(get_text(lang, "warroom_title"))
 
     _render_warroom_v2_top_minimal_status_line_mount_q32y()
+    _render_warroom_v2_receiver_page_mount_compact_status_badge_q35g()
 
     with render_warroom_focus_section("operator_focus_nav"):
         render_warroom_operator_focus_nav()
