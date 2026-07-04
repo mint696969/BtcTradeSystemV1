@@ -1,0 +1,50 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_WP11_TOP_LAYOUT_PUSH_WIDGET_POLISH_2026-07-05.md
+# desc: WP11 WarRoom manual trade support top layout push-widget polish.
+
+# WP11 WarRoom top layout push-widget polish
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Roadmap: PREDICTION_SYSTEM_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_ROADMAP_WP1_WP13_2026-07-05.md
+Base gate: PS_WP10_WARROOM_MANUAL_TRADE_SUPPORT_WIDGET_EXTENSION_CONTRACT_DONE
+Slice: PS-WP11_WARROOM_MANUAL_TRADE_SUPPORT_TOP_LAYOUT_PUSH_WIDGET_POLISH
+
+## Goal
+
+WP11 organizes the top WarRoom information groups around market status, freshness/connection health, manual decision context, and risk cues while preserving the read-only push-widget boundary.
+
+```text
+wp11_completed=true
+next_checkpoint=WP12_Bottom_chart_layout
+top_layout_push_widget_polish_ready=true
+top_information_groups_ready=true
+market_status_group_ready=true
+freshness_connection_group_ready=true
+manual_decision_context_group_ready=true
+risk_cues_group_ready=true
+top_layout_visible_mount_ready=true
+top_layout_read_only_ready=true
+group_count=4
+base_widget_count=5
+live_widget_count=5
+manual_trade_support_read_only=true
+warroom_page_modified=true
+warroom_page_mount_added=true
+websocket_opened=false
+websocket_receive_loop_started=false
+websocket_send_enabled=false
+websocket_subscribe_invoked=false
+external_network_used=false
+raw_payload_rendered=false
+endpoint_value_rendered=false
+token_value_rendered=false
+callable_value_rendered=false
+secret_exposure=false
+broker_send_enabled=false
+would_send_to_broker=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+```

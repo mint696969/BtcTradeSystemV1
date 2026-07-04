@@ -67,6 +67,11 @@ from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.wp9_warroom_page_
     build_wp9_warroom_page_mount_packet,
     render_wp9_push_widget_mount,
 )
+from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.wp11_top_layout_push_widget_polish import (
+    WARROOM_WP11_TOP_LAYOUT_SESSION_STATE_KEY,
+    build_wp11_top_layout_push_widget_polish_packet,
+    render_wp11_top_layout_polish,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     WARROOM_V2_OPERATOR_DIAGNOSTIC_OBSERVATION_STATE_KEY,
@@ -413,6 +418,12 @@ def _render_warroom_operator_support_review() -> None:
         warroom_timeline.render()
 
 
+
+
+def _render_warroom_push_widget_top_layout_wp11() -> None:
+    packet = build_wp11_top_layout_push_widget_polish_packet()
+    st.session_state[WARROOM_WP11_TOP_LAYOUT_SESSION_STATE_KEY] = packet
+    render_wp11_top_layout_polish(packet, st)
 
 def _render_warroom_push_widget_mount_wp9() -> None:
     packet = build_wp9_warroom_page_mount_packet()
@@ -1043,6 +1054,9 @@ def _render_warroom_page_body() -> None:
 
     with render_warroom_focus_section("live_nowcast"):
         render_warroom_live_market_nowcast_panel(fragment_enabled=fragment_enabled)
+
+    with render_warroom_focus_section("push_widget_top_layout"):
+        _render_warroom_push_widget_top_layout_wp11()
 
     with render_warroom_focus_section("push_widget_grid"):
         _render_warroom_push_widget_mount_wp9()
