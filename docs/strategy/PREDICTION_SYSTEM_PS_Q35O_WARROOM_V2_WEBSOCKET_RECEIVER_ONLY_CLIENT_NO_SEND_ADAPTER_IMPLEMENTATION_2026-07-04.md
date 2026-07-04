@@ -20,6 +20,8 @@ requires_endpoint_url=true
 requires_allow_adapter_open_flag=true
 low_level_connect_fn_injected_only=true
 connect_called_only_on_adapter_open=true
+adapter_open_allowed_only_after_allow_flag=true
+factory_embeds_allow_adapter_open_from_runtime_config=true
 factory_creation_connects=false
 injected_adapter_factory_compatible=true
 injected_opener_compatible=true
@@ -89,7 +91,7 @@ not_using_live_network_tests=true
 
 ```text
 - Missing connect_fn blocks adapter open.
-- Missing allow_adapter_open blocks adapter open.
+- Missing allow_adapter_open blocks direct adapter open and Q35N factory-produced opener.
 - Adapter factory creation does not connect.
 - With Q35N/Q35M/Q35L guards true, injected low-level connect is called exactly once.
 - Q35N preflight blocks before factory/connect calls.

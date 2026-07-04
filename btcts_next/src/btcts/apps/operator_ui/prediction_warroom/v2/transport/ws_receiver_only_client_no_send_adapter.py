@@ -49,6 +49,8 @@ def build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract() -> dict[
         "requires_allow_adapter_open_flag": True,
         "low_level_connect_fn_injected_only": True,
         "connect_called_only_on_adapter_open": True,
+        "adapter_open_allowed_only_after_allow_flag": True,
+        "factory_embeds_allow_adapter_open_from_runtime_config": True,
         "factory_creation_connects": False,
         "injected_adapter_factory_compatible": True,
         "injected_opener_compatible": True,
@@ -90,9 +92,10 @@ def build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract() -> dict[
 class WarRoomV2ReceiverOnlyClientNoSendAdapter:
     """Receiver-only adapter wrapper around an explicitly injected low-level connect function."""
 
-    def __init__(self, *, connect_fn: LowLevelConnectFn, runtime_config: Mapping[str, Any] | None = None) -> None:
+    def __init__(self, *, connect_fn: LowLevelConnectFn, runtime_config: Mapping[str, Any] | None = None, allow_adapter_open: bool = False) -> None:
         self._connect_fn = connect_fn
         self._runtime_config = dict(runtime_config or {})
+        self._allow_adapter_open = bool(allow_adapter_open)
 
     def __call__(self, endpoint_url: str) -> dict[str, Any]:
         return self.open(endpoint_url)
@@ -120,6 +123,30 @@ class WarRoomV2ReceiverOnlyClientNoSendAdapter:
                 "external_message_send_enabled": False,
                 "send_disabled": True,
             }
+        if not self._allow_adapter_open:
+            return {
+                **build_warroom_v2_ws_receiver_only_client_no_send_adapter_contract(),
+                "packet_kind": "warroom_v2_ws_receiver_only_client_no_send_adapter_open_packet",
+                "adapter_open_status": "receiver_only_client_no_send_adapter_blocked_allow_adapter_open_flag_required",
+                "endpoint_url_present": True,
+                "endpoint_url_redacted": "<provided>",
+                "runtime_config_redacted": _redacted_config(self._runtime_config),
+                "runtime_config_keys": _config_keys(self._runtime_config),
+                "allow_adapter_open": False,
+                "connect_called": False,
+                "connect_result": {},
+                "connect_error": {},
+                "socket_opened": False,
+                "client_started": False,
+                "websocket_enabled": False,
+                "runtime_connected": False,
+                "push_connected": False,
+                "client_sends_messages": False,
+                "external_message_send_enabled": False,
+                "send_disabled": True,
+                "order_intent_submitted": False,
+                "would_send_to_broker": False,
+            }
         raw_result: dict[str, Any] = {}
         error: dict[str, Any] = {}
         try:
@@ -136,6 +163,7 @@ class WarRoomV2ReceiverOnlyClientNoSendAdapter:
             "endpoint_url_redacted": "<provided>",
             "runtime_config_redacted": _redacted_config(self._runtime_config),
             "runtime_config_keys": _config_keys(self._runtime_config),
+            "allow_adapter_open": True,
             "connect_called": True,
             "connect_result": sanitized_result,
             "connect_error": error,
@@ -161,7 +189,8 @@ def build_warroom_v2_ws_receiver_only_client_no_send_adapter_factory(
 
     def adapter_factory(runtime_config: Mapping[str, Any]) -> SocketOpenFn:
         merged_config = {**base_config, **dict(runtime_config or {})}
-        adapter = WarRoomV2ReceiverOnlyClientNoSendAdapter(connect_fn=connect_fn, runtime_config=merged_config)
+        allow_adapter_open = bool(merged_config.get("allow_adapter_open"))
+        adapter = WarRoomV2ReceiverOnlyClientNoSendAdapter(connect_fn=connect_fn, runtime_config=merged_config, allow_adapter_open=allow_adapter_open)
         return adapter.open
 
     return adapter_factory
@@ -219,5 +248,5 @@ def build_warroom_v2_ws_receiver_only_client_no_send_adapter_packet(
             "external_message_send_enabled": False,
             "send_disabled": True,
         }
-    adapter = WarRoomV2ReceiverOnlyClientNoSendAdapter(connect_fn=connect_fn, runtime_config=config)
+    adapter = WarRoomV2ReceiverOnlyClientNoSendAdapter(connect_fn=connect_fn, runtime_config=config, allow_adapter_open=True)
     return {**adapter.open(endpoint_url), "allow_adapter_open": True}

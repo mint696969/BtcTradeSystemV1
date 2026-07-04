@@ -42,6 +42,8 @@ def test_q35o_contract_is_no_send_adapter_implementation() -> None:
     assert packet["requires_low_level_connect_fn"] is True
     assert packet["low_level_connect_fn_injected_only"] is True
     assert packet["factory_creation_connects"] is False
+    assert packet["adapter_open_allowed_only_after_allow_flag"] is True
+    assert packet["factory_embeds_allow_adapter_open_from_runtime_config"] is True
     assert packet["injected_adapter_factory_compatible"] is True
     assert packet["runtime_config_values_returned"] is False
     assert packet["connect_result_sanitized"] is True
@@ -98,7 +100,7 @@ def test_q35o_adapter_open_reports_connect_failure_as_data_without_send() -> Non
     def connect(endpoint: str, config: Mapping[str, Any]) -> dict[str, Any]:
         raise RuntimeError("connect failed")
 
-    adapter = WarRoomV2ReceiverOnlyClientNoSendAdapter(connect_fn=connect, runtime_config=_config())
+    adapter = WarRoomV2ReceiverOnlyClientNoSendAdapter(connect_fn=connect, runtime_config=_config(), allow_adapter_open=True)
     packet = adapter.open("ws://example.invalid/receiver")
     assert packet["adapter_open_status"] == "receiver_only_client_no_send_adapter_attempt_failed_no_send"
     assert packet["connect_called"] is True
@@ -107,6 +109,21 @@ def test_q35o_adapter_open_reports_connect_failure_as_data_without_send() -> Non
     assert packet["client_started"] is False
     assert packet["client_sends_messages"] is False
     assert packet["external_message_send_enabled"] is False
+
+
+def test_q35o_direct_adapter_open_blocks_without_allow_flag() -> None:
+    calls: list[str] = []
+
+    def connect(endpoint: str, config: Mapping[str, Any]) -> dict[str, Any]:
+        calls.append(endpoint)
+        return {"socket_opened": True}
+
+    adapter = WarRoomV2ReceiverOnlyClientNoSendAdapter(connect_fn=connect, runtime_config=_config())
+    packet = adapter.open("ws://example.invalid/receiver")
+    assert packet["adapter_open_status"] == "receiver_only_client_no_send_adapter_blocked_allow_adapter_open_flag_required"
+    assert packet["connect_called"] is False
+    assert packet["socket_opened"] is False
+    assert calls == []
 
 
 def test_q35o_factory_creation_does_not_connect_and_q35n_calls_opener_once_after_guards() -> None:
@@ -121,7 +138,7 @@ def test_q35o_factory_creation_does_not_connect_and_q35n_calls_opener_once_after
 
     packet = build_warroom_v2_ws_receiver_only_client_adapter_factory_packet(
         compact_status_badge_packet=_badge(),
-        runtime_config=_config(),
+        runtime_config={**_config(), "allow_adapter_open": True},
         adapter_factory=adapter_factory,
         allow_adapter_factory=True,
         operator_scope_ack=True,
@@ -131,11 +148,36 @@ def test_q35o_factory_creation_does_not_connect_and_q35n_calls_opener_once_after
     )
     assert packet["adapter_factory_status"] == "receiver_only_client_adapter_factory_ready_to_build_injected_opener_no_send"
     assert packet["adapter_factory_called"] is True
-    assert connect_calls == [("ws://example.invalid/receiver", {"base_name": "q35o", **_config()})]
+    assert connect_calls == [("ws://example.invalid/receiver", {"base_name": "q35o", **_config(), "allow_adapter_open": True})]
     assert packet["runtime_wiring_status"] == "receiver_only_client_guarded_socket_open_opened_no_send"
     assert packet["socket_opened"] is True
     assert packet["client_sends_messages"] is False
     assert packet["external_message_send_enabled"] is False
+
+
+def test_q35o_factory_with_q35n_blocks_without_embedded_allow_adapter_open() -> None:
+    connect_calls: list[str] = []
+
+    def connect(endpoint: str, config: Mapping[str, Any]) -> dict[str, Any]:
+        connect_calls.append(endpoint)
+        return {"socket_opened": True}
+
+    packet = build_warroom_v2_ws_receiver_only_client_adapter_factory_packet(
+        compact_status_badge_packet=_badge(),
+        runtime_config=_config(),
+        adapter_factory=build_warroom_v2_ws_receiver_only_client_no_send_adapter_factory(connect_fn=connect),
+        allow_adapter_factory=True,
+        operator_scope_ack=True,
+        socket_open_requested=True,
+        operator_socket_open_ack=True,
+        allow_socket_open=True,
+    )
+    assert packet["adapter_factory_status"] == "receiver_only_client_adapter_factory_ready_to_build_injected_opener_no_send"
+    assert packet["adapter_factory_called"] is True
+    assert packet["runtime_wiring_status"] == "receiver_only_client_guarded_socket_open_attempt_failed_no_send"
+    assert packet["socket_open_attempted"] is True
+    assert packet["socket_opened"] is False
+    assert connect_calls == []
 
 
 def test_q35o_factory_with_q35n_does_not_connect_when_preflight_blocks() -> None:
