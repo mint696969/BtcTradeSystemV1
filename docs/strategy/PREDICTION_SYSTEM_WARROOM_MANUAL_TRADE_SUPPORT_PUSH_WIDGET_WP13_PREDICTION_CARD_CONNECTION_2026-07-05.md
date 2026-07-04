@@ -1,0 +1,53 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_WP13_PREDICTION_CARD_CONNECTION_2026-07-05.md
+# desc: WP13 WarRoom manual trade support prediction card connection and updates. Final roadmap checkpoint.
+
+# WP13 WarRoom prediction card connection and updates
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Roadmap: PREDICTION_SYSTEM_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_ROADMAP_WP1_WP13_2026-07-05.md
+Base gate: PS_WP12_WARROOM_MANUAL_TRADE_SUPPORT_BOTTOM_CHART_LAYOUT_DONE
+Slice: PS-WP13_WARROOM_MANUAL_TRADE_SUPPORT_PREDICTION_CARD_CONNECTION_AND_UPDATES
+
+## Goal
+
+WP13 connects prediction cards to push-widget market context and bottom-chart context as read-only manual review cards. This completes the WP1-WP13 WarRoom manual trading support push-widget roadmap without enabling prediction invocation, classifier invocation, broker, order, ledger, or auto-trading.
+
+```text
+wp13_completed=true
+roadmap_completed=true
+next_checkpoint=WP13_DONE_CC_and_operator_acceptance
+prediction_card_connection_ready=true
+prediction_card_update_ready=true
+prediction_card_market_context_ready=true
+prediction_card_chart_context_ready=true
+prediction_card_manual_review_ready=true
+prediction_card_read_only_ready=true
+prediction_card_no_action_boundary_ready=true
+prediction_invocation_guard_ready=true
+classifier_invocation_guard_ready=true
+prediction_card_count=3
+bottom_chart_row_count=7
+bottom_chart_overlay_count=4
+manual_trade_support_read_only=true
+warroom_page_modified=true
+warroom_page_mount_added=true
+websocket_opened=false
+websocket_receive_loop_started=false
+websocket_send_enabled=false
+websocket_subscribe_invoked=false
+external_network_used=false
+raw_payload_rendered=false
+endpoint_value_rendered=false
+token_value_rendered=false
+callable_value_rendered=false
+secret_exposure=false
+broker_send_enabled=false
+would_send_to_broker=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+roadmap_wp1_wp13_complete=true
+```

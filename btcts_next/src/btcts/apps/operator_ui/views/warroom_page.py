@@ -77,6 +77,11 @@ from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.wp12_bottom_chart
     build_wp12_bottom_chart_layout_packet,
     render_wp12_bottom_chart_layout,
 )
+from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.wp13_prediction_card_connection import (
+    WARROOM_WP13_PREDICTION_CARD_SESSION_STATE_KEY,
+    build_wp13_prediction_card_connection_packet,
+    render_wp13_prediction_card_connection,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     WARROOM_V2_OPERATOR_DIAGNOSTIC_OBSERVATION_STATE_KEY,
@@ -425,6 +430,12 @@ def _render_warroom_operator_support_review() -> None:
 
 
 
+
+
+def _render_warroom_push_widget_prediction_card_wp13() -> None:
+    packet = build_wp13_prediction_card_connection_packet()
+    st.session_state[WARROOM_WP13_PREDICTION_CARD_SESSION_STATE_KEY] = packet
+    render_wp13_prediction_card_connection(packet, st)
 
 def _render_warroom_push_widget_bottom_chart_wp12() -> None:
     packet = build_wp12_bottom_chart_layout_packet()
@@ -1073,6 +1084,9 @@ def _render_warroom_page_body() -> None:
         _render_warroom_push_widget_mount_wp9()
     with render_warroom_focus_section("push_widget_bottom_chart"):
         _render_warroom_push_widget_bottom_chart_wp12()
+    with render_warroom_focus_section("push_widget_prediction_cards"):
+        _render_warroom_push_widget_prediction_card_wp13()
+
 
 
     with render_warroom_focus_section("latest_prediction_read_model"):
