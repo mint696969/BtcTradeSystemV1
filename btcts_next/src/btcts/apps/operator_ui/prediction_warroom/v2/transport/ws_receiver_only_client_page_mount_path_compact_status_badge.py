@@ -7,6 +7,7 @@ from typing import Any, Mapping
 
 WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_VERSION = "prediction_warroom.v2.transport.ws_receiver_only_client_page_mount_path_compact_status_badge.ps_q35g.v1"
 WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_READBACK_COUNT_VERSION = "prediction_warroom.v2.transport.ws_receiver_only_client_page_mount_path_compact_status_badge_readback_count.ps_q35h.v1"
+WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_READBACK_STATUS_VERSION = "prediction_warroom.v2.transport.ws_receiver_only_client_page_mount_path_compact_status_badge_readback_status.ps_q35i.v1"
 WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_KEY = "warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_q35g"
 
 
@@ -18,12 +19,24 @@ def _badge_status(*, mount_markdown_allowed: bool, receiver_ready: bool) -> str:
     return "receiver_page_mount_compact_status_badge_visible_one_line_no_socket_no_send"
 
 
-def _readback_count(hidden_observation_packet: Mapping[str, Any] | None) -> int:
+def _readiness_packet(hidden_observation_packet: Mapping[str, Any] | None) -> Mapping[str, Any]:
     packet = dict(hidden_observation_packet or {})
     readiness = packet.get("page_mount_path_readiness_packet")
-    if not isinstance(readiness, Mapping):
-        return 0
+    return readiness if isinstance(readiness, Mapping) else {}
+
+
+def _readback_count(hidden_observation_packet: Mapping[str, Any] | None) -> int:
+    readiness = _readiness_packet(hidden_observation_packet)
     return int(readiness.get("receiver_state_message_count") or 0)
+
+
+def _readback_label(hidden_observation_packet: Mapping[str, Any] | None) -> str:
+    readiness = _readiness_packet(hidden_observation_packet)
+    if not readiness:
+        return "unknown"
+    if bool(readiness.get("receiver_page_mount_path_ready_for_next_slice")):
+        return "ready"
+    return "blocked"
 
 
 def build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_contract() -> dict[str, Any]:
@@ -31,14 +44,18 @@ def build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badg
         "ok": True,
         "compact_status_badge_version": WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_VERSION,
         "compact_status_badge_readback_count_version": WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_READBACK_COUNT_VERSION,
+        "compact_status_badge_readback_status_version": WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_READBACK_STATUS_VERSION,
         "compact_status_badge_kind": "warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_visible_one_line_no_socket_no_send",
         "state_key": WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_KEY,
         "selected_visible_surface": "compact_status_badge",
         "visible_surface_implemented_now": True,
         "visible_surface_implementation_allowed_now": True,
         "readback_count_display_enabled": True,
+        "readback_status_display_enabled": True,
         "warroom_page_modified": True,
         "warroom_page_visible_ui_modified": True,
+        "q35i_warroom_page_delta_modified": False,
+        "q35i_warroom_page_visible_ui_delta_modified": False,
         "visible_information_added": True,
         "visible_controls_added": False,
         "renders_badge_now": True,
@@ -85,9 +102,10 @@ def build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badg
     status = _badge_status(mount_markdown_allowed=mount_markdown_allowed, receiver_ready=receiver_ready)
     visible_now = status == "receiver_page_mount_compact_status_badge_visible_one_line_no_socket_no_send"
     receiver_state_message_count = _readback_count(hidden)
+    readback_label = _readback_label(hidden)
     compact_badge_markdown = ""
     if visible_now:
-        compact_badge_markdown = f"`WS Receiver` page-mount ready · msgs={receiver_state_message_count} · no socket/send"
+        compact_badge_markdown = f"`WS Receiver` mount ready · readback={readback_label} · msgs={receiver_state_message_count} · no socket/send"
     return {
         **build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_contract(),
         "packet_kind": "warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet",
@@ -96,6 +114,7 @@ def build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badg
         "mount_point_status": str(mount.get("mount_point_status") or ""),
         "mount_markdown_allowed": mount_markdown_allowed,
         "receiver_ready": receiver_ready,
+        "receiver_readback_label": readback_label,
         "receiver_state_message_count": receiver_state_message_count,
         "compact_status_badge_status": status,
         "compact_status_badge_visible_now": visible_now,
