@@ -115,6 +115,13 @@ from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     build_warroom_v2_streamlit_local_loop_observation_packet,
     build_warroom_v2_streamlit_shadow_integration_packet,
 )
+from btcts.apps.operator_ui.prediction_warroom.v2.transport.ws_receiver_only_client_page_mount_path_hidden_observation import (
+    WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_HIDDEN_OBSERVATION_STATE_KEY,
+    WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_OPERATOR_ACK_STATE_KEY,
+    WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_REQUEST_STATE_KEY,
+    WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_TARGET_READBACK_STATE_KEY,
+    build_warroom_v2_ws_receiver_only_client_page_mount_path_hidden_observation_packet,
+)
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
 from btcts.apps.operator_ui.components.live_shell import get_registered_slots
@@ -852,6 +859,14 @@ def _record_warroom_v2_transport_shadow_integration_state(*, fragment_enabled: b
         operator_visible_mount_ack=False,
         status_gate_render_requested=False,
         status_gate_read_only_ack=False,
+    )
+    # Hidden session_state key: warroom_v2_ws_receiver_only_client_page_mount_path_hidden_observation_q35b
+    st.session_state[WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_HIDDEN_OBSERVATION_STATE_KEY] = build_warroom_v2_ws_receiver_only_client_page_mount_path_hidden_observation_packet(
+        fragment_summary=fragment_summary,
+        target_write_readback_reset_rollback_packet=st.session_state.get(WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_TARGET_READBACK_STATE_KEY),
+        visible_mount_point_packet=st.session_state.get(WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_MOUNT_POINT_STATE_KEY),
+        receiver_page_mount_path_requested=bool(st.session_state.get(WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_REQUEST_STATE_KEY, False)),
+        operator_receiver_page_mount_path_ack=bool(st.session_state.get(WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_OPERATOR_ACK_STATE_KEY, False)),
     )
 
 def _warroom_operator_first_render_path_cleanup_packet() -> dict:
