@@ -60,7 +60,7 @@ def test_q35g_builds_one_line_compact_badge_when_mount_ready() -> None:
     assert packet["compact_status_badge_status"] == "receiver_page_mount_compact_status_badge_visible_one_line_no_socket_no_send"
     assert packet["compact_status_badge_visible_now"] is True
     assert packet["visible_surface_implemented_now"] is True
-    assert packet["compact_badge_markdown"] == "`WS Receiver` mount ready · readback=unknown · msgs=0 · no socket/send"
+    assert packet["compact_badge_markdown"] == "`WS Receiver` mount ready · state=unknown · readback=unknown · msgs=0 · no socket/send"
     assert packet["renders_badge_now"] is True
     assert packet["renders_warning_now"] is False
     assert packet["renders_help_text_now"] is False

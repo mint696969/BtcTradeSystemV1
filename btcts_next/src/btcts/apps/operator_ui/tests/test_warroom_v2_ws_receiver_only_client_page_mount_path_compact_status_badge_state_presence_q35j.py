@@ -1,5 +1,5 @@
-# path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_readback_status_q35i.py
-# desc: PS-Q35I guards for compact receiver status badge readback status label. One line only, no socket, no send.
+# path: ./btcts_next/src/btcts/apps/operator_ui/tests/test_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_state_presence_q35j.py
+# desc: PS-Q35J guards for compact receiver status badge state presence label. One line only, no socket, no send.
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.apps.operator_ui.prediction_warroom.v2.transport.ws_receiver_only_client_page_mount_path_compact_status_badge import (  # noqa: E402
-    WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_READBACK_STATUS_VERSION,
+    WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_PRESENCE_VERSION,
     build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_contract,
     build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[6]
 MODULE = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/transport/ws_receiver_only_client_page_mount_path_compact_status_badge.py"
-DOC = REPO_ROOT / "docs/strategy/PREDICTION_SYSTEM_PS_Q35I_WARROOM_V2_WEBSOCKET_RECEIVER_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_READBACK_STATUS_NO_SOCKET_NO_SEND_2026-07-04.md"
+DOC = REPO_ROOT / "docs/strategy/PREDICTION_SYSTEM_PS_Q35J_WARROOM_V2_WEBSOCKET_RECEIVER_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_PRESENCE_NO_SOCKET_NO_SEND_2026-07-04.md"
 TRANSPORT_INIT = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/transport/__init__.py"
 V2_INIT = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/__init__.py"
 
@@ -27,18 +27,18 @@ def _mount_packet() -> dict[str, object]:
     return {"mount_point_status": "compact_ws_status_line_streamlit_top_minimal_status_line_visible_mount_point_markdown_allowed", "streamlit_markdown_allowed": True, "status_line_visible_now": True, "status_line_mounted_now": True}
 
 
-def _hidden_observation_packet(*, message_count: int = 9, ready: bool = True) -> dict[str, object]:
-    return {"page_mount_path_readiness_packet": {"receiver_state_message_count": message_count, "receiver_page_mount_path_ready_for_next_slice": ready}}
+def _hidden_observation_packet(*, message_count: int = 9, target_ready: bool = True, ready: bool = True) -> dict[str, object]:
+    return {"page_mount_path_readiness_packet": {"receiver_state_message_count": message_count, "target_receiver_state_readback_ready": target_ready, "receiver_page_mount_path_ready_for_next_slice": ready}}
 
 
-def test_q35i_contract_extends_badge_with_readback_status_label() -> None:
+def test_q35j_contract_extends_badge_with_state_presence_label() -> None:
     packet = build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_contract()
-    assert packet["compact_status_badge_readback_status_version"] == WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_READBACK_STATUS_VERSION
+    assert packet["compact_status_badge_state_presence_version"] == WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_PRESENCE_VERSION
+    assert packet["state_presence_display_enabled"] is True
     assert packet["readback_status_display_enabled"] is True
     assert packet["readback_count_display_enabled"] is True
     assert packet["selected_visible_surface"] == "compact_status_badge"
-    assert packet["warroom_page_modified"] is True
-    assert packet["q35i_warroom_page_delta_modified"] is False
+    assert packet["q35j_warroom_page_delta_modified"] is False
     assert packet["visible_controls_added"] is False
     assert packet["renders_badge_now"] is True
     assert packet["renders_card_now"] is False
@@ -49,19 +49,21 @@ def test_q35i_contract_extends_badge_with_readback_status_label() -> None:
     assert packet["client_sends_messages"] is False
 
 
-def test_q35i_badge_marks_readback_unknown_when_hidden_observation_missing() -> None:
+def test_q35j_badge_marks_state_unknown_when_hidden_observation_missing() -> None:
     packet = build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet(visible_mount_point_packet=_mount_packet())
+    assert packet["receiver_state_presence_label"] == "unknown"
     assert packet["receiver_readback_label"] == "unknown"
     assert packet["receiver_state_message_count"] == 0
     assert packet["compact_badge_markdown"] == "`WS Receiver` mount ready · state=unknown · readback=unknown · msgs=0 · no socket/send"
     assert packet["socket_opened"] is False
 
 
-def test_q35i_badge_marks_readback_ready_when_hidden_observation_ready() -> None:
+def test_q35j_badge_marks_state_present_when_target_ready() -> None:
     packet = build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet(
         visible_mount_point_packet=_mount_packet(),
-        hidden_observation_packet=_hidden_observation_packet(message_count=14, ready=True),
+        hidden_observation_packet=_hidden_observation_packet(message_count=14, target_ready=True, ready=True),
     )
+    assert packet["receiver_state_presence_label"] == "present"
     assert packet["receiver_readback_label"] == "ready"
     assert packet["receiver_state_message_count"] == 14
     assert packet["compact_badge_markdown"] == "`WS Receiver` mount ready · state=present · readback=ready · msgs=14 · no socket/send"
@@ -72,11 +74,12 @@ def test_q35i_badge_marks_readback_ready_when_hidden_observation_ready() -> None
     assert packet["client_sends_messages"] is False
 
 
-def test_q35i_badge_marks_readback_blocked_when_hidden_observation_not_ready() -> None:
+def test_q35j_badge_marks_state_missing_when_target_not_ready() -> None:
     packet = build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet(
         visible_mount_point_packet=_mount_packet(),
-        hidden_observation_packet=_hidden_observation_packet(message_count=0, ready=False),
+        hidden_observation_packet=_hidden_observation_packet(message_count=0, target_ready=False, ready=False),
     )
+    assert packet["receiver_state_presence_label"] == "missing"
     assert packet["receiver_readback_label"] == "blocked"
     assert packet["receiver_state_message_count"] == 0
     assert packet["compact_badge_markdown"] == "`WS Receiver` mount ready · state=missing · readback=blocked · msgs=0 · no socket/send"
@@ -84,30 +87,31 @@ def test_q35i_badge_marks_readback_blocked_when_hidden_observation_not_ready() -
     assert packet["renders_help_text_now"] is False
 
 
-def test_q35i_badge_still_blocks_without_mount_permission() -> None:
-    packet = build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet(hidden_observation_packet=_hidden_observation_packet(message_count=14, ready=True))
+def test_q35j_badge_still_blocks_without_mount_permission() -> None:
+    packet = build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet(hidden_observation_packet=_hidden_observation_packet(message_count=14, target_ready=True, ready=True))
     assert packet["compact_status_badge_status"] == "receiver_page_mount_compact_status_badge_blocked_mount_point_required"
     assert packet["compact_status_badge_visible_now"] is False
+    assert packet["receiver_state_presence_label"] == "present"
     assert packet["receiver_readback_label"] == "ready"
     assert packet["receiver_state_message_count"] == 14
     assert packet["compact_badge_markdown"] == ""
 
 
-def test_q35i_does_not_add_aggregator_exports_or_risky_paths() -> None:
+def test_q35j_does_not_add_aggregator_exports_or_risky_paths() -> None:
     module = MODULE.read_text(encoding="utf-8-sig")
     transport_init = TRANSPORT_INIT.read_text(encoding="utf-8-sig")
     v2_init = V2_INIT.read_text(encoding="utf-8-sig")
-    assert "READBACK_STATUS" not in transport_init
-    assert "READBACK_STATUS" not in v2_init
+    assert "STATE_PRESENCE" not in transport_init
+    assert "STATE_PRESENCE" not in v2_init
     forbidden = ("import streamlit", "from streamlit", "websocket.", "sse.", "send_to_broker(", "submit_order(", "append_ledger(", "write_runtime_artifact(", "write_prediction_artifact(", "run_prediction(", "invoke_classifier(", "D:" + chr(92), "E:" + chr(92))
     for token in forbidden:
-        assert token not in module, f"forbidden token {token!r} found in Q35I module"
+        assert token not in module, f"forbidden token {token!r} found in Q35J module"
 
 
-def test_q35i_doc_records_readback_status_boundary() -> None:
+def test_q35j_doc_records_state_presence_boundary() -> None:
     doc = DOC.read_text(encoding="utf-8-sig")
-    assert "readback_status_display_enabled=true" in doc
-    assert "rendered_line_template=`WS Receiver` mount ready · readback={ready|blocked|unknown} · msgs={receiver_state_message_count} · no socket/send" in doc
+    assert "state_presence_display_enabled=true" in doc
+    assert "rendered_line_template=`WS Receiver` mount ready · state={present|missing|unknown} · readback={ready|blocked|unknown} · msgs={receiver_state_message_count} · no socket/send" in doc
     assert "visible_controls_added=false" in doc
     assert "not_opening_socket=true" in doc
     assert "not_sending_external_messages=true" in doc

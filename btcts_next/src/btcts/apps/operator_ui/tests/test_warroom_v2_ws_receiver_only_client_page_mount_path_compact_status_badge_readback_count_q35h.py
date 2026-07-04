@@ -52,7 +52,7 @@ def test_q35h_badge_defaults_to_zero_count_without_hidden_observation() -> None:
     packet = build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet(visible_mount_point_packet=_mount_packet())
     assert packet["compact_status_badge_visible_now"] is True
     assert packet["receiver_state_message_count"] == 0
-    assert packet["compact_badge_markdown"] == "`WS Receiver` mount ready · readback=unknown · msgs=0 · no socket/send"
+    assert packet["compact_badge_markdown"] == "`WS Receiver` mount ready · state=unknown · readback=unknown · msgs=0 · no socket/send"
     assert packet["socket_opened"] is False
 
 
@@ -62,7 +62,7 @@ def test_q35h_badge_displays_hidden_observation_readback_message_count() -> None
         hidden_observation_packet=_hidden_observation_packet(12),
     )
     assert packet["receiver_state_message_count"] == 12
-    assert packet["compact_badge_markdown"] == "`WS Receiver` mount ready · readback=ready · msgs=12 · no socket/send"
+    assert packet["compact_badge_markdown"] == "`WS Receiver` mount ready · state=present · readback=ready · msgs=12 · no socket/send"
     assert packet["visible_surface_implemented_now"] is True
     assert packet["renders_badge_now"] is True
     assert packet["renders_warning_now"] is False
