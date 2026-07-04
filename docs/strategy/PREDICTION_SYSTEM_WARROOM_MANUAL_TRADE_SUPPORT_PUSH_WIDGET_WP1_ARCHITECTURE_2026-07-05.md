@@ -1,0 +1,52 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_WP1_ARCHITECTURE_2026-07-05.md
+# desc: WP1 WarRoom manual trade support push-widget architecture. Locks contracts before registry/state/router implementation checkpoints.
+
+# WP1 WarRoom push widget architecture
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Roadmap: PREDICTION_SYSTEM_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_ROADMAP_WP1_WP13_2026-07-05.md
+Base gate: PS_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_ROADMAP_WP1_WP13_LOCKED
+Slice: PS-WP1_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_ARCHITECTURE
+
+## Goal
+
+WP1 fixes the architecture contracts needed to finish WarRoom as a manual trading support cockpit where widgets independently auto-update from WebSocket push market data and future widgets can be added safely.
+
+```text
+wp1_completed=true
+next_checkpoint=WP2_Widget_registry_and_manifest
+primary_goal=WarRoom_manual_trade_support_completion
+first_priority=independent_WebSocket_push_auto_updating_widgets
+widget_registry_ready=true
+widget_manifest_contract_ready=true
+topic_binding_contract_ready=true
+per_widget_state_contract_ready=true
+widget_update_reducer_contract_ready=true
+widget_render_packet_contract_ready=true
+widget_health_status_contract_ready=true
+push_router_contract_ready=true
+state_isolation_contract_ready=true
+future_widget_extension_contract_seeded=true
+architecture_only=true
+manual_trade_support_read_only=true
+warroom_page_modified=false
+warroom_page_mount_added=false
+websocket_opened=false
+websocket_receive_loop_started=false
+websocket_send_enabled=false
+websocket_subscribe_invoked=false
+external_network_used=false
+raw_payload_rendered=false
+endpoint_value_rendered=false
+token_value_rendered=false
+callable_value_rendered=false
+secret_exposure=false
+broker_send_enabled=false
+would_send_to_broker=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+```
