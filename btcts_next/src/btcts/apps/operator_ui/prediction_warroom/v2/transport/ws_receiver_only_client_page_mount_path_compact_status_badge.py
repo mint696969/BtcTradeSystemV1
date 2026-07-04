@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_VERSION = "prediction_warroom.v2.transport.ws_receiver_only_client_page_mount_path_compact_status_badge.ps_q35g.v1"
+WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_READBACK_COUNT_VERSION = "prediction_warroom.v2.transport.ws_receiver_only_client_page_mount_path_compact_status_badge_readback_count.ps_q35h.v1"
 WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_KEY = "warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_q35g"
 
 
@@ -17,15 +18,25 @@ def _badge_status(*, mount_markdown_allowed: bool, receiver_ready: bool) -> str:
     return "receiver_page_mount_compact_status_badge_visible_one_line_no_socket_no_send"
 
 
+def _readback_count(hidden_observation_packet: Mapping[str, Any] | None) -> int:
+    packet = dict(hidden_observation_packet or {})
+    readiness = packet.get("page_mount_path_readiness_packet")
+    if not isinstance(readiness, Mapping):
+        return 0
+    return int(readiness.get("receiver_state_message_count") or 0)
+
+
 def build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_contract() -> dict[str, Any]:
     return {
         "ok": True,
         "compact_status_badge_version": WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_VERSION,
+        "compact_status_badge_readback_count_version": WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_READBACK_COUNT_VERSION,
         "compact_status_badge_kind": "warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_visible_one_line_no_socket_no_send",
         "state_key": WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_KEY,
         "selected_visible_surface": "compact_status_badge",
         "visible_surface_implemented_now": True,
         "visible_surface_implementation_allowed_now": True,
+        "readback_count_display_enabled": True,
         "warroom_page_modified": True,
         "warroom_page_visible_ui_modified": True,
         "visible_information_added": True,
@@ -61,8 +72,10 @@ def build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badg
 def build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet(
     *,
     visible_mount_point_packet: Mapping[str, Any] | None = None,
+    hidden_observation_packet: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     mount = dict(visible_mount_point_packet or {})
+    hidden = dict(hidden_observation_packet or {})
     mount_markdown_allowed = bool(mount.get("streamlit_markdown_allowed"))
     receiver_ready = bool(
         mount.get("status_line_visible_now")
@@ -71,16 +84,19 @@ def build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badg
     )
     status = _badge_status(mount_markdown_allowed=mount_markdown_allowed, receiver_ready=receiver_ready)
     visible_now = status == "receiver_page_mount_compact_status_badge_visible_one_line_no_socket_no_send"
+    receiver_state_message_count = _readback_count(hidden)
     compact_badge_markdown = ""
     if visible_now:
-        compact_badge_markdown = "`WS Receiver` page-mount ready · no socket/send"
+        compact_badge_markdown = f"`WS Receiver` page-mount ready · msgs={receiver_state_message_count} · no socket/send"
     return {
         **build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_contract(),
         "packet_kind": "warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet",
         "visible_mount_point_packet": mount,
+        "hidden_observation_packet": hidden,
         "mount_point_status": str(mount.get("mount_point_status") or ""),
         "mount_markdown_allowed": mount_markdown_allowed,
         "receiver_ready": receiver_ready,
+        "receiver_state_message_count": receiver_state_message_count,
         "compact_status_badge_status": status,
         "compact_status_badge_visible_now": visible_now,
         "compact_badge_markdown": compact_badge_markdown,

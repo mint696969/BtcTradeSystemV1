@@ -624,8 +624,10 @@ def _render_warroom_v2_top_minimal_status_line_mount_q32y() -> None:
 
 def _render_warroom_v2_receiver_page_mount_compact_status_badge_q35g() -> None:
     mount_point_packet = st.session_state.get(WARROOM_V2_COMPACT_WS_STATUS_LINE_STREAMLIT_TOP_MINIMAL_STATUS_LINE_VISIBLE_MOUNT_POINT_STATE_KEY)
+    hidden_observation_packet = st.session_state.get(WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_HIDDEN_OBSERVATION_STATE_KEY)
     badge_packet = build_warroom_v2_ws_receiver_only_client_page_mount_path_compact_status_badge_packet(
         visible_mount_point_packet=mount_point_packet if isinstance(mount_point_packet, dict) else None,
+        hidden_observation_packet=hidden_observation_packet if isinstance(hidden_observation_packet, dict) else None,
     )
     st.session_state[WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_KEY] = badge_packet
     if bool(badge_packet.get("streamlit_markdown_allowed")):
