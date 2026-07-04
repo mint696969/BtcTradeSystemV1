@@ -9,7 +9,8 @@ import streamlit as st
 
 from .market_snapshot_read_model import build_warroom_v2_market_snapshot_dhot_read_model
 
-WARROOM_V2_MARKET_SNAPSHOT_STRIP_RENDERER_VERSION = "prediction_warroom.v2.market_snapshot_strip_renderer.ps_q29r.v1"
+WARROOM_V2_MARKET_SNAPSHOT_STRIP_RENDERER_VERSION = "prediction_warroom.v2.market_snapshot_strip_renderer.ps_q34b.v1"
+WARROOM_V2_MARKET_SNAPSHOT_DATA_QUALITY_BADGE_POLICY_VERSION = "prediction_warroom.v2.market_snapshot_data_quality_badge_policy.ps_q34b.v1"
 _FIELD_ORDER: tuple[tuple[str, str, str], ...] = (
     ("market", "Market", "BTC-FX-JPY"), ("ltp", "LTP", "--"), ("best_bid", "Best Bid", "--"), ("best_ask", "Best Ask", "--"),
     ("spread", "Spread", "-- / -- bps"), ("data_age_sec", "Data Age", "-- sec"), ("data_state", "Data State", "NO_DATA"),
@@ -19,20 +20,37 @@ _FIELD_ORDER: tuple[tuple[str, str, str], ...] = (
 _SECONDARY_READY_FIELDS = ("range_5m_pct", "range_15m_pct", "short_term_volatility", "recent_volume", "trade_density", "board_imbalance", "top_bid_size", "top_ask_size", "depth_0_1_pct", "fx_spot_basis", "alert_flags")
 
 
+def _data_quality_badge_policy(state: str) -> dict[str, Any]:
+    normalized = str(state or "NO_DATA").upper()
+    table = {
+        "OK": ("normal", "ok", "板品質: 正常"),
+        "CROSSED_BOOK": ("danger", "crossed_book", "板品質: 交差"),
+        "SPREAD_SIGN_INVALID": ("warning", "spread_sign_invalid", "板品質: spread符号"),
+        "SPREAD_MISMATCH": ("warning", "spread_mismatch", "板品質: spread不一致"),
+        "SPREAD_MISSING": ("muted", "spread_missing", "板品質: spread未取得"),
+        "NO_DATA": ("muted", "no_data", "板品質: 未取得"),
+    }
+    severity, token, label = table.get(normalized, ("muted", "unknown", "板品質: 不明"))
+    return {"policy_version": WARROOM_V2_MARKET_SNAPSHOT_DATA_QUALITY_BADGE_POLICY_VERSION, "state": normalized, "severity": severity, "badge_token": token, "label_ja": label, "operator_guidance_ja": "参考表示のみ。売買判断へ直結しない。", "badge_visible_default": False, "badge_render_allowed_default": False, "streamlit_badge_invoked": False, "visual_policy_only": True, "would_block_trading": False, "would_send_to_broker": False}
+
+
 def build_warroom_v2_market_snapshot_strip_packet(*, source_packet: dict[str, Any] | None = None) -> dict[str, Any]:
     source = dict(source_packet or {})
     display = dict(source.get("display_values") or {})
     raw = dict(source.get("raw_values") or {})
     fields = [{"key": k, "label": label, "value": display.get(k, default), "placeholder_only": not bool(source.get("data_connected"))} for k, label, default in _FIELD_ORDER]
     connected = bool(source.get("data_connected"))
+    quality_state = display.get("market_data_quality_state", raw.get("market_data_quality_state", "NO_DATA"))
+    badge_policy = _data_quality_badge_policy(str(quality_state))
     return {
         "ok": True, "renderer_version": WARROOM_V2_MARKET_SNAPSHOT_STRIP_RENDERER_VERSION, "placement": "above_prediction_cards",
         "market": display.get("market", "BTC-FX-JPY"), "exchange": "bitFlyer", "field_count": len(fields), "fields": fields,
         "field_keys": [field["key"] for field in fields], "secondary_ready_fields": list(_SECONDARY_READY_FIELDS),
         "data_state": display.get("data_state", "NO_DATA"), "invalidation_watch": display.get("invalidation_watch", "NO_DATA"),
         "data_quality_diagnostics": dict(source.get("data_quality_diagnostics") or raw.get("data_quality") or {}),
-        "market_data_quality_state": display.get("market_data_quality_state", raw.get("market_data_quality_state", "NO_DATA")),
-        "market_snapshot_source": source, "raw_values": raw, "freshness_badge_only": True, "data_quality_badge_only": True, "price_neutral_display": True,
+        "market_data_quality_state": quality_state, "data_quality_badge_policy_version": WARROOM_V2_MARKET_SNAPSHOT_DATA_QUALITY_BADGE_POLICY_VERSION,
+        "data_quality_badge_policy": badge_policy, "market_snapshot_source": source, "raw_values": raw,
+        "freshness_badge_only": True, "data_quality_badge_only": True, "price_neutral_display": True,
         "risk_badge_or_border_only": True, "push_ready": True, "auto_refresh_ready": True, "data_connected": connected,
         "runtime_connected": False, "push_connected": False, "websocket_enabled": False, "sse_enabled": False,
         "placeholder_only": not connected, "display_only": True, "read_only": True, "would_send_to_broker": False,
