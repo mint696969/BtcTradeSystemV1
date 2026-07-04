@@ -44,6 +44,9 @@ def test_q35n_contract_is_configured_adapter_factory_no_send() -> None:
     assert packet["requires_endpoint_url_from_runtime_config"] is True
     assert packet["requires_allow_adapter_factory_flag"] is True
     assert packet["requires_injected_adapter_factory"] is True
+    assert packet["adapter_factory_called_only_after_socket_open_requested"] is True
+    assert packet["adapter_factory_called_only_after_operator_socket_open_ack"] is True
+    assert packet["adapter_factory_called_only_after_allow_socket_open"] is True
     assert packet["injected_adapter_factory_only"] is True
     assert packet["no_hardcoded_endpoint"] is True
     assert packet["no_default_network_client"] is True
@@ -103,6 +106,34 @@ def test_q35n_blocks_without_endpoint_or_allow_flag_before_factory_call() -> Non
     )
     assert no_allow["adapter_factory_status"] == "receiver_only_client_adapter_factory_blocked_allow_adapter_factory_flag_required"
     assert no_allow["adapter_factory_called"] is False
+    assert factory_calls == []
+
+
+def test_q35n_blocks_factory_until_socket_request_ack_and_allow_socket_open() -> None:
+    factory_calls: list[Mapping[str, Any]] = []
+
+    def factory(config: Mapping[str, Any]):
+        factory_calls.append(config)
+        return lambda endpoint: {"socket_opened": True, "endpoint": endpoint}
+
+    base = {
+        "compact_status_badge_packet": _badge(),
+        "runtime_config": _config(),
+        "adapter_factory": factory,
+        "allow_adapter_factory": True,
+        "operator_scope_ack": True,
+    }
+    no_request = build_warroom_v2_ws_receiver_only_client_adapter_factory_packet(**base)
+    assert no_request["adapter_factory_status"] == "receiver_only_client_adapter_factory_blocked_socket_open_request_required"
+    assert no_request["adapter_factory_called"] is False
+
+    no_ack = build_warroom_v2_ws_receiver_only_client_adapter_factory_packet(**base, socket_open_requested=True)
+    assert no_ack["adapter_factory_status"] == "receiver_only_client_adapter_factory_blocked_operator_socket_open_ack_required"
+    assert no_ack["adapter_factory_called"] is False
+
+    no_allow_socket = build_warroom_v2_ws_receiver_only_client_adapter_factory_packet(**base, socket_open_requested=True, operator_socket_open_ack=True)
+    assert no_allow_socket["adapter_factory_status"] == "receiver_only_client_adapter_factory_blocked_allow_socket_open_flag_required"
+    assert no_allow_socket["adapter_factory_called"] is False
     assert factory_calls == []
 
 

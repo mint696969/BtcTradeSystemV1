@@ -10,7 +10,7 @@ Slice: PS-Q35N_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_ADAPTER_FACTORY_NO_SEND
 
 ## Decision
 
-PS-Q35N introduces an adapter factory boundary for receiver-only client runtime wiring. It still does not import a websocket library, does not create a default network client, and does not hardcode an endpoint. It accepts explicit runtime config and an injected adapter factory, then builds an injected opener only after Q35K preflight readiness, endpoint presence, and allow_adapter_factory are all true.
+PS-Q35N introduces an adapter factory boundary for receiver-only client runtime wiring. It still does not import a websocket library, does not create a default network client, and does not hardcode an endpoint. It accepts explicit runtime config and an injected adapter factory, then builds an injected opener only after Q35K preflight readiness, endpoint presence, allow_adapter_factory, socket_open_requested, operator_socket_open_ack, and allow_socket_open are all true.
 
 ```text
 module=btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/transport/ws_receiver_only_client_adapter_factory.py
@@ -26,6 +26,9 @@ requires_injected_adapter_factory=true
 adapter_factory_called_only_after_preflight_ready=true
 adapter_factory_called_only_after_endpoint_present=true
 adapter_factory_called_only_after_allow_flag=true
+adapter_factory_called_only_after_socket_open_requested=true
+adapter_factory_called_only_after_operator_socket_open_ack=true
+adapter_factory_called_only_after_allow_socket_open=true
 injected_adapter_factory_only=true
 injected_opener_only=true
 no_hardcoded_endpoint=true
@@ -59,11 +62,14 @@ would_send_to_broker=false
 2. If preflight is not ready, do not call adapter_factory.
 3. If endpoint_url is missing from runtime_config, do not call adapter_factory.
 4. If allow_adapter_factory is false, do not call adapter_factory.
-5. If adapter_factory is missing, do not continue.
-6. Call injected adapter_factory once to obtain an opener callable.
-7. Pass the opener into Q35M runtime wiring.
-8. Q35M/Q35L apply socket request/ack/allow guards and may call opener once.
-9. No message send is enabled at any layer.
+5. If socket_open_requested is false, do not call adapter_factory.
+6. If operator_socket_open_ack is false, do not call adapter_factory.
+7. If allow_socket_open is false, do not call adapter_factory.
+8. If adapter_factory is missing, do not continue.
+9. Call injected adapter_factory once to obtain an opener callable.
+10. Pass the opener into Q35M runtime wiring.
+11. Q35M/Q35L apply the same socket request/ack/allow guards and may call opener once.
+12. No message send is enabled at any layer.
 ```
 
 ## Non-goals
@@ -92,6 +98,7 @@ not_invoking_classifier=true
 - Preflight not-ready prevents adapter_factory calls.
 - Missing endpoint config prevents adapter_factory calls.
 - Missing allow_adapter_factory prevents adapter_factory calls.
+- Missing socket_open_requested, operator_socket_open_ack, or allow_socket_open prevents adapter_factory calls.
 - With all Q35K/Q35M/Q35L guards true, injected factory is called once and produced opener is called once.
 - Packet returns runtime config presence/keys only; raw runtime_config values are not returned.
 - Factory exceptions and non-callable factory results are reported as packet data.

@@ -17,13 +17,28 @@ def _endpoint_url(config: Mapping[str, Any]) -> str:
     return str(config.get("receiver_endpoint_url") or config.get("endpoint_url") or "")
 
 
-def _factory_status(*, preflight_ready: bool, endpoint_url: str, adapter_factory_present: bool, allow_adapter_factory: bool) -> str:
+def _factory_status(
+    *,
+    preflight_ready: bool,
+    endpoint_url: str,
+    adapter_factory_present: bool,
+    allow_adapter_factory: bool,
+    socket_open_requested: bool,
+    operator_socket_open_ack: bool,
+    allow_socket_open: bool,
+) -> str:
     if not preflight_ready:
         return "receiver_only_client_adapter_factory_blocked_preflight_required"
     if not endpoint_url.strip():
         return "receiver_only_client_adapter_factory_blocked_endpoint_config_required"
     if not allow_adapter_factory:
         return "receiver_only_client_adapter_factory_blocked_allow_adapter_factory_flag_required"
+    if not socket_open_requested:
+        return "receiver_only_client_adapter_factory_blocked_socket_open_request_required"
+    if not operator_socket_open_ack:
+        return "receiver_only_client_adapter_factory_blocked_operator_socket_open_ack_required"
+    if not allow_socket_open:
+        return "receiver_only_client_adapter_factory_blocked_allow_socket_open_flag_required"
     if not adapter_factory_present:
         return "receiver_only_client_adapter_factory_blocked_injected_adapter_factory_required"
     return "receiver_only_client_adapter_factory_ready_to_build_injected_opener_no_send"
@@ -46,6 +61,9 @@ def build_warroom_v2_ws_receiver_only_client_adapter_factory_contract() -> dict[
         "adapter_factory_called_only_after_preflight_ready": True,
         "adapter_factory_called_only_after_endpoint_present": True,
         "adapter_factory_called_only_after_allow_flag": True,
+        "adapter_factory_called_only_after_socket_open_requested": True,
+        "adapter_factory_called_only_after_operator_socket_open_ack": True,
+        "adapter_factory_called_only_after_allow_socket_open": True,
         "injected_adapter_factory_only": True,
         "injected_opener_only": True,
         "no_hardcoded_endpoint": True,
@@ -102,6 +120,9 @@ def build_warroom_v2_ws_receiver_only_client_adapter_factory_packet(
         endpoint_url=endpoint,
         adapter_factory_present=adapter_factory is not None,
         allow_adapter_factory=bool(allow_adapter_factory),
+        socket_open_requested=bool(socket_open_requested),
+        operator_socket_open_ack=bool(operator_socket_open_ack),
+        allow_socket_open=bool(allow_socket_open),
     )
     opener: SocketOpenFn | None = None
     factory_error: dict[str, Any] = {}

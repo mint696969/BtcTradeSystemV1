@@ -59,7 +59,7 @@ would_send_to_broker=false
 1. Q35O receives an injected low_level_connect_fn.
 2. Q35O can build an adapter factory compatible with Q35N.
 3. Factory creation does not connect.
-4. Q35N calls factory only after preflight/endpoint/allow/factory guards pass.
+4. Q35N calls factory only after preflight/endpoint/allow_adapter_factory/socket request/operator socket-open ack/allow_socket_open/factory guards pass.
 5. Q35M/Q35L call the produced opener only after socket request/ack/allow guards pass.
 6. Q35O adapter calls low_level_connect_fn(endpoint, config) once.
 7. Connect result is sanitized before packet exposure.
