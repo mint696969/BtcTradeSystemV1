@@ -131,6 +131,14 @@ from btcts.apps.operator_ui.prediction_warroom.v2.transport.ws_receiver_only_cli
     WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_CP3_VISIBLE_READINESS_STATE_KEY,
     build_warroom_v2_ws_receiver_only_client_cp3_visible_readiness_packet,
 )
+from btcts.apps.operator_ui.prediction_warroom.v2.transport.ws_receiver_only_client_cp3_visible_readiness_implementation_gate import (
+    STATE_KEY as WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_CP3_VISIBLE_READINESS_IMPLEMENTATION_GATE_STATE_KEY,
+    build_warroom_v2_ws_receiver_only_client_cp3_visible_readiness_implementation_gate_packet,
+)
+from btcts.apps.operator_ui.prediction_warroom.v2.transport.ws_receiver_only_client_cp3_minimal_visible_readiness_surface import (
+    STATE_KEY as WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_CP3_MINIMAL_VISIBLE_READINESS_SURFACE_STATE_KEY,
+    build_warroom_v2_ws_receiver_only_client_cp3_minimal_visible_readiness_surface_packet,
+)
 from btcts.apps.operator_ui.components import warroom_alert_engine
 from btcts.apps.operator_ui.components import decision_log_panel
 from btcts.apps.operator_ui.components.live_shell import get_registered_slots
@@ -636,13 +644,23 @@ def _render_warroom_v2_receiver_page_mount_compact_status_badge_q35g() -> None:
     )
     cp1_completion_packet = st.session_state.get(WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_CP3_VISIBLE_READINESS_SOURCE_STATE_KEY)
     cp3_visible_readiness_packet = build_warroom_v2_ws_receiver_only_client_cp3_visible_readiness_packet(
-        compact_badge_packet=badge_packet,
         cp1_completion_packet=cp1_completion_packet if isinstance(cp1_completion_packet, dict) else None,
-        allow_visible_readiness=True,
+        allow_visible_readiness_proposal=True,
+    )
+    cp3_visible_readiness_gate_packet = build_warroom_v2_ws_receiver_only_client_cp3_visible_readiness_implementation_gate_packet(
+        cp3_visible_readiness_packet,
+        allow_implementation_gate=True,
+    )
+    cp3_minimal_visible_readiness_surface_packet = build_warroom_v2_ws_receiver_only_client_cp3_minimal_visible_readiness_surface_packet(
+        compact_badge_packet=badge_packet,
+        implementation_gate_packet=cp3_visible_readiness_gate_packet,
+        allow_minimal_surface=True,
     )
     st.session_state[WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_CP3_VISIBLE_READINESS_STATE_KEY] = cp3_visible_readiness_packet
-    if cp3_visible_readiness_packet.get("cp3_visible_readiness_visible_now"):
-        badge_packet["compact_badge_markdown"] = str(cp3_visible_readiness_packet.get("visible_readiness_markdown") or badge_packet.get("compact_badge_markdown") or "")
+    st.session_state[WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_CP3_VISIBLE_READINESS_IMPLEMENTATION_GATE_STATE_KEY] = cp3_visible_readiness_gate_packet
+    st.session_state[WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_CP3_MINIMAL_VISIBLE_READINESS_SURFACE_STATE_KEY] = cp3_minimal_visible_readiness_surface_packet
+    if cp3_minimal_visible_readiness_surface_packet.get("cp3_minimal_visible_readiness_surface_visible_now"):
+        badge_packet["compact_badge_markdown"] = str(cp3_minimal_visible_readiness_surface_packet.get("visible_readiness_markdown") or badge_packet.get("compact_badge_markdown") or "")
     st.session_state[WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_PAGE_MOUNT_PATH_COMPACT_STATUS_BADGE_STATE_KEY] = badge_packet
     if bool(badge_packet.get("streamlit_markdown_allowed")):
         st.markdown(str(badge_packet.get("compact_badge_markdown") or ""))
