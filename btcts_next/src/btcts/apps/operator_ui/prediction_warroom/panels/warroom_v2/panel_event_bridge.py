@@ -7,13 +7,16 @@ from typing import Any
 
 from btcts.apps.operator_ui.prediction_warroom.v2 import build_warroom_v2_chart_review_update_event, build_warroom_v2_market_snapshot_update_event, stable_payload_fingerprint
 
-WARROOM_V2_PANEL_EVENT_BRIDGE_ADAPTER_VERSION = "prediction_warroom.v2.panel_event_bridge.ps_q30e.v1"
+WARROOM_V2_PANEL_EVENT_BRIDGE_ADAPTER_VERSION = "prediction_warroom.v2.panel_event_bridge.ps_q34c.v1"
 
 
 def market_snapshot_event_payload_from_strip_packet(packet: dict[str, Any] | None = None) -> dict[str, Any]:
     data = dict(packet or {})
     fields = {str(row.get("key")): row.get("value") for row in list(data.get("fields") or []) if isinstance(row, dict)}
-    return {"payload_schema": "warroom.market_snapshot_strip.event_payload.v1", "market": data.get("market"), "exchange": data.get("exchange"), "data_state": data.get("data_state"), "invalidation_watch": data.get("invalidation_watch"), "fields": fields, "raw_values": dict(data.get("raw_values") or {}), "data_connected": bool(data.get("data_connected")), "placeholder_only": bool(data.get("placeholder_only")), "read_only": True, "display_only": True, "would_send_to_broker": False}
+    diagnostics = dict(data.get("data_quality_diagnostics") or {})
+    badge_policy = dict(data.get("data_quality_badge_policy") or {})
+    quality_state = str(data.get("market_data_quality_state") or diagnostics.get("market_data_quality_state") or "NO_DATA")
+    return {"payload_schema": "warroom.market_snapshot_strip.event_payload.v1", "market": data.get("market"), "exchange": data.get("exchange"), "data_state": data.get("data_state"), "invalidation_watch": data.get("invalidation_watch"), "fields": fields, "raw_values": dict(data.get("raw_values") or {}), "market_data_quality_state": quality_state, "data_quality_diagnostics": diagnostics, "data_quality_badge_policy": badge_policy, "data_quality_metadata_carried": bool(diagnostics or badge_policy or quality_state != "NO_DATA"), "data_connected": bool(data.get("data_connected")), "placeholder_only": bool(data.get("placeholder_only")), "read_only": True, "display_only": True, "would_send_to_broker": False}
 
 
 def chart_review_event_payload_from_panel_packet(packet: dict[str, Any] | None = None) -> dict[str, Any]:
