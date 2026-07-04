@@ -84,6 +84,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     WARROOM_V2_WS_DISPLAY_CLIENT_OBSERVATION_STATE_KEY,
     WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_HIDDEN_STATE_KEY,
     WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_SESSION_STATE_APPLY_HIDDEN_RECORD_KEY,
+    WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_LIGHTWEIGHT_STATE_TARGET_WRITE_HIDDEN_RECORD_KEY,
     WARROOM_V2_WS_DISPLAY_CONNECTION_STATUS_OBSERVATION_STATE_KEY,
     WARROOM_V2_OPERATOR_REVIEW_OBSERVATION_STATE_KEY,
     WARROOM_V2_SHADOW_RENDERER_OBSERVATION_STATE_KEY,
@@ -107,6 +108,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     build_warroom_v2_ws_display_client_observation_packet,
     build_warroom_v2_ws_receiver_only_client_hidden_state_packet,
     build_warroom_v2_ws_receiver_only_client_session_state_apply_hidden_record_packet,
+    build_warroom_v2_ws_receiver_only_client_lightweight_state_target_write_hidden_record_packet,
     build_warroom_v2_ws_display_connection_status_observation_packet,
     build_warroom_v2_operator_review_observation_packet,
     build_warroom_v2_shadow_renderer_observation_packet,
@@ -684,6 +686,10 @@ def _record_warroom_v2_transport_shadow_integration_state(*, fragment_enabled: b
     )
     # Hidden session_state key: warroom_v2_ws_receiver_only_client_session_state_apply_hidden_record_q33g
     st.session_state[WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_SESSION_STATE_APPLY_HIDDEN_RECORD_KEY] = build_warroom_v2_ws_receiver_only_client_session_state_apply_hidden_record_packet(
+        fragment_summary=fragment_summary,
+    )
+    # Hidden session_state key: warroom_v2_ws_receiver_only_client_lightweight_state_target_write_hidden_record_q33j
+    st.session_state[WARROOM_V2_WS_RECEIVER_ONLY_CLIENT_LIGHTWEIGHT_STATE_TARGET_WRITE_HIDDEN_RECORD_KEY] = build_warroom_v2_ws_receiver_only_client_lightweight_state_target_write_hidden_record_packet(
         fragment_summary=fragment_summary,
     )
     # Hidden session_state key: warroom_v2_ws_display_connection_status_observation_q32d

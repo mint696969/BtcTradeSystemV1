@@ -1,0 +1,87 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_PS_Q33J_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_LIGHTWEIGHT_STATE_TARGET_WRITE_HIDDEN_RECORD_DEFAULT_OFF_NO_SOCKET_2026-07-04.md
+# desc: PS-Q33J WarRoom v2 WebSocket receiver-only client lightweight-state target write hidden diagnostic record. Default-off, no socket open, and no actual target write.
+
+# PS-Q33J WarRoom v2 WebSocket receiver-only client lightweight-state target write hidden record default-off no-socket
+
+Date: 2026-07-04
+Profile: BtcTradeSystem
+Base gate: PS_Q33I_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_LIGHTWEIGHT_STATE_TARGET_WRITE_PREVIEW_DEFAULT_OFF_NO_SOCKET_DONE
+Slice: PS-Q33J_WARROOM_V2_WEBSOCKET_RECEIVER_ONLY_CLIENT_LIGHTWEIGHT_STATE_TARGET_WRITE_HIDDEN_RECORD_DEFAULT_OFF_NO_SOCKET
+
+## Decision
+
+PS-Q33J records the Q33I `target_lightweight_state_value_preview` into a WarRoom hidden diagnostic session_state record for future target write review. This slice modifies WarRoom page only by adding the hidden diagnostic record placement. It does not perform actual target session_state write, does not open sockets, does not start a client, does not subscribe live, and does not send messages.
+
+```text
+hidden_record_module=btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/transport/ws_receiver_only_client_lightweight_state_target_write_hidden_record.py
+hidden_record_key=warroom_v2_ws_receiver_only_client_lightweight_state_target_write_hidden_record_q33j
+hidden_record_kind=warroom_v2_ws_receiver_only_client_lightweight_state_target_write_hidden_record_default_off_no_socket
+input_pipeline=q33i_lightweight_state_target_write_preview,q33h_lightweight_state_target_apply_gate,q33g_session_state_apply_hidden_record
+lightweight_state_target_write_hidden_record_requested_default=false
+operator_lightweight_state_target_write_hidden_record_ack_default=false
+hidden_record_status_default=lightweight_state_target_write_hidden_record_hidden_default
+hidden_record_status_ready=lightweight_state_target_write_hidden_record_ready_for_next_slice_no_socket
+hidden_record_session_state_recorded=true
+warroom_page_modified=true
+visible_controls_added=false
+hidden_record_source=q33i_target_lightweight_state_value_preview
+hidden_record_target=warroom_hidden_session_state_diagnostic_key
+hidden_record_is_not_target_lightweight_state_write=true
+hidden_record_effective_mutation_scope=hidden_diagnostic_record_only
+actual_target_session_state_write=false
+target_write_allowed_effective=false
+target_session_state_write_allowed_effective=false
+target_session_state_write_applied=false
+target_session_state_mutated=false
+state_mutated=false
+messages_committed_now=0
+receiver_only=true
+send_disabled=true
+socket_opened=false
+client_started=false
+client_sends_messages=false
+external_message_send_enabled=false
+websocket_enabled=false
+runtime_connected=false
+push_connected=false
+```
+
+## Non-goals
+
+```text
+not_adding_visible_controls=true
+not_rendering_target_write_hidden_record=true
+not_writing_target_lightweight_state=true
+not_applying_state_update=true
+not_opening_socket=true
+not_starting_client=true
+not_subscribing_live=true
+not_sending_external_messages=true
+not_using_polling_fallback=true
+not_using_browser_timer_reload=true
+not_submitting_order_intent=true
+not_sending_order_to_broker=true
+not_appending_live_order_ledger=true
+not_applying_mode=true
+not_applying_parameter=true
+not_invoking_prediction_generation=true
+not_invoking_prediction_inference=true
+not_invoking_classifier=true
+```
+
+## Acceptance criteria
+
+```text
+- ws_receiver_only_client_lightweight_state_target_write_hidden_record.py exists and stays pure.
+- Default packet status is lightweight_state_target_write_hidden_record_hidden_default.
+- Ready requires lightweight_state_target_write_hidden_record_requested=true, operator_lightweight_state_target_write_hidden_record_ack=true, Q33I target write preview next-slice eligibility=true, and a valid target_lightweight_state_value_preview.
+- Ready packet may expose target_lightweight_state_value_preview as hidden diagnostic evidence only.
+- Ready packet still has target_write_allowed_effective=false, target_session_state_write_allowed_effective=false, target_session_state_write_applied=false, messages_committed_now=0, and target_session_state_mutated=false.
+- WarRoom page records only the hidden diagnostic packet in session_state.
+- No visible controls are added.
+- socket_opened=false, client_started=false, client_sends_messages=false, websocket_enabled=false.
+```
+
+## Next boundary
+
+Q33K may add the actual target write gate for a later write slice. Q33K must still not write the target lightweight receiver state unless a later explicit gate allows it.
