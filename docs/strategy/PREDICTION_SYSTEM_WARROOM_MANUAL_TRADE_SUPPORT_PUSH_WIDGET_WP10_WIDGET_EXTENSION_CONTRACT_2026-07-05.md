@@ -1,0 +1,49 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_WP10_WIDGET_EXTENSION_CONTRACT_2026-07-05.md
+# desc: WP10 WarRoom manual trade support widget extension contract after page mount.
+
+# WP10 WarRoom widget extension contract
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Roadmap: PREDICTION_SYSTEM_WARROOM_MANUAL_TRADE_SUPPORT_PUSH_WIDGET_ROADMAP_WP1_WP13_2026-07-05.md
+Base gate: PS_WP9_WARROOM_MANUAL_TRADE_SUPPORT_WARROOM_PAGE_MOUNT_FOR_PUSH_WIDGETS_DONE
+Slice: PS-WP10_WARROOM_MANUAL_TRADE_SUPPORT_WIDGET_EXTENSION_CONTRACT
+
+## Goal
+
+WP10 locks the safe extension contract for adding future WarRoom push widgets without editing the page mount or weakening the manual-trade-support no-action boundary.
+
+```text
+wp10_completed=true
+next_checkpoint=WP11_Top_layout_push_widget_polish
+widget_extension_contract_ready=true
+extension_validator_ready=true
+future_widget_addition_ready=true
+extension_without_page_edit_ready=true
+extension_no_action_boundary_ready=true
+extension_render_adapter_contract_ready=true
+extension_health_contract_ready=true
+example_extension_id=extension.orderbook_imbalance.v1
+example_widget_id=orderbook_imbalance_widget
+base_widget_count=5
+manual_trade_support_read_only=true
+warroom_page_modified=false
+warroom_page_mount_added=false
+websocket_opened=false
+websocket_receive_loop_started=false
+websocket_send_enabled=false
+websocket_subscribe_invoked=false
+external_network_used=false
+raw_payload_rendered=false
+endpoint_value_rendered=false
+token_value_rendered=false
+callable_value_rendered=false
+secret_exposure=false
+broker_send_enabled=false
+would_send_to_broker=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+```
