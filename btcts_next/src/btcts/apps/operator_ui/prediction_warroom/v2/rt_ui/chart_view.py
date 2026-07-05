@@ -11,12 +11,13 @@ import pandas as pd
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_timeframe_view import (
     CHART_TIMEFRAME_VIEW_VERSION,
     ChartDisplayConfig,
+    candle_frame_from_history,
     chart_x_domain,
     prepare_chart_display_frame,
     select_chart_display_config,
 )
 
-BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v5_fixed_x_domain"
+BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v6_ohlc_overlay"
 _PRICE_RE = re.compile(r"(?:best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 _NAMED_PRICE_RE = re.compile(r"(best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 CHART_HISTORY_SESSION_STATE_KEY = "warroom_v2_bottom_chart_history_rows"
@@ -194,24 +195,41 @@ def _retain_chart_history(current_frame: pd.DataFrame, st_api: Any) -> pd.DataFr
     return history
 
 
-def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, st_api: Any, *, x_domain: tuple[pd.Timestamp, pd.Timestamp] | None = None) -> bool:
+def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, candle_frame: pd.DataFrame, st_api: Any, *, x_domain: tuple[pd.Timestamp, pd.Timestamp] | None = None) -> bool:
     if frame.empty:
         return False
     try:
         import altair as alt  # type: ignore
 
         x_scale = alt.Scale(domain=[x_domain[0].to_pydatetime(), x_domain[1].to_pydatetime()]) if x_domain is not None else alt.Undefined
-        base = alt.Chart(frame).encode(x=alt.X("ts:T", title="time", scale=x_scale))
+        x_encoding = alt.X("ts:T", title="time", scale=x_scale)
+        base = alt.Chart(frame).encode(x=x_encoding)
         layers: list[Any] = []
+        if not candle_frame.empty:
+            candle_rule = alt.Chart(candle_frame).mark_rule(strokeWidth=1.2).encode(
+                x=x_encoding,
+                y=alt.Y("low:Q", title="price", scale=alt.Scale(zero=False)),
+                y2="high:Q",
+                color=alt.Color("direction:N", title="candle", scale=alt.Scale(domain=["up", "down"], range=["#facc15", "#fb7185"])),
+                tooltip=["ts:T", "open:Q", "high:Q", "low:Q", "close:Q", "count:Q", "source_role:N"],
+            )
+            candle_body = alt.Chart(candle_frame).mark_bar(size=6, opacity=0.72).encode(
+                x=x_encoding,
+                y=alt.Y("open:Q", title="price", scale=alt.Scale(zero=False)),
+                y2="close:Q",
+                color=alt.Color("direction:N", title="candle", scale=alt.Scale(domain=["up", "down"], range=["#facc15", "#fb7185"])),
+                tooltip=["ts:T", "open:Q", "high:Q", "low:Q", "close:Q", "count:Q", "source_role:N"],
+            )
+            layers.extend([candle_rule, candle_body])
         if not band_frame.empty:
             band = alt.Chart(band_frame).mark_area(opacity=0.16, color="#7dd3fc").encode(
-                x=alt.X("ts:T", title="time"),
+                x=x_encoding,
                 y=alt.Y("bid:Q", title="price", scale=alt.Scale(zero=False)),
                 y2="ask:Q",
                 tooltip=["ts:T", "bid:Q", "ask:Q", "mid:Q", "spread:Q"],
             )
             mid = alt.Chart(band_frame).mark_line(color="#64748b", strokeDash=[4, 4], strokeWidth=1.4).encode(
-                x="ts:T",
+                x=x_encoding,
                 y=alt.Y("mid:Q", title="price", scale=alt.Scale(zero=False)),
                 tooltip=["ts:T", "mid:Q", "spread:Q"],
             )
@@ -249,6 +267,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     frame = _retain_chart_history(current_frame, st_api)
     chart_config: ChartDisplayConfig = select_chart_display_config(st_api)
     display_frame = prepare_chart_display_frame(frame, chart_config)
+    candle_frame = candle_frame_from_history(frame, chart_config)
     x_domain = chart_x_domain(frame, minutes=chart_config.viewport_minutes)
     band_frame = _board_band_frame(display_frame)
     overlay_rows = _overlay_rows(packet)
@@ -270,7 +289,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         st_api.info("1時間足/日足は現在のLive保持履歴からの暫定表示です。10日超やcold archive統合は、後続の集約キャッシュ接続で扱います。")
 
     if not display_frame.empty:
-        rendered = _render_price_chart(display_frame, band_frame, st_api, x_domain=x_domain)
+        rendered = _render_price_chart(display_frame, band_frame, candle_frame, st_api, x_domain=x_domain)
         assert latest is not None
         st_api.caption(
             f"latest={_fmt_price(latest['price'])} / topic={latest['topic']} / role={latest['role']} / freshness={latest['freshness_label']} / 表示モード={chart_config.mode} / 表示窓={chart_config.viewport_label} / history={len(frame)} / visible={len(display_frame)} / helper={CHART_TIMEFRAME_VIEW_VERSION} / version={BOTTOM_CHART_POLISH_VERSION}"
@@ -283,6 +302,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         st_api.caption("overlays: " + " / ".join(f"{row['overlay']}={row['state']}" for row in overlay_rows[:4]))
     with st_api.expander("チャート行・板帯・レイヤー詳細", expanded=False):
         st_api.dataframe(display_frame, width="stretch")
+        st_api.dataframe(candle_frame, width="stretch")
         st_api.dataframe(frame, width="stretch")
         st_api.dataframe(band_frame, width="stretch")
         st_api.dataframe(overlay_rows, width="stretch")
@@ -309,6 +329,9 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "fixed_x_domain_ready": x_domain is not None,
         "x_domain_start": x_domain[0].isoformat() if x_domain is not None else None,
         "x_domain_end": x_domain[1].isoformat() if x_domain is not None else None,
+        "ohlc_overlay_ready": True,
+        "candle_frame_rows": len(candle_frame),
+        "candle_source": "retained_live_history_mid_from_bid_ask",
         "board_band_rows": len(band_frame),
         "overlay_rows": len(overlay_rows),
         "bid_ask_layer_ready": True,

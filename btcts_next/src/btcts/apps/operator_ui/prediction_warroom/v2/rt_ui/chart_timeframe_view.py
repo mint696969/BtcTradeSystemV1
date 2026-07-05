@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-CHART_TIMEFRAME_VIEW_VERSION = "warroom_v2_chart_timeframe_view.2026_07_05.v3_fixed_x_domain"
+CHART_TIMEFRAME_VIEW_VERSION = "warroom_v2_chart_timeframe_view.2026_07_05.v4_ohlc_overlay"
 CHART_VIEWPORT_OPTIONS: tuple[tuple[str, int], ...] = (("3分", 3), ("15分", 15), ("1時間", 60))
 CHART_DEFAULT_VIEWPORT_LABEL = "15分"
 CHART_MODE_OPTIONS: tuple[str, ...] = ("Live", "1分足", "1時間足", "日足")
@@ -153,6 +153,82 @@ def aggregate_chart_frame(frame: pd.DataFrame, *, mode: str) -> pd.DataFrame:
     if result.empty:
         return result
     return result.sort_values(["ts", "role", "topic"])
+
+
+def _candle_frequency(mode: str) -> str:
+    if mode == "Live":
+        return "15s"
+    return CHART_MODE_FREQUENCY.get(mode) or "1min"
+
+
+def _mid_price_points(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return pd.DataFrame(columns=["ts", "price", "source_role"])
+    required = {"ts", "role", "price"}
+    if not required.issubset(set(frame.columns)):
+        return pd.DataFrame(columns=["ts", "price", "source_role"])
+    work = frame.copy()
+    work["ts"] = pd.to_datetime(work["ts"], utc=True, errors="coerce")
+    work["price"] = pd.to_numeric(work["price"], errors="coerce")
+    work = work.dropna(subset=["ts", "price"])
+    if work.empty:
+        return pd.DataFrame(columns=["ts", "price", "source_role"])
+
+    rows: list[dict[str, Any]] = []
+    quote_frame = work[work["role"].isin(["bid", "ask"])].copy()
+    if not quote_frame.empty:
+        pivot = quote_frame.pivot_table(index="ts", columns="role", values="price", aggfunc="last").sort_index()
+        if "bid" in pivot.columns and "ask" in pivot.columns:
+            pivot = pivot.dropna(subset=["bid", "ask"])
+            for ts, row in pivot.iterrows():
+                rows.append({"ts": ts, "price": float((row["bid"] + row["ask"]) / 2.0), "source_role": "mid_from_bid_ask"})
+
+    price_frame = work[work["role"].isin(["last", "price", "mid"])].sort_values("ts")
+    for row in price_frame.to_dict("records"):
+        rows.append({"ts": row["ts"], "price": float(row["price"]), "source_role": str(row.get("role") or "price")})
+
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return pd.DataFrame(columns=["ts", "price", "source_role"])
+    return result.drop_duplicates(subset=["ts", "price", "source_role"]).sort_values("ts")
+
+
+def build_ohlc_candle_frame(frame: pd.DataFrame, *, frequency: str) -> pd.DataFrame:
+    points = _mid_price_points(frame)
+    if points.empty:
+        return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "direction", "count", "source_role"])
+    work = points.copy()
+    work["bucket_ts"] = work["ts"].dt.floor(frequency)
+    rows: list[dict[str, Any]] = []
+    for bucket_ts, group in work.sort_values("ts").groupby("bucket_ts", dropna=True):
+        if group.empty:
+            continue
+        open_price = float(group.iloc[0]["price"])
+        close_price = float(group.iloc[-1]["price"])
+        high_price = float(group["price"].max())
+        low_price = float(group["price"].min())
+        direction = "up" if close_price >= open_price else "down"
+        rows.append(
+            {
+                "ts": bucket_ts,
+                "open": open_price,
+                "high": high_price,
+                "low": low_price,
+                "close": close_price,
+                "direction": direction,
+                "count": int(len(group)),
+                "source_role": ",".join(sorted(set(str(value) for value in group["source_role"].tolist()))),
+            }
+        )
+    result = pd.DataFrame(rows)
+    if result.empty:
+        return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "direction", "count", "source_role"])
+    return result.sort_values("ts")
+
+
+def candle_frame_from_history(history_frame: pd.DataFrame, config: ChartDisplayConfig) -> pd.DataFrame:
+    visible = apply_rolling_viewport(history_frame, minutes=config.viewport_minutes)
+    return build_ohlc_candle_frame(visible, frequency=_candle_frequency(config.mode))
 
 
 def prepare_chart_display_frame(history_frame: pd.DataFrame, config: ChartDisplayConfig) -> pd.DataFrame:
