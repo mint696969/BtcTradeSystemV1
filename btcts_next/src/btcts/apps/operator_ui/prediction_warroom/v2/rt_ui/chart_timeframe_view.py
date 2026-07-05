@@ -8,7 +8,7 @@ from typing import Any
 
 import pandas as pd
 
-CHART_TIMEFRAME_VIEW_VERSION = "warroom_v2_chart_timeframe_view.2026_07_05.v1"
+CHART_TIMEFRAME_VIEW_VERSION = "warroom_v2_chart_timeframe_view.2026_07_05.v3_fixed_x_domain"
 CHART_VIEWPORT_OPTIONS: tuple[tuple[str, int], ...] = (("3分", 3), ("15分", 15), ("1時間", 60))
 CHART_DEFAULT_VIEWPORT_LABEL = "15分"
 CHART_MODE_OPTIONS: tuple[str, ...] = ("Live", "1分足", "1時間足", "日足")
@@ -22,6 +22,8 @@ class ChartDisplayConfig:
     viewport_label: str
     viewport_minutes: int
     source_scope: str = "retained_live_history"
+    source_label: str = "受信中Live履歴"
+    source_notice: str = "Live受信履歴からの表示です。"
     historical_cache_required: bool = False
     read_only: bool = True
     broker_send_enabled: bool = False
@@ -74,12 +76,23 @@ def select_chart_display_config(st_api: Any) -> ChartDisplayConfig:
         help_text="表示だけを切り替えます。履歴は保持され、broker/order/predictionには接続しません。",
     )
     historical_cache_required = mode in {"1時間足", "日足"}
+    source_notice = chart_source_notice(mode=mode, historical_cache_required=historical_cache_required)
     return ChartDisplayConfig(
         mode=mode,
         viewport_label=viewport_label,
         viewport_minutes=_viewport_minutes(viewport_label),
+        source_label="retained_live_history",
+        source_notice=source_notice,
         historical_cache_required=historical_cache_required,
     )
+
+
+def chart_source_notice(*, mode: str, historical_cache_required: bool) -> str:
+    if historical_cache_required:
+        return "現在の1時間足/日足は、保持中のLive履歴からの暫定集約です。hot/cold長期キャッシュは未接続です。"
+    if mode == "1分足":
+        return "1分足は保持中のLive履歴を1分単位に読み取り専用で集約しています。"
+    return "Liveは受信履歴をそのままrolling表示しています。"
 
 
 def apply_rolling_viewport(frame: pd.DataFrame, *, minutes: int) -> pd.DataFrame:
@@ -93,6 +106,17 @@ def apply_rolling_viewport(frame: pd.DataFrame, *, minutes: int) -> pd.DataFrame
     if visible.empty:
         return frame.tail(12).copy()
     return visible
+
+
+def chart_x_domain(history_frame: pd.DataFrame, *, minutes: int) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+    if history_frame.empty or "ts" not in history_frame.columns:
+        return None
+    ts = pd.to_datetime(history_frame["ts"], utc=True, errors="coerce").dropna()
+    if ts.empty:
+        return None
+    end = ts.max()
+    start = end - pd.Timedelta(minutes=minutes)
+    return start, end
 
 
 def aggregate_chart_frame(frame: pd.DataFrame, *, mode: str) -> pd.DataFrame:

@@ -11,11 +11,12 @@ import pandas as pd
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_timeframe_view import (
     CHART_TIMEFRAME_VIEW_VERSION,
     ChartDisplayConfig,
+    chart_x_domain,
     prepare_chart_display_frame,
     select_chart_display_config,
 )
 
-BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v4_timeframe_modes"
+BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v5_fixed_x_domain"
 _PRICE_RE = re.compile(r"(?:best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 _NAMED_PRICE_RE = re.compile(r"(best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 CHART_HISTORY_SESSION_STATE_KEY = "warroom_v2_bottom_chart_history_rows"
@@ -193,13 +194,14 @@ def _retain_chart_history(current_frame: pd.DataFrame, st_api: Any) -> pd.DataFr
     return history
 
 
-def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, st_api: Any) -> bool:
+def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, st_api: Any, *, x_domain: tuple[pd.Timestamp, pd.Timestamp] | None = None) -> bool:
     if frame.empty:
         return False
     try:
         import altair as alt  # type: ignore
 
-        base = alt.Chart(frame).encode(x=alt.X("ts:T", title="time"))
+        x_scale = alt.Scale(domain=[x_domain[0].to_pydatetime(), x_domain[1].to_pydatetime()]) if x_domain is not None else alt.Undefined
+        base = alt.Chart(frame).encode(x=alt.X("ts:T", title="time", scale=x_scale))
         layers: list[Any] = []
         if not band_frame.empty:
             band = alt.Chart(band_frame).mark_area(opacity=0.16, color="#7dd3fc").encode(
@@ -247,6 +249,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     frame = _retain_chart_history(current_frame, st_api)
     chart_config: ChartDisplayConfig = select_chart_display_config(st_api)
     display_frame = prepare_chart_display_frame(frame, chart_config)
+    x_domain = chart_x_domain(frame, minutes=chart_config.viewport_minutes)
     band_frame = _board_band_frame(display_frame)
     overlay_rows = _overlay_rows(packet)
     live_rows = sum(1 for row in packet.get("chart_rows", []) if isinstance(row, Mapping) and row.get("freshness_label") == "live")
@@ -262,8 +265,12 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     c6.metric("売気配", _fmt_price(None if latest_band is None else latest_band.get("ask")))
     c7.metric("スプレッド", _fmt_spread(None if latest_band is None else latest_band.get("spread")))
 
+    st_api.caption(f"データ範囲={chart_config.source_label} / 注意={chart_config.source_notice}")
+    if chart_config.historical_cache_required:
+        st_api.info("1時間足/日足は現在のLive保持履歴からの暫定表示です。10日超やcold archive統合は、後続の集約キャッシュ接続で扱います。")
+
     if not display_frame.empty:
-        rendered = _render_price_chart(display_frame, band_frame, st_api)
+        rendered = _render_price_chart(display_frame, band_frame, st_api, x_domain=x_domain)
         assert latest is not None
         st_api.caption(
             f"latest={_fmt_price(latest['price'])} / topic={latest['topic']} / role={latest['role']} / freshness={latest['freshness_label']} / 表示モード={chart_config.mode} / 表示窓={chart_config.viewport_label} / history={len(frame)} / visible={len(display_frame)} / helper={CHART_TIMEFRAME_VIEW_VERSION} / version={BOTTOM_CHART_POLISH_VERSION}"
@@ -290,11 +297,18 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "viewport_label": chart_config.viewport_label,
         "viewport_minutes": chart_config.viewport_minutes,
         "historical_cache_required": chart_config.historical_cache_required,
+        "chart_source_label": chart_config.source_label,
+        "chart_source_notice": chart_config.source_notice,
+        "historical_cache_connected": False,
+        "cold_archive_direct_read_enabled": False,
         "timeframe_helper_version": CHART_TIMEFRAME_VIEW_VERSION,
         "history_session_state_key": CHART_HISTORY_SESSION_STATE_KEY,
         "current_frame_rows": len(current_frame),
         "display_frame_rows": len(display_frame),
         "frame_rows": len(frame),
+        "fixed_x_domain_ready": x_domain is not None,
+        "x_domain_start": x_domain[0].isoformat() if x_domain is not None else None,
+        "x_domain_end": x_domain[1].isoformat() if x_domain is not None else None,
         "board_band_rows": len(band_frame),
         "overlay_rows": len(overlay_rows),
         "bid_ask_layer_ready": True,
