@@ -1,38 +1,28 @@
 # path: ./btcts_next/src/btcts/collector_vnext/writer.py
-# desc: JSONL append writers for raw, canonical, and state outputs in Collector vNext.
+# desc: Size-bounded JSONL append writers for raw, canonical, and state outputs in Collector vNext.
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any, Dict
 
+from btcts.core.sharded_jsonl import append_jsonl_shard
+
 from .config import CollectorConfig
-from .paths import build_layer_paths, ensure_dir, part_file_path
+from .paths import build_layer_paths, ensure_dir
 
 
-def _append_jsonl(path: Path, record: Dict[str, Any]) -> None:
-    ensure_dir(path.parent)
-    line = json.dumps(record, ensure_ascii=False, separators=(",", ":"))
-    with path.open("a", encoding="utf-8", newline="\n") as f:
-        f.write(line + "\n")
-
-
-def write_raw(cfg: CollectorConfig, *, exchange: str, symbol: str, channel: str, record_type: str, record: Dict[str, Any]) -> Path:
+def write_raw(cfg: CollectorConfig, *, exchange: str, symbol: str, channel: str, record_type: str, record: Dict[str, Any]):
     lp = build_layer_paths(cfg, exchange=exchange, symbol=symbol, channel=channel, record_type=record_type)
-    out = part_file_path(lp.raw_dir, part_no=1)
-    _append_jsonl(out, record)
-    return out
+    return append_jsonl_shard(lp.raw_dir, record)
 
 
-def write_canonical(cfg: CollectorConfig, *, exchange: str, symbol: str, channel: str, record_type: str, record: Dict[str, Any]) -> Path:
+def write_canonical(cfg: CollectorConfig, *, exchange: str, symbol: str, channel: str, record_type: str, record: Dict[str, Any]):
     lp = build_layer_paths(cfg, exchange=exchange, symbol=symbol, channel=channel, record_type=record_type)
-    out = part_file_path(lp.canonical_dir, part_no=1)
-    _append_jsonl(out, record)
-    return out
+    return append_jsonl_shard(lp.canonical_dir, record)
 
 
-def write_status(cfg: CollectorConfig, status: Dict[str, Any]) -> Path:
+def write_status(cfg: CollectorConfig, status: Dict[str, Any]):
     state_dir = cfg.roots()["state"]
     ensure_dir(state_dir)
     out = state_dir / "status.json"
