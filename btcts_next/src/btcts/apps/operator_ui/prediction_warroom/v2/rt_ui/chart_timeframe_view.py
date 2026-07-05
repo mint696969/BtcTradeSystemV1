@@ -8,12 +8,13 @@ from typing import Any
 
 import pandas as pd
 
-CHART_TIMEFRAME_VIEW_VERSION = "warroom_v2_chart_timeframe_view.2026_07_05.v4_ohlc_overlay"
+CHART_TIMEFRAME_VIEW_VERSION = "warroom_v2_chart_timeframe_view.2026_07_05.v6_unsealed_edge"
 CHART_VIEWPORT_OPTIONS: tuple[tuple[str, int], ...] = (("3分", 3), ("15分", 15), ("1時間", 60))
 CHART_DEFAULT_VIEWPORT_LABEL = "15分"
 CHART_MODE_OPTIONS: tuple[str, ...] = ("Live", "1分足", "1時間足", "日足")
 CHART_DEFAULT_MODE = "Live"
 CHART_MODE_FREQUENCY: dict[str, str | None] = {"Live": None, "1分足": "1min", "1時間足": "1h", "日足": "1D"}
+UNSEALED_EDGE_CANDLE_COUNT = 2
 
 
 @dataclass(frozen=True)
@@ -196,7 +197,7 @@ def _mid_price_points(frame: pd.DataFrame) -> pd.DataFrame:
 def build_ohlc_candle_frame(frame: pd.DataFrame, *, frequency: str) -> pd.DataFrame:
     points = _mid_price_points(frame)
     if points.empty:
-        return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "direction", "count", "source_role"])
+        return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "direction", "count", "source_role", "candle_status", "is_closed"])
     work = points.copy()
     work["bucket_ts"] = work["ts"].dt.floor(frequency)
     rows: list[dict[str, Any]] = []
@@ -208,6 +209,7 @@ def build_ohlc_candle_frame(frame: pd.DataFrame, *, frequency: str) -> pd.DataFr
         high_price = float(group["price"].max())
         low_price = float(group["price"].min())
         direction = "up" if close_price >= open_price else "down"
+        candle_status = "closed"
         rows.append(
             {
                 "ts": bucket_ts,
@@ -218,17 +220,30 @@ def build_ohlc_candle_frame(frame: pd.DataFrame, *, frequency: str) -> pd.DataFr
                 "direction": direction,
                 "count": int(len(group)),
                 "source_role": ",".join(sorted(set(str(value) for value in group["source_role"].tolist()))),
+                "candle_status": candle_status,
+                "is_closed": candle_status == "closed",
             }
         )
     result = pd.DataFrame(rows)
     if result.empty:
-        return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "direction", "count", "source_role"])
-    return result.sort_values("ts")
+        return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "direction", "count", "source_role", "candle_status", "is_closed"])
+    result = result.sort_values("ts").reset_index(drop=True)
+    forming_start = max(0, len(result) - UNSEALED_EDGE_CANDLE_COUNT)
+    result.loc[result.index >= forming_start, "candle_status"] = "forming"
+    result["is_closed"] = result["candle_status"] == "closed"
+    return result
 
 
 def candle_frame_from_history(history_frame: pd.DataFrame, config: ChartDisplayConfig) -> pd.DataFrame:
-    visible = apply_rolling_viewport(history_frame, minutes=config.viewport_minutes)
-    return build_ohlc_candle_frame(visible, frequency=_candle_frequency(config.mode))
+    candles = build_ohlc_candle_frame(history_frame, frequency=_candle_frequency(config.mode))
+    domain = chart_x_domain(history_frame, minutes=config.viewport_minutes)
+    if candles.empty or domain is None:
+        return candles
+    start, end = domain
+    visible = candles[(candles["ts"] >= start) & (candles["ts"] <= end)].copy()
+    if visible.empty:
+        return candles.tail(12).copy()
+    return visible
 
 
 def prepare_chart_display_frame(history_frame: pd.DataFrame, config: ChartDisplayConfig) -> pd.DataFrame:

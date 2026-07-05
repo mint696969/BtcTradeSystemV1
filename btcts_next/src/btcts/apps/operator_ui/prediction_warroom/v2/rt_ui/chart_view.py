@@ -8,16 +8,19 @@ from typing import Any, Mapping
 
 import pandas as pd
 
+from btcts.prediction.warroom_chart_series import (
+    WARROOM_CHART_SERIES_VERSION,
+    build_warroom_chart_candles,
+)
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_timeframe_view import (
     CHART_TIMEFRAME_VIEW_VERSION,
     ChartDisplayConfig,
-    candle_frame_from_history,
     chart_x_domain,
     prepare_chart_display_frame,
     select_chart_display_config,
 )
 
-BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v6_ohlc_overlay"
+BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v12_chart_series_logic_split"
 _PRICE_RE = re.compile(r"(?:best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 _NAMED_PRICE_RE = re.compile(r"(best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 CHART_HISTORY_SESSION_STATE_KEY = "warroom_v2_bottom_chart_history_rows"
@@ -205,54 +208,55 @@ def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, candle_fr
         x_encoding = alt.X("ts:T", title="time", scale=x_scale)
         base = alt.Chart(frame).encode(x=x_encoding)
         layers: list[Any] = []
-        if not candle_frame.empty:
-            candle_rule = alt.Chart(candle_frame).mark_rule(strokeWidth=1.2).encode(
-                x=x_encoding,
-                y=alt.Y("low:Q", title="price", scale=alt.Scale(zero=False)),
-                y2="high:Q",
-                color=alt.Color("direction:N", title="candle", scale=alt.Scale(domain=["up", "down"], range=["#facc15", "#fb7185"])),
-                tooltip=["ts:T", "open:Q", "high:Q", "low:Q", "close:Q", "count:Q", "source_role:N"],
-            )
-            candle_body = alt.Chart(candle_frame).mark_bar(size=6, opacity=0.72).encode(
-                x=x_encoding,
-                y=alt.Y("open:Q", title="price", scale=alt.Scale(zero=False)),
-                y2="close:Q",
-                color=alt.Color("direction:N", title="candle", scale=alt.Scale(domain=["up", "down"], range=["#facc15", "#fb7185"])),
-                tooltip=["ts:T", "open:Q", "high:Q", "low:Q", "close:Q", "count:Q", "source_role:N"],
-            )
-            layers.extend([candle_rule, candle_body])
         if not band_frame.empty:
-            band = alt.Chart(band_frame).mark_area(opacity=0.16, color="#7dd3fc").encode(
+            band = alt.Chart(band_frame).mark_area(opacity=0.08, color="#38bdf8").encode(
                 x=x_encoding,
                 y=alt.Y("bid:Q", title="price", scale=alt.Scale(zero=False)),
                 y2="ask:Q",
                 tooltip=["ts:T", "bid:Q", "ask:Q", "mid:Q", "spread:Q"],
             )
-            mid = alt.Chart(band_frame).mark_line(color="#64748b", strokeDash=[4, 4], strokeWidth=1.4).encode(
+            mid = alt.Chart(band_frame).mark_line(color="#64748b", strokeDash=[4, 4], strokeWidth=1.1, opacity=0.82).encode(
                 x=x_encoding,
                 y=alt.Y("mid:Q", title="price", scale=alt.Scale(zero=False)),
                 tooltip=["ts:T", "mid:Q", "spread:Q"],
             )
             layers.extend([band, mid])
-        quote_lines = base.transform_filter("datum.role == 'bid' || datum.role == 'ask'").mark_line(point=True, strokeWidth=2).encode(
+        if not candle_frame.empty:
+            candle_rule = alt.Chart(candle_frame).mark_rule(strokeWidth=1.4, opacity=0.9).encode(
+                x=x_encoding,
+                y=alt.Y("low:Q", title="price", scale=alt.Scale(zero=False)),
+                y2="high:Q",
+                color=alt.Color("direction:N", title="ローソク", scale=alt.Scale(domain=["up", "down"], range=["#f59e0b", "#ef4444"]), legend=None),
+                tooltip=["ts:T", "open:Q", "high:Q", "low:Q", "close:Q", "count:Q", "candle_status:N", "source_role:N"],
+            )
+            candle_body = alt.Chart(candle_frame).mark_bar(size=7, opacity=0.88).encode(
+                x=x_encoding,
+                y=alt.Y("open:Q", title="price", scale=alt.Scale(zero=False)),
+                y2="close:Q",
+                color=alt.Color("direction:N", title="ローソク", scale=alt.Scale(domain=["up", "down"], range=["#f59e0b", "#ef4444"]), legend=None),
+                tooltip=["ts:T", "open:Q", "high:Q", "low:Q", "close:Q", "count:Q", "source_role:N"],
+            )
+            layers.extend([candle_rule, candle_body])
+        quote_lines = base.transform_filter("datum.role == 'bid' || datum.role == 'ask'").mark_line(point=False, strokeWidth=1.15, opacity=0.58).encode(
             y=alt.Y("price:Q", title="price", scale=alt.Scale(zero=False)),
             color=alt.Color(
                 "role:N",
-                title="series",
-                scale=alt.Scale(domain=["ask", "bid", "last", "price"], range=["#ef4444", "#2563eb", "#16a34a", "#94a3b8"]),
+                title="補助線",
+                scale=alt.Scale(domain=["ask", "bid", "last", "price"], range=["#fb7185", "#60a5fa", "#16a34a", "#94a3b8"]),
+                legend=alt.Legend(orient="right"),
             ),
             tooltip=["ts:T", "topic:N", "role:N", "price:Q", "sequence:Q", "freshness_label:N"],
         )
-        trades = base.transform_filter("datum.role == 'last'").mark_circle(size=90, color="#16a34a", opacity=0.9).encode(
+        trades = base.transform_filter("datum.role == 'last'").mark_circle(size=72, color="#16a34a", opacity=0.74).encode(
             y=alt.Y("price:Q", title="price", scale=alt.Scale(zero=False)),
             tooltip=["ts:T", "topic:N", "price:Q", "sequence:Q", "freshness_label:N"],
         )
-        other = base.transform_filter("datum.role != 'bid' && datum.role != 'ask' && datum.role != 'last'").mark_point(size=60, color="#94a3b8").encode(
+        other = base.transform_filter("datum.role != 'bid' && datum.role != 'ask' && datum.role != 'last'").mark_point(size=42, color="#94a3b8", opacity=0.55).encode(
             y=alt.Y("price:Q", title="price", scale=alt.Scale(zero=False)),
             tooltip=["ts:T", "topic:N", "role:N", "price:Q", "sequence:Q", "freshness_label:N"],
         )
         layers.extend([quote_lines, trades, other])
-        chart = alt.layer(*layers).resolve_scale(y="shared").properties(height=380)
+        chart = alt.layer(*layers).resolve_scale(y="shared").properties(height=400)
         st_api.altair_chart(chart, use_container_width=True)
         return True
     except Exception:  # noqa: BLE001
@@ -267,8 +271,11 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     frame = _retain_chart_history(current_frame, st_api)
     chart_config: ChartDisplayConfig = select_chart_display_config(st_api)
     display_frame = prepare_chart_display_frame(frame, chart_config)
-    candle_frame = candle_frame_from_history(frame, chart_config)
     x_domain = chart_x_domain(frame, minutes=chart_config.viewport_minutes)
+    candle_frame, chart_series_meta = build_warroom_chart_candles(frame, mode=chart_config.mode, x_domain=x_domain)
+    raw_candle_frame = candle_frame
+    closed_candle_count = int((candle_frame.get("candle_status") == "closed").sum()) if not candle_frame.empty and "candle_status" in candle_frame.columns else 0
+    forming_candle_count = int((candle_frame.get("candle_status") == "forming").sum()) if not candle_frame.empty and "candle_status" in candle_frame.columns else 0
     band_frame = _board_band_frame(display_frame)
     overlay_rows = _overlay_rows(packet)
     live_rows = sum(1 for row in packet.get("chart_rows", []) if isinstance(row, Mapping) and row.get("freshness_label") == "live")
@@ -285,6 +292,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     c7.metric("スプレッド", _fmt_spread(None if latest_band is None else latest_band.get("spread")))
 
     st_api.caption(f"データ範囲={chart_config.source_label} / 注意={chart_config.source_notice}")
+    st_api.caption("チャート信頼境界=非UI chart series生成ロジック / 入力は暫定market-state mid由来 / 最新足のみ未確定 / D-hot履歴bootstrap・正式約定OHLCは未接続")
     if chart_config.historical_cache_required:
         st_api.info("1時間足/日足は現在のLive保持履歴からの暫定表示です。10日超やcold archive統合は、後続の集約キャッシュ接続で扱います。")
 
@@ -292,7 +300,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         rendered = _render_price_chart(display_frame, band_frame, candle_frame, st_api, x_domain=x_domain)
         assert latest is not None
         st_api.caption(
-            f"latest={_fmt_price(latest['price'])} / topic={latest['topic']} / role={latest['role']} / freshness={latest['freshness_label']} / 表示モード={chart_config.mode} / 表示窓={chart_config.viewport_label} / history={len(frame)} / visible={len(display_frame)} / helper={CHART_TIMEFRAME_VIEW_VERSION} / version={BOTTOM_CHART_POLISH_VERSION}"
+            f"latest={_fmt_price(latest['price'])} / topic={latest['topic']} / role={latest['role']} / freshness={latest['freshness_label']} / 表示モード={chart_config.mode} / 表示窓={chart_config.viewport_label} / history={len(frame)} / visible={len(display_frame)} / candles={len(candle_frame)} / closed={closed_candle_count} / forming={forming_candle_count} / helper={CHART_TIMEFRAME_VIEW_VERSION} / version={BOTTOM_CHART_POLISH_VERSION}"
         )
     else:
         rendered = False
@@ -322,6 +330,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "historical_cache_connected": False,
         "cold_archive_direct_read_enabled": False,
         "timeframe_helper_version": CHART_TIMEFRAME_VIEW_VERSION,
+        "chart_series_version": WARROOM_CHART_SERIES_VERSION,
         "history_session_state_key": CHART_HISTORY_SESSION_STATE_KEY,
         "current_frame_rows": len(current_frame),
         "display_frame_rows": len(display_frame),
@@ -330,8 +339,19 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "x_domain_start": x_domain[0].isoformat() if x_domain is not None else None,
         "x_domain_end": x_domain[1].isoformat() if x_domain is not None else None,
         "ohlc_overlay_ready": True,
+        "ohlc_visual_polish_ready": True,
+        "stable_candles_ready": True,
+        "sealed_candles_ready": False,
+        "chart_series_logic_split_ready": True,
+        "chart_series_meta": chart_series_meta.to_dict(),
+        "chart_trust_level": "deterministic_provisional_market_state_mid_ohlcv",
+        "dhot_history_bootstrap_connected": False,
+        "true_trade_ohlcv_connected": False,
+        "raw_candle_frame_rows": len(raw_candle_frame),
         "candle_frame_rows": len(candle_frame),
-        "candle_source": "retained_live_history_mid_from_bid_ask",
+        "closed_candle_count": closed_candle_count,
+        "forming_candle_count": forming_candle_count,
+        "candle_source": "non_ui_chart_series_from_retained_market_state_mid_rows",
         "board_band_rows": len(band_frame),
         "overlay_rows": len(overlay_rows),
         "bid_ask_layer_ready": True,
