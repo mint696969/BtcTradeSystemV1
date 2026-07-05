@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from btcts.core.sharded_jsonl import append_jsonl_shard
+from btcts.core.sharded_jsonl import append_jsonl_shard, hard_bytes_from_env, target_bytes_from_env
 from btcts.market_engine.config import MarketEngineConfig
 from btcts.market_engine.market_state.schema import MarketStateRecord
 from btcts.market_engine.storage_paths import build_market_state_paths, market_state_part_path
@@ -17,10 +17,26 @@ def _append_jsonl(base_dir: Path, record: dict) -> Path:
 
 
 def _append_explicit(path: Path, record: dict) -> Path:
+    # Compatibility path for one-shot callers/tests that request a specific
+    # part number. Even explicit part writes must not keep growing an already
+    # oversized file; if the requested file is at/over the configured shard
+    # target or hard limit, fall back to size-bounded sharding in the same
+    # date directory.
+    line = json.dumps(record, ensure_ascii=False, separators=(",", ":")) + "\n"
+    line_bytes = len(line.encode("utf-8"))
+    if path.exists():
+        try:
+            current_size = path.stat().st_size
+        except OSError:
+            current_size = hard_bytes_from_env()
+        target = target_bytes_from_env()
+        hard = max(target, hard_bytes_from_env())
+        if current_size >= hard or current_size + line_bytes > hard or current_size + line_bytes > target:
+            return append_jsonl_shard(path.parent, record)
+
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")))
-        fh.write("\n")
+        fh.write(line)
     return path
 
 
