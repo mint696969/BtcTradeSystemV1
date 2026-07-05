@@ -1,0 +1,33 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_PUSH_WIDGET_RT0_RT6_LIVE_OBSERVATION_RUNTIME_2026-07-05.md
+# desc: RT0-RT6 WarRoom push widget live observation runtime after WP1-WP13 roadmap completion.
+
+# WarRoom push widgets RT0-RT6 live observation runtime
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Base gate: PS_WP13_WARROOM_MANUAL_TRADE_SUPPORT_PREDICTION_CARD_CONNECTION_AND_UPDATES_DONE
+Slice: PS-RT0-RT6_WARROOM_PUSH_WIDGET_LIVE_OBSERVATION_RUNTIME
+
+```text
+rt0_live_receiver_runtime_started=true
+rt1_live_receiver_source_to_router_bridge_ready=true
+rt2_received_websocket_message_to_state_store_apply_ready=true
+rt3_session_state_lightweight_state_reflection_ready=true
+rt4_warroom_auto_refresh_observation_ready=true
+rt5_live_freshness_stale_error_observation_ready=true
+rt6_no_send_broker_order_boundary_ready=true
+warroom_page_starts_receiver_runtime_when_endpoint_present=true
+warroom_page_uses_live_packet_when_present=true
+top_layout_live_packet_ready=true
+push_widget_grid_live_packet_ready=true
+bottom_chart_live_packet_ready=true
+prediction_card_live_context_packet_ready=true
+manual_trade_support_read_only=true
+websocket_send_enabled=false
+broker_send_enabled=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+```

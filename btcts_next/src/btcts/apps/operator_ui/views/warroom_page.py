@@ -82,6 +82,10 @@ from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.wp13_prediction_c
     build_wp13_prediction_card_connection_packet,
     render_wp13_prediction_card_connection,
 )
+from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.rt_live_receiver_bridge import (
+    apply_warroom_push_widget_rt_live_receiver_bridge_to_session_state,
+    ensure_warroom_push_widget_live_observation_runtime,
+)
 from btcts.apps.operator_ui.ui_text import get_text
 from btcts.apps.operator_ui.prediction_warroom.v2.transport import (
     WARROOM_V2_OPERATOR_DIAGNOSTIC_OBSERVATION_STATE_KEY,
@@ -432,24 +436,38 @@ def _render_warroom_operator_support_review() -> None:
 
 
 
+
+def _refresh_warroom_push_widget_rt_live_bridge() -> None:
+    ensure_warroom_push_widget_live_observation_runtime(st.session_state)
+    now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+    apply_warroom_push_widget_rt_live_receiver_bridge_to_session_state(st.session_state, now_ms=now_ms)
+
 def _render_warroom_push_widget_prediction_card_wp13() -> None:
-    packet = build_wp13_prediction_card_connection_packet()
-    st.session_state[WARROOM_WP13_PREDICTION_CARD_SESSION_STATE_KEY] = packet
+    packet = st.session_state.get(WARROOM_WP13_PREDICTION_CARD_SESSION_STATE_KEY)
+    if not isinstance(packet, dict):
+        packet = build_wp13_prediction_card_connection_packet()
+        st.session_state[WARROOM_WP13_PREDICTION_CARD_SESSION_STATE_KEY] = packet
     render_wp13_prediction_card_connection(packet, st)
 
 def _render_warroom_push_widget_bottom_chart_wp12() -> None:
-    packet = build_wp12_bottom_chart_layout_packet()
-    st.session_state[WARROOM_WP12_BOTTOM_CHART_SESSION_STATE_KEY] = packet
+    packet = st.session_state.get(WARROOM_WP12_BOTTOM_CHART_SESSION_STATE_KEY)
+    if not isinstance(packet, dict):
+        packet = build_wp12_bottom_chart_layout_packet()
+        st.session_state[WARROOM_WP12_BOTTOM_CHART_SESSION_STATE_KEY] = packet
     render_wp12_bottom_chart_layout(packet, st)
 
 def _render_warroom_push_widget_top_layout_wp11() -> None:
-    packet = build_wp11_top_layout_push_widget_polish_packet()
-    st.session_state[WARROOM_WP11_TOP_LAYOUT_SESSION_STATE_KEY] = packet
+    packet = st.session_state.get(WARROOM_WP11_TOP_LAYOUT_SESSION_STATE_KEY)
+    if not isinstance(packet, dict):
+        packet = build_wp11_top_layout_push_widget_polish_packet()
+        st.session_state[WARROOM_WP11_TOP_LAYOUT_SESSION_STATE_KEY] = packet
     render_wp11_top_layout_polish(packet, st)
 
 def _render_warroom_push_widget_mount_wp9() -> None:
-    packet = build_wp9_warroom_page_mount_packet()
-    st.session_state[WARROOM_WP9_PAGE_MOUNT_SESSION_STATE_KEY] = packet
+    packet = st.session_state.get(WARROOM_WP9_PAGE_MOUNT_SESSION_STATE_KEY)
+    if not isinstance(packet, dict):
+        packet = build_wp9_warroom_page_mount_packet()
+        st.session_state[WARROOM_WP9_PAGE_MOUNT_SESSION_STATE_KEY] = packet
     render_wp9_push_widget_mount(packet, st)
 
 def _render_warroom_evidence_presentation() -> None:
@@ -1076,6 +1094,8 @@ def _render_warroom_page_body() -> None:
 
     with render_warroom_focus_section("live_nowcast"):
         render_warroom_live_market_nowcast_panel(fragment_enabled=fragment_enabled)
+
+    _refresh_warroom_push_widget_rt_live_bridge()
 
     with render_warroom_focus_section("push_widget_top_layout"):
         _render_warroom_push_widget_top_layout_wp11()
