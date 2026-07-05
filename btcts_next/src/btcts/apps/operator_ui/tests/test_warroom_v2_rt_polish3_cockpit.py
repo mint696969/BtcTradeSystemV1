@@ -165,7 +165,9 @@ def test_gpt_copy_packet_render_shows_copy_range_guidance() -> None:
     fake = _CopyPacketFakeStreamlit()
     result = render_gpt_copy_packet(text, fake)
     assert result["copy_packet_rendered"] is True
+    assert result["copy_status_summary"].startswith("GPTコピー準備:")
     assert fake.expander_titles == ["GPTへコピーするチャート範囲"]
+    assert any("GPTコピー準備:" in line for line in fake.captions)
     assert any("GPTコピー対象範囲: 2026-07-05T18:20:37Z ～ 2026-07-05T18:35:37Z" in line for line in fake.captions)
     assert any("rows: history=813 / visible=813" in line for line in fake.captions)
     assert any("D-hot source:" in line for line in fake.captions)

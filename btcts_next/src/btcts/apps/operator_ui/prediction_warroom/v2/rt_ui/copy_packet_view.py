@@ -198,8 +198,22 @@ def _copy_packet_range_summary(text: str) -> dict[str, Any]:
     }
 
 
+def build_gpt_copy_status_summary(text: str) -> str:
+    summary = _copy_packet_range_summary(text)
+    range_label = str(summary.get("range_label") or "GPTコピー対象範囲: -")
+    rows_label = str(summary.get("rows_label") or "rows: -")
+    source_label = str(summary.get("source_label") or "D-hot source: -")
+    source_ready = "sourceあり"
+    if source_label.strip() in {"D-hot source: -", "D-hot source:"} or source_label.rstrip().endswith(": -"):
+        source_ready = "source未確認"
+    range_text = range_label.replace("GPTコピー対象範囲: ", "")
+    return f"GPTコピー準備: {range_text} / {rows_label} / {source_ready}"
+
+
 def render_gpt_copy_packet(text: str, st_api: Any) -> dict[str, Any]:
     summary = _copy_packet_range_summary(text)
+    status_summary = build_gpt_copy_status_summary(text)
+    st_api.caption(status_summary)
     with st_api.expander("GPTへコピーするチャート範囲", expanded=False):
         st_api.caption(summary["range_label"])
         st_api.caption(summary["rows_label"])
@@ -211,6 +225,7 @@ def render_gpt_copy_packet(text: str, st_api: Any) -> dict[str, Any]:
         "copy_packet_rendered": True,
         "copy_packet_version": GPT_COPY_PACKET_VERSION,
         "copy_packet_chars": len(text),
+        "copy_status_summary": status_summary,
         "lightweight_request": True,
         "copy_range_label": summary["range_label"],
         "copy_source_label": summary["source_label"],
