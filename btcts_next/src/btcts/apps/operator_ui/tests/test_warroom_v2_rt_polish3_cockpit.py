@@ -16,7 +16,7 @@ PAGE = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/views/warroom_v2_page.
 RT_UI = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/rt_ui"
 DOC = REPO_ROOT / "docs/strategy/PREDICTION_SYSTEM_WARROOM_V2_RT_POLISH3_COCKPIT_2026-07-05.md"
 
-from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.copy_packet_view import build_gpt_copy_packet  # noqa: E402
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.copy_packet_view import build_gpt_copy_packet, render_gpt_copy_packet  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.inference_guidance_view import build_inference_guidance_packet  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_strip_view import build_market_strip_packet  # noqa: E402
 from btcts.apps.operator_ui.views.warroom_v2_page import build_warroom_v2_page_mount_packet  # noqa: E402
@@ -37,6 +37,33 @@ def test_market_strip_extracts_dhot_values() -> None:
     assert packet["spread_bps"] == 1.0
     assert packet["receiver_status"] == "receiving"
     assert packet["broker_send_enabled"] is False
+
+
+
+class _CopyPacketFakeExpander:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+
+class _CopyPacketFakeStreamlit:
+    def __init__(self) -> None:
+        self.captions: list[str] = []
+        self.text_areas: list[dict[str, object]] = []
+        self.expander_titles: list[str] = []
+
+    def expander(self, title: str, expanded: bool = False):
+        self.expander_titles.append(title)
+        return _CopyPacketFakeExpander()
+
+    def caption(self, text: object) -> None:
+        self.captions.append(str(text))
+
+    def text_area(self, label: str, value: str, height: int | None = None):
+        self.text_areas.append({"label": label, "value": value, "height": height})
+        return value
 
 
 def test_guidance_and_copy_packet_are_read_only() -> None:
@@ -113,3 +140,33 @@ def test_modules_and_doc_markers() -> None:
     doc = DOC.read_text(encoding="utf-8-sig")
     assert "warroom_v2_rt_polish3_cockpit_done=true" in doc
     assert "gpt_review_copy_packet_added=true" in doc
+
+
+def test_gpt_copy_packet_render_shows_copy_range_guidance() -> None:
+    text = json.dumps(
+        {
+            "schema_version": "warroom_gpt_review_packet.2026_07_05.v3_action_plan",
+            "operator_focus": {
+                "selected_chart_range": {
+                    "history_rows": 813,
+                    "visible_rows": 813,
+                    "x_domain": {
+                        "start": "2026-07-05T18:20:37Z",
+                        "end": "2026-07-05T18:35:37Z",
+                    },
+                    "dhot_bootstrap": {
+                        "source_path": "D:/btc_ts_hot/data/market_data/exchange=bitflyer/symbol=FX_BTC_JPY/type=market.trade/date=2026-07-05",
+                    },
+                }
+            },
+        },
+        ensure_ascii=False,
+    )
+    fake = _CopyPacketFakeStreamlit()
+    result = render_gpt_copy_packet(text, fake)
+    assert result["copy_packet_rendered"] is True
+    assert fake.expander_titles == ["GPTへコピーするチャート範囲"]
+    assert any("GPTコピー対象範囲: 2026-07-05T18:20:37Z ～ 2026-07-05T18:35:37Z" in line for line in fake.captions)
+    assert any("rows: history=813 / visible=813" in line for line in fake.captions)
+    assert any("D-hot source:" in line for line in fake.captions)
+    assert fake.text_areas[0]["label"] == "GPTに貼る軽量リクエスト"

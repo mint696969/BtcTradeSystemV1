@@ -172,8 +172,48 @@ def build_gpt_copy_packet(
     return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
 
 
+def _copy_packet_range_summary(text: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(text)
+    except Exception:  # noqa: BLE001
+        return {
+            "ok": False,
+            "range_label": "GPTコピー対象範囲: JSON解析不可",
+            "source_label": "D-hot source: -",
+            "rows_label": "rows: -",
+        }
+    selected = dict(((payload.get("operator_focus") or {}).get("selected_chart_range") or {}))
+    x_domain = dict(selected.get("x_domain") or {})
+    dhot = dict(selected.get("dhot_bootstrap") or {})
+    start = x_domain.get("start") or "-"
+    end = x_domain.get("end") or "-"
+    source_path = dhot.get("source_path") or selected.get("data_access_hints", {}).get("primary_market_trade_path") or "-"
+    history_rows = selected.get("history_rows")
+    visible_rows = selected.get("visible_rows")
+    return {
+        "ok": True,
+        "range_label": f"GPTコピー対象範囲: {start} ～ {end}",
+        "source_label": f"D-hot source: {source_path}",
+        "rows_label": f"rows: history={history_rows} / visible={visible_rows}",
+    }
+
+
 def render_gpt_copy_packet(text: str, st_api: Any) -> dict[str, Any]:
-    with st_api.expander("GPT review request packet", expanded=False):
-        st_api.caption("軽量コピー: 生データ本体ではなく、選択範囲・D-hot参照先・安全境界だけをGPTに渡します。詳細分析はGPT ActionsでD-hot/repoを読みます。")
-        st_api.text_area("Copy lightweight request for GPT analysis", value=text, height=220)
-    return {"ok": True, "copy_packet_rendered": True, "copy_packet_version": GPT_COPY_PACKET_VERSION, "copy_packet_chars": len(text), "lightweight_request": True, "read_only": True}
+    summary = _copy_packet_range_summary(text)
+    with st_api.expander("GPTへコピーするチャート範囲", expanded=False):
+        st_api.caption(summary["range_label"])
+        st_api.caption(summary["rows_label"])
+        st_api.caption(summary["source_label"])
+        st_api.caption("操作: 下の欄をクリック → Ctrl+A → Ctrl+C → GPTに貼り付け。軽量コピーなので生データ本体は含めません。")
+        st_api.text_area("GPTに貼る軽量リクエスト", value=text, height=220)
+    return {
+        "ok": True,
+        "copy_packet_rendered": True,
+        "copy_packet_version": GPT_COPY_PACKET_VERSION,
+        "copy_packet_chars": len(text),
+        "lightweight_request": True,
+        "copy_range_label": summary["range_label"],
+        "copy_source_label": summary["source_label"],
+        "copy_rows_label": summary["rows_label"],
+        "read_only": True,
+    }
