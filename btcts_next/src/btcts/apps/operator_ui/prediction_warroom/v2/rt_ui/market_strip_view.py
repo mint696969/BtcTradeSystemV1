@@ -1,9 +1,11 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/rt_ui/market_strip_view.py
-# desc: Thin market strip for WarRoom v2 cockpit. Extracts live bid/ask/spread/freshness from RT widget packets.
+# desc: Thin market strip for WarRoom v2 cockpit. Shows essential manual-trade market data in one compact top row.
 
 from __future__ import annotations
 
 from typing import Any, Mapping
+
+MARKET_TOP_STRIP_VERSION = "warroom_v2_market_top_strip.2026_07_05.v1"
 
 
 def _rows(packet: Mapping[str, Any], widget_id: str) -> list[Mapping[str, Any]]:
@@ -18,32 +20,123 @@ def _value(row: Mapping[str, Any]) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
+def _latest_value(rows: list[Mapping[str, Any]], topic_key: str | None = None) -> Mapping[str, Any]:
+    for row in reversed(rows):
+        if topic_key is None or str(row.get("topic_key") or "") == topic_key:
+            return _value(row)
+    return {}
+
+
+def _widget_state(widgets_packet: Mapping[str, Any], widget_id: str) -> str:
+    render_packets = widgets_packet.get("render_packets", {})
+    widget = render_packets.get(widget_id, {}) if isinstance(render_packets, Mapping) else {}
+    if isinstance(widget, Mapping):
+        health = widget.get("health", {})
+        if isinstance(health, Mapping) and health.get("state"):
+            return str(health.get("state"))
+        if widget.get("freshness_label"):
+            return str(widget.get("freshness_label"))
+    return "not_started"
+
+
+def _as_float(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        if isinstance(value, str) and value.strip():
+            return float(value)
+    except ValueError:
+        return None
+    return None
+
+
+def _spread_bps(spread: object, bid: object, ask: object, provided: object) -> float | None:
+    explicit = _as_float(provided)
+    if explicit is not None:
+        return explicit
+    spread_f = _as_float(spread)
+    bid_f = _as_float(bid)
+    ask_f = _as_float(ask)
+    if spread_f is None or bid_f is None or ask_f is None:
+        return None
+    mid = (bid_f + ask_f) / 2.0
+    if mid <= 0:
+        return None
+    return spread_f / mid * 10_000.0
+
+
+def _spread_value(spread: object, bid: object, ask: object) -> float | None:
+    explicit = _as_float(spread)
+    if explicit is not None:
+        return explicit
+    bid_f = _as_float(bid)
+    ask_f = _as_float(ask)
+    if bid_f is None or ask_f is None:
+        return None
+    return ask_f - bid_f
+
+
 def build_market_strip_packet(widgets_packet: Mapping[str, Any]) -> dict[str, Any]:
     depth_rows = _rows(widgets_packet, "market_depth_widget")
+    trade_rows = _rows(widgets_packet, "recent_trades_widget")
     spread_rows = _rows(widgets_packet, "spread_liquidity_widget")
     lifecycle_rows = _rows(widgets_packet, "receiver_lifecycle_widget")
-    depth_value = _value(depth_rows[-1]) if depth_rows else {}
-    spread_value = next((_value(row) for row in reversed(spread_rows) if str(row.get("topic_key")) == "market.spread"), {})
-    lifecycle_value = _value(lifecycle_rows[-1]) if lifecycle_rows else {}
+    summary_rows = _rows(widgets_packet, "summary_alerts_widget")
+
+    depth_value = _latest_value(depth_rows)
+    trade_value = _latest_value(trade_rows, "market.trades")
+    spread_value = _latest_value(spread_rows, "market.spread")
+    liquidity_value = _latest_value(spread_rows, "market.liquidity")
+    lifecycle_value = _latest_value(lifecycle_rows)
+    summary_value = _latest_value(summary_rows, "warroom.summary")
+    alert_value = _latest_value(summary_rows, "warroom.alerts")
+
     best_bid = depth_value.get("best_bid")
     best_ask = depth_value.get("best_ask")
-    spread = spread_value.get("spread", depth_value.get("spread"))
-    spread_bps = spread_value.get("spread_bps")
+    spread = _spread_value(spread_value.get("spread", depth_value.get("spread")), best_bid, best_ask)
+    spread_bps = _spread_bps(spread, best_bid, best_ask, spread_value.get("spread_bps"))
+    bid_f = _as_float(best_bid)
+    ask_f = _as_float(best_ask)
+    mid = ((bid_f + ask_f) / 2.0) if bid_f is not None and ask_f is not None else None
+
+    market_states = {
+        "depth": _widget_state(widgets_packet, "market_depth_widget"),
+        "trades": _widget_state(widgets_packet, "recent_trades_widget"),
+        "spread_liquidity": _widget_state(widgets_packet, "spread_liquidity_widget"),
+        "receiver": _widget_state(widgets_packet, "receiver_lifecycle_widget"),
+        "summary_alerts": _widget_state(widgets_packet, "summary_alerts_widget"),
+    }
+    alert_count = int(alert_value.get("alert_count") or 0) if isinstance(alert_value.get("alert_count", 0), (int, float, str)) else 0
     return {
         "ok": True,
         "packet_kind": "warroom_v2_rt_market_strip_packet",
+        "version": MARKET_TOP_STRIP_VERSION,
         "display_source": widgets_packet.get("display_source", "live"),
-        "symbol": depth_value.get("symbol") or spread_value.get("symbol") or "--",
+        "symbol": depth_value.get("symbol") or spread_value.get("symbol") or liquidity_value.get("symbol") or "--",
         "best_bid": best_bid,
         "best_ask": best_ask,
+        "mid_price": mid,
         "spread": spread,
         "spread_bps": spread_bps,
+        "last_price": trade_value.get("last_price"),
+        "last_size": trade_value.get("last_size"),
+        "last_side": trade_value.get("side"),
+        "liquidity_state": liquidity_value.get("liquidity_state") or liquidity_value.get("lane_state") or "--",
+        "depth_score": liquidity_value.get("depth_score"),
+        "bid_levels": liquidity_value.get("bid_levels"),
+        "ask_levels": liquidity_value.get("ask_levels"),
         "market_uid": depth_value.get("market_uid"),
-        "source": depth_value.get("source") or spread_value.get("source"),
+        "source": depth_value.get("source") or spread_value.get("source") or liquidity_value.get("source"),
         "receiver_status": lifecycle_value.get("status", "waiting"),
-        "last_event_ts": lifecycle_value.get("last_event_ts"),
+        "last_event_ts": lifecycle_value.get("last_event_ts") or summary_value.get("last_event_ts"),
+        "summary": summary_value.get("summary"),
+        "alert_count": alert_count,
+        "highest_alert_level": alert_value.get("highest_level", "info"),
+        "last_error": alert_value.get("last_error"),
         "live_widget_count": int(widgets_packet.get("live_widget_count") or 0),
+        "market_states": market_states,
         "read_only": True,
+        "manual_trade_support": True,
         "broker_send_enabled": False,
         "order_intent_submitted": False,
         "prediction_invoked": False,
@@ -52,25 +145,106 @@ def build_market_strip_packet(widgets_packet: Mapping[str, Any]) -> dict[str, An
 
 
 def _fmt_price(value: object) -> str:
-    if isinstance(value, (int, float)):
-        return f"{float(value):,.0f}"
+    numeric = _as_float(value)
+    if numeric is not None:
+        return f"{numeric:,.0f}"
+    return "--"
+
+
+def _fmt_size(value: object) -> str:
+    numeric = _as_float(value)
+    if numeric is not None:
+        return f"{numeric:.4f}"
     return "--"
 
 
 def _fmt_bps(value: object) -> str:
-    if isinstance(value, (int, float)):
-        return f"{float(value):.2f} bps"
+    numeric = _as_float(value)
+    if numeric is not None:
+        return f"{numeric:.2f} bps"
     return "--"
 
 
+def _side_label(value: object) -> str:
+    side = str(value or "").strip().lower()
+    if side == "buy":
+        return "BUY"
+    if side == "sell":
+        return "SELL"
+    return "--"
+
+
+def _receiver_label(value: object) -> str:
+    status = str(value or "waiting")
+    if status in {"receiving", "live"}:
+        return f"🟢 {status}"
+    if status in {"slow", "attention", "stale"}:
+        return f"🟡 {status}"
+    if status in {"error", "failed"}:
+        return f"🔴 {status}"
+    return f"⚪ {status}"
+
+
+def _metric(column: Any, label: str, value: str, help_text: str, *, delta: str | None = None) -> None:
+    try:
+        column.metric(label, value, delta=delta, help=help_text)
+    except TypeError:
+        if delta is not None:
+            try:
+                column.metric(label, value, delta=delta)
+                return
+            except TypeError:
+                pass
+        column.metric(label, value)
+
+
+def _state_summary(states: Mapping[str, Any]) -> str:
+    return " / ".join(f"{key}={value}" for key, value in states.items())
+
+
 def render_market_strip(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
-    st_api.caption("Market strip: D-hot live market state / read-only / no broker action")
-    cols = st_api.columns(6)
-    cols[0].metric("Symbol", str(packet.get("symbol") or "--"))
-    cols[1].metric("Best Bid", _fmt_price(packet.get("best_bid")))
-    cols[2].metric("Best Ask", _fmt_price(packet.get("best_ask")))
-    cols[3].metric("Spread", _fmt_price(packet.get("spread")))
-    cols[4].metric("Spread bps", _fmt_bps(packet.get("spread_bps")))
-    cols[5].metric("Receiver", str(packet.get("receiver_status") or "waiting"))
-    st_api.caption(f"source={packet.get('source') or '--'} / last_event_ts={packet.get('last_event_ts') or '--'} / live_widgets={packet.get('live_widget_count', 0)}")
-    return {"ok": True, "market_strip_rendered": True, "read_only": True, "broker_send_enabled": False}
+    st_api.caption("Market top strip: manual trading essentials / compact / read-only / no broker action")
+    cols = st_api.columns(8)
+    _metric(cols[0], "Symbol", str(packet.get("symbol") or "--"), "取引対象。現在は Collector/D-hot 由来の market state を表示します。")
+    _metric(cols[1], "Bid", _fmt_price(packet.get("best_bid")), "最良買い気配。手動エントリー時の売却可能側の目安です。")
+    _metric(cols[2], "Ask", _fmt_price(packet.get("best_ask")), "最良売り気配。手動エントリー時の購入可能側の目安です。")
+    _metric(cols[3], "Mid", _fmt_price(packet.get("mid_price")), "Bid と Ask の中間値。短期判断の基準線として使います。")
+    _metric(cols[4], "Spread", _fmt_price(packet.get("spread")), "Ask - Bid。広がるほど約定コストと滑りリスクが上がります。", delta=_fmt_bps(packet.get("spread_bps")))
+    _metric(cols[5], "Last", _fmt_price(packet.get("last_price")), "直近約定価格。D-hot market state だけの場合は未接続表示になります。")
+    _metric(cols[6], "Flow", f"{_side_label(packet.get('last_side'))} {_fmt_size(packet.get('last_size'))}", "直近約定の方向とサイズ。未接続時は -- です。")
+    _metric(cols[7], "Receiver", _receiver_label(packet.get("receiver_status")), "Push/Collector からの観測状態。STALE 時は last-known context として扱います。")
+
+    compact_context = " / ".join(
+        [
+            f"liquidity={packet.get('liquidity_state') or '--'}",
+            f"depth_score={packet.get('depth_score') if packet.get('depth_score') is not None else '--'}",
+            f"alerts={packet.get('alert_count', 0)}:{packet.get('highest_alert_level') or 'info'}",
+            f"last_event_ts={packet.get('last_event_ts') or '--'}",
+            f"source={packet.get('source') or '--'}",
+        ]
+    )
+    st_api.caption(compact_context)
+    with st_api.expander("Market top strip details", expanded=False):
+        st_api.dataframe(
+            [
+                {"key": "market_uid", "value": str(packet.get("market_uid") or "--")},
+                {"key": "bid_levels", "value": str(packet.get("bid_levels") or "--")},
+                {"key": "ask_levels", "value": str(packet.get("ask_levels") or "--")},
+                {"key": "widget_states", "value": _state_summary(packet.get("market_states", {}))},
+                {"key": "summary", "value": str(packet.get("summary") or "--")},
+                {"key": "last_error", "value": str(packet.get("last_error") or "--")},
+                {"key": "safety", "value": "read_only=true / broker_send_enabled=false / prediction_invoked=false / classifier_invoked=false"},
+            ],
+            width="stretch",
+        )
+    return {
+        "ok": True,
+        "market_top_strip_version": MARKET_TOP_STRIP_VERSION,
+        "market_strip_rendered": True,
+        "compact_horizontal_strip": True,
+        "tooltip_help_ready": True,
+        "read_only": True,
+        "broker_send_enabled": False,
+        "prediction_invoked": False,
+        "classifier_invoked": False,
+    }
