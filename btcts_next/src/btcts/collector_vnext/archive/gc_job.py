@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import ArchiveConfig
+from .file_policy import is_archive_gc_candidate
 
 
 def _same_resolved_path(left: Path, right: Path) -> bool:
@@ -90,7 +91,7 @@ def build_gc_plan(cfg: ArchiveConfig) -> list[DeleteItem]:
             if date_dir.name > cutoff:
                 continue
 
-            for hot_file in sorted([p for p in date_dir.rglob("*") if p.is_file()]):
+            for hot_file in sorted(p for p in date_dir.rglob("*") if is_archive_gc_candidate(p)):
                 if not _is_stable_file(hot_file, stable_age_sec=cfg.stable_age_sec):
                     continue
 
@@ -107,7 +108,7 @@ def build_gc_plan(cfg: ArchiveConfig) -> list[DeleteItem]:
                 except Exception:
                     continue
 
-                # Automatic GC must require exact D/E size equality.  A larger
+                # Automatic GC must require exact D/E size equality. A larger
                 # cold file is not treated as safe because it can indicate an
                 # unexpected path collision, append, or schema/rotation issue.
                 if cold_size != hot_size:

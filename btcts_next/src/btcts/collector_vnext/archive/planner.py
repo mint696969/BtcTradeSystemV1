@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from .config import ArchiveConfig
+from .file_policy import is_archive_copy_candidate
 
 
 def _same_resolved_path(left: Path, right: Path) -> bool:
@@ -79,6 +80,12 @@ def _maybe_add_copy_item(items: list[CopyItem], *, src_file: Path, dst_file: Pat
     items.append(CopyItem(src=src_file, dst=dst_file, kind="file", size_bytes=src_size))
 
 
+def _iter_completed_files(root: Path, *, data_file: bool) -> list[Path]:
+    if not root.exists():
+        return []
+    return sorted(p for p in root.rglob("*") if is_archive_copy_candidate(p, data_file=data_file))
+
+
 def build_copy_plan(cfg: ArchiveConfig) -> list[CopyItem]:
     if _same_resolved_path(cfg.hot_root, cfg.cold_root):
         return []
@@ -98,7 +105,7 @@ def build_copy_plan(cfg: ArchiveConfig) -> list[CopyItem]:
                 rel = date_dir.relative_to(cfg.hot_root)
                 dst_dir = cfg.cold_root / rel
 
-                for src_file in sorted([p for p in date_dir.rglob("*") if p.is_file()]):
+                for src_file in _iter_completed_files(date_dir, data_file=True):
                     if not _is_stable_file(src_file, stable_age_sec=cfg.stable_age_sec):
                         continue
 
@@ -121,7 +128,7 @@ def build_copy_plan(cfg: ArchiveConfig) -> list[CopyItem]:
                         items.append(CopyItem(src=src_file, dst=dst_file, kind="file", size_bytes=src_size))
             continue
 
-        for src_file in sorted([p for p in root.rglob("*") if p.is_file()]):
+        for src_file in _iter_completed_files(root, data_file=False):
             if not _is_stable_file(src_file, stable_age_sec=cfg.stable_age_sec):
                 continue
 
@@ -152,7 +159,7 @@ def build_copy_plan(cfg: ArchiveConfig) -> list[CopyItem]:
         if planned and bytes_so_far + item.size_bytes > cfg.max_bytes_per_cycle:
             break
         planned.append(item)
-        bytes_so_far += item.size_bytes
+        bytes_so_far += int(item.size_bytes)
 
     return planned
 

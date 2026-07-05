@@ -30,6 +30,7 @@ BtcTradeSystem must not produce or retain huge single hot JSONL files.  Hot data
 ## Archive rule
 
 - Only stable closed shards are cold-copy eligible.
+- Archive copy and GC planners must exclude incomplete file names such as `.open`, `.tmp`, `.partial`, `.inprogress`, `.writing`, and `.lock`.
 - Cold copy must preserve the same relative path under the cold root.
 - Hot GC requires cold existence and verification before delete.
 - Size equality is the minimum compatibility check; new manifest flows should prefer checksum verification.
