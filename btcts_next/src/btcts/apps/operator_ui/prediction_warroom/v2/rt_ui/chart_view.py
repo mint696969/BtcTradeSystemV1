@@ -8,9 +8,11 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v1"
+BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v2_history"
 _PRICE_RE = re.compile(r"(?:best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 _NAMED_PRICE_RE = re.compile(r"(best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
+CHART_HISTORY_SESSION_STATE_KEY = "warroom_v2_bottom_chart_history_rows"
+CHART_HISTORY_LIMIT = 240
 
 
 def _as_float(value: object) -> float | None:
@@ -123,6 +125,67 @@ def _fmt_spread(value: object) -> str:
     return f"{numeric:,.0f}"
 
 
+def _session_state(st_api: Any) -> Any | None:
+    state = getattr(st_api, "session_state", None)
+    if hasattr(state, "get") and hasattr(state, "__setitem__"):
+        return state
+    return None
+
+
+def _frame_to_history_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = []
+    if frame.empty:
+        return records
+    for row in frame.to_dict("records"):
+        ts = row.get("ts")
+        records.append(
+            {
+                "ts": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+                "topic": str(row.get("topic") or ""),
+                "role": str(row.get("role") or "price"),
+                "price": float(row.get("price") or 0.0),
+                "sequence": int(row.get("sequence") or 0),
+                "freshness_label": str(row.get("freshness_label") or ""),
+            }
+        )
+    return records
+
+
+def _history_records_to_frame(records: object) -> pd.DataFrame:
+    if not isinstance(records, list):
+        return pd.DataFrame(columns=["ts", "topic", "role", "price", "sequence", "freshness_label"])
+    rows = [row for row in records if isinstance(row, Mapping)]
+    if not rows:
+        return pd.DataFrame(columns=["ts", "topic", "role", "price", "sequence", "freshness_label"])
+    frame = pd.DataFrame(rows)
+    frame["ts"] = pd.to_datetime(frame["ts"], utc=True, errors="coerce")
+    frame["price"] = pd.to_numeric(frame["price"], errors="coerce")
+    frame["sequence"] = pd.to_numeric(frame["sequence"], errors="coerce").fillna(0).astype(int)
+    frame = frame.dropna(subset=["ts", "price"])
+    if frame.empty:
+        return pd.DataFrame(columns=["ts", "topic", "role", "price", "sequence", "freshness_label"])
+    return frame[["ts", "topic", "role", "price", "sequence", "freshness_label"]]
+
+
+def _retain_chart_history(current_frame: pd.DataFrame, st_api: Any) -> pd.DataFrame:
+    state = _session_state(st_api)
+    if state is None:
+        return current_frame
+    previous = _history_records_to_frame(state.get(CHART_HISTORY_SESSION_STATE_KEY, []))
+    if current_frame.empty:
+        history = previous
+    elif previous.empty:
+        history = current_frame
+    else:
+        history = pd.concat([previous, current_frame], ignore_index=True)
+    if history.empty:
+        state[CHART_HISTORY_SESSION_STATE_KEY] = []
+        return history
+    history = history.drop_duplicates(subset=["ts", "topic", "role", "price", "sequence"]).sort_values(["ts", "role", "topic"]).tail(CHART_HISTORY_LIMIT)
+    state[CHART_HISTORY_SESSION_STATE_KEY] = _frame_to_history_records(history)
+    return history
+
+
 def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, st_api: Any) -> bool:
     if frame.empty:
         return False
@@ -162,7 +225,7 @@ def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, st_api: A
             tooltip=["ts:T", "topic:N", "role:N", "price:Q", "sequence:Q", "freshness_label:N"],
         )
         layers.extend([quote_lines, trades, other])
-        chart = alt.layer(*layers).resolve_scale(y="shared").properties(height=360)
+        chart = alt.layer(*layers).resolve_scale(y="shared").properties(height=380)
         st_api.altair_chart(chart, use_container_width=True)
         return True
     except Exception:  # noqa: BLE001
@@ -172,8 +235,9 @@ def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, st_api: A
 
 
 def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
-    st_api.caption("Bottom chart: bid/ask board layer + mid reference + trade points / read-only")
-    frame = chart_rows_to_frame(packet)
+    st_api.caption("チャート: 買気配/売気配の板レイヤー + 中心線 + 約定点 / 短期履歴保持 / 読み取り専用")
+    current_frame = chart_rows_to_frame(packet)
+    frame = _retain_chart_history(current_frame, st_api)
     band_frame = _board_band_frame(frame)
     overlay_rows = _overlay_rows(packet)
     live_rows = sum(1 for row in packet.get("chart_rows", []) if isinstance(row, Mapping) and row.get("freshness_label") == "live")
@@ -181,12 +245,12 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     latest_band = band_frame.sort_values("ts").iloc[-1] if not band_frame.empty else None
 
     c1, c2, c3, c4, c5, c6 = st_api.columns(6)
-    c1.metric("Points", len(frame))
-    c2.metric("Live rows", live_rows)
-    c3.metric("Bid", _fmt_price(None if latest_band is None else latest_band.get("bid")))
-    c4.metric("Ask", _fmt_price(None if latest_band is None else latest_band.get("ask")))
-    c5.metric("Spread", _fmt_spread(None if latest_band is None else latest_band.get("spread")))
-    c6.metric("Overlays", len(overlay_rows))
+    c1.metric("履歴点", len(frame))
+    c2.metric("最新行", live_rows)
+    c3.metric("買気配", _fmt_price(None if latest_band is None else latest_band.get("bid")))
+    c4.metric("売気配", _fmt_price(None if latest_band is None else latest_band.get("ask")))
+    c5.metric("スプレッド", _fmt_spread(None if latest_band is None else latest_band.get("spread")))
+    c6.metric("レイヤー", len(overlay_rows))
 
     if not frame.empty:
         rendered = _render_price_chart(frame, band_frame, st_api)
@@ -196,11 +260,11 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         )
     else:
         rendered = False
-        st_api.info("No live price rows yet. Waiting for market.depth or market.trades.")
+        st_api.info("価格行がまだありません。market.depth または market.trades の到着を待っています。")
 
     if overlay_rows:
         st_api.caption("overlays: " + " / ".join(f"{row['overlay']}={row['state']}" for row in overlay_rows[:4]))
-    with st_api.expander("Chart rows, board band, and overlays", expanded=False):
+    with st_api.expander("チャート行・板帯・レイヤー詳細", expanded=False):
         st_api.dataframe(frame, width="stretch")
         st_api.dataframe(band_frame, width="stretch")
         st_api.dataframe(overlay_rows, width="stretch")
@@ -208,6 +272,9 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "ok": True,
         "bottom_chart_polish_version": BOTTOM_CHART_POLISH_VERSION,
         "chart_graph_rendered": rendered,
+        "history_retention_ready": True,
+        "history_session_state_key": CHART_HISTORY_SESSION_STATE_KEY,
+        "current_frame_rows": len(current_frame),
         "frame_rows": len(frame),
         "board_band_rows": len(band_frame),
         "overlay_rows": len(overlay_rows),
