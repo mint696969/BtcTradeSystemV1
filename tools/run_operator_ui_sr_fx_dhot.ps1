@@ -41,9 +41,10 @@ $env:BTCTS_MARKET_ENGINE_WRITE_MARKET_STATE = "true"
 $env:BTCTS_UNIFIED_MARKET_STATE_ENABLED = "true"
 
 # WarRoom push-widget realtime observation defaults.
-# Uses existing bitFlyer collector providers; raw JSON-RPC URL is not required here.
-if (-not $env:WARROOM_PUSH_WIDGET_WS_URL) { $env:WARROOM_PUSH_WIDGET_WS_URL = "bitflyer://FX_BTC_JPY" }
-if (-not $env:WARROOM_PUSH_WIDGET_SOURCE) { $env:WARROOM_PUSH_WIDGET_SOURCE = "bitflyer_collector_provider" }
+# Uses D-hot unified market state produced by the existing Collector; WarRoom does not open an extra exchange WebSocket by default.
+if (-not $env:WARROOM_PUSH_WIDGET_WS_URL) { $env:WARROOM_PUSH_WIDGET_WS_URL = "dhot://unified_market_state" }
+if (-not $env:WARROOM_PUSH_WIDGET_SOURCE) { $env:WARROOM_PUSH_WIDGET_SOURCE = "dhot_unified_market_state_provider" }
+if (-not $env:WARROOM_PUSH_WIDGET_DHOT_POLL_INTERVAL_SEC) { $env:WARROOM_PUSH_WIDGET_DHOT_POLL_INTERVAL_SEC = "0.25" }
 if (-not $env:WARROOM_PUSH_WIDGET_REALTIME_OBSERVATION_DEFAULT) { $env:WARROOM_PUSH_WIDGET_REALTIME_OBSERVATION_DEFAULT = "true" }
 
 # Unified daemon tuning inherited by Collector tab Start.

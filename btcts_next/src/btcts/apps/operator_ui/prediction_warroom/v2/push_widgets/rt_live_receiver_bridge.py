@@ -7,6 +7,7 @@ import json
 import os
 import threading
 import time
+from pathlib import Path
 from collections import deque
 from typing import Any, Callable, Mapping, MutableMapping
 
@@ -145,8 +146,66 @@ class _BitflyerCollectorConnection:
         latest = payload[-1] if isinstance(payload, list) and payload and isinstance(payload[-1], Mapping) else payload if isinstance(payload, Mapping) else {}
         return {"topic_key": "market.trades", "value": {"last_price": latest.get("price"), "last_size": latest.get("size"), "side": latest.get("side"), "channel": str(getattr(msg, "channel", ""))}, "received_at_ms": int(time.time() * 1000)}
 
+
+class _DhotUnifiedMarketStateConnection:
+    """Recv-compatible adapter backed by D-hot unified market state status.
+
+    WarRoom observes the existing Collector output instead of opening an additional
+    external exchange WebSocket by default.
+    """
+
+    def __init__(self, source_name: str, runtime_config: Mapping[str, Any]) -> None:
+        self.source_name = source_name
+        self.runtime_config = dict(runtime_config)
+        self.state_root = Path(str(self.runtime_config.get("state_root") or os.environ.get("BTCTS_STATE_ROOT") or "D:/btc_ts_hot/state"))
+        self.poll_interval_sec = float(self.runtime_config.get("poll_interval_sec", 0.25))
+        self._last_step: int | None = None
+
+    def recv(self) -> dict[str, Any]:
+        if self.poll_interval_sec > 0:
+            time.sleep(self.poll_interval_sec)
+        status = self._read_status()
+        step = int(status.get("step_count") or 0)
+        if self._last_step == step:
+            return {"messages": []}
+        self._last_step = step
+        return {"messages": self._messages_from_status(status)}
+
+    def close(self) -> None:
+        return None
+
+    def _status_path(self) -> Path:
+        return self.state_root / "collector_vnext" / "unified_market_state_status.json"
+
+    def _read_status(self) -> dict[str, Any]:
+        path = self._status_path()
+        return json.loads(path.read_text(encoding="utf-8-sig"))
+
+    def _messages_from_status(self, status: Mapping[str, Any]) -> list[dict[str, Any]]:
+        ts_ms = int(time.time() * 1000)
+        best_bid = status.get("last_best_bid")
+        best_ask = status.get("last_best_ask")
+        spread = status.get("last_spread")
+        mid = ((float(best_bid) + float(best_ask)) / 2.0) if isinstance(best_bid, (int, float)) and isinstance(best_ask, (int, float)) else None
+        spread_bps = (float(spread) / mid * 10000.0) if isinstance(spread, (int, float)) and mid else None
+        symbol = str(status.get("last_symbol_raw") or self.runtime_config.get("symbol") or "FX_BTC_JPY")
+        lane_state = str(status.get("lane_state") or "unknown")
+        last_error = status.get("last_error")
+        messages = [
+            {"topic_key": "market.depth", "value": {"symbol": symbol, "best_bid": best_bid, "best_ask": best_ask, "spread": spread, "market_uid": status.get("last_market_uid"), "source": "dhot_unified_market_state"}, "received_at_ms": ts_ms, "sequence": int(status.get("step_count") or 0)},
+            {"topic_key": "market.spread", "value": {"symbol": symbol, "spread": spread, "spread_bps": spread_bps, "source": "dhot_unified_market_state"}, "received_at_ms": ts_ms, "sequence": int(status.get("step_count") or 0)},
+            {"topic_key": "market.liquidity", "value": {"symbol": symbol, "lane_state": lane_state, "step_count": int(status.get("step_count") or 0), "source_series_id": status.get("last_source_series_id")}, "received_at_ms": ts_ms, "sequence": int(status.get("step_count") or 0)},
+            {"topic_key": "receiver.lifecycle", "value": {"status": "receiving" if lane_state == "live" else lane_state, "source": "dhot_unified_market_state", "last_event_ts": status.get("last_event_ts"), "read_only": True}, "received_at_ms": ts_ms, "sequence": int(status.get("step_count") or 0)},
+            {"topic_key": "warroom.summary", "value": {"summary": f"D-hot market state {lane_state}", "manual_trade_support": True, "last_event_ts": status.get("last_event_ts")}, "received_at_ms": ts_ms, "sequence": int(status.get("step_count") or 0)},
+            {"topic_key": "warroom.alerts", "value": {"alert_count": 1 if last_error else 0, "highest_level": "error" if last_error else "info", "last_error": last_error}, "received_at_ms": ts_ms, "sequence": int(status.get("step_count") or 0)},
+        ]
+        return messages
+
 def _default_connect(endpoint: str, runtime_config: Mapping[str, Any]) -> Any:
     source = str(runtime_config.get("source") or "")
+    if endpoint.startswith("dhot://") or source == "dhot_unified_market_state_provider":
+        source_name = endpoint.removeprefix("dhot://") or "unified_market_state"
+        return _DhotUnifiedMarketStateConnection(source_name, runtime_config)
     if endpoint.startswith("bitflyer://") or source == "bitflyer_collector_provider":
         symbol = endpoint.removeprefix("bitflyer://") or str(runtime_config.get("symbol") or "FX_BTC_JPY")
         return _BitflyerCollectorConnection(symbol, runtime_config)

@@ -1,0 +1,32 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_V2_DHOT_LIVE_SOURCE_2026-07-05.md
+# desc: WarRoom v2 D-hot live source default for realtime observation.
+
+# WarRoom v2 D-hot live source default
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Base gate: PS-WARROOM_V2_RT_POLISH2_FOUNDATION_LIVE_RETENTION_SCENARIO_GUIDANCE
+Slice: PS-WARROOM_V2_DHOT_LIVE_SOURCE_DEFAULT
+
+```text
+warroom_v2_dhot_live_source_default=true
+warroom_push_widget_endpoint_default=dhot://unified_market_state
+warroom_push_widget_source_default=dhot_unified_market_state_provider
+dhot_state_root_used=true
+dhot_unified_market_state_status_used=true
+collector_owns_external_websocket=true
+warroom_does_not_open_extra_bitflyer_provider_by_default=true
+market_depth_message_from_dhot=true
+market_spread_message_from_dhot=true
+market_liquidity_message_from_dhot=true
+receiver_lifecycle_message_from_dhot=true
+warroom_summary_message_from_dhot=true
+warroom_alerts_message_from_dhot=true
+websocket_send_enabled=false
+broker_send_enabled=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+```
