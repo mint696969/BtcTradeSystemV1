@@ -385,7 +385,6 @@ def write_fx_market_state_from_ws_live_canonical(
         state_type=STATE_TYPE,
         record=record,
         date_str=_date_str_from_ts(record.collector_ts),
-        part_no=1,
     )
     return FxWsLiveMarketStateResult(
         ok=not blocked,

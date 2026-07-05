@@ -286,7 +286,6 @@ def write_fx_market_state_from_public_rest_board(
         state_type=STATE_TYPE,
         record=record,
         date_str=_date_str_from_ts(record.collector_ts or _utc_now()),
-        part_no=1,
     )
     return FxMarketStateRestSnapshotResult(
         ok=True,
