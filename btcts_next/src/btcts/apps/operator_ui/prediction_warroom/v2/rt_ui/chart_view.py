@@ -8,6 +8,10 @@ from typing import Any, Mapping
 
 import pandas as pd
 
+from btcts.prediction.warroom_chart_history_bootstrap import (
+    WARROOM_CHART_DHOT_BOOTSTRAP_VERSION,
+    load_dhot_market_trade_history,
+)
 from btcts.prediction.warroom_chart_series import (
     WARROOM_CHART_SERIES_VERSION,
     build_warroom_chart_candles,
@@ -20,11 +24,12 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_timeframe_view imp
     select_chart_display_config,
 )
 
-BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v12_chart_series_logic_split"
+BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v13_dhot_history_bootstrap"
 _PRICE_RE = re.compile(r"(?:best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 _NAMED_PRICE_RE = re.compile(r"(best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 CHART_HISTORY_SESSION_STATE_KEY = "warroom_v2_bottom_chart_history_rows"
-CHART_HISTORY_LIMIT = 720
+CHART_DHOT_BOOTSTRAP_SESSION_STATE_KEY = "warroom_v2_bottom_chart_dhot_bootstrap"
+CHART_HISTORY_LIMIT = 1440
 
 
 def _as_float(value: object) -> float | None:
@@ -197,6 +202,25 @@ def _retain_chart_history(current_frame: pd.DataFrame, st_api: Any) -> pd.DataFr
     state[CHART_HISTORY_SESSION_STATE_KEY] = _frame_to_history_records(history)
     return history
 
+def _bootstrap_dhot_chart_history(current_frame: pd.DataFrame, st_api: Any) -> tuple[pd.DataFrame, dict[str, Any]]:
+    state = _session_state(st_api)
+    if state is None:
+        return current_frame, {"ok": False, "version": WARROOM_CHART_DHOT_BOOTSTRAP_VERSION, "reason": "session_state_unavailable"}
+    previous = _history_records_to_frame(state.get(CHART_HISTORY_SESSION_STATE_KEY, []))
+    bootstrap_meta = state.get(CHART_DHOT_BOOTSTRAP_SESSION_STATE_KEY)
+    if not previous.empty or isinstance(bootstrap_meta, Mapping):
+        return current_frame, dict(bootstrap_meta or {"ok": False, "version": WARROOM_CHART_DHOT_BOOTSTRAP_VERSION, "reason": "already_attempted"})
+    bootstrap_frame, result = load_dhot_market_trade_history()
+    meta = result.to_dict()
+    state[CHART_DHOT_BOOTSTRAP_SESSION_STATE_KEY] = meta
+    if bootstrap_frame.empty:
+        return current_frame, meta
+    if current_frame.empty:
+        return bootstrap_frame, meta
+    merged = pd.concat([bootstrap_frame, current_frame], ignore_index=True)
+    merged = merged.drop_duplicates(subset=["ts", "topic", "role", "price", "sequence"]).sort_values(["ts", "role", "topic"]).tail(CHART_HISTORY_LIMIT)
+    return merged, meta
+
 
 def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, candle_frame: pd.DataFrame, st_api: Any, *, x_domain: tuple[pd.Timestamp, pd.Timestamp] | None = None) -> bool:
     if frame.empty:
@@ -268,6 +292,7 @@ def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, candle_fr
 def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
     st_api.caption("チャート: Live/分足/時足/日足モード + rolling表示窓 / 読み取り専用")
     current_frame = chart_rows_to_frame(packet)
+    current_frame, dhot_bootstrap_meta = _bootstrap_dhot_chart_history(current_frame, st_api)
     frame = _retain_chart_history(current_frame, st_api)
     chart_config: ChartDisplayConfig = select_chart_display_config(st_api)
     display_frame = prepare_chart_display_frame(frame, chart_config)
@@ -292,7 +317,8 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     c7.metric("スプレッド", _fmt_spread(None if latest_band is None else latest_band.get("spread")))
 
     st_api.caption(f"データ範囲={chart_config.source_label} / 注意={chart_config.source_notice}")
-    st_api.caption("チャート信頼境界=非UI chart series生成ロジック / 入力は暫定market-state mid由来 / 最新足のみ未確定 / D-hot履歴bootstrap・正式約定OHLCは未接続")
+    bootstrap_rows = int(dhot_bootstrap_meta.get("rows_returned") or 0) if isinstance(dhot_bootstrap_meta, Mapping) else 0
+    st_api.caption(f"チャート信頼境界=非UI chart series生成ロジック / D-hot market.trade bootstrap={bootstrap_rows}行 / 最新足のみ未確定 / 正式約定OHLCキャッシュは未接続")
     if chart_config.historical_cache_required:
         st_api.info("1時間足/日足は現在のLive保持履歴からの暫定表示です。10日超やcold archive統合は、後続の集約キャッシュ接続で扱います。")
 
@@ -331,7 +357,11 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "cold_archive_direct_read_enabled": False,
         "timeframe_helper_version": CHART_TIMEFRAME_VIEW_VERSION,
         "chart_series_version": WARROOM_CHART_SERIES_VERSION,
+        "dhot_bootstrap_version": WARROOM_CHART_DHOT_BOOTSTRAP_VERSION,
+        "dhot_history_bootstrap_connected": bool(dhot_bootstrap_meta.get("ok")) if isinstance(dhot_bootstrap_meta, Mapping) else False,
+        "dhot_history_bootstrap_meta": dict(dhot_bootstrap_meta) if isinstance(dhot_bootstrap_meta, Mapping) else {},
         "history_session_state_key": CHART_HISTORY_SESSION_STATE_KEY,
+        "dhot_bootstrap_session_state_key": CHART_DHOT_BOOTSTRAP_SESSION_STATE_KEY,
         "current_frame_rows": len(current_frame),
         "display_frame_rows": len(display_frame),
         "frame_rows": len(frame),
@@ -345,13 +375,12 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "chart_series_logic_split_ready": True,
         "chart_series_meta": chart_series_meta.to_dict(),
         "chart_trust_level": "deterministic_provisional_market_state_mid_ohlcv",
-        "dhot_history_bootstrap_connected": False,
         "true_trade_ohlcv_connected": False,
         "raw_candle_frame_rows": len(raw_candle_frame),
         "candle_frame_rows": len(candle_frame),
         "closed_candle_count": closed_candle_count,
         "forming_candle_count": forming_candle_count,
-        "candle_source": "non_ui_chart_series_from_retained_market_state_mid_rows",
+        "candle_source": "dhot_bootstrap_plus_retained_market_state_mid_rows",
         "board_band_rows": len(band_frame),
         "overlay_rows": len(overlay_rows),
         "bid_ask_layer_ready": True,
