@@ -1,0 +1,34 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_V2_RT_VISIBLE_MOUNT_2026-07-05.md
+# desc: WarRoom v2 visible mount fix for RT0-RT6 live observation runtime.
+
+# WarRoom v2 RT visible mount
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Base gate: PS_RT0_RT6_WARROOM_PUSH_WIDGET_LIVE_OBSERVATION_RUNTIME_DONE
+Slice: PS-WARROOM_V2_RT_VISIBLE_MOUNT
+
+```text
+warroom_v2_rt_visible_mount_ready=true
+preview_shell_removed=true
+warroom_page_starts_receiver_runtime_when_endpoint_present=true
+warroom_page_uses_live_packet_when_present=true
+rt0_live_receiver_runtime_started=true
+rt1_live_receiver_source_to_router_bridge_ready=true
+rt2_received_websocket_message_to_state_store_apply_ready=true
+rt3_session_state_lightweight_state_reflection_ready=true
+rt4_warroom_auto_refresh_observation_ready=true
+rt5_live_freshness_stale_error_observation_ready=true
+rt6_no_send_broker_order_boundary_ready=true
+top_layout_live_packet_rendered=true
+push_widget_grid_live_packet_rendered=true
+bottom_chart_live_packet_rendered=true
+prediction_card_live_context_rendered=true
+websocket_send_enabled=false
+broker_send_enabled=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+```
