@@ -44,11 +44,40 @@ def test_guidance_and_copy_packet_are_read_only() -> None:
     widgets = _widgets_packet()
     market = build_market_strip_packet(widgets)
     guidance = build_inference_guidance_packet(chart, widgets)
-    text = build_gpt_copy_packet(market_strip=market, guidance=guidance, chart_packet=chart, cards_packet={"cards": []})
+    chart_render_summary = {
+        "gpt_review_chart_snapshot": {
+            "schema_version": "warroom_chart_gpt_review_snapshot.v2_light_pointer",
+            "display_mode": "Live",
+            "viewport_label": "15分",
+            "viewport_minutes": 15,
+            "history_rows": 819,
+            "visible_rows": 813,
+            "latest": {"ts": "2026-07-05T14:16:27Z", "price": 10103617.0, "role": "last", "freshness_label": "dhot_bootstrap"},
+            "x_domain": {"start": "2026-07-05T14:01:27Z", "end": "2026-07-05T14:16:27Z", "latest_anchored": True},
+            "candle_summary": {"rows": 16, "closed": 15, "forming": 1, "source": "non_ui_warroom_chart_series", "true_trade_ohlcv_connected": False},
+            "dhot_bootstrap": {"ok": True, "source_path": "D:/btc_ts_hot/data/market_data/exchange=bitflyer/symbol=FX_BTC_JPY/type=market.trade/date=2026-07-05/part-00001.jsonl", "rows_returned": 813, "tail_bytes": 2000000, "max_rows": 900},
+            "trust_boundary": {"chart_logic_owner": "btcts.prediction.warroom_chart_series", "ui_role": "render_only", "input_source": "retained_market_state_rows_plus_dhot_market_trade_bootstrap", "latest_candle_may_change": True, "closed_candles_should_not_change_in_session": True, "official_exchange_ohlc_connected": False, "manual_review_only": True},
+            "sample_preview": {"visible_price_rows_tail": [{"heavy": "not copied into final packet"}]},
+        }
+    }
+    text = build_gpt_copy_packet(market_strip=market, guidance=guidance, chart_packet=chart, cards_packet={"cards": []}, chart_render_summary=chart_render_summary)
     payload = json.loads(text)
-    assert payload["schema_version"] == "warroom_gpt_review_packet.v1"
+    assert payload["schema_version"] == "warroom_gpt_review_packet.2026_07_05.v2_light_request"
     assert payload["market"]["symbol"] == "FX_BTC_JPY"
+    selected = payload["operator_focus"]["selected_chart_range"]
+    assert selected["schema_version"] == "warroom_chart_analysis_request.v1"
+    assert selected["history_rows"] == 819
+    assert selected["dhot_bootstrap"]["rows_returned"] == 813
+    assert selected["data_access_hints"]["hot_data_root"] == "D:/btc_ts_hot"
+    assert selected["data_access_hints"]["primary_market_trade_path"].endswith("part-00001.jsonl")
+    assert selected["copy_weight_policy"]["embedded_raw_rows"] is False
+    assert selected["copy_weight_policy"]["embedded_visible_price_rows"] is False
+    serialized = json.dumps(payload, ensure_ascii=False)
+    assert "sample_preview" not in serialized
+    assert "visible_price_rows_tail" not in serialized
+    assert "heavy" not in serialized
     assert payload["safety"]["broker_send_enabled"] is False
+    assert payload["safety"]["prediction_invoked"] is False
     assert guidance["observational_scenario_only"] is True
     assert guidance["prediction_invoked"] is False
 
