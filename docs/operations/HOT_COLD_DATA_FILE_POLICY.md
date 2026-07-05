@@ -14,9 +14,12 @@ BtcTradeSystem must not produce or retain huge single hot JSONL files.  Hot data
 
 ## Retention rule
 
-- D-hot keeps live/current data and the latest 10 date partitions only.
-- A hot file older than 10 days is delete-eligible only after a cold copy exists and is verified.
+- D-hot keeps live/current date-partitioned data and the latest 10 date partitions only.
+- Date-partitioned data includes `data/market_data`, `data/collector_raw`, and `data/market_state`.
+- A stable completed hot data file older than 10 days is delete-eligible only after a cold copy exists and is verified.
+- Archive copy must be idempotent: same relative path and same size skips copy; missing or smaller cold files are copy candidates; mismatches are held for review.
 - Open or actively written files are never deleted by hot GC.
+- Runtime logs, locks, and status files may use separate retention and are not treated as primary market-history data.
 
 ## Writer rule
 

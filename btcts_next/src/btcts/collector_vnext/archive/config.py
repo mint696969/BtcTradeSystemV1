@@ -14,6 +14,7 @@ from btcts.collector_vnext.config import load_config
 DEFAULT_COPY_PREFIXES = [
     "data/market_data",
     "data/collector_raw",
+    "data/market_state",
     "state/collector_vnext",
     "logs/collector_vnext",
 ]
@@ -21,6 +22,7 @@ DEFAULT_COPY_PREFIXES = [
 DEFAULT_GC_PREFIXES = [
     "data/market_data",
     "data/collector_raw",
+    "data/market_state",
 ]
 
 
