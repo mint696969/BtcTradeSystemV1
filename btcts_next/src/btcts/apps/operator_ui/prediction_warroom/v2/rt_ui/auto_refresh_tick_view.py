@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/rt_ui/auto_refresh_tick_view.py
-# desc: WarRoom v2 cockpit auto-refresh metadata. Sidebar-driven Streamlit fragment refresh; page reload disabled.
+# desc: WarRoom v2 cockpit auto-refresh metadata. Sidebar-driven Streamlit section fragments; page reload disabled.
 
 from __future__ import annotations
 
@@ -44,11 +44,12 @@ def build_cockpit_auto_refresh_packet(session_state: Mapping[str, Any]) -> dict[
         "interval_ms": interval_ms,
         "fragment_run_every": f"{max(1, int(interval_ms / 1000))}s" if enabled else None,
         "source": "operator_sidebar",
-        "transport_kind": "streamlit_fragment_refresh",
-        "target": "warroom_v2_realtime_cockpit_body",
+        "transport_kind": "streamlit_section_fragment_refresh",
+        "target": "warroom_v2_realtime_cockpit_sections",
         "last_rendered_at": _now_iso(),
         "page_reload_enabled": False,
         "fragment_refresh_enabled": enabled,
+        "section_fragment_refresh_enabled": enabled,
         "read_only": True,
         "websocket_send_enabled": False,
         "broker_send_enabled": False,
@@ -66,11 +67,11 @@ def render_cockpit_auto_refresh_tick(packet: Mapping[str, Any], st_api: Any) -> 
             [
                 f"cockpit_auto_refresh={'on' if enabled else 'off'}",
                 f"interval_ms={interval_ms}",
-                "transport=streamlit_fragment_refresh",
+                "transport=streamlit_section_fragment_refresh",
                 "page_reload_enabled=false",
                 "broker_send_enabled=false",
                 "prediction_invoked=false",
             ]
         )
     )
-    return {"ok": True, "auto_refresh_tick_rendered": True, "auto_refresh_enabled": enabled, "interval_ms": interval_ms, "page_reload_enabled": False, "fragment_refresh_enabled": enabled, "read_only": True}
+    return {"ok": True, "auto_refresh_tick_rendered": True, "auto_refresh_enabled": enabled, "interval_ms": interval_ms, "page_reload_enabled": False, "fragment_refresh_enabled": enabled, "section_fragment_refresh_enabled": enabled, "read_only": True}

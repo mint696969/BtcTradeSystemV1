@@ -1,10 +1,10 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/views/warroom_v2_page.py
-# desc: WarRoom v2 live observation page. Static shell plus fragment-refreshed cockpit body.
+# desc: WarRoom v2 live observation page. Static shell plus section-fragment-refreshed cockpit lanes.
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 import streamlit as st
 
@@ -28,7 +28,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.status_view import rende
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.top_widgets_view import render_rt_top_layout_and_widgets
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.trade_strip_view import build_trade_strip_packet, render_trade_strip
 
-WARROOM_V2_RT_VISIBLE_MOUNT_VERSION = "prediction_warroom.v2.rt_visible_mount.2026_07_05.v5"
+WARROOM_V2_RT_VISIBLE_MOUNT_VERSION = "prediction_warroom.v2.rt_visible_mount.2026_07_05.v6"
 
 
 def _apply_runtime_endpoint_to_session_state(session_state: Any, endpoint: str) -> bool:
@@ -63,17 +63,7 @@ def _refresh_warroom_v2_rt_live_observation() -> tuple[dict[str, Any], dict[str,
     return runtime_status, bridge_packet
 
 
-def build_warroom_v2_page_mount_packet(*, runtime_status: Mapping[str, Any] | None = None, bridge_packet: Mapping[str, Any] | None = None, display_source: str = "unknown") -> dict[str, Any]:
-    runtime = dict(runtime_status or {})
-    bridge = dict(bridge_packet or {})
-    receiver_started = bool(runtime.get("receiver_runtime_started"))
-    socket_opened = bool(runtime.get("socket_opened") or runtime.get("websocket_opened"))
-    receive_loop_started = bool(runtime.get("receive_loop_started"))
-    messages_applied = int(bridge.get("messages_applied") or 0)
-    return {"ok": True, "page_mount_version": WARROOM_V2_RT_VISIBLE_MOUNT_VERSION, "page_key": "warroom_v2", "page_label": "WarRoom v2", "thin_page_shell_only": False, "rt_visible_mount_ready": True, "rt_ui_polish1_modularized": True, "rt_polish2_live_retention_ready": True, "rt_polish3_cockpit_layout_ready": True, "rt_fragment_refresh_ready": True, "rt_display_source": display_source, "fallback_sample_suppressed": True, "runtime_connected": receiver_started, "push_connected": bool(socket_opened or receive_loop_started or messages_applied > 0 or display_source in {"live", "retained"}), "websocket_enabled": bool(socket_opened or receive_loop_started), "receive_loop_started": receive_loop_started, "messages_applied": messages_applied, "page_reload_enabled": False, "websocket_send_enabled": False, "broker_send_enabled": False, "order_intent_submitted": False, "ledger_append_allowed": False, "prediction_invoked": False, "classifier_invoked": False}
-
-
-def _render_warroom_v2_cockpit_body(auto_refresh_packet: Mapping[str, Any]) -> None:
+def _build_cockpit_snapshot() -> dict[str, Any]:
     runtime_status, bridge_packet = _refresh_warroom_v2_rt_live_observation()
     display_packets = select_or_build_rt_display_packets(st.session_state, bridge_packet)
     display_source = str(display_packets["source"]["display_source"])
@@ -82,54 +72,68 @@ def _render_warroom_v2_cockpit_body(auto_refresh_packet: Mapping[str, Any]) -> N
     trade_packet = build_trade_strip_packet(runtime_status, bridge_packet)
     guidance_packet = build_inference_guidance_packet(display_packets["chart"], display_packets["widgets"])
     copy_text = build_gpt_copy_packet(market_strip=market_packet, guidance=guidance_packet, chart_packet=display_packets["chart"], cards_packet=display_packets["cards"])
-
     st.session_state[WARROOM_RT_LIVE_RUNTIME_STATUS_STATE_KEY] = runtime_status
-    render_rt_runtime_status(runtime_status, bridge_packet, st)
-    render_cockpit_auto_refresh_tick(auto_refresh_packet, st)
-    st.caption(f"display_source={display_source} / fallback_sample_suppressed=true / rt_polish3_cockpit_layout_ready=true / rt_fragment_refresh_ready=true")
-
-    st.divider()
-    st.subheader("1. Market strip")
-    render_market_strip(market_packet, st)
-
-    st.divider()
-    st.subheader("2. Trade strip / orders, position, PnL")
-    render_trade_strip(trade_packet, st)
-
-    st.divider()
-    st.subheader("3. Inference scenario guidance")
-    render_inference_guidance(guidance_packet, st)
-
-    st.divider()
-    st.subheader("4. Prediction cards / important context")
-    render_rt_prediction_cards(display_packets["cards"], st)
-
-    st.divider()
-    st.subheader("5. Bottom chart / realtime context")
-    render_rt_bottom_chart_graph(display_packets["chart"], st)
-    render_gpt_copy_packet(copy_text, st)
-
-    with st.expander("Realtime widget details", expanded=False):
-        render_rt_top_layout_and_widgets(display_packets["top"], display_packets["widgets"], st)
-    render_rt_debug_packets({"page_mount": page_packet, "runtime_status": runtime_status, "bridge_packet": bridge_packet, "market_strip": market_packet, "trade_strip": trade_packet, "inference_guidance": guidance_packet}, st)
-    st.caption("rt_visible_mount_ready=true / rt_polish3_cockpit_layout_ready=true / rt_fragment_refresh_ready=true / page_reload_enabled=false / fallback_sample_suppressed=true / websocket_send_enabled=false / broker_send_enabled=false / order_intent_submitted=false / prediction_invoked=false / classifier_invoked=false")
+    return {"runtime_status": runtime_status, "bridge_packet": bridge_packet, "display_packets": display_packets, "display_source": display_source, "page_packet": page_packet, "market_packet": market_packet, "trade_packet": trade_packet, "guidance_packet": guidance_packet, "copy_text": copy_text}
 
 
-def _render_warroom_v2_cockpit_fragment(auto_refresh_packet: Mapping[str, Any]) -> None:
+def build_warroom_v2_page_mount_packet(*, runtime_status: Mapping[str, Any] | None = None, bridge_packet: Mapping[str, Any] | None = None, display_source: str = "unknown") -> dict[str, Any]:
+    runtime = dict(runtime_status or {})
+    bridge = dict(bridge_packet or {})
+    receiver_started = bool(runtime.get("receiver_runtime_started"))
+    socket_opened = bool(runtime.get("socket_opened") or runtime.get("websocket_opened"))
+    receive_loop_started = bool(runtime.get("receive_loop_started"))
+    messages_applied = int(bridge.get("messages_applied") or 0)
+    return {"ok": True, "page_mount_version": WARROOM_V2_RT_VISIBLE_MOUNT_VERSION, "page_key": "warroom_v2", "page_label": "WarRoom v2", "thin_page_shell_only": False, "rt_visible_mount_ready": True, "rt_ui_polish1_modularized": True, "rt_polish2_live_retention_ready": True, "rt_polish3_cockpit_layout_ready": True, "rt_fragment_refresh_ready": True, "rt_section_fragment_refresh_ready": True, "rt_display_source": display_source, "fallback_sample_suppressed": True, "runtime_connected": receiver_started, "push_connected": bool(socket_opened or receive_loop_started or messages_applied > 0 or display_source in {"live", "retained"}), "websocket_enabled": bool(socket_opened or receive_loop_started), "receive_loop_started": receive_loop_started, "messages_applied": messages_applied, "page_reload_enabled": False, "websocket_send_enabled": False, "broker_send_enabled": False, "order_intent_submitted": False, "ledger_append_allowed": False, "prediction_invoked": False, "classifier_invoked": False}
+
+
+def _render_section_fragment(name: str, auto_refresh_packet: Mapping[str, Any], body: Callable[[dict[str, Any]], None]) -> None:
     run_every = fragment_run_every(auto_refresh_packet)
     fragment = getattr(st, "fragment", None)
     if run_every and callable(fragment):
         @fragment(run_every=run_every)
-        def _fragment_body() -> None:
-            _render_warroom_v2_cockpit_body(auto_refresh_packet)
+        def _section_body() -> None:
+            body(_build_cockpit_snapshot())
 
-        _fragment_body()
+        _section_body()
         return
-    _render_warroom_v2_cockpit_body(auto_refresh_packet)
+    body(_build_cockpit_snapshot())
+
+
+def _runtime_section(snapshot: dict[str, Any], auto_refresh_packet: Mapping[str, Any]) -> None:
+    render_rt_runtime_status(snapshot["runtime_status"], snapshot["bridge_packet"], st)
+    render_cockpit_auto_refresh_tick(auto_refresh_packet, st)
+    st.caption(f"display_source={snapshot['display_source']} / fallback_sample_suppressed=true / rt_section_fragment_refresh_ready=true")
 
 
 def render() -> None:
     auto_refresh_packet = build_cockpit_auto_refresh_packet(st.session_state)
     st.header("WarRoom v2 / Realtime Cockpit")
-    st.caption("D-hot live observation / fragment-refreshed cockpit body / no page reload / no broker")
-    _render_warroom_v2_cockpit_fragment(auto_refresh_packet)
+    st.caption("D-hot live observation / section-fragment refreshed lanes / no page reload / no broker")
+
+    _render_section_fragment("runtime", auto_refresh_packet, lambda snapshot: _runtime_section(snapshot, auto_refresh_packet))
+
+    st.divider()
+    st.subheader("1. Market strip")
+    _render_section_fragment("market", auto_refresh_packet, lambda snapshot: render_market_strip(snapshot["market_packet"], st))
+
+    st.divider()
+    st.subheader("2. Trade strip / orders, position, PnL")
+    _render_section_fragment("trade", auto_refresh_packet, lambda snapshot: render_trade_strip(snapshot["trade_packet"], st))
+
+    st.divider()
+    st.subheader("3. Inference scenario guidance")
+    _render_section_fragment("guidance", auto_refresh_packet, lambda snapshot: render_inference_guidance(snapshot["guidance_packet"], st))
+
+    st.divider()
+    st.subheader("4. Prediction cards / important context")
+    _render_section_fragment("cards", auto_refresh_packet, lambda snapshot: render_rt_prediction_cards(snapshot["display_packets"]["cards"], st))
+
+    st.divider()
+    st.subheader("5. Bottom chart / realtime context")
+    _render_section_fragment("chart", auto_refresh_packet, lambda snapshot: (render_rt_bottom_chart_graph(snapshot["display_packets"]["chart"], st), render_gpt_copy_packet(snapshot["copy_text"], st)))
+
+    with st.expander("Realtime widget details", expanded=False):
+        _render_section_fragment("details", auto_refresh_packet, lambda snapshot: render_rt_top_layout_and_widgets(snapshot["display_packets"]["top"], snapshot["display_packets"]["widgets"], st))
+    with st.expander("RT debug packets", expanded=False):
+        _render_section_fragment("debug", auto_refresh_packet, lambda snapshot: render_rt_debug_packets({"page_mount": snapshot["page_packet"], "runtime_status": snapshot["runtime_status"], "bridge_packet": snapshot["bridge_packet"], "market_strip": snapshot["market_packet"], "trade_strip": snapshot["trade_packet"], "inference_guidance": snapshot["guidance_packet"]}, st))
+    st.caption("rt_visible_mount_ready=true / rt_polish3_cockpit_layout_ready=true / rt_section_fragment_refresh_ready=true / page_reload_enabled=false / websocket_send_enabled=false / broker_send_enabled=false / order_intent_submitted=false / prediction_invoked=false / classifier_invoked=false")
