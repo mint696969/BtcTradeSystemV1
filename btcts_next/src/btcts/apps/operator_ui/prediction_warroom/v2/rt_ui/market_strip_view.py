@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-MARKET_TOP_STRIP_VERSION = "warroom_v2_market_top_strip.2026_07_05.v1"
+MARKET_TOP_STRIP_VERSION = "warroom_v2_market_top_strip.2026_07_05.v2_japanese"
 
 
 def _rows(packet: Mapping[str, Any], widget_id: str) -> list[Mapping[str, Any]]:
@@ -171,18 +171,42 @@ def _side_label(value: object) -> str:
         return "BUY"
     if side == "sell":
         return "SELL"
-    return "--"
+    return "未接続"
+
+
+def _state_label(value: object) -> str:
+    state = str(value or "--")
+    mapping = {
+        "live": "ライブ",
+        "receiving": "受信中",
+        "normal": "通常",
+        "attention": "注意",
+        "stale": "古い",
+        "slow": "遅延",
+        "waiting": "待機",
+        "not_started": "未開始",
+        "info": "情報",
+        "error": "異常",
+    }
+    return mapping.get(state, state)
+
+
+def _source_label(value: object) -> str:
+    source = str(value or "")
+    if source == "dhot_unified_market_state":
+        return "D-hot統合市場状態"
+    return source or "--"
 
 
 def _receiver_label(value: object) -> str:
     status = str(value or "waiting")
     if status in {"receiving", "live"}:
-        return f"🟢 {status}"
+        return "🟢 受信中"
     if status in {"slow", "attention", "stale"}:
-        return f"🟡 {status}"
+        return f"🟡 {_state_label(status)}"
     if status in {"error", "failed"}:
-        return f"🔴 {status}"
-    return f"⚪ {status}"
+        return f"🔴 {_state_label(status)}"
+    return f"⚪ {_state_label(status)}"
 
 
 def _metric(column: Any, label: str, value: str, help_text: str, *, delta: str | None = None) -> None:
@@ -203,37 +227,37 @@ def _state_summary(states: Mapping[str, Any]) -> str:
 
 
 def render_market_strip(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
-    st_api.caption("Market top strip: manual trading essentials / compact / read-only / no broker action")
+    st_api.caption("市場データ: 手動取引用の必須情報 / コンパクト表示 / 読み取り専用 / broker送信なし")
     cols = st_api.columns(8)
-    _metric(cols[0], "Symbol", str(packet.get("symbol") or "--"), "取引対象。現在は Collector/D-hot 由来の market state を表示します。")
-    _metric(cols[1], "Bid", _fmt_price(packet.get("best_bid")), "最良買い気配。手動エントリー時の売却可能側の目安です。")
-    _metric(cols[2], "Ask", _fmt_price(packet.get("best_ask")), "最良売り気配。手動エントリー時の購入可能側の目安です。")
-    _metric(cols[3], "Mid", _fmt_price(packet.get("mid_price")), "Bid と Ask の中間値。短期判断の基準線として使います。")
-    _metric(cols[4], "Spread", _fmt_price(packet.get("spread")), "Ask - Bid。広がるほど約定コストと滑りリスクが上がります。", delta=_fmt_bps(packet.get("spread_bps")))
-    _metric(cols[5], "Last", _fmt_price(packet.get("last_price")), "直近約定価格。D-hot market state だけの場合は未接続表示になります。")
-    _metric(cols[6], "Flow", f"{_side_label(packet.get('last_side'))} {_fmt_size(packet.get('last_size'))}", "直近約定の方向とサイズ。未接続時は -- です。")
-    _metric(cols[7], "Receiver", _receiver_label(packet.get("receiver_status")), "Push/Collector からの観測状態。STALE 時は last-known context として扱います。")
+    _metric(cols[0], "銘柄", str(packet.get("symbol") or "--"), "取引対象。現在は Collector/D-hot 由来の市場状態を表示します。")
+    _metric(cols[1], "買気配", _fmt_price(packet.get("best_bid")), "最良買い気配。成行で売る場合に近い価格の目安です。")
+    _metric(cols[2], "売気配", _fmt_price(packet.get("best_ask")), "最良売り気配。成行で買う場合に近い価格の目安です。")
+    _metric(cols[3], "中心値", _fmt_price(packet.get("mid_price")), "買気配と売気配の中間値。短期判断の基準線として使います。")
+    _metric(cols[4], "スプレッド", _fmt_price(packet.get("spread")), "売気配 - 買気配。広がるほど約定コストと滑りリスクが上がります。", delta=_fmt_bps(packet.get("spread_bps")))
+    _metric(cols[5], "直近約定", _fmt_price(packet.get("last_price")), "直近約定価格。約定ストリーム未接続時は未接続表示になります。")
+    _metric(cols[6], "約定方向", f"{_side_label(packet.get('last_side'))} {_fmt_size(packet.get('last_size'))}", "直近約定の方向とサイズ。約定ストリーム未接続時は未接続表示です。")
+    _metric(cols[7], "受信状態", _receiver_label(packet.get("receiver_status")), "Push/Collector からの観測状態。古い表示の時は最終観測値として扱います。")
 
     compact_context = " / ".join(
         [
-            f"liquidity={packet.get('liquidity_state') or '--'}",
-            f"depth_score={packet.get('depth_score') if packet.get('depth_score') is not None else '--'}",
-            f"alerts={packet.get('alert_count', 0)}:{packet.get('highest_alert_level') or 'info'}",
-            f"last_event_ts={packet.get('last_event_ts') or '--'}",
-            f"source={packet.get('source') or '--'}",
+            f"流動性={_state_label(packet.get('liquidity_state'))}",
+            f"板厚スコア={packet.get('depth_score') if packet.get('depth_score') is not None else '--'}",
+            f"警告={packet.get('alert_count', 0)}:{_state_label(packet.get('highest_alert_level') or 'info')}",
+            f"最終更新={packet.get('last_event_ts') or '--'}",
+            f"データ源={_source_label(packet.get('source'))}",
         ]
     )
     st_api.caption(compact_context)
-    with st_api.expander("Market top strip details", expanded=False):
+    with st_api.expander("市場データの詳細", expanded=False):
         st_api.dataframe(
             [
-                {"key": "market_uid", "value": str(packet.get("market_uid") or "--")},
-                {"key": "bid_levels", "value": str(packet.get("bid_levels") or "--")},
-                {"key": "ask_levels", "value": str(packet.get("ask_levels") or "--")},
-                {"key": "widget_states", "value": _state_summary(packet.get("market_states", {}))},
-                {"key": "summary", "value": str(packet.get("summary") or "--")},
-                {"key": "last_error", "value": str(packet.get("last_error") or "--")},
-                {"key": "safety", "value": "read_only=true / broker_send_enabled=false / prediction_invoked=false / classifier_invoked=false"},
+                {"項目": "市場UID", "値": str(packet.get("market_uid") or "--")},
+                {"項目": "買い板段数", "値": str(packet.get("bid_levels") or "--")},
+                {"項目": "売り板段数", "値": str(packet.get("ask_levels") or "--")},
+                {"項目": "ウィジェット状態", "値": _state_summary(packet.get("market_states", {}))},
+                {"項目": "要約", "値": str(packet.get("summary") or "--")},
+                {"項目": "最終エラー", "値": str(packet.get("last_error") or "--")},
+                {"項目": "安全境界", "値": "read_only=true / broker_send_enabled=false / prediction_invoked=false / classifier_invoked=false"},
             ],
             width="stretch",
         )
