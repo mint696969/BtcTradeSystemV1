@@ -42,10 +42,10 @@ $env:BTCTS_UNIFIED_MARKET_STATE_ENABLED = "true"
 
 # WarRoom push-widget realtime observation defaults.
 # Uses D-hot unified market state produced by the existing Collector; WarRoom does not open an extra exchange WebSocket by default.
-if (-not $env:WARROOM_PUSH_WIDGET_WS_URL) { $env:WARROOM_PUSH_WIDGET_WS_URL = "dhot://unified_market_state" }
-if (-not $env:WARROOM_PUSH_WIDGET_SOURCE) { $env:WARROOM_PUSH_WIDGET_SOURCE = "dhot_unified_market_state_provider" }
+$env:WARROOM_PUSH_WIDGET_WS_URL = "dhot://unified_market_state"
+$env:WARROOM_PUSH_WIDGET_SOURCE = "dhot_unified_market_state_provider"
 if (-not $env:WARROOM_PUSH_WIDGET_DHOT_POLL_INTERVAL_SEC) { $env:WARROOM_PUSH_WIDGET_DHOT_POLL_INTERVAL_SEC = "0.25" }
-if (-not $env:WARROOM_PUSH_WIDGET_REALTIME_OBSERVATION_DEFAULT) { $env:WARROOM_PUSH_WIDGET_REALTIME_OBSERVATION_DEFAULT = "true" }
+$env:WARROOM_PUSH_WIDGET_REALTIME_OBSERVATION_DEFAULT = "true"
 
 # Unified daemon tuning inherited by Collector tab Start.
 if (-not $env:BTCTS_UNIFIED_LOOP_SLEEP_SEC) { $env:BTCTS_UNIFIED_LOOP_SLEEP_SEC = "0.25" }

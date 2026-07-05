@@ -1,0 +1,28 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_V2_DHOT_ENDPOINT_OVERRIDE_2026-07-05.md
+# desc: WarRoom v2 D-hot endpoint override for default realtime observation.
+
+# WarRoom v2 D-hot endpoint override
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Base gate: PS-WARROOM_V2_DHOT_LIVE_SOURCE_DEFAULT
+Slice: PS-WARROOM_V2_DHOT_ENDPOINT_OVERRIDE
+
+```text
+warroom_v2_dhot_endpoint_override_done=true
+stale_bitflyer_endpoint_overridden=true
+dhot_endpoint_forced_by_default_launch=true
+dhot_source_forced_by_default_launch=true
+session_state_endpoint_refresh_ready=true
+retained_packets_cleared_on_endpoint_change=true
+warroom_default_realtime_observation_uses_dhot=true
+collector_owns_external_websocket=true
+warroom_does_not_open_extra_bitflyer_provider_by_default=true
+websocket_send_enabled=false
+broker_send_enabled=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+```

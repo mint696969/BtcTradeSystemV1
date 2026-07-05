@@ -28,10 +28,27 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.trade_strip_view import 
 WARROOM_V2_RT_VISIBLE_MOUNT_VERSION = "prediction_warroom.v2.rt_visible_mount.2026_07_05.v3"
 
 
+
+def _apply_runtime_endpoint_to_session_state(session_state: Any, endpoint: str) -> bool:
+    if not endpoint:
+        return False
+    previous = session_state.get(WARROOM_RT_LIVE_ENDPOINT_STATE_KEY)
+    if previous == endpoint:
+        return False
+    session_state[WARROOM_RT_LIVE_ENDPOINT_STATE_KEY] = endpoint
+    for key in (
+        "warroom_v2_rt_display_packet_source",
+        "warroom_v2_rt_retained_wp9_page_mount_packet",
+        "warroom_v2_rt_retained_wp11_top_layout_packet",
+        "warroom_v2_rt_retained_wp12_bottom_chart_packet",
+        "warroom_v2_rt_retained_wp13_prediction_card_packet",
+    ):
+        session_state.pop(key, None)
+    return True
+
 def _refresh_warroom_v2_rt_live_observation() -> tuple[dict[str, Any], dict[str, Any]]:
     endpoint = endpoint_from_env()
-    if endpoint and WARROOM_RT_LIVE_ENDPOINT_STATE_KEY not in st.session_state:
-        st.session_state[WARROOM_RT_LIVE_ENDPOINT_STATE_KEY] = endpoint
+    _apply_runtime_endpoint_to_session_state(st.session_state, endpoint)
     runtime_status = ensure_warroom_push_widget_live_observation_runtime(
         st.session_state,
         runtime_config=runtime_config_from_env(),
