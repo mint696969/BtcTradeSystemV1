@@ -6,13 +6,70 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping
 
-GPT_COPY_PACKET_VERSION = "warroom_gpt_review_packet.2026_07_05.v2_light_request"
+GPT_COPY_PACKET_VERSION = "warroom_gpt_review_packet.2026_07_05.v3_action_plan"
 
 
 def _compact_mapping(value: object, *, allowed_keys: tuple[str, ...]) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         return {}
     return {key: value.get(key) for key in allowed_keys if key in value}
+
+
+def _iso_date(value: object) -> str | None:
+    if not isinstance(value, str) or len(value) < 10:
+        return None
+    return value[:10]
+
+
+def _iso_time(value: object) -> str | None:
+    if not isinstance(value, str) or "T" not in value:
+        return None
+    return value.split("T", 1)[1].replace("Z", "").split("+", 1)[0]
+
+
+def _recommended_actions(*, primary_market_trade_path: object, x_domain: Mapping[str, Any]) -> list[dict[str, Any]]:
+    start = x_domain.get("start")
+    end = x_domain.get("end")
+    trade_path = primary_market_trade_path if isinstance(primary_market_trade_path, str) and primary_market_trade_path else None
+    actions: list[dict[str, Any]] = [
+        {
+            "tool": "data_latest",
+            "purpose": "read current hot runtime state and recent state candidates",
+            "args": {"kind": "state", "max_files": 5},
+        }
+    ]
+    if trade_path:
+        actions.append(
+            {
+                "tool": "data_slice",
+                "purpose": "inspect raw D-hot market.trade records around the selected chart range",
+                "args": {
+                    "path": trade_path,
+                    "date_from": _iso_date(start),
+                    "date_to": _iso_date(end),
+                    "time_from": _iso_time(start),
+                    "time_to": _iso_time(end),
+                    "max_lines": 200,
+                    "max_bytes": 60000,
+                },
+            }
+        )
+    actions.append(
+        {
+            "tool": "repo_read_batch",
+            "purpose": "inspect deterministic chart logic and D-hot bootstrap adapter, not UI rendering only",
+            "args": {
+                "paths": [
+                    "btcts_next/src/btcts/prediction/warroom_chart_series.py",
+                    "btcts_next/src/btcts/prediction/warroom_chart_history_bootstrap.py",
+                    "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/rt_ui/copy_packet_view.py",
+                ],
+                "max_chars_per_file": 16000,
+                "max_total_chars": 48000,
+            },
+        }
+    )
+    return actions
 
 
 def _copy_chart_request(chart_render_summary: Mapping[str, Any] | None) -> dict[str, Any]:
@@ -29,6 +86,7 @@ def _copy_chart_request(chart_render_summary: Mapping[str, Any] | None) -> dict[
         snapshot.get("trust_boundary"),
         allowed_keys=("chart_logic_owner", "ui_role", "input_source", "latest_candle_may_change", "closed_candles_should_not_change_in_session", "official_exchange_ohlc_connected", "manual_review_only"),
     )
+    primary_market_trade_path = dhot_bootstrap.get("source_path")
     return {
         "schema_version": "warroom_chart_analysis_request.v1",
         "instruction_to_gpt": "Use Actions/data tools to inspect the referenced D-hot/repo artifacts when deeper evidence is needed. Do not rely on this copied text as the full dataset.",
@@ -44,15 +102,19 @@ def _copy_chart_request(chart_render_summary: Mapping[str, Any] | None) -> dict[
         "candle_summary": candle_summary,
         "dhot_bootstrap": dhot_bootstrap,
         "trust_boundary": trust_boundary,
+        "analysis_target": {
+            "scope": "currently selected WarRoom chart viewport",
+            "time_range": x_domain,
+            "latest_point": latest,
+            "manual_operator_question": "Analyze this selected chart range using Actions; do not infer from embedded rows alone.",
+        },
         "data_access_hints": {
             "hot_data_root": "D:/btc_ts_hot",
+            "cold_data_root": "E:/btc_ts",
+            "cold_root_policy": "Use cold archive only when the operator explicitly asks for archive/replay/historical validation.",
             "primary_runtime_state": "state/collector_vnext/unified_market_state_status.json",
-            "primary_market_trade_path": dhot_bootstrap.get("source_path"),
-            "suggested_action_flow": [
-                "data_latest(kind='state') for current runtime state",
-                "data_slice(path=primary_market_trade_path, tail/head/date filters) for raw D-hot trades",
-                "repo_read for btcts_next/src/btcts/prediction/warroom_chart_series.py when chart logic evidence is needed",
-            ],
+            "primary_market_trade_path": primary_market_trade_path,
+            "recommended_actions": _recommended_actions(primary_market_trade_path=primary_market_trade_path, x_domain=x_domain),
         },
         "copy_weight_policy": {
             "embedded_raw_rows": False,
@@ -76,7 +138,7 @@ def build_gpt_copy_packet(
     payload = {
         "schema_version": GPT_COPY_PACKET_VERSION,
         "purpose": "manual trade observation review request; read-only; no order action",
-        "how_to_use": "Paste this lightweight request to GPT, then ask GPT to use Actions to inspect the referenced D-hot/repo sources for the chosen time range.",
+        "how_to_use": "Paste this lightweight request to GPT, then ask GPT to follow operator_focus.selected_chart_range.data_access_hints.recommended_actions for bounded D-hot/repo inspection.",
         "market": {
             "symbol": market_strip.get("symbol"),
             "best_bid": market_strip.get("best_bid"),

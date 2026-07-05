@@ -62,14 +62,26 @@ def test_guidance_and_copy_packet_are_read_only() -> None:
     }
     text = build_gpt_copy_packet(market_strip=market, guidance=guidance, chart_packet=chart, cards_packet={"cards": []}, chart_render_summary=chart_render_summary)
     payload = json.loads(text)
-    assert payload["schema_version"] == "warroom_gpt_review_packet.2026_07_05.v2_light_request"
+    assert payload["schema_version"] == "warroom_gpt_review_packet.2026_07_05.v3_action_plan"
     assert payload["market"]["symbol"] == "FX_BTC_JPY"
     selected = payload["operator_focus"]["selected_chart_range"]
     assert selected["schema_version"] == "warroom_chart_analysis_request.v1"
     assert selected["history_rows"] == 819
     assert selected["dhot_bootstrap"]["rows_returned"] == 813
+    assert selected["analysis_target"]["scope"] == "currently selected WarRoom chart viewport"
+    assert selected["analysis_target"]["time_range"]["start"] == "2026-07-05T14:01:27Z"
     assert selected["data_access_hints"]["hot_data_root"] == "D:/btc_ts_hot"
+    assert selected["data_access_hints"]["cold_data_root"] == "E:/btc_ts"
     assert selected["data_access_hints"]["primary_market_trade_path"].endswith("part-00001.jsonl")
+    actions = selected["data_access_hints"]["recommended_actions"]
+    assert [action["tool"] for action in actions] == ["data_latest", "data_slice", "repo_read_batch"]
+    trade_action = actions[1]
+    assert trade_action["args"]["path"].endswith("part-00001.jsonl")
+    assert trade_action["args"]["date_from"] == "2026-07-05"
+    assert trade_action["args"]["time_from"] == "14:01:27"
+    assert trade_action["args"]["time_to"] == "14:16:27"
+    assert trade_action["args"]["max_lines"] == 200
+    assert trade_action["args"]["max_bytes"] == 60000
     assert selected["copy_weight_policy"]["embedded_raw_rows"] is False
     assert selected["copy_weight_policy"]["embedded_visible_price_rows"] is False
     serialized = json.dumps(payload, ensure_ascii=False)
