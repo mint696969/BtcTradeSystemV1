@@ -8,13 +8,18 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v3_rolling_viewport"
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_timeframe_view import (
+    CHART_TIMEFRAME_VIEW_VERSION,
+    ChartDisplayConfig,
+    prepare_chart_display_frame,
+    select_chart_display_config,
+)
+
+BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v4_timeframe_modes"
 _PRICE_RE = re.compile(r"(?:best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 _NAMED_PRICE_RE = re.compile(r"(best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 CHART_HISTORY_SESSION_STATE_KEY = "warroom_v2_bottom_chart_history_rows"
 CHART_HISTORY_LIMIT = 720
-CHART_VIEWPORT_OPTIONS: tuple[tuple[str, int], ...] = (("3分", 3), ("15分", 15), ("1時間", 60))
-CHART_DEFAULT_VIEWPORT_LABEL = "15分"
 
 
 def _as_float(value: object) -> float | None:
@@ -188,35 +193,6 @@ def _retain_chart_history(current_frame: pd.DataFrame, st_api: Any) -> pd.DataFr
     return history
 
 
-def _selected_viewport_label(st_api: Any) -> str:
-    labels = [label for label, _minutes in CHART_VIEWPORT_OPTIONS]
-    try:
-        selected = st_api.selectbox("表示範囲", labels, index=labels.index(CHART_DEFAULT_VIEWPORT_LABEL), help="表示だけを切り替えます。履歴は保持され、broker/order/prediction には接続しません。")
-    except Exception:  # noqa: BLE001
-        selected = CHART_DEFAULT_VIEWPORT_LABEL
-    return selected if selected in labels else CHART_DEFAULT_VIEWPORT_LABEL
-
-
-def _viewport_minutes(label: str) -> int:
-    for option_label, minutes in CHART_VIEWPORT_OPTIONS:
-        if option_label == label:
-            return minutes
-    return 15
-
-
-def _apply_rolling_viewport(frame: pd.DataFrame, *, minutes: int) -> pd.DataFrame:
-    if frame.empty:
-        return frame
-    latest_ts = frame["ts"].max()
-    if pd.isna(latest_ts):
-        return frame
-    cutoff = latest_ts - pd.Timedelta(minutes=minutes)
-    visible = frame[frame["ts"] >= cutoff].copy()
-    if visible.empty:
-        return frame.tail(12).copy()
-    return visible
-
-
 def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, st_api: Any) -> bool:
     if frame.empty:
         return False
@@ -266,31 +242,31 @@ def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, st_api: A
 
 
 def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
-    st_api.caption("チャート: 買気配/売気配の板レイヤー + 中心線 + 約定点 / rolling表示窓 / 読み取り専用")
+    st_api.caption("チャート: Live/分足/時足/日足モード + rolling表示窓 / 読み取り専用")
     current_frame = chart_rows_to_frame(packet)
     frame = _retain_chart_history(current_frame, st_api)
-    viewport_label = _selected_viewport_label(st_api)
-    viewport_minutes = _viewport_minutes(viewport_label)
-    display_frame = _apply_rolling_viewport(frame, minutes=viewport_minutes)
+    chart_config: ChartDisplayConfig = select_chart_display_config(st_api)
+    display_frame = prepare_chart_display_frame(frame, chart_config)
     band_frame = _board_band_frame(display_frame)
     overlay_rows = _overlay_rows(packet)
     live_rows = sum(1 for row in packet.get("chart_rows", []) if isinstance(row, Mapping) and row.get("freshness_label") == "live")
     latest = display_frame.sort_values("ts").iloc[-1] if not display_frame.empty else None
     latest_band = band_frame.sort_values("ts").iloc[-1] if not band_frame.empty else None
 
-    c1, c2, c3, c4, c5, c6 = st_api.columns(6)
+    c1, c2, c3, c4, c5, c6, c7 = st_api.columns(7)
     c1.metric("履歴点", len(frame))
     c2.metric("表示点", len(display_frame))
-    c3.metric("表示窓", viewport_label)
-    c4.metric("買気配", _fmt_price(None if latest_band is None else latest_band.get("bid")))
-    c5.metric("売気配", _fmt_price(None if latest_band is None else latest_band.get("ask")))
-    c6.metric("スプレッド", _fmt_spread(None if latest_band is None else latest_band.get("spread")))
+    c3.metric("表示モード", chart_config.mode)
+    c4.metric("表示窓", chart_config.viewport_label)
+    c5.metric("買気配", _fmt_price(None if latest_band is None else latest_band.get("bid")))
+    c6.metric("売気配", _fmt_price(None if latest_band is None else latest_band.get("ask")))
+    c7.metric("スプレッド", _fmt_spread(None if latest_band is None else latest_band.get("spread")))
 
     if not display_frame.empty:
         rendered = _render_price_chart(display_frame, band_frame, st_api)
         assert latest is not None
         st_api.caption(
-            f"latest={_fmt_price(latest['price'])} / topic={latest['topic']} / role={latest['role']} / freshness={latest['freshness_label']} / 表示窓={viewport_label} / history={len(frame)} / visible={len(display_frame)} / version={BOTTOM_CHART_POLISH_VERSION}"
+            f"latest={_fmt_price(latest['price'])} / topic={latest['topic']} / role={latest['role']} / freshness={latest['freshness_label']} / 表示モード={chart_config.mode} / 表示窓={chart_config.viewport_label} / history={len(frame)} / visible={len(display_frame)} / helper={CHART_TIMEFRAME_VIEW_VERSION} / version={BOTTOM_CHART_POLISH_VERSION}"
         )
     else:
         rendered = False
@@ -309,8 +285,12 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "chart_graph_rendered": rendered,
         "history_retention_ready": True,
         "rolling_viewport_ready": True,
-        "viewport_label": viewport_label,
-        "viewport_minutes": viewport_minutes,
+        "timeframe_modes_ready": True,
+        "timeframe_mode": chart_config.mode,
+        "viewport_label": chart_config.viewport_label,
+        "viewport_minutes": chart_config.viewport_minutes,
+        "historical_cache_required": chart_config.historical_cache_required,
+        "timeframe_helper_version": CHART_TIMEFRAME_VIEW_VERSION,
         "history_session_state_key": CHART_HISTORY_SESSION_STATE_KEY,
         "current_frame_rows": len(current_frame),
         "display_frame_rows": len(display_frame),
@@ -324,6 +304,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "read_only": True,
         "controls_added": True,
         "display_control_action_free": True,
+        "timeframe_control_action_free": True,
         "broker_send_enabled": False,
         "order_intent_submitted": False,
         "prediction_invoked": False,
