@@ -1,0 +1,28 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_V2_RT_FRAGMENT_REFRESH_2026-07-05.md
+# desc: WarRoom v2 realtime cockpit fragment refresh.
+
+# WarRoom v2 RT fragment refresh
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Base gate: PS-WARROOM_V2_RT_AUTO_REFRESH_TICK
+Slice: PS-WARROOM_V2_RT_FRAGMENT_REFRESH_NO_PAGE_RELOAD
+
+```text
+warroom_v2_rt_fragment_refresh_done=true
+streamlit_fragment_refresh_enabled=true
+browser_page_reload_removed=true
+scroll_position_preserved_by_fragment_refresh=true
+cockpit_body_fragment_refreshed=true
+static_shell_not_reloaded=true
+sidebar_auto_refresh_drives_fragment_run_every=true
+page_reload_enabled=false
+browser_timer_reload_enabled=false
+websocket_send_enabled=false
+broker_send_enabled=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+```
