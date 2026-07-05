@@ -15,6 +15,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.rt_live_receiver_
     apply_warroom_push_widget_rt_live_receiver_bridge_to_session_state,
     ensure_warroom_push_widget_live_observation_runtime,
 )
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.auto_refresh_tick_view import build_cockpit_auto_refresh_packet, render_cockpit_auto_refresh_tick
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_view import render_rt_bottom_chart_graph
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.copy_packet_view import build_gpt_copy_packet, render_gpt_copy_packet
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.debug_view import render_rt_debug_packets
@@ -81,11 +82,13 @@ def render() -> None:
     trade_packet = build_trade_strip_packet(runtime_status, bridge_packet)
     guidance_packet = build_inference_guidance_packet(display_packets["chart"], display_packets["widgets"])
     copy_text = build_gpt_copy_packet(market_strip=market_packet, guidance=guidance_packet, chart_packet=display_packets["chart"], cards_packet=display_packets["cards"])
+    auto_refresh_packet = build_cockpit_auto_refresh_packet(st.session_state)
 
     st.header("WarRoom v2 / Realtime Cockpit")
     st.caption("D-hot live observation / market strip / trade strip / scenario guidance / important cards / chart / GPT copy packet / no broker")
     st.session_state[WARROOM_RT_LIVE_RUNTIME_STATUS_STATE_KEY] = runtime_status
     render_rt_runtime_status(runtime_status, bridge_packet, st)
+    render_cockpit_auto_refresh_tick(auto_refresh_packet, st)
     st.caption(f"display_source={display_source} / fallback_sample_suppressed=true / rt_polish3_cockpit_layout_ready=true")
 
     st.divider()
