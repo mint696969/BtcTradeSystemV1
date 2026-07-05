@@ -40,6 +40,12 @@ $env:BTCTS_MARKET_ENGINE_WRITE_MARKET_STATE = "true"
 # the Operator UI process environment via stack_control.start_stack_detached().
 $env:BTCTS_UNIFIED_MARKET_STATE_ENABLED = "true"
 
+# WarRoom push-widget realtime observation defaults.
+# Uses existing bitFlyer collector providers; raw JSON-RPC URL is not required here.
+if (-not $env:WARROOM_PUSH_WIDGET_WS_URL) { $env:WARROOM_PUSH_WIDGET_WS_URL = "bitflyer://FX_BTC_JPY" }
+if (-not $env:WARROOM_PUSH_WIDGET_SOURCE) { $env:WARROOM_PUSH_WIDGET_SOURCE = "bitflyer_collector_provider" }
+if (-not $env:WARROOM_PUSH_WIDGET_REALTIME_OBSERVATION_DEFAULT) { $env:WARROOM_PUSH_WIDGET_REALTIME_OBSERVATION_DEFAULT = "true" }
+
 # Unified daemon tuning inherited by Collector tab Start.
 if (-not $env:BTCTS_UNIFIED_LOOP_SLEEP_SEC) { $env:BTCTS_UNIFIED_LOOP_SLEEP_SEC = "0.25" }
 if (-not $env:BTCTS_UNIFIED_MAX_FAILURES) { $env:BTCTS_UNIFIED_MAX_FAILURES = "20" }
@@ -69,6 +75,8 @@ Write-Host "[operator-ui-srfx-dhot] market_uid=$env:BTCTS_EXECUTION_MARKET_UID"
 Write-Host "[operator-ui-srfx-dhot] market_state_lane=$env:BTCTS_UNIFIED_MARKET_STATE_ENABLED"
 Write-Host "[operator-ui-srfx-dhot] ws_ssl_verify=$env:BTCTS_WS_SSL_VERIFY"
 Write-Host "[operator-ui-srfx-dhot] ws_ca_file=$env:BTCTS_WS_CA_FILE"
+Write-Host "[operator-ui-srfx-dhot] warroom_push_widget_endpoint=$env:WARROOM_PUSH_WIDGET_WS_URL"
+Write-Host "[operator-ui-srfx-dhot] warroom_push_widget_source=$env:WARROOM_PUSH_WIDGET_SOURCE"
 Write-Host "[operator-ui-srfx-dhot] port=$Port"
 Write-Host "[operator-ui-srfx-dhot] read_only=true would_send_to_broker=false"
 Write-Host "[operator-ui-srfx-dhot] Collector tab Start/Safe Stop is the normal watchdog control path."

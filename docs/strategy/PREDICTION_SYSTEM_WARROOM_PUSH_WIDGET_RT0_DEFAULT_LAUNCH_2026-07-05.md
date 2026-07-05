@@ -1,0 +1,26 @@
+# path: ./docs/strategy/PREDICTION_SYSTEM_WARROOM_PUSH_WIDGET_RT0_DEFAULT_LAUNCH_2026-07-05.md
+# desc: WarRoom push-widget realtime observation default launch endpoint.
+
+# WarRoom push-widget realtime observation default launch
+
+Date: 2026-07-05
+Profile: BtcTradeSystem
+Base gate: PS_RT0_RT6_WARROOM_PUSH_WIDGET_LIVE_OBSERVATION_RUNTIME_DONE
+Slice: PS-RT0_DEFAULT_LAUNCH_WARROOM_PUSH_WIDGET_REALTIME_OBSERVATION
+
+```text
+warroom_push_widget_realtime_observation_default=true
+warroom_push_widget_endpoint_default=bitflyer://FX_BTC_JPY
+warroom_push_widget_source_default=bitflyer_collector_provider
+warroom_page_starts_receiver_runtime_when_endpoint_present=true
+collector_provider_board_stream_used=true
+collector_provider_executions_stream_used=true
+raw_bitflyer_json_rpc_endpoint_not_required_in_launch_code=true
+websocket_order_send_enabled=false
+broker_send_enabled=false
+order_intent_submitted=false
+ledger_append_allowed=false
+auto_trading_enabled=false
+prediction_invoked=false
+classifier_invoked=false
+```

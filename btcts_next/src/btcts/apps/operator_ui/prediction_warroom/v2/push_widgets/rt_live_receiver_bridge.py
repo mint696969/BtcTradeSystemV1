@@ -85,7 +85,71 @@ def normalize_live_receiver_messages(source: object) -> list[dict[str, Any]]:
     return out
 
 
+
+# Indirection points for tests and for keeping WarRoom aligned with the existing collector provider implementation.
+def _connect_and_stream_board(symbol: str, *, ssl_verify: bool = True, ca_file: str | None = None):
+    from btcts.collector_vnext.providers.bitflyer_ws_board import connect_and_stream_board
+    return connect_and_stream_board(symbol, ssl_verify=ssl_verify, ca_file=ca_file)
+
+
+def _connect_and_stream_executions(symbol: str, *, ssl_verify: bool = True, recv_timeout_sec: float = 60.0, ca_file: str | None = None):
+    from btcts.collector_vnext.providers.bitflyer_ws import connect_and_stream_executions
+    return connect_and_stream_executions(symbol, ssl_verify=ssl_verify, recv_timeout_sec=recv_timeout_sec, ca_file=ca_file)
+
+
+def _first_price(levels: object) -> float | None:
+    if isinstance(levels, list) and levels and isinstance(levels[0], Mapping):
+        value = levels[0].get("price")
+        if isinstance(value, (int, float)):
+            return float(value)
+    return None
+
+
+class _BitflyerCollectorConnection:
+    """Small recv-compatible adapter backed by existing bitFlyer collector providers."""
+
+    def __init__(self, symbol: str, runtime_config: Mapping[str, Any]) -> None:
+        self.symbol = symbol
+        self.runtime_config = dict(runtime_config)
+        self.ssl_verify = str(self.runtime_config.get("ssl_verify", "true")).lower() != "false"
+        self.ca_file = self.runtime_config.get("ca_file")
+        self._board = iter(_connect_and_stream_board(symbol, ssl_verify=self.ssl_verify, ca_file=self.ca_file))
+        self._exec = iter(_connect_and_stream_executions(symbol, ssl_verify=self.ssl_verify, recv_timeout_sec=float(self.runtime_config.get("recv_timeout_sec", 60)), ca_file=self.ca_file))
+        self._turn = 0
+
+    def recv(self) -> dict[str, Any]:
+        self._turn += 1
+        if self._turn % 2:
+            return {"messages": self._map_board(next(self._board))}
+        return {"messages": [self._map_execution(next(self._exec))]}
+
+    def close(self) -> None:
+        for gen in (self._board, self._exec):
+            close = getattr(gen, "close", None)
+            if callable(close):
+                close()
+
+    def _map_board(self, msg: object) -> list[dict[str, Any]]:
+        payload = dict(getattr(msg, "payload", {}) or {})
+        best_bid = _first_price(payload.get("bids"))
+        best_ask = _first_price(payload.get("asks"))
+        ts_ms = int(time.time() * 1000)
+        return [
+            {"topic_key": "market.depth", "value": {"best_bid": best_bid, "best_ask": best_ask, "channel": str(getattr(msg, "channel", ""))}, "received_at_ms": ts_ms},
+            {"topic_key": "market.liquidity", "value": {"bid_levels": len(payload.get("bids") or []), "ask_levels": len(payload.get("asks") or [])}, "received_at_ms": ts_ms},
+            {"topic_key": "receiver.lifecycle", "value": {"status": "receiving", "source": "bitflyer_collector_provider"}, "received_at_ms": ts_ms},
+        ]
+
+    def _map_execution(self, msg: object) -> dict[str, Any]:
+        payload = getattr(msg, "payload", {}) or {}
+        latest = payload[-1] if isinstance(payload, list) and payload and isinstance(payload[-1], Mapping) else payload if isinstance(payload, Mapping) else {}
+        return {"topic_key": "market.trades", "value": {"last_price": latest.get("price"), "last_size": latest.get("size"), "side": latest.get("side"), "channel": str(getattr(msg, "channel", ""))}, "received_at_ms": int(time.time() * 1000)}
+
 def _default_connect(endpoint: str, runtime_config: Mapping[str, Any]) -> Any:
+    source = str(runtime_config.get("source") or "")
+    if endpoint.startswith("bitflyer://") or source == "bitflyer_collector_provider":
+        symbol = endpoint.removeprefix("bitflyer://") or str(runtime_config.get("symbol") or "FX_BTC_JPY")
+        return _BitflyerCollectorConnection(symbol, runtime_config)
     try:
         from websockets.sync.client import connect as ws_connect  # type: ignore
         return ws_connect(endpoint, open_timeout=float(runtime_config.get("open_timeout_sec", 5)))
