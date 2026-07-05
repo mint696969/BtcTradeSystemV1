@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-TRADE_SECOND_STRIP_VERSION = "warroom_v2_trade_second_strip.2026_07_05.v1"
+TRADE_SECOND_STRIP_VERSION = "warroom_v2_trade_second_strip.2026_07_05.v2_japanese"
 
 
 def _mapping(value: object) -> Mapping[str, Any]:
@@ -70,8 +70,9 @@ def _fmt_pnl(value: object) -> str:
 def _position_label(side: object, size: object) -> str:
     size_f = _as_float(size)
     if size_f is None or size_f == 0:
-        return "flat"
-    side_label = str(side or "position").upper()
+        return "建玉なし"
+    side_raw = str(side or "position").strip().lower()
+    side_label = {"long": "買建", "buy": "買建", "short": "売建", "sell": "売建"}.get(side_raw, str(side or "建玉").upper())
     return f"{side_label} {_fmt_size(size)}"
 
 
@@ -79,8 +80,8 @@ def _orders_label(active_count: object, pending_count: object) -> str:
     active = _as_int(active_count, 0)
     pending = _as_int(pending_count, 0)
     if active <= 0 and pending <= 0:
-        return "none"
-    return f"active {active} / pending {pending}"
+        return "なし"
+    return f"有効 {active} / 待機 {pending}"
 
 
 def _confirm_label(order_state: Mapping[str, Any]) -> str:
@@ -96,7 +97,7 @@ def _source_label(*sources: Mapping[str, Any]) -> str:
         value = source.get("source") or source.get("data_source") or source.get("trade_state_source")
         if value:
             return str(value)
-    return "not connected"
+    return "未接続"
 
 
 def build_trade_strip_packet(runtime_status: Mapping[str, Any], bridge_packet: Mapping[str, Any]) -> dict[str, Any]:
@@ -127,9 +128,9 @@ def build_trade_strip_packet(runtime_status: Mapping[str, Any], bridge_packet: M
     runtime_connected = bool(runtime_status.get("receiver_runtime_started"))
     messages_applied = _as_int(bridge_packet.get("messages_applied"), 0)
     summary = (
-        "read-only trade-state source connected"
+        "読み取り専用の取引状態ソースに接続済み"
         if data_connected
-        else "orders / position / PnL lane is reserved and waiting for trusted read-only trade-state source"
+        else "注文 / 建玉 / 損益レーンは予約済み。信頼できる読み取り専用ソース接続待ち"
     )
 
     return {
@@ -181,37 +182,37 @@ def _metric(column: Any, label: str, value: str, help_text: str, *, delta: str |
 
 
 def render_trade_strip(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
-    st_api.caption("Trade second strip: orders / position / confirmation / PnL / compact / read-only")
+    st_api.caption("取引データ: 注文 / 建玉 / 確定時刻 / 損益 / コンパクト表示 / 読み取り専用")
     cols = st_api.columns(8)
-    _metric(cols[0], "Orders", _orders_label(packet.get("active_orders"), packet.get("pending_orders")), "未約定・待機中注文の数。未接続時は none ではなく source caption で waiting を確認します。")
-    _metric(cols[1], "Confirmed", str(packet.get("confirmed_at") or "--"), "直近の注文受付・確定日時。手動判断の時刻整合に使います。")
-    _metric(cols[2], "Position", _position_label(packet.get("position_side"), packet.get("position_size")), "現在建玉の方向とサイズ。未接続またはゼロなら flat と表示します。")
-    _metric(cols[3], "Entry", _fmt_price(packet.get("entry_price")), "建玉の平均取得価格または約定基準価格。")
-    _metric(cols[4], "Mark", _fmt_price(packet.get("mark_price")), "評価価格。未接続時は -- です。")
-    _metric(cols[5], "U-PnL", _fmt_pnl(packet.get("unrealized_pnl")), "未実現損益。現在価格で評価した含み損益です。")
-    _metric(cols[6], "R-PnL", _fmt_pnl(packet.get("realized_pnl")), "実現済み損益。決済済みの損益です。")
-    _metric(cols[7], "After fill", _fmt_pnl(packet.get("after_fill_pnl")), "注文が約定した後の想定/反映損益。信頼できる read-only source 接続後に有効化します。")
+    _metric(cols[0], "注文", _orders_label(packet.get("active_orders"), packet.get("pending_orders")), "有効注文と待機中注文の数。未接続時は下段のデータ源を確認します。")
+    _metric(cols[1], "確定時刻", str(packet.get("confirmed_at") or "--"), "直近の注文受付・確定日時。手動判断の時刻整合に使います。")
+    _metric(cols[2], "建玉", _position_label(packet.get("position_side"), packet.get("position_size")), "現在建玉の方向とサイズ。未接続またはゼロなら建玉なしと表示します。")
+    _metric(cols[3], "建値", _fmt_price(packet.get("entry_price")), "建玉の平均取得価格または約定基準価格。")
+    _metric(cols[4], "評価値", _fmt_price(packet.get("mark_price")), "評価価格。未接続時は -- です。")
+    _metric(cols[5], "含み損益", _fmt_pnl(packet.get("unrealized_pnl")), "未実現損益。現在価格で評価した含み損益です。")
+    _metric(cols[6], "確定損益", _fmt_pnl(packet.get("realized_pnl")), "実現済み損益。決済済みの損益です。")
+    _metric(cols[7], "約定後", _fmt_pnl(packet.get("after_fill_pnl")), "注文が約定した後の想定または反映後損益。信頼できる読み取り専用ソース接続後に有効化します。")
 
     st_api.caption(
         " / ".join(
             [
-                f"source={packet.get('trade_state_source') or 'not connected'}",
-                f"orders_connected={bool(packet.get('orders_connected'))}",
-                f"positions_connected={bool(packet.get('positions_connected'))}",
-                f"pnl_connected={bool(packet.get('pnl_connected'))}",
-                f"messages_applied={packet.get('messages_applied', 0)}",
+                f"データ源={packet.get('trade_state_source') or '未接続'}",
+                f"注文接続={bool(packet.get('orders_connected'))}",
+                f"建玉接続={bool(packet.get('positions_connected'))}",
+                f"損益接続={bool(packet.get('pnl_connected'))}",
+                f"受信適用={packet.get('messages_applied', 0)}",
                 "broker_send_enabled=false",
                 "order_intent_submitted=false",
             ]
         )
     )
-    with st_api.expander("Trade second strip details", expanded=False):
+    with st_api.expander("取引データの詳細", expanded=False):
         st_api.dataframe(
             [
-                {"key": "last_order_id", "value": str(packet.get("last_order_id") or "--")},
-                {"key": "display_source", "value": str(packet.get("display_source") or "waiting")},
-                {"key": "summary", "value": str(packet.get("summary") or "")},
-                {"key": "safety", "value": "read_only=true / broker_send_enabled=false / ledger_append_allowed=false / auto_trading_enabled=false"},
+                {"項目": "直近注文ID", "値": str(packet.get("last_order_id") or "--")},
+                {"項目": "表示ソース", "値": str(packet.get("display_source") or "waiting")},
+                {"項目": "要約", "値": str(packet.get("summary") or "")},
+                {"項目": "安全境界", "値": "read_only=true / broker_send_enabled=false / ledger_append_allowed=false / auto_trading_enabled=false"},
             ],
             width="stretch",
         )
