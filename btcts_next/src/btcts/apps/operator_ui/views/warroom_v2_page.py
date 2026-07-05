@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/views/warroom_v2_page.py
-# desc: WarRoom v2 live observation page. Orchestrates RT0-RT6 runtime and delegates visual rendering to small rt_ui modules.
+# desc: WarRoom v2 live observation page. Orchestrates RT runtime and delegates to modular top/trade/scenario/card/chart UI.
 
 from __future__ import annotations
 
@@ -15,39 +15,17 @@ from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.rt_live_receiver_
     apply_warroom_push_widget_rt_live_receiver_bridge_to_session_state,
     ensure_warroom_push_widget_live_observation_runtime,
 )
-from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.wp9_warroom_page_mount import (
-    WARROOM_WP9_PAGE_MOUNT_SESSION_STATE_KEY,
-    build_wp9_warroom_page_mount_packet,
-)
-from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.wp11_top_layout_push_widget_polish import (
-    WARROOM_WP11_TOP_LAYOUT_SESSION_STATE_KEY,
-    build_wp11_top_layout_push_widget_polish_packet,
-)
-from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.wp12_bottom_chart_layout import (
-    WARROOM_WP12_BOTTOM_CHART_SESSION_STATE_KEY,
-    build_wp12_bottom_chart_layout_packet,
-)
-from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.wp13_prediction_card_connection import (
-    WARROOM_WP13_PREDICTION_CARD_SESSION_STATE_KEY,
-    build_wp13_prediction_card_connection_packet,
-)
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_view import render_rt_bottom_chart_graph
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.debug_view import render_rt_debug_packets
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.inference_guidance_view import build_inference_guidance_packet, render_inference_guidance
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.live_packets import select_or_build_rt_display_packets
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.prediction_cards_view import render_rt_prediction_cards
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.runtime_env import endpoint_from_env, runtime_config_from_env
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.status_view import render_rt_runtime_status
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.top_widgets_view import render_rt_top_layout_and_widgets
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.trade_strip_view import build_trade_strip_packet, render_trade_strip
 
-WARROOM_V2_RT_VISIBLE_MOUNT_VERSION = "prediction_warroom.v2.rt_visible_mount.2026_07_05.v2"
-
-
-def _packet(key: str, fallback_builder: Any) -> dict[str, Any]:
-    value = st.session_state.get(key)
-    if isinstance(value, dict):
-        return value
-    packet = fallback_builder()
-    st.session_state[key] = packet
-    return packet
+WARROOM_V2_RT_VISIBLE_MOUNT_VERSION = "prediction_warroom.v2.rt_visible_mount.2026_07_05.v3"
 
 
 def _refresh_warroom_v2_rt_live_observation() -> tuple[dict[str, Any], dict[str, Any]]:
@@ -65,80 +43,48 @@ def _refresh_warroom_v2_rt_live_observation() -> tuple[dict[str, Any], dict[str,
     return runtime_status, bridge_packet
 
 
-def build_warroom_v2_page_mount_packet(*, runtime_status: Mapping[str, Any] | None = None, bridge_packet: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def build_warroom_v2_page_mount_packet(*, runtime_status: Mapping[str, Any] | None = None, bridge_packet: Mapping[str, Any] | None = None, display_source: str = "unknown") -> dict[str, Any]:
     runtime = dict(runtime_status or {})
     bridge = dict(bridge_packet or {})
     receiver_started = bool(runtime.get("receiver_runtime_started"))
     socket_opened = bool(runtime.get("socket_opened") or runtime.get("websocket_opened"))
     receive_loop_started = bool(runtime.get("receive_loop_started"))
     messages_applied = int(bridge.get("messages_applied") or 0)
-    return {
-        "ok": True,
-        "page_mount_version": WARROOM_V2_RT_VISIBLE_MOUNT_VERSION,
-        "page_key": "warroom_v2",
-        "page_label": "WarRoom v2",
-        "thin_page_shell_only": False,
-        "rt_visible_mount_ready": True,
-        "rt_ui_polish1_modularized": True,
-        "renders_rt_live_observation_runtime": True,
-        "warroom_page_starts_receiver_runtime_when_endpoint_present": True,
-        "warroom_page_uses_live_packet_when_present": True,
-        "runtime_connected": bool(receiver_started),
-        "push_connected": bool(socket_opened or receive_loop_started or messages_applied > 0),
-        "websocket_enabled": bool(socket_opened or receive_loop_started),
-        "receive_loop_started": receive_loop_started,
-        "messages_applied": messages_applied,
-        "live_widget_count": int(dict(st.session_state.get(WARROOM_WP9_PAGE_MOUNT_SESSION_STATE_KEY) or {}).get("live_widget_count") or 0),
-        "dhot_read_in_page": False,
-        "classifier_invoked_in_page": False,
-        "autotrade_trigger_allowed": False,
-        "broker_private_api_allowed": False,
-        "ledger_append_allowed": False,
-        "would_send_to_broker": False,
-        "websocket_send_enabled": False,
-        "broker_send_enabled": False,
-        "order_intent_submitted": False,
-        "prediction_invoked": False,
-        "classifier_invoked": False,
-    }
+    return {"ok": True, "page_mount_version": WARROOM_V2_RT_VISIBLE_MOUNT_VERSION, "page_key": "warroom_v2", "page_label": "WarRoom v2", "thin_page_shell_only": False, "rt_visible_mount_ready": True, "rt_ui_polish1_modularized": True, "rt_polish2_live_retention_ready": True, "rt_display_source": display_source, "fallback_sample_suppressed": True, "runtime_connected": receiver_started, "push_connected": bool(socket_opened or receive_loop_started or messages_applied > 0 or display_source in {"live", "retained"}), "websocket_enabled": bool(socket_opened or receive_loop_started), "receive_loop_started": receive_loop_started, "messages_applied": messages_applied, "websocket_send_enabled": False, "broker_send_enabled": False, "order_intent_submitted": False, "ledger_append_allowed": False, "prediction_invoked": False, "classifier_invoked": False}
 
 
 def render() -> None:
     runtime_status, bridge_packet = _refresh_warroom_v2_rt_live_observation()
-    page_packet = build_warroom_v2_page_mount_packet(runtime_status=runtime_status, bridge_packet=bridge_packet)
+    display_packets = select_or_build_rt_display_packets(st.session_state, bridge_packet)
+    display_source = str(display_packets["source"]["display_source"])
+    page_packet = build_warroom_v2_page_mount_packet(runtime_status=runtime_status, bridge_packet=bridge_packet, display_source=display_source)
     st.header("WarRoom v2 / Realtime Observation")
-    st.caption("RT0-RT6 live observation runtime / receive-only WebSocket / modular top-chart-card UI / no send / no broker / no order")
+    st.caption("RT live observation / market strip / trade strip / scenario guidance / prediction cards / chart / no send / no broker")
     st.session_state[WARROOM_RT_LIVE_RUNTIME_STATUS_STATE_KEY] = runtime_status
     render_rt_runtime_status(runtime_status, bridge_packet, st)
-
-    top_packet = _packet(WARROOM_WP11_TOP_LAYOUT_SESSION_STATE_KEY, build_wp11_top_layout_push_widget_polish_packet)
-    widgets_packet = _packet(WARROOM_WP9_PAGE_MOUNT_SESSION_STATE_KEY, build_wp9_warroom_page_mount_packet)
-    chart_packet = _packet(WARROOM_WP12_BOTTOM_CHART_SESSION_STATE_KEY, build_wp12_bottom_chart_layout_packet)
-    cards_packet = _packet(WARROOM_WP13_PREDICTION_CARD_SESSION_STATE_KEY, build_wp13_prediction_card_connection_packet)
+    st.caption(f"display_source={display_source} / fallback_sample_suppressed=true")
 
     st.divider()
-    st.subheader("Top layout / realtime push widgets")
-    render_rt_top_layout_and_widgets(top_packet, widgets_packet, st)
+    st.subheader("1. Market strip / realtime push widgets")
+    render_rt_top_layout_and_widgets(display_packets["top"], display_packets["widgets"], st)
 
     st.divider()
-    st.subheader("Bottom chart / realtime context")
-    render_rt_bottom_chart_graph(chart_packet, st)
+    st.subheader("2. Trade strip / orders, position, PnL")
+    trade_packet = build_trade_strip_packet(runtime_status, bridge_packet)
+    render_trade_strip(trade_packet, st)
 
     st.divider()
-    st.subheader("Prediction cards / realtime market context")
-    render_rt_prediction_cards(cards_packet, st)
+    st.subheader("3. Inference scenario guidance")
+    guidance_packet = build_inference_guidance_packet(display_packets["chart"], display_packets["widgets"])
+    render_inference_guidance(guidance_packet, st)
 
-    render_rt_debug_packets(
-        {
-            "page_mount": page_packet,
-            "runtime_status": runtime_status,
-            "bridge_packet": bridge_packet,
-        },
-        st,
-    )
-    st.caption(
-        "rt_visible_mount_ready=true / rt_ui_polish1_modularized=true / "
-        f"runtime_connected={str(page_packet['runtime_connected']).lower()} / "
-        f"push_connected={str(page_packet['push_connected']).lower()} / "
-        "websocket_send_enabled=false / broker_send_enabled=false / order_intent_submitted=false / prediction_invoked=false / classifier_invoked=false"
-    )
+    st.divider()
+    st.subheader("4. Prediction cards / important context")
+    render_rt_prediction_cards(display_packets["cards"], st)
+
+    st.divider()
+    st.subheader("5. Bottom chart / realtime context")
+    render_rt_bottom_chart_graph(display_packets["chart"], st)
+
+    render_rt_debug_packets({"page_mount": page_packet, "runtime_status": runtime_status, "bridge_packet": bridge_packet, "trade_strip": trade_packet, "inference_guidance": guidance_packet}, st)
+    st.caption("rt_visible_mount_ready=true / rt_polish2_live_retention_ready=true / fallback_sample_suppressed=true / websocket_send_enabled=false / broker_send_enabled=false / order_intent_submitted=false / prediction_invoked=false / classifier_invoked=false")
