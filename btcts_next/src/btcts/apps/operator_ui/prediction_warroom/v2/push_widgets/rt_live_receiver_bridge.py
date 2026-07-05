@@ -179,7 +179,22 @@ class _DhotUnifiedMarketStateConnection:
 
     def _read_status(self) -> dict[str, Any]:
         path = self._status_path()
-        return json.loads(path.read_text(encoding="utf-8-sig"))
+        last_exc: Exception | None = None
+        for attempt in range(3):
+            try:
+                text = path.read_text(encoding="utf-8-sig")
+                if not text.strip():
+                    raise json.JSONDecodeError("empty D-hot status file", text, 0)
+                return json.loads(text)
+            except json.JSONDecodeError as exc:
+                last_exc = exc
+                if attempt < 2:
+                    time.sleep(0.025)
+                    continue
+                raise
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("unreachable D-hot status read state")
 
     def _messages_from_status(self, status: Mapping[str, Any]) -> list[dict[str, Any]]:
         ts_ms = int(time.time() * 1000)
@@ -314,6 +329,8 @@ def _sync_read_dhot_once(runtime: "ReceiverOnlyRuntime") -> int:
             runtime._append(parsed)
         runtime.status["dhot_sync_read_applied"] = bool(parsed)
         runtime.status["dhot_sync_read_count"] = len(parsed)
+        runtime.status["dhot_sync_read_retry_guard"] = True
+        runtime.status.pop("receiver_error", None)
         runtime.status["socket_opened"] = True
         runtime.status["websocket_opened"] = True
         runtime.status["client_started"] = True
@@ -323,7 +340,8 @@ def _sync_read_dhot_once(runtime: "ReceiverOnlyRuntime") -> int:
         return len(parsed)
     except Exception as exc:  # noqa: BLE001
         runtime.status["dhot_sync_read_applied"] = False
-        runtime.status["receiver_error"] = {"error_type": type(exc).__name__, "error_message": str(exc)}
+        runtime.status["dhot_sync_read_retry_guard"] = True
+        runtime.status["receiver_error"] = {"error_type": type(exc).__name__, "error_message": str(exc), "transient_read_retry_exhausted": True}
         return 0
 
 def _endpoint(session_state: Mapping[str, Any], endpoint_url: str | None) -> str:
