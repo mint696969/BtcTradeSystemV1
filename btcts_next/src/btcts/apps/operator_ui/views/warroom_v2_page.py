@@ -17,6 +17,12 @@ from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.rt_live_receiver_
 )
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.auto_refresh_tick_view import build_cockpit_auto_refresh_packet, fragment_run_every, render_cockpit_auto_refresh_tick
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_view import render_rt_bottom_chart_graph
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.compact_layout_view import (
+    COMPACT_VIEWPORT_LAYOUT_VERSION,
+    compact_footer_caption,
+    render_compact_page_header,
+    render_compact_section_label,
+)
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.copy_packet_view import build_gpt_copy_packet, render_gpt_copy_packet
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.debug_view import render_rt_debug_packets
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.inference_guidance_view import build_inference_guidance_packet, render_inference_guidance
@@ -28,7 +34,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.status_view import rende
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.top_widgets_view import render_rt_top_layout_and_widgets
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.trade_strip_view import build_trade_strip_packet, render_trade_strip
 
-WARROOM_V2_RT_VISIBLE_MOUNT_VERSION = "prediction_warroom.v2.rt_visible_mount.2026_07_05.v6"
+WARROOM_V2_RT_VISIBLE_MOUNT_VERSION = "prediction_warroom.v2.rt_visible_mount.2026_07_05.v7_compact_viewport"
 
 
 def _apply_runtime_endpoint_to_session_state(session_state: Any, endpoint: str) -> bool:
@@ -107,33 +113,27 @@ def _runtime_section(snapshot: dict[str, Any], auto_refresh_packet: Mapping[str,
 
 def render() -> None:
     auto_refresh_packet = build_cockpit_auto_refresh_packet(st.session_state)
-    st.header("WarRoom v2 / Realtime Cockpit")
-    st.caption("D-hot live observation / section-fragment refreshed lanes / no page reload / no broker")
+    render_compact_page_header(st)
 
     _render_section_fragment("runtime", auto_refresh_packet, lambda snapshot: _runtime_section(snapshot, auto_refresh_packet))
 
-    st.divider()
-    st.subheader("1. Market strip")
+    render_compact_section_label(st, index=1, title="Market strip", note="manual-trade market essentials")
     _render_section_fragment("market", auto_refresh_packet, lambda snapshot: render_market_strip(snapshot["market_packet"], st))
 
-    st.divider()
-    st.subheader("2. Trade strip / orders, position, PnL")
+    render_compact_section_label(st, index=2, title="Trade strip", note="orders / position / PnL")
     _render_section_fragment("trade", auto_refresh_packet, lambda snapshot: render_trade_strip(snapshot["trade_packet"], st))
 
-    st.divider()
-    st.subheader("3. Inference scenario guidance")
-    _render_section_fragment("guidance", auto_refresh_packet, lambda snapshot: render_inference_guidance(snapshot["guidance_packet"], st))
+    with st.expander("3. Inference scenario guidance — deferred compact review", expanded=False):
+        _render_section_fragment("guidance", auto_refresh_packet, lambda snapshot: render_inference_guidance(snapshot["guidance_packet"], st))
 
-    st.divider()
-    st.subheader("4. Prediction cards / important context")
-    _render_section_fragment("cards", auto_refresh_packet, lambda snapshot: render_rt_prediction_cards(snapshot["display_packets"]["cards"], st))
+    with st.expander("4. Prediction cards — deferred to next thread", expanded=False):
+        _render_section_fragment("cards", auto_refresh_packet, lambda snapshot: render_rt_prediction_cards(snapshot["display_packets"]["cards"], st))
 
-    st.divider()
-    st.subheader("5. Bottom chart / realtime context")
+    render_compact_section_label(st, index=5, title="Bottom chart", note="bid/ask board layer + trade points")
     _render_section_fragment("chart", auto_refresh_packet, lambda snapshot: (render_rt_bottom_chart_graph(snapshot["display_packets"]["chart"], st), render_gpt_copy_packet(snapshot["copy_text"], st)))
 
     with st.expander("Realtime widget details", expanded=False):
         _render_section_fragment("details", auto_refresh_packet, lambda snapshot: render_rt_top_layout_and_widgets(snapshot["display_packets"]["top"], snapshot["display_packets"]["widgets"], st))
     with st.expander("RT debug packets", expanded=False):
         _render_section_fragment("debug", auto_refresh_packet, lambda snapshot: render_rt_debug_packets({"page_mount": snapshot["page_packet"], "runtime_status": snapshot["runtime_status"], "bridge_packet": snapshot["bridge_packet"], "market_strip": snapshot["market_packet"], "trade_strip": snapshot["trade_packet"], "inference_guidance": snapshot["guidance_packet"]}, st))
-    st.caption("rt_visible_mount_ready=true / rt_polish3_cockpit_layout_ready=true / rt_section_fragment_refresh_ready=true / page_reload_enabled=false / websocket_send_enabled=false / broker_send_enabled=false / order_intent_submitted=false / prediction_invoked=false / classifier_invoked=false")
+    st.caption(compact_footer_caption())
