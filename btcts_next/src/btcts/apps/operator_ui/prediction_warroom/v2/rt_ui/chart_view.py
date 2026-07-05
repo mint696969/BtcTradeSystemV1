@@ -128,6 +128,99 @@ def _overlay_rows(packet: Mapping[str, Any]) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda row: row["priority"])
 
 
+def _compact_frame_records(frame: pd.DataFrame, *, limit: int, columns: list[str]) -> list[dict[str, Any]]:
+    if frame.empty:
+        return []
+    available = [column for column in columns if column in frame.columns]
+    compact = frame[available].tail(limit).copy()
+    rows: list[dict[str, Any]] = []
+    for row in compact.to_dict("records"):
+        normalized: dict[str, Any] = {}
+        for key, value in row.items():
+            if hasattr(value, "isoformat"):
+                normalized[key] = value.isoformat()
+            elif isinstance(value, float):
+                normalized[key] = round(value, 6)
+            elif pd.isna(value):
+                normalized[key] = None
+            else:
+                normalized[key] = value
+        rows.append(normalized)
+    return rows
+
+
+def _build_gpt_review_chart_snapshot(
+    *,
+    display_frame: pd.DataFrame,
+    candle_frame: pd.DataFrame,
+    band_frame: pd.DataFrame,
+    overlay_rows: list[dict[str, Any]],
+    chart_config: ChartDisplayConfig,
+    chart_series_meta: Any,
+    dhot_bootstrap_meta: Mapping[str, Any],
+    x_domain: tuple[pd.Timestamp, pd.Timestamp] | None,
+) -> dict[str, Any]:
+    latest_display = display_frame.sort_values("ts").iloc[-1].to_dict() if not display_frame.empty else {}
+    latest_band = band_frame.sort_values("ts").iloc[-1].to_dict() if not band_frame.empty else {}
+    return {
+        "schema_version": "warroom_chart_gpt_review_snapshot.v1",
+        "purpose": "copy selected WarRoom chart context to GPT for manual analysis",
+        "display_mode": chart_config.mode,
+        "viewport_label": chart_config.viewport_label,
+        "viewport_minutes": chart_config.viewport_minutes,
+        "source_label": chart_config.source_label,
+        "source_notice": chart_config.source_notice,
+        "history_rows": len(display_frame),
+        "visible_rows": len(display_frame),
+        "latest": {
+            "ts": latest_display.get("ts").isoformat() if hasattr(latest_display.get("ts"), "isoformat") else latest_display.get("ts"),
+            "topic": latest_display.get("topic"),
+            "role": latest_display.get("role"),
+            "price": latest_display.get("price"),
+            "freshness_label": latest_display.get("freshness_label"),
+            "bid": latest_band.get("bid"),
+            "ask": latest_band.get("ask"),
+            "mid": latest_band.get("mid"),
+            "spread": latest_band.get("spread"),
+        },
+        "x_domain": {
+            "start": x_domain[0].isoformat() if x_domain is not None else None,
+            "end": x_domain[1].isoformat() if x_domain is not None else None,
+            "latest_anchored": x_domain is not None,
+        },
+        "candle_summary": {
+            "rows": len(candle_frame),
+            "closed": int((candle_frame.get("candle_status") == "closed").sum()) if not candle_frame.empty and "candle_status" in candle_frame.columns else 0,
+            "forming": int((candle_frame.get("candle_status") == "forming").sum()) if not candle_frame.empty and "candle_status" in candle_frame.columns else 0,
+            "source": "non_ui_warroom_chart_series",
+            "true_trade_ohlcv_connected": False,
+        },
+        "chart_series_meta": chart_series_meta.to_dict() if hasattr(chart_series_meta, "to_dict") else {},
+        "dhot_bootstrap": dict(dhot_bootstrap_meta),
+        "visible_price_rows_tail": _compact_frame_records(display_frame, limit=80, columns=["ts", "topic", "role", "price", "sequence", "freshness_label"]),
+        "candles_tail": _compact_frame_records(candle_frame, limit=40, columns=["mode", "ts", "open", "high", "low", "close", "direction", "count", "source_role", "candle_status", "is_closed"]),
+        "board_band_tail": _compact_frame_records(band_frame, limit=40, columns=["ts", "bid", "ask", "mid", "spread"]),
+        "overlays": overlay_rows[:8],
+        "trust_boundary": {
+            "chart_logic_owner": "btcts.prediction.warroom_chart_series",
+            "ui_role": "render_only",
+            "input_source": "retained_market_state_rows_plus_dhot_market_trade_bootstrap",
+            "latest_candle_may_change": True,
+            "closed_candles_should_not_change_in_session": True,
+            "official_exchange_ohlc_connected": False,
+            "manual_review_only": True,
+        },
+        "safety": {
+            "read_only": True,
+            "websocket_send_enabled": False,
+            "broker_send_enabled": False,
+            "order_intent_submitted": False,
+            "prediction_invoked": False,
+            "classifier_invoked": False,
+        },
+    }
+
+
 def _fmt_price(value: object) -> str:
     numeric = _as_float(value)
     if numeric is None:
@@ -332,6 +425,16 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         rendered = False
         st_api.info("価格行がまだありません。market.depth または market.trades の到着を待っています。")
 
+    chart_review_snapshot = _build_gpt_review_chart_snapshot(
+        display_frame=display_frame,
+        candle_frame=candle_frame,
+        band_frame=band_frame,
+        overlay_rows=overlay_rows,
+        chart_config=chart_config,
+        chart_series_meta=chart_series_meta,
+        dhot_bootstrap_meta=dhot_bootstrap_meta if isinstance(dhot_bootstrap_meta, Mapping) else {},
+        x_domain=x_domain,
+    )
     if overlay_rows:
         st_api.caption("overlays: " + " / ".join(f"{row['overlay']}={row['state']}" for row in overlay_rows[:4]))
     with st_api.expander("チャート行・板帯・レイヤー詳細", expanded=False):
@@ -374,6 +477,8 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "sealed_candles_ready": False,
         "chart_series_logic_split_ready": True,
         "chart_series_meta": chart_series_meta.to_dict(),
+        "gpt_review_chart_snapshot_ready": True,
+        "gpt_review_chart_snapshot": chart_review_snapshot,
         "chart_trust_level": "deterministic_provisional_market_state_mid_ohlcv",
         "true_trade_ohlcv_connected": False,
         "raw_candle_frame_rows": len(raw_candle_frame),

@@ -7,7 +7,14 @@ import json
 from typing import Any, Mapping
 
 
-def build_gpt_copy_packet(*, market_strip: Mapping[str, Any], guidance: Mapping[str, Any], chart_packet: Mapping[str, Any], cards_packet: Mapping[str, Any]) -> str:
+def build_gpt_copy_packet(
+    *,
+    market_strip: Mapping[str, Any],
+    guidance: Mapping[str, Any],
+    chart_packet: Mapping[str, Any],
+    cards_packet: Mapping[str, Any],
+    chart_render_summary: Mapping[str, Any] | None = None,
+) -> str:
     chart_rows = [row for row in chart_packet.get("chart_rows", []) if isinstance(row, Mapping)]
     live_rows = [row for row in chart_rows if row.get("freshness_label") == "live"]
     payload = {
@@ -34,6 +41,8 @@ def build_gpt_copy_packet(*, market_strip: Mapping[str, Any], guidance: Mapping[
             "live_row_count": len(live_rows),
             "stale_row_count": chart_packet.get("stale_row_count"),
             "rows": live_rows[-12:],
+            "render_summary": dict(chart_render_summary or {}),
+            "review_snapshot": dict((chart_render_summary or {}).get("gpt_review_chart_snapshot") or {}),
         },
         "prediction_cards": [card for card in cards_packet.get("cards", []) if isinstance(card, Mapping)],
         "safety": {

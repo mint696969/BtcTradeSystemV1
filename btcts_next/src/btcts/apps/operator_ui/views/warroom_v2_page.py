@@ -111,6 +111,18 @@ def _runtime_section(snapshot: dict[str, Any], auto_refresh_packet: Mapping[str,
     st.caption(f"display_source={snapshot['display_source']} / fallback_sample_suppressed=true / rt_section_fragment_refresh_ready=true")
 
 
+def _render_chart_and_gpt_copy(snapshot: dict[str, Any]) -> None:
+    chart_render_summary = render_rt_bottom_chart_graph(snapshot["display_packets"]["chart"], st)
+    copy_text = build_gpt_copy_packet(
+        market_strip=snapshot["market_packet"],
+        guidance=snapshot["guidance_packet"],
+        chart_packet=snapshot["display_packets"]["chart"],
+        cards_packet=snapshot["display_packets"]["cards"],
+        chart_render_summary=chart_render_summary,
+    )
+    render_gpt_copy_packet(copy_text, st)
+
+
 def render() -> None:
     auto_refresh_packet = build_cockpit_auto_refresh_packet(st.session_state)
     render_compact_page_header(st)
@@ -130,7 +142,7 @@ def render() -> None:
         _render_section_fragment("cards", auto_refresh_packet, lambda snapshot: render_rt_prediction_cards(snapshot["display_packets"]["cards"], st))
 
     render_compact_section_label(st, index=5, title="Bottom chart", note="bid/ask board layer + trade points")
-    _render_section_fragment("chart", auto_refresh_packet, lambda snapshot: (render_rt_bottom_chart_graph(snapshot["display_packets"]["chart"], st), render_gpt_copy_packet(snapshot["copy_text"], st)))
+    _render_section_fragment("chart", auto_refresh_packet, _render_chart_and_gpt_copy)
 
     with st.expander("Realtime widget details", expanded=False):
         _render_section_fragment("details", auto_refresh_packet, lambda snapshot: render_rt_top_layout_and_widgets(snapshot["display_packets"]["top"], snapshot["display_packets"]["widgets"], st))
