@@ -1,10 +1,67 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/rt_ui/copy_packet_view.py
-# desc: GPT copy-packet builder for WarRoom chart/scenario review. Keeps copy text compact and safe.
+# desc: Lightweight GPT analysis request builder for WarRoom chart/scenario review. Keeps copied text compact and points GPT to repo/data Actions.
 
 from __future__ import annotations
 
 import json
 from typing import Any, Mapping
+
+GPT_COPY_PACKET_VERSION = "warroom_gpt_review_packet.2026_07_05.v2_light_request"
+
+
+def _compact_mapping(value: object, *, allowed_keys: tuple[str, ...]) -> dict[str, Any]:
+    if not isinstance(value, Mapping):
+        return {}
+    return {key: value.get(key) for key in allowed_keys if key in value}
+
+
+def _copy_chart_request(chart_render_summary: Mapping[str, Any] | None) -> dict[str, Any]:
+    summary = dict(chart_render_summary or {})
+    snapshot = dict(summary.get("gpt_review_chart_snapshot") or {})
+    latest = _compact_mapping(snapshot.get("latest"), allowed_keys=("ts", "topic", "role", "price", "freshness_label", "bid", "ask", "mid", "spread"))
+    x_domain = _compact_mapping(snapshot.get("x_domain"), allowed_keys=("start", "end", "latest_anchored"))
+    candle_summary = _compact_mapping(snapshot.get("candle_summary"), allowed_keys=("rows", "closed", "forming", "source", "true_trade_ohlcv_connected"))
+    dhot_bootstrap = _compact_mapping(
+        snapshot.get("dhot_bootstrap"),
+        allowed_keys=("ok", "version", "source_path", "source_root", "source_root_reason", "rows_read", "rows_returned", "tail_bytes", "max_rows", "error"),
+    )
+    trust_boundary = _compact_mapping(
+        snapshot.get("trust_boundary"),
+        allowed_keys=("chart_logic_owner", "ui_role", "input_source", "latest_candle_may_change", "closed_candles_should_not_change_in_session", "official_exchange_ohlc_connected", "manual_review_only"),
+    )
+    return {
+        "schema_version": "warroom_chart_analysis_request.v1",
+        "instruction_to_gpt": "Use Actions/data tools to inspect the referenced D-hot/repo artifacts when deeper evidence is needed. Do not rely on this copied text as the full dataset.",
+        "display_mode": snapshot.get("display_mode"),
+        "viewport_label": snapshot.get("viewport_label"),
+        "viewport_minutes": snapshot.get("viewport_minutes"),
+        "source_label": snapshot.get("source_label"),
+        "source_notice": snapshot.get("source_notice"),
+        "history_rows": snapshot.get("history_rows"),
+        "visible_rows": snapshot.get("visible_rows"),
+        "latest": latest,
+        "x_domain": x_domain,
+        "candle_summary": candle_summary,
+        "dhot_bootstrap": dhot_bootstrap,
+        "trust_boundary": trust_boundary,
+        "data_access_hints": {
+            "hot_data_root": "D:/btc_ts_hot",
+            "primary_runtime_state": "state/collector_vnext/unified_market_state_status.json",
+            "primary_market_trade_path": dhot_bootstrap.get("source_path"),
+            "suggested_action_flow": [
+                "data_latest(kind='state') for current runtime state",
+                "data_slice(path=primary_market_trade_path, tail/head/date filters) for raw D-hot trades",
+                "repo_read for btcts_next/src/btcts/prediction/warroom_chart_series.py when chart logic evidence is needed",
+            ],
+        },
+        "copy_weight_policy": {
+            "embedded_raw_rows": False,
+            "embedded_visible_price_rows": False,
+            "embedded_candles": False,
+            "embedded_board_band": False,
+            "reason": "Keep chat copy lightweight; GPT can read source artifacts through Actions.",
+        },
+    }
 
 
 def build_gpt_copy_packet(
@@ -15,11 +72,11 @@ def build_gpt_copy_packet(
     cards_packet: Mapping[str, Any],
     chart_render_summary: Mapping[str, Any] | None = None,
 ) -> str:
-    chart_rows = [row for row in chart_packet.get("chart_rows", []) if isinstance(row, Mapping)]
-    live_rows = [row for row in chart_rows if row.get("freshness_label") == "live"]
+    chart_request = _copy_chart_request(chart_render_summary)
     payload = {
-        "schema_version": "warroom_gpt_review_packet.v1",
-        "purpose": "manual trade observation review; read-only; no order action",
+        "schema_version": GPT_COPY_PACKET_VERSION,
+        "purpose": "manual trade observation review request; read-only; no order action",
+        "how_to_use": "Paste this lightweight request to GPT, then ask GPT to use Actions to inspect the referenced D-hot/repo sources for the chosen time range.",
         "market": {
             "symbol": market_strip.get("symbol"),
             "best_bid": market_strip.get("best_bid"),
@@ -29,23 +86,20 @@ def build_gpt_copy_packet(
             "source": market_strip.get("source"),
             "last_event_ts": market_strip.get("last_event_ts"),
         },
-        "scenario_guidance": {
-            "scenario": guidance.get("scenario"),
-            "confidence": guidance.get("confidence"),
-            "rationale": guidance.get("rationale"),
-            "evidence": guidance.get("evidence", []),
-            "observation_only": True,
+        "operator_focus": {
+            "selected_chart_range": chart_request,
+            "scenario_guidance": {
+                "scenario": guidance.get("scenario"),
+                "confidence": guidance.get("confidence"),
+                "rationale": guidance.get("rationale"),
+                "evidence_summary": guidance.get("evidence", [])[:4] if isinstance(guidance.get("evidence", []), list) else [],
+                "observation_only": True,
+            },
+            "prediction_cards_scope": "deferred_to_next_thread_context_only",
         },
-        "chart": {
-            "row_count": chart_packet.get("chart_row_count"),
-            "live_row_count": len(live_rows),
-            "stale_row_count": chart_packet.get("stale_row_count"),
-            "rows": live_rows[-12:],
-            "render_summary": dict(chart_render_summary or {}),
-            "review_snapshot": dict((chart_render_summary or {}).get("gpt_review_chart_snapshot") or {}),
-        },
-        "prediction_cards": [card for card in cards_packet.get("cards", []) if isinstance(card, Mapping)],
         "safety": {
+            "read_only": True,
+            "manual_review_only": True,
             "websocket_send_enabled": False,
             "broker_send_enabled": False,
             "order_intent_submitted": False,
@@ -57,6 +111,7 @@ def build_gpt_copy_packet(
 
 
 def render_gpt_copy_packet(text: str, st_api: Any) -> dict[str, Any]:
-    with st_api.expander("GPT review copy packet", expanded=False):
-        st_api.text_area("Copy for GPT analysis", value=text, height=260)
-    return {"ok": True, "copy_packet_rendered": True, "copy_packet_chars": len(text), "read_only": True}
+    with st_api.expander("GPT review request packet", expanded=False):
+        st_api.caption("軽量コピー: 生データ本体ではなく、選択範囲・D-hot参照先・安全境界だけをGPTに渡します。詳細分析はGPT ActionsでD-hot/repoを読みます。")
+        st_api.text_area("Copy lightweight request for GPT analysis", value=text, height=220)
+    return {"ok": True, "copy_packet_rendered": True, "copy_packet_version": GPT_COPY_PACKET_VERSION, "copy_packet_chars": len(text), "lightweight_request": True, "read_only": True}

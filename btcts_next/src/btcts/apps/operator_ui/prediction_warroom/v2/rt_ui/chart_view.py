@@ -163,8 +163,8 @@ def _build_gpt_review_chart_snapshot(
     latest_display = display_frame.sort_values("ts").iloc[-1].to_dict() if not display_frame.empty else {}
     latest_band = band_frame.sort_values("ts").iloc[-1].to_dict() if not band_frame.empty else {}
     return {
-        "schema_version": "warroom_chart_gpt_review_snapshot.v1",
-        "purpose": "copy selected WarRoom chart context to GPT for manual analysis",
+        "schema_version": "warroom_chart_gpt_review_snapshot.v2_light_pointer",
+        "purpose": "identify selected WarRoom chart context and source pointers for GPT Actions analysis",
         "display_mode": chart_config.mode,
         "viewport_label": chart_config.viewport_label,
         "viewport_minutes": chart_config.viewport_minutes,
@@ -197,10 +197,15 @@ def _build_gpt_review_chart_snapshot(
         },
         "chart_series_meta": chart_series_meta.to_dict() if hasattr(chart_series_meta, "to_dict") else {},
         "dhot_bootstrap": dict(dhot_bootstrap_meta),
-        "visible_price_rows_tail": _compact_frame_records(display_frame, limit=80, columns=["ts", "topic", "role", "price", "sequence", "freshness_label"]),
-        "candles_tail": _compact_frame_records(candle_frame, limit=40, columns=["mode", "ts", "open", "high", "low", "close", "direction", "count", "source_role", "candle_status", "is_closed"]),
-        "board_band_tail": _compact_frame_records(band_frame, limit=40, columns=["ts", "bid", "ask", "mid", "spread"]),
-        "overlays": overlay_rows[:8],
+        "sample_preview": {
+            "visible_price_tail_count": min(len(display_frame), 12),
+            "candle_tail_count": min(len(candle_frame), 6),
+            "board_band_tail_count": min(len(band_frame), 6),
+            "visible_price_rows_tail": _compact_frame_records(display_frame, limit=12, columns=["ts", "topic", "role", "price", "freshness_label"]),
+            "candles_tail": _compact_frame_records(candle_frame, limit=6, columns=["ts", "open", "high", "low", "close", "candle_status", "is_closed"]),
+            "board_band_tail": _compact_frame_records(band_frame, limit=6, columns=["ts", "bid", "ask", "mid", "spread"]),
+        },
+        "overlays_summary": overlay_rows[:4],
         "trust_boundary": {
             "chart_logic_owner": "btcts.prediction.warroom_chart_series",
             "ui_role": "render_only",
