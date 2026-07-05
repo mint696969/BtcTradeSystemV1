@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import shutil
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -164,7 +165,31 @@ def build_copy_plan(cfg: ArchiveConfig) -> list[CopyItem]:
     return planned
 
 
-def execute_copy_plan(items: list[CopyItem]) -> dict[str, int | list[dict[str, str]]]:
+def _copy_file_throttled(src: Path, dst: Path, *, throttle_mib_per_sec: int) -> None:
+    if throttle_mib_per_sec <= 0:
+        shutil.copy2(src, dst)
+        return
+
+    chunk_size = 1024 * 1024
+    target_bytes_per_sec = max(1, int(throttle_mib_per_sec)) * chunk_size
+    copied = 0
+    started = time.monotonic()
+
+    with src.open("rb") as src_handle, dst.open("wb") as dst_handle:
+        while True:
+            chunk = src_handle.read(chunk_size)
+            if not chunk:
+                break
+            dst_handle.write(chunk)
+            copied += len(chunk)
+            expected_elapsed = copied / target_bytes_per_sec
+            actual_elapsed = time.monotonic() - started
+            if expected_elapsed > actual_elapsed:
+                time.sleep(expected_elapsed - actual_elapsed)
+    shutil.copystat(src, dst)
+
+
+def execute_copy_plan(items: list[CopyItem], *, throttle_mib_per_sec: int = 32) -> dict[str, int | list[dict[str, str]]]:
     copied_dirs = 0
     copied_files = 0
     copied_bytes = 0
@@ -188,7 +213,7 @@ def execute_copy_plan(items: list[CopyItem]) -> dict[str, int | list[dict[str, s
                 shutil.copytree(item.src, item.dst, dirs_exist_ok=True)
                 copied_dirs += 1
             else:
-                shutil.copy2(item.src, item.dst)
+                _copy_file_throttled(item.src, item.dst, throttle_mib_per_sec=throttle_mib_per_sec)
                 copied_files += 1
             copied_bytes += int(item.size_bytes)
         except Exception as exc:

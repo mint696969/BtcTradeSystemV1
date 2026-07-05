@@ -194,7 +194,7 @@ def run_forever() -> int:
                     "plan_sample": plan_sample,
                 },
             )
-            result = execute_copy_plan(plan)
+            result = execute_copy_plan(plan, throttle_mib_per_sec=cfg.copy_throttle_mib_per_sec)
 
             if result["error_count"]:
                 append_archive_audit(

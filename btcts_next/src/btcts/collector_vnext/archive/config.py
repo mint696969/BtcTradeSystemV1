@@ -53,6 +53,7 @@ class ArchiveConfig:
     gc_min_age_days: int = 10
     max_files_per_cycle: int = 64
     max_bytes_per_cycle: int = 256 * 1024 * 1024
+    copy_throttle_mib_per_sec: int = 32
     gc_enabled: bool = False
     gc_dry_run: bool = True
     max_delete_files_per_cycle: int = 32
@@ -92,6 +93,7 @@ def load_archive_config() -> ArchiveConfig:
         gc_min_age_days=max(7, env_int("BTCTS_ARCHIVE_GC_MIN_AGE_DAYS", 10)),
         max_files_per_cycle=max(1, env_int("BTCTS_ARCHIVE_MAX_FILES_PER_CYCLE", 64)),
         max_bytes_per_cycle=max(1024 * 1024, env_int("BTCTS_ARCHIVE_MAX_BYTES_PER_CYCLE", 256 * 1024 * 1024)),
+        copy_throttle_mib_per_sec=max(0, env_int("BTCTS_ARCHIVE_COPY_THROTTLE_MIB_PER_SEC", 32)),
         gc_enabled=_env_bool("BTCTS_ARCHIVE_GC_ENABLED", False),
         gc_dry_run=_env_bool("BTCTS_ARCHIVE_GC_DRY_RUN", True),
         max_delete_files_per_cycle=max(1, env_int("BTCTS_ARCHIVE_MAX_DELETE_FILES_PER_CYCLE", 32)),
