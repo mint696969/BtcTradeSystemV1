@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/core/test_sharded_jsonl.py
-# desc: Tests for size-bounded JSONL shard append helpers.
+# desc: Tests for size-bounded JSONL shard append and tolerant read helpers.
 
 from __future__ import annotations
 
@@ -47,6 +47,36 @@ def test_iter_jsonl_part_files_ignores_missing_parts_and_orders(tmp_path: Path) 
     (base / "notes.txt").write_text("ignore", encoding="utf-8")
 
     assert [path.name for path in iter_jsonl_part_files(base)] == ["part-00001.jsonl", "part-00003.jsonl"]
+
+
+def test_read_jsonl_tail_from_parts_combines_latest_and_previous(tmp_path: Path) -> None:
+    from btcts.core.sharded_jsonl import read_jsonl_tail_from_parts
+
+    base = tmp_path / "date=2026-07-05"
+    base.mkdir(parents=True)
+    (base / "part-00001.jsonl").write_text('{"i":1}\n{"i":2}\n', encoding="utf-8")
+    (base / "part-00002.jsonl").write_text('{bad-json}\n{"i":3}\n', encoding="utf-8")
+
+    result = read_jsonl_tail_from_parts(base, max_lines=3, max_bytes=4096)
+
+    assert [row["i"] for row in result.rows] == [1, 2, 3]
+    assert result.skipped_bad_lines == 1
+    assert any("jsonl_bad_lines_skipped" in warning for warning in result.warnings)
+
+
+def test_read_jsonl_tail_from_parts_reports_missing_part_numbers(tmp_path: Path) -> None:
+    from btcts.core.sharded_jsonl import read_jsonl_tail_from_parts
+
+    base = tmp_path / "date=2026-07-05"
+    base.mkdir(parents=True)
+    (base / "part-00001.jsonl").write_text('{"i":1}\n', encoding="utf-8")
+    (base / "part-00003.jsonl").write_text('{"i":3}\n', encoding="utf-8")
+
+    result = read_jsonl_tail_from_parts(base, max_lines=10, max_bytes=4096)
+
+    assert [row["i"] for row in result.rows] == [1, 3]
+    assert result.missing_part_numbers == [2]
+    assert any("jsonl_missing_part_numbers:2" == warning for warning in result.warnings)
 
 
 if __name__ == "__main__":

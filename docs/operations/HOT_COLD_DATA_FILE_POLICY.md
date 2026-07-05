@@ -37,6 +37,7 @@ BtcTradeSystem must not produce or retain huge single hot JSONL files.  Hot data
 ## Reader rule
 
 Readers for Collector, L1-L4, inference, and UI must read ordered `part-*.jsonl` files for a date partition.  Missing part numbers, corrupt lines, and absent old hot partitions must be handled as warnings rather than hard failures when a cold/derived source can continue the sequence.
+- Reader implementation must use tolerant sharded readers that report missing part numbers and skipped corrupt lines while continuing with valid rows.
 
 ## High-volume streams
 

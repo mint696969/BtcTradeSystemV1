@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from btcts.core.sharded_jsonl import iter_jsonl_part_files
+
 import pandas as pd
 
 WARROOM_CHART_DHOT_BOOTSTRAP_VERSION = "warroom_chart_dhot_history_bootstrap.2026_07_05.v1"
@@ -18,7 +20,7 @@ ENV_DHOT_RUNTIME_ROOT = "BTC_TS_AUTOTRADE_RUNTIME_ROOT"
 DEFAULT_DHOT_ROOT = Path("D:/btc_ts_hot")
 DEFAULT_SYMBOL = "FX_BTC_JPY"
 DEFAULT_EXCHANGE = "bitflyer"
-DEFAULT_MARKET_TRADE_RELATIVE = "data/market_data/exchange={exchange}/symbol={symbol}/type=market.trade/date={date}/part-00001.jsonl"
+DEFAULT_MARKET_TRADE_RELATIVE = "data/market_data/exchange={exchange}/symbol={symbol}/type=market.trade/date={date}"
 DEFAULT_TAIL_BYTES = 2_000_000
 DEFAULT_MAX_ROWS = 900
 
@@ -78,7 +80,7 @@ def market_trade_path(*, root: Path | None = None, date: str | None = None, exch
     return resolved_root / relative, reason
 
 
-def read_recent_jsonl_lines(path: Path, *, tail_bytes: int = DEFAULT_TAIL_BYTES) -> list[str]:
+def _read_recent_jsonl_lines_file(path: Path, *, tail_bytes: int = DEFAULT_TAIL_BYTES) -> list[str]:
     if tail_bytes <= 0:
         tail_bytes = DEFAULT_TAIL_BYTES
     size = path.stat().st_size
@@ -89,6 +91,19 @@ def read_recent_jsonl_lines(path: Path, *, tail_bytes: int = DEFAULT_TAIL_BYTES)
         data = handle.read()
     text = data.decode("utf-8", errors="ignore")
     return [line for line in text.splitlines() if line.strip()]
+
+
+def read_recent_jsonl_lines(path: Path, *, tail_bytes: int = DEFAULT_TAIL_BYTES) -> list[str]:
+    if path.is_file():
+        return _read_recent_jsonl_lines_file(path, tail_bytes=tail_bytes)
+    if not path.is_dir():
+        return []
+    lines_reversed: list[str] = []
+    for part in reversed(iter_jsonl_part_files(path)):
+        if len("\n".join(lines_reversed).encode("utf-8")) >= max(1, int(tail_bytes)):
+            break
+        lines_reversed.extend(reversed(_read_recent_jsonl_lines_file(part, tail_bytes=tail_bytes)))
+    return list(reversed(lines_reversed))
 
 
 def _first_present(mapping: Mapping[str, Any], keys: Iterable[str]) -> Any:

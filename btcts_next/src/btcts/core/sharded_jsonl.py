@@ -1,8 +1,9 @@
 # path: ./btcts_next/src/btcts/core/sharded_jsonl.py
-# desc: Size-bounded JSONL shard append helpers for hot data files.
+# desc: Size-bounded JSONL shard append and tolerant read helpers for hot data files.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 import os
 import re
@@ -12,6 +13,26 @@ from typing import Any, Mapping
 PART_RE = re.compile(r"^part-(?P<part_no>\d{5})\.jsonl$")
 DEFAULT_TARGET_BYTES = 256 * 1024 * 1024
 DEFAULT_HARD_BYTES = 512 * 1024 * 1024
+
+
+@dataclass(frozen=True)
+class JsonlTailReadResult:
+    rows: list[dict[str, Any]]
+    source_paths: list[str]
+    warnings: list[str]
+    skipped_bad_lines: int = 0
+    missing_part_numbers: list[int] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "rows": list(self.rows),
+            "row_count": len(self.rows),
+            "source_paths": list(self.source_paths),
+            "warnings": list(self.warnings),
+            "skipped_bad_lines": int(self.skipped_bad_lines),
+            "missing_part_numbers": list(self.missing_part_numbers or []),
+            "tolerant_jsonl_reader": True,
+        }
 
 
 def _env_int(name: str, default: int) -> int:
@@ -49,6 +70,15 @@ def discover_part_files(base_dir: Path) -> list[Path]:
         return []
     parts = [path for path in base_dir.iterdir() if path.is_file() and _part_no(path) is not None]
     return sorted(parts, key=lambda path: (_part_no(path) or 0, path.name))
+
+
+def missing_part_numbers(base_dir: Path) -> list[int]:
+    part_numbers = [_part_no(path) for path in discover_part_files(base_dir)]
+    numbers = sorted(n for n in part_numbers if n is not None)
+    if not numbers:
+        return []
+    expected = set(range(numbers[0], numbers[-1] + 1))
+    return sorted(expected.difference(numbers))
 
 
 def latest_part_path(base_dir: Path) -> Path | None:
@@ -122,3 +152,83 @@ def iter_jsonl_part_files(base_dir: Path, *, include_open_suffix: bool = False) 
     if include_open_suffix and base_dir.exists():
         parts.extend(sorted(base_dir.glob("part-*.open.jsonl")))
     return sorted(parts, key=lambda path: (_part_no(path) or 10**9, path.name))
+
+
+def _tail_text_lines(path: Path, *, max_lines: int, max_bytes: int) -> tuple[list[str], list[str]]:
+    warnings: list[str] = []
+    if not path.exists() or not path.is_file():
+        return [], [f"jsonl_part_missing:{path}"]
+    try:
+        size = path.stat().st_size
+    except Exception as exc:
+        return [], [f"jsonl_part_stat_failed:{path}:{type(exc).__name__}"]
+    if size <= 0:
+        return [], []
+    read_size = min(int(size), max(1024, int(max_bytes)))
+    try:
+        with path.open("rb") as handle:
+            handle.seek(max(0, int(size) - read_size))
+            data = handle.read(read_size)
+    except Exception as exc:
+        return [], [f"jsonl_part_read_failed:{path}:{type(exc).__name__}"]
+    if read_size < size:
+        first_newline = data.find(bytes((10,)))
+        if first_newline >= 0:
+            data = data[first_newline + 1 :]
+        else:
+            warnings.append(f"jsonl_tail_started_mid_line_no_newline:{path}")
+    try:
+        lines = data.decode("utf-8", errors="replace").splitlines()
+    except Exception as exc:
+        return [], [*warnings, f"jsonl_part_decode_failed:{path}:{type(exc).__name__}"]
+    return lines[-max(1, int(max_lines)) :], warnings
+
+
+def read_jsonl_tail_file(path: Path, *, max_lines: int = 200, max_bytes: int = 8 * 1024 * 1024) -> JsonlTailReadResult:
+    lines, warnings = _tail_text_lines(path, max_lines=max_lines, max_bytes=max_bytes)
+    rows: list[dict[str, Any]] = []
+    skipped = 0
+    for line in lines:
+        text = str(line or "").strip()
+        if not text:
+            continue
+        try:
+            value = json.loads(text)
+        except Exception:
+            skipped += 1
+            continue
+        if isinstance(value, dict):
+            rows.append(value)
+        else:
+            skipped += 1
+    if skipped:
+        warnings.append(f"jsonl_bad_lines_skipped:{path}:{skipped}")
+    return JsonlTailReadResult(rows=rows[-max(1, int(max_lines)) :], source_paths=[str(path)], warnings=warnings, skipped_bad_lines=skipped, missing_part_numbers=[])
+
+
+def read_jsonl_tail_from_parts(base_dir: Path, *, max_lines: int = 200, max_bytes: int = 8 * 1024 * 1024) -> JsonlTailReadResult:
+    parts = iter_jsonl_part_files(base_dir)
+    missing = missing_part_numbers(base_dir)
+    warnings: list[str] = []
+    if not parts:
+        return JsonlTailReadResult(rows=[], source_paths=[], warnings=[f"jsonl_parts_missing:{base_dir}"], skipped_bad_lines=0, missing_part_numbers=[])
+    if missing:
+        warnings.append("jsonl_missing_part_numbers:" + ",".join(str(n) for n in missing))
+
+    rows_reversed: list[dict[str, Any]] = []
+    source_paths: list[str] = []
+    skipped = 0
+    # Tail from newest parts backward so a newly rolled small latest part can be
+    # combined with the previous part without full-scanning old multi-GB files.
+    per_part_lines = max(1, int(max_lines))
+    per_part_bytes = max(1024, int(max_bytes))
+    for part in reversed(parts):
+        if len(rows_reversed) >= max(1, int(max_lines)):
+            break
+        result = read_jsonl_tail_file(part, max_lines=per_part_lines, max_bytes=per_part_bytes)
+        source_paths.append(str(part))
+        warnings.extend(result.warnings)
+        skipped += int(result.skipped_bad_lines)
+        rows_reversed.extend(reversed(result.rows))
+    rows = list(reversed(rows_reversed))[-max(1, int(max_lines)) :]
+    return JsonlTailReadResult(rows=rows, source_paths=list(reversed(source_paths)), warnings=warnings, skipped_bad_lines=skipped, missing_part_numbers=missing)

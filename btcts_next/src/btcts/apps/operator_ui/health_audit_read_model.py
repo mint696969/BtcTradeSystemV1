@@ -10,6 +10,7 @@ from typing import Any
 
 from btcts.core import io
 from btcts.core import paths as core_paths
+from btcts.core.sharded_jsonl import iter_jsonl_part_files
 
 HEALTH_AUDIT_READ_MODEL_VERSION = "health_audit_read_model.v2.health_event_input"
 HEALTH_TELEMETRY_STREAMS = ("collector_vnext",)
@@ -99,9 +100,7 @@ def telemetry_log_paths(
     date_dirs.sort(key=lambda p: p.name, reverse=True)
     out: list[Path] = []
     for date_dir in date_dirs[: max(1, int(max_partitions))]:
-        path = date_dir / "part-00001.jsonl"
-        if path.exists() and path.is_file():
-            out.append(path)
+        out.extend(iter_jsonl_part_files(date_dir))
     return out
 
 

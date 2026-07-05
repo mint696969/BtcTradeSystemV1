@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from btcts.core import paths as core_paths
+from btcts.core.sharded_jsonl import latest_part_path, read_jsonl_tail_from_parts
 from btcts.processing.l4_consumer_models.shared import (
     MarketSummary,
     MarketSummaryBuildInput,
@@ -165,11 +166,7 @@ def _latest_market_state_part_file(
 
     latest_date_dir = date_dirs[-1]
 
-    part_files = sorted(latest_date_dir.glob("part-*.jsonl"))
-    if not part_files:
-        return None
-
-    return part_files[-1]
+    return latest_part_path(latest_date_dir)
 
 
 def _preferred_market_state_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -264,7 +261,7 @@ def market_state_diagnostics(
         except Exception:
             pass
 
-        rows = _read_jsonl_recent_rows(latest_part)
+        rows = read_jsonl_tail_from_parts(latest_part.parent, max_lines=5000, max_bytes=4 * 1024 * 1024).rows
         preferred = _preferred_market_state_row(rows)
         if preferred:
             preferred_age = _row_age_seconds(preferred)
@@ -293,7 +290,7 @@ def load_recent_market_states(
     latest_part = _latest_market_state_part_file(exchange=exchange, symbol_raw=symbol_raw, state_type=state_type)
     if latest_part is None:
         return []
-    return _read_jsonl_recent_rows(latest_part, max_lines=max_lines, max_bytes=max_bytes)
+    return read_jsonl_tail_from_parts(latest_part.parent, max_lines=max_lines, max_bytes=max_bytes).rows
 
 def load_latest_market_state(
     *,
@@ -309,7 +306,7 @@ def load_latest_market_state(
     if latest_part is None:
         return {}
 
-    rows = _read_jsonl_recent_rows(latest_part)
+    rows = read_jsonl_tail_from_parts(latest_part.parent, max_lines=5000, max_bytes=4 * 1024 * 1024).rows
     return _preferred_market_state_row(rows)
 
 

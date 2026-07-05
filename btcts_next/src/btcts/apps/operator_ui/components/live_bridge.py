@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from btcts.core import paths as core_paths
+from btcts.core.sharded_jsonl import latest_part_path
 
 
 def logs_path() -> Path:
@@ -118,7 +119,8 @@ def _market_type_path(
         latest_date = _latest_available_date_dir(type_root)
         target_date = latest_date or _utc_today()
 
-    return type_root / f"date={target_date}" / "part-00001.jsonl"
+    date_dir = type_root / f"date={target_date}"
+    return latest_part_path(date_dir) or date_dir / "part-00001.jsonl"
 
 
 def load_status() -> Optional[dict]:
