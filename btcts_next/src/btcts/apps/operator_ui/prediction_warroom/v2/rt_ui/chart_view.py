@@ -8,11 +8,13 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v2_history"
+BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v3_rolling_viewport"
 _PRICE_RE = re.compile(r"(?:best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 _NAMED_PRICE_RE = re.compile(r"(best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 CHART_HISTORY_SESSION_STATE_KEY = "warroom_v2_bottom_chart_history_rows"
-CHART_HISTORY_LIMIT = 240
+CHART_HISTORY_LIMIT = 720
+CHART_VIEWPORT_OPTIONS: tuple[tuple[str, int], ...] = (("3分", 3), ("15分", 15), ("1時間", 60))
+CHART_DEFAULT_VIEWPORT_LABEL = "15分"
 
 
 def _as_float(value: object) -> float | None:
@@ -186,6 +188,35 @@ def _retain_chart_history(current_frame: pd.DataFrame, st_api: Any) -> pd.DataFr
     return history
 
 
+def _selected_viewport_label(st_api: Any) -> str:
+    labels = [label for label, _minutes in CHART_VIEWPORT_OPTIONS]
+    try:
+        selected = st_api.selectbox("表示範囲", labels, index=labels.index(CHART_DEFAULT_VIEWPORT_LABEL), help="表示だけを切り替えます。履歴は保持され、broker/order/prediction には接続しません。")
+    except Exception:  # noqa: BLE001
+        selected = CHART_DEFAULT_VIEWPORT_LABEL
+    return selected if selected in labels else CHART_DEFAULT_VIEWPORT_LABEL
+
+
+def _viewport_minutes(label: str) -> int:
+    for option_label, minutes in CHART_VIEWPORT_OPTIONS:
+        if option_label == label:
+            return minutes
+    return 15
+
+
+def _apply_rolling_viewport(frame: pd.DataFrame, *, minutes: int) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    latest_ts = frame["ts"].max()
+    if pd.isna(latest_ts):
+        return frame
+    cutoff = latest_ts - pd.Timedelta(minutes=minutes)
+    visible = frame[frame["ts"] >= cutoff].copy()
+    if visible.empty:
+        return frame.tail(12).copy()
+    return visible
+
+
 def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, st_api: Any) -> bool:
     if frame.empty:
         return False
@@ -235,28 +266,31 @@ def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, st_api: A
 
 
 def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
-    st_api.caption("チャート: 買気配/売気配の板レイヤー + 中心線 + 約定点 / 短期履歴保持 / 読み取り専用")
+    st_api.caption("チャート: 買気配/売気配の板レイヤー + 中心線 + 約定点 / rolling表示窓 / 読み取り専用")
     current_frame = chart_rows_to_frame(packet)
     frame = _retain_chart_history(current_frame, st_api)
-    band_frame = _board_band_frame(frame)
+    viewport_label = _selected_viewport_label(st_api)
+    viewport_minutes = _viewport_minutes(viewport_label)
+    display_frame = _apply_rolling_viewport(frame, minutes=viewport_minutes)
+    band_frame = _board_band_frame(display_frame)
     overlay_rows = _overlay_rows(packet)
     live_rows = sum(1 for row in packet.get("chart_rows", []) if isinstance(row, Mapping) and row.get("freshness_label") == "live")
-    latest = frame.sort_values("ts").iloc[-1] if not frame.empty else None
+    latest = display_frame.sort_values("ts").iloc[-1] if not display_frame.empty else None
     latest_band = band_frame.sort_values("ts").iloc[-1] if not band_frame.empty else None
 
     c1, c2, c3, c4, c5, c6 = st_api.columns(6)
     c1.metric("履歴点", len(frame))
-    c2.metric("最新行", live_rows)
-    c3.metric("買気配", _fmt_price(None if latest_band is None else latest_band.get("bid")))
-    c4.metric("売気配", _fmt_price(None if latest_band is None else latest_band.get("ask")))
-    c5.metric("スプレッド", _fmt_spread(None if latest_band is None else latest_band.get("spread")))
-    c6.metric("レイヤー", len(overlay_rows))
+    c2.metric("表示点", len(display_frame))
+    c3.metric("表示窓", viewport_label)
+    c4.metric("買気配", _fmt_price(None if latest_band is None else latest_band.get("bid")))
+    c5.metric("売気配", _fmt_price(None if latest_band is None else latest_band.get("ask")))
+    c6.metric("スプレッド", _fmt_spread(None if latest_band is None else latest_band.get("spread")))
 
-    if not frame.empty:
-        rendered = _render_price_chart(frame, band_frame, st_api)
+    if not display_frame.empty:
+        rendered = _render_price_chart(display_frame, band_frame, st_api)
         assert latest is not None
         st_api.caption(
-            f"latest={_fmt_price(latest['price'])} / topic={latest['topic']} / role={latest['role']} / freshness={latest['freshness_label']} / version={BOTTOM_CHART_POLISH_VERSION}"
+            f"latest={_fmt_price(latest['price'])} / topic={latest['topic']} / role={latest['role']} / freshness={latest['freshness_label']} / 表示窓={viewport_label} / history={len(frame)} / visible={len(display_frame)} / version={BOTTOM_CHART_POLISH_VERSION}"
         )
     else:
         rendered = False
@@ -265,6 +299,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     if overlay_rows:
         st_api.caption("overlays: " + " / ".join(f"{row['overlay']}={row['state']}" for row in overlay_rows[:4]))
     with st_api.expander("チャート行・板帯・レイヤー詳細", expanded=False):
+        st_api.dataframe(display_frame, width="stretch")
         st_api.dataframe(frame, width="stretch")
         st_api.dataframe(band_frame, width="stretch")
         st_api.dataframe(overlay_rows, width="stretch")
@@ -273,8 +308,12 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "bottom_chart_polish_version": BOTTOM_CHART_POLISH_VERSION,
         "chart_graph_rendered": rendered,
         "history_retention_ready": True,
+        "rolling_viewport_ready": True,
+        "viewport_label": viewport_label,
+        "viewport_minutes": viewport_minutes,
         "history_session_state_key": CHART_HISTORY_SESSION_STATE_KEY,
         "current_frame_rows": len(current_frame),
+        "display_frame_rows": len(display_frame),
         "frame_rows": len(frame),
         "board_band_rows": len(band_frame),
         "overlay_rows": len(overlay_rows),
@@ -283,7 +322,8 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "trade_points_ready": True,
         "zero_free_scale_ready": True,
         "read_only": True,
-        "controls_added": False,
+        "controls_added": True,
+        "display_control_action_free": True,
         "broker_send_enabled": False,
         "order_intent_submitted": False,
         "prediction_invoked": False,
