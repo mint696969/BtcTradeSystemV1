@@ -296,6 +296,36 @@ class ReceiverOnlyRuntime:
         return {**self.status, "pending_message_count": pending, **_flags()}
 
 
+
+def _is_dhot_source(endpoint_url: str, runtime_config: Mapping[str, Any]) -> bool:
+    return endpoint_url.startswith("dhot://") or str(runtime_config.get("source") or "") == "dhot_unified_market_state_provider"
+
+
+def _sync_read_dhot_once(runtime: "ReceiverOnlyRuntime") -> int:
+    if not _is_dhot_source(runtime.endpoint_url, runtime.runtime_config):
+        return 0
+    cfg = dict(runtime.runtime_config)
+    cfg["poll_interval_sec"] = 0
+    source_name = runtime.endpoint_url.removeprefix("dhot://") or "unified_market_state"
+    try:
+        conn = _DhotUnifiedMarketStateConnection(source_name, cfg)
+        parsed = _parse_wire_message(conn.recv())
+        if parsed:
+            runtime._append(parsed)
+        runtime.status["dhot_sync_read_applied"] = bool(parsed)
+        runtime.status["dhot_sync_read_count"] = len(parsed)
+        runtime.status["socket_opened"] = True
+        runtime.status["websocket_opened"] = True
+        runtime.status["client_started"] = True
+        runtime.status["runtime_connected"] = True
+        runtime.status["push_connected"] = True
+        runtime.status["receive_loop_started"] = True
+        return len(parsed)
+    except Exception as exc:  # noqa: BLE001
+        runtime.status["dhot_sync_read_applied"] = False
+        runtime.status["receiver_error"] = {"error_type": type(exc).__name__, "error_message": str(exc)}
+        return 0
+
 def _endpoint(session_state: Mapping[str, Any], endpoint_url: str | None) -> str:
     return str(endpoint_url or session_state.get(WARROOM_RT_LIVE_ENDPOINT_STATE_KEY) or os.environ.get("WARROOM_PUSH_WIDGET_WS_URL") or "")
 
@@ -312,6 +342,7 @@ def ensure_warroom_push_widget_live_observation_runtime(session_state: MutableMa
             runtime = ReceiverOnlyRuntime(endpoint_url=endpoint, runtime_key=runtime_key, connect_fn=connect_fn, runtime_config=runtime_config)
             _RUNTIME[runtime_key] = runtime
         runtime.start()
+    _sync_read_dhot_once(runtime)
     drained = runtime.drain()
     if drained:
         session_state[WARROOM_RT_LIVE_DRAINED_MESSAGES_STATE_KEY] = drained
