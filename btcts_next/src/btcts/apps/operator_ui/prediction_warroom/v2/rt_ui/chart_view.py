@@ -29,7 +29,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart import
     render_interactive_candle_chart,
 )
 
-BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_06.v14_plain_trade_cache"
+BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_06.v15_base_candle_freshness"
 _PRICE_RE = re.compile(r"(?:best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 _NAMED_PRICE_RE = re.compile(r"(best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 CHART_HISTORY_SESSION_STATE_KEY = "warroom_v2_bottom_chart_history_rows"
@@ -403,6 +403,44 @@ def _fmt_spread(value: object) -> str:
     return f"{numeric:,.0f}"
 
 
+def _fmt_time_minute(value: object) -> str:
+    if value is None:
+        return "--"
+    try:
+        ts = pd.Timestamp(value)
+    except Exception:  # noqa: BLE001
+        return "--"
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("UTC")
+    ts = ts.tz_convert("UTC")
+    return ts.strftime("%H:%MZ")
+
+
+def _latest_candle_row(candles: pd.DataFrame) -> dict[str, Any]:
+    if candles.empty or "ts" not in candles.columns:
+        return {}
+    ordered = candles.sort_values("ts")
+    return ordered.iloc[-1].to_dict()
+
+
+def _cache_lag_label(*, cache_ts: object, live_ts: object) -> str:
+    if cache_ts is None or live_ts is None:
+        return "--"
+    try:
+        cache_value = pd.Timestamp(cache_ts)
+        live_value = pd.Timestamp(live_ts)
+    except Exception:  # noqa: BLE001
+        return "--"
+    if cache_value.tzinfo is None:
+        cache_value = cache_value.tz_localize("UTC")
+    if live_value.tzinfo is None:
+        live_value = live_value.tz_localize("UTC")
+    delta_sec = max(0.0, (live_value.tz_convert("UTC") - cache_value.tz_convert("UTC")).total_seconds())
+    if delta_sec < 90:
+        return "live相当"
+    return f"{int(round(delta_sec / 60.0))}分"
+
+
 def _session_state(st_api: Any) -> Any | None:
     state = getattr(st_api, "session_state", None)
     if hasattr(state, "get") and hasattr(state, "__setitem__"):
@@ -579,10 +617,14 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     live_rows = sum(1 for row in packet.get("chart_rows", []) if isinstance(row, Mapping) and row.get("freshness_label") == "live")
     latest = display_frame.sort_values("ts").iloc[-1] if not display_frame.empty else None
     latest_band = band_frame.sort_values("ts").iloc[-1] if not band_frame.empty else None
+    base_latest = _latest_candle_row(plain_cache_all_candles if plain_cache_connected else candle_frame)
+    base_latest_ts = base_latest.get("ts")
+    live_overlay_ts = None if latest is None else latest.get("ts")
+    cache_lag = _cache_lag_label(cache_ts=base_latest_ts, live_ts=live_overlay_ts)
 
     c1, c2, c3, c4, c5, c6, c7 = st_api.columns(7)
-    c1.metric("履歴点", len(frame))
-    c2.metric("表示点", len(display_frame))
+    c1.metric("足終値", _fmt_price(base_latest.get("close")))
+    c2.metric("cache遅延", cache_lag)
     c3.metric("表示モード", chart_config.mode)
     c4.metric("表示窓", chart_config.viewport_label)
     c5.metric("買気配", _fmt_price(None if latest_band is None else latest_band.get("bid")))
@@ -591,7 +633,8 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
 
     cache_rows = int(plain_cache_meta.get("rows_returned") or 0) if isinstance(plain_cache_meta, Mapping) else 0
     st_api.caption(f"データ範囲={chart_config.source_label} / 注意={chart_config.source_notice}")
-    st_api.caption(f"チャート信頼境界=plain trade OHLC cache優先 / cache={cache_rows}行 / UI raw market.trade bootstrap=disabled / 最新足のみ未確定")
+    st_api.caption(f"ベース足=plain trade OHLC cache / latest_close={_fmt_price(base_latest.get('close'))} / cache_end={_fmt_time_minute(base_latest_ts)} / cache_lag_vs_live={cache_lag}")
+    st_api.caption(f"チャート信頼境界=plain trade OHLC cache優先 / cache={cache_rows}行 / UI raw market.trade bootstrap=disabled / 最新足のみ未確定 / bid-ask線は現在気配overlayで予測線ではありません")
     if chart_config.historical_cache_required:
         st_api.info("1時間足/日足は現在のLive保持履歴からの暫定表示です。10日超やcold archive統合は、後続の集約キャッシュ接続で扱います。")
 
@@ -621,7 +664,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
             rendered = _render_price_chart(display_frame, band_frame, candle_frame, st_api, x_domain=x_domain)
         assert latest is not None
         st_api.caption(
-            f"latest={_fmt_price(latest['price'])} / topic={latest['topic']} / role={latest['role']} / freshness={latest['freshness_label']} / 表示モード={chart_config.mode} / 表示窓={chart_config.viewport_label} / history={len(frame)} / visible={len(display_frame)} / candles={len(candle_frame)} / closed={closed_candle_count} / forming={forming_candle_count} / helper={CHART_TIMEFRAME_VIEW_VERSION} / version={BOTTOM_CHART_POLISH_VERSION}"
+            f"base_close={_fmt_price(base_latest.get('close'))} / base_end={_fmt_time_minute(base_latest_ts)} / live_overlay_price={_fmt_price(latest['price'])} / live_topic={latest['topic']} / freshness={latest['freshness_label']} / 表示モード={chart_config.mode} / 表示窓={chart_config.viewport_label} / history={len(frame)} / visible={len(display_frame)} / candles={len(candle_frame)} / closed={closed_candle_count} / forming={forming_candle_count} / helper={CHART_TIMEFRAME_VIEW_VERSION} / version={BOTTOM_CHART_POLISH_VERSION}"
         )
     else:
         rendered = False

@@ -25,7 +25,7 @@ from btcts.apps.operator_ui.views.warroom_v2_page import build_warroom_v2_page_m
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart import build_interactive_candle_records, build_interactive_chart_html, build_chart_selection_copy_request, normalize_interactive_overlay_layers  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart.html_builder import component_height  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart.renderer import _resolve_visible_candle_count  # noqa: E402
-from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_view import _cache_candles_to_display_points, _plain_cache_to_candle_frame  # noqa: E402
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_view import _cache_candles_to_display_points, _cache_lag_label, _latest_candle_row, _plain_cache_to_candle_frame  # noqa: E402
 
 
 def _widgets_packet() -> dict[str, object]:
@@ -158,6 +158,10 @@ def test_modules_and_doc_markers() -> None:
     assert "plain_trade_ohlc_cache" in chart_text
     assert "interactive_candle_frame = plain_cache_all_candles" in chart_text
     assert "base_candle_pan_history_enabled" in chart_text
+    assert "cache_lag_vs_live" in chart_text
+    assert "base_close=" in chart_text
+    assert "live_overlay_price=" in chart_text
+    assert "予測線ではありません" in chart_text
     assert "_build_board_band_overlay_layers" in chart_text
     doc = DOC.read_text(encoding="utf-8-sig")
     assert "warroom_v2_rt_polish3_cockpit_done=true" in doc
@@ -181,6 +185,10 @@ def test_plain_trade_cache_candles_can_seed_display_points_without_live_overlay(
     assert list(points["role"]) == ["last", "last"]
     assert list(points["price"]) == [104.0, 105.0]
     assert points.iloc[-1]["freshness_label"] == "plain_trade_cache"
+    latest = _latest_candle_row(candles)
+    assert latest["close"] == 105.0
+    assert _cache_lag_label(cache_ts="2026-07-06T14:41:00Z", live_ts="2026-07-06T14:50:10Z") == "9分"
+    assert _cache_lag_label(cache_ts="2026-07-06T14:41:00Z", live_ts="2026-07-06T14:41:30Z") == "live相当"
 
 def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     frame = pd.DataFrame(
