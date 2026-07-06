@@ -9,6 +9,7 @@ from typing import Any, Mapping
 
 from .constants import INTERACTIVE_CHART_COMPONENT_VERSION, LIGHTWEIGHT_CHARTS_CDN, recommended_visible_candle_count
 from .html_assets import CHART_CSS, CHART_JS
+from .overlays import normalize_interactive_overlay_layers
 
 
 def json_for_script(value: object) -> str:
@@ -27,10 +28,13 @@ def build_interactive_chart_html(
     visible_candle_count: int | None = None,
 ) -> str:
     visible_count = int(visible_candle_count or recommended_visible_candle_count(mode))
+    context = dict(chart_context or {})
+    overlay_layers = normalize_interactive_overlay_layers(context.get("overlay_layers"))
     selection_base = {
         "mode": mode,
         "visible_candle_count": visible_count,
-        "chart_context": dict(chart_context or {}),
+        "chart_context": context,
+        "overlay_layers": overlay_layers,
         "component_version": INTERACTIVE_CHART_COMPONENT_VERSION,
     }
     title = escape(f"Interactive candlestick / {mode} / read-only")

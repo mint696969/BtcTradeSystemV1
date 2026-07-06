@@ -6,6 +6,7 @@ from __future__ import annotations
 from .candle_records import build_interactive_candle_records
 from .constants import INTERACTIVE_CHART_COMPONENT_VERSION, recommended_visible_candle_count, timeframe_key
 from .html_builder import build_interactive_chart_html, component_height
+from .overlays import normalize_interactive_overlay_layers
 from .renderer import render_interactive_candle_chart
 from .selection_packet import build_chart_selection_copy_request
 
@@ -15,6 +16,7 @@ __all__ = [
     "build_interactive_candle_records",
     "build_interactive_chart_html",
     "component_height",
+    "normalize_interactive_overlay_layers",
     "recommended_visible_candle_count",
     "render_interactive_candle_chart",
     "timeframe_key",

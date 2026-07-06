@@ -22,7 +22,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.copy_packet_view import 
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.inference_guidance_view import build_inference_guidance_packet  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_strip_view import build_market_strip_packet  # noqa: E402
 from btcts.apps.operator_ui.views.warroom_v2_page import build_warroom_v2_page_mount_packet  # noqa: E402
-from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart import build_interactive_candle_records, build_interactive_chart_html, build_chart_selection_copy_request  # noqa: E402
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart import build_interactive_candle_records, build_interactive_chart_html, build_chart_selection_copy_request, normalize_interactive_overlay_layers  # noqa: E402
 
 
 def _widgets_packet() -> dict[str, object]:
@@ -140,6 +140,7 @@ def test_modules_and_doc_markers() -> None:
     assert (RT_UI / "copy_packet_view.py").exists()
     assert (RT_UI / "interactive_chart" / "renderer.py").exists()
     assert (RT_UI / "interactive_chart" / "html_builder.py").exists()
+    assert (RT_UI / "interactive_chart" / "overlays.py").exists()
     chart_text = (RT_UI / "chart_view.py").read_text(encoding="utf-8-sig")
     assert "zero=False" in chart_text
     assert "render_interactive_candle_chart" in chart_text
@@ -180,7 +181,52 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "packet-preview" in html
     assert "自動コピー不可: 下のJSONをCtrl+Cで手動コピー" in html
     assert "selectPreviewForManualCopy" in html
+    assert "renderOverlayLayers" in html
+    assert "renderMarkerOverlay" in html
     assert "future_space_is_visual_blank_only" in html
+
+
+def test_interactive_chart_overlay_layers_are_read_only_and_renderable() -> None:
+    layers = normalize_interactive_overlay_layers(
+        [
+            {
+                "layer_id": "prediction_flow_preview",
+                "label": "予測流動線 preview",
+                "kind": "line",
+                "color": "#7c3aed",
+                "points": [
+                    {"ts": "2026-07-05T14:00:00Z", "value": 100.0},
+                    {"ts": "2026-07-05T14:01:00Z", "value": 101.0},
+                ],
+            }
+        ]
+    )
+    assert layers[0]["layer_id"] == "prediction_flow_preview"
+    assert layers[0]["kind"] == "line"
+    assert layers[0]["read_only"] is True
+    assert layers[0]["prediction_invoked"] is False
+    marker_layers = normalize_interactive_overlay_layers(
+        [
+            {
+                "layer_id": "execution_points",
+                "kind": "marker",
+                "markers": [{"ts": "2026-07-05T14:00:00Z", "text": "約定", "shape": "circle"}],
+            },
+            {"layer_id": "board_depth_band", "kind": "board_band"},
+        ]
+    )
+    assert marker_layers[0]["kind"] == "marker"
+    assert marker_layers[0]["broker_send_enabled"] is False
+    assert marker_layers[1]["kind"] == "board_band"
+    assert marker_layers[1]["reserved_for_future"] is True
+    assert marker_layers[1]["rendered_now"] is False
+    html = build_interactive_chart_html(candles=[{"time": 1, "open": 1, "high": 1, "low": 1, "close": 1, "time_utc": "1970-01-01T00:00:01Z", "time_jst": "1970-01-01T09:00:01+09:00", "candle_index": 0}], mode="1分足", chart_context={"overlay_layers": layers + marker_layers})
+    assert "prediction_flow_preview" in html
+    assert "execution_points" in html
+    assert "board_depth_band" in html
+    assert "renderMarkerOverlay" in html
+    assert "renderOverlayLayers(chart, series);" in html
+
 
 
 def test_gpt_copy_packet_render_shows_copy_range_guidance() -> None:

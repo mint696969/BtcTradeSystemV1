@@ -131,6 +131,39 @@ async function copySelection() {
     console.error(err);
   }
 }
+function lineStyleValue(value) {
+  if (value === 'dotted' && LightweightCharts.LineStyle) return LightweightCharts.LineStyle.Dotted;
+  if (value === 'solid' && LightweightCharts.LineStyle) return LightweightCharts.LineStyle.Solid;
+  if (LightweightCharts.LineStyle) return LightweightCharts.LineStyle.LargeDashed;
+  return 2;
+}
+function renderLineOverlay(chart, layer) {
+  if (!Array.isArray(layer.points) || layer.points.length < 2) return;
+  let series = null;
+  const options = { color: layer.color || '#7c3aed', lineWidth: layer.line_width || 2, lineStyle: lineStyleValue(layer.line_style || 'dashed'), priceLineVisible: false, lastValueVisible: false, title: layer.label || layer.layer_id || 'overlay' };
+  if (chart.addSeries && LightweightCharts.LineSeries) {
+    series = chart.addSeries(LightweightCharts.LineSeries, options);
+  } else if (chart.addLineSeries) {
+    series = chart.addLineSeries(options);
+  }
+  if (series) series.setData(layer.points.map(p => ({ time: p.time, value: p.value })));
+}
+function renderMarkerOverlay(baseSeries, layer) {
+  if (!baseSeries || !Array.isArray(layer.markers) || !layer.markers.length) return;
+  try {
+    const markers = layer.markers.map(m => ({ time: m.time, position: m.position || 'aboveBar', color: m.color || layer.color || '#0f766e', shape: m.shape || 'circle', text: m.text || layer.label || '' }));
+    if (LightweightCharts.createSeriesMarkers) LightweightCharts.createSeriesMarkers(baseSeries, markers);
+    else if (baseSeries.setMarkers) baseSeries.setMarkers(markers);
+  } catch (err) { console.debug(err); }
+}
+function renderOverlayLayers(chart, baseSeries) {
+  const layers = Array.isArray(BASE.overlay_layers) ? BASE.overlay_layers : [];
+  for (const layer of layers) {
+    if (!layer || layer.rendered_now === false) continue;
+    if (layer.kind === 'line') renderLineOverlay(chart, layer);
+    if (layer.kind === 'marker') renderMarkerOverlay(baseSeries, layer);
+  }
+}
 function markSelection(series) {
   if (!selectedStart || !selectedEnd) return;
   const [s, e] = orderSelection(selectedStart, selectedEnd);
@@ -163,6 +196,7 @@ function boot() {
   }
   if (!series) { document.getElementById('fallback').style.display = 'block'; return; }
   series.setData(CANDLES.map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close })));
+  renderOverlayLayers(chart, series);
   const total = CANDLES.length;
   const visible = Math.min(total, BASE.visible_candle_count || 90);
   chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, total - visible), to: total + 10 });
