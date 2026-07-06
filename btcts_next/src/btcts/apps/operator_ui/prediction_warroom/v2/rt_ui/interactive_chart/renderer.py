@@ -12,6 +12,18 @@ from .constants import INTERACTIVE_CHART_COMPONENT_VERSION, recommended_visible_
 from .html_builder import build_interactive_chart_html, component_height
 
 
+def _resolve_visible_candle_count(*, mode: str, chart_context: Mapping[str, Any] | None) -> int:
+    if isinstance(chart_context, Mapping):
+        raw = chart_context.get("initial_visible_candle_count")
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            value = 0
+        if value > 0:
+            return value
+    return recommended_visible_candle_count(mode)
+
+
 def render_interactive_candle_chart(
     candle_frame: pd.DataFrame,
     *,
@@ -25,11 +37,12 @@ def render_interactive_candle_chart(
     try:
         from streamlit.components.v1 import html as st_html
 
+        visible_candle_count = _resolve_visible_candle_count(mode=mode, chart_context=chart_context)
         html_doc = build_interactive_chart_html(
             candles=candles,
             mode=mode,
             chart_context=chart_context,
-            visible_candle_count=recommended_visible_candle_count(mode),
+            visible_candle_count=visible_candle_count,
         )
         st_html(html_doc, height=component_height(len(candles)), scrolling=False)
         return {
@@ -44,7 +57,7 @@ def render_interactive_candle_chart(
             "prediction_overlay_layers_ready": True,
             "single_candle_selection_ready": True,
             "range_selection_ready": True,
-            "visible_candle_count": recommended_visible_candle_count(mode),
+            "visible_candle_count": visible_candle_count,
             "future_blank_space_ready": True,
             "read_only": True,
             "broker_send_enabled": False,

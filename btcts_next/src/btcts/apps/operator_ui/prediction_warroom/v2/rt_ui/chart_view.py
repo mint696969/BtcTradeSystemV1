@@ -559,8 +559,13 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     plain_cache_all_candles = _plain_cache_to_candle_frame(plain_cache_frame)
     plain_cache_connected = (chart_config.mode in PLAIN_CANDLE_CACHE_MODES) and not plain_cache_all_candles.empty
     x_domain = _candle_x_domain(plain_cache_all_candles, minutes=chart_config.viewport_minutes) if plain_cache_connected else chart_x_domain(frame, minutes=chart_config.viewport_minutes)
+    interactive_candle_frame = pd.DataFrame()
+    initial_visible_candle_count = 0
     if plain_cache_connected:
-        candle_frame = _filter_candles_to_domain(plain_cache_all_candles, x_domain)
+        visible_candle_frame = _filter_candles_to_domain(plain_cache_all_candles, x_domain)
+        candle_frame = visible_candle_frame
+        interactive_candle_frame = plain_cache_all_candles
+        initial_visible_candle_count = max(1, len(visible_candle_frame)) if not visible_candle_frame.empty else 0
         chart_series_meta = _plain_cache_chart_series_meta(cache_frame=plain_cache_frame, candle_frame=candle_frame, mode=chart_config.mode)
         if display_frame.empty:
             display_frame = _cache_candles_to_display_points(candle_frame)
@@ -592,13 +597,17 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
 
     interactive_chart_summary: dict[str, Any] = {"interactive_chart_rendered": False}
     if not display_frame.empty:
+        render_candle_frame = interactive_candle_frame if plain_cache_connected and not interactive_candle_frame.empty else candle_frame
         interactive_chart_summary = render_interactive_candle_chart(
-            candle_frame,
+            render_candle_frame,
             mode=chart_config.mode,
             chart_context={
                 "display_mode": chart_config.mode,
                 "viewport_label": chart_config.viewport_label,
                 "viewport_minutes": chart_config.viewport_minutes,
+                "initial_visible_candle_count": initial_visible_candle_count,
+                "interactive_candle_count": len(render_candle_frame),
+                "base_candle_pan_history_enabled": bool(plain_cache_connected and len(render_candle_frame) > len(candle_frame)),
                 "primary_market_trade_path": dict(plain_cache_meta).get("cache_path") if plain_cache_connected and isinstance(plain_cache_meta, Mapping) else None,
                 "dhot_bootstrap": dict(dhot_bootstrap_meta) if isinstance(dhot_bootstrap_meta, Mapping) else {},
                 "plain_candle_cache": dict(plain_cache_meta) if isinstance(plain_cache_meta, Mapping) else {},

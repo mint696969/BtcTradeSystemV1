@@ -24,6 +24,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_strip_view import
 from btcts.apps.operator_ui.views.warroom_v2_page import build_warroom_v2_page_mount_packet  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart import build_interactive_candle_records, build_interactive_chart_html, build_chart_selection_copy_request, normalize_interactive_overlay_layers  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart.html_builder import component_height  # noqa: E402
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart.renderer import _resolve_visible_candle_count  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_view import _cache_candles_to_display_points, _plain_cache_to_candle_frame  # noqa: E402
 
 
@@ -155,6 +156,8 @@ def test_modules_and_doc_markers() -> None:
     assert "raw_trade_read_from_ui_enabled" in chart_text
     assert "load_dhot_market_trade_history" not in chart_text
     assert "plain_trade_ohlc_cache" in chart_text
+    assert "interactive_candle_frame = plain_cache_all_candles" in chart_text
+    assert "base_candle_pan_history_enabled" in chart_text
     assert "_build_board_band_overlay_layers" in chart_text
     doc = DOC.read_text(encoding="utf-8-sig")
     assert "warroom_v2_rt_polish3_cockpit_done=true" in doc
@@ -234,6 +237,13 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "subscribeCrosshairMove" not in html
     assert "dragLatestCandle" not in html
     assert "future_space_is_visual_blank_only" in html
+    assert "base-candle-range" in html
+    assert "subscribeVisibleLogicalRangeChange" in html
+    assert "loadVisibleRange() || defaultVisibleRange" in html
+    compact_html = build_interactive_chart_html(candles=candles, mode="1分足", chart_context={"initial_visible_candle_count": 1}, visible_candle_count=1)
+    assert '"visible_candle_count": 1' in compact_html
+    assert _resolve_visible_candle_count(mode="1分足", chart_context={"initial_visible_candle_count": 16}) == 16
+    assert _resolve_visible_candle_count(mode="1分足", chart_context={}) == 120
 
 
 def test_interactive_chart_overlay_layers_are_read_only_and_renderable() -> None:

@@ -26,7 +26,41 @@ function boot() {
   renderOverlayLayers(chart, series);
   const total = CANDLES.length;
   const visible = Math.min(total, BASE.visible_candle_count || 90);
-  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, total - visible), to: total + 10 });
+  const rangeStorageKey = ['warroom', 'base-candle-range', BASE.mode || 'live', total].join(':');
+  const defaultVisibleRange = { from: Math.max(0, total - visible), to: total + 10 };
+  function clampVisibleRange(range) {
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return null;
+    const width = Math.max(5, Math.min(visible * 4, range.to - range.from));
+    const maxTo = total + 10;
+    const minFrom = Math.min(0, total - width);
+    let from = Math.max(minFrom, Math.min(range.from, maxTo - 1));
+    let to = Math.max(from + 1, Math.min(range.to, maxTo));
+    if ((to - from) < Math.min(5, total)) {
+      to = Math.min(maxTo, from + Math.min(visible, Math.max(1, total)));
+    }
+    return { from, to };
+  }
+  function loadVisibleRange() {
+    try {
+      const raw = window.localStorage.getItem(rangeStorageKey);
+      return clampVisibleRange(JSON.parse(raw));
+    } catch (err) {
+      return null;
+    }
+  }
+  function saveVisibleRange(range) {
+    const clamped = clampVisibleRange(range);
+    if (!clamped) return;
+    try {
+      window.localStorage.setItem(rangeStorageKey, JSON.stringify(clamped));
+    } catch (err) {
+      // localStorage can be unavailable in some embedded browsers; chart remains usable.
+    }
+  }
+  chart.timeScale().setVisibleLogicalRange(loadVisibleRange() || defaultVisibleRange);
+  if (chart.timeScale().subscribeVisibleLogicalRangeChange) {
+    chart.timeScale().subscribeVisibleLogicalRangeChange(saveVisibleRange);
+  }
   chart.subscribeClick(param => {
     const c = candleByTime(param.time);
     if (!c) return;
