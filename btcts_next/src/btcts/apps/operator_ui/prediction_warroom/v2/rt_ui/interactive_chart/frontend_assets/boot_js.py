@@ -30,31 +30,10 @@ function boot() {
   chart.subscribeClick(param => {
     const c = candleByTime(param.time);
     if (!c) return;
-    selectedStart = c;
-    selectedEnd = c;
-    copiedEl.textContent = '';
-    updateStatus();
-    markSelection(series);
-  });
-  chartEl.addEventListener('mousedown', ev => {
-    const rect = chartEl.getBoundingClientRect();
-    const coordinate = ev.clientX - rect.left;
-    if (chart.timeScale().coordinateToTime) mouseDownTime = candleByTime(chart.timeScale().coordinateToTime(coordinate));
-  });
-  chartEl.addEventListener('mouseup', ev => {
-    if (!mouseDownTime || !chart.timeScale().coordinateToTime) return;
-    const rect = chartEl.getBoundingClientRect();
-    const coordinate = ev.clientX - rect.left;
-    const end = candleByTime(chart.timeScale().coordinateToTime(coordinate));
-    if (!end) return;
-    selectedStart = mouseDownTime;
-    selectedEnd = end;
-    mouseDownTime = null;
-    copiedEl.textContent = '';
-    updateStatus();
-    markSelection(series);
+    handleCandleClick(c, series);
   });
   copyBtn.addEventListener('click', copySelection);
+  if (!restoreFinalizedSelection(series)) restoreSelectionAnchor(series);
   window.addEventListener('resize', () => chart.applyOptions({ width: chartEl.clientWidth }));
 }
 boot();

@@ -13,9 +13,15 @@ const copyPanelEl = document.getElementById('copy-panel');
 const selectionSummaryEl = document.getElementById('selection-summary');
 const copyHintEl = document.getElementById('copy-hint');
 const copySafetyEl = document.getElementById('copy-safety');
+const SELECTION_ANCHOR_TTL_MS = 5000;
+const SELECTION_FINALIZED_TTL_MS = 5000;
+const SELECTION_ANCHOR_STORAGE_KEY = `warroom_v2_interactive_chart_anchor.${BASE.component_version || 'v1'}.${BASE.mode || 'live'}`;
+const SELECTION_FINALIZED_STORAGE_KEY = `warroom_v2_interactive_chart_finalized.${BASE.component_version || 'v1'}.${BASE.mode || 'live'}`;
 let selectedStart = null;
 let selectedEnd = null;
-let mouseDownTime = null;
+let selectionAnchor = null;
+let selectionRangeFinalized = false;
+let selectionAnchorTimer = null;
 let markersApi = null;
 
 function candleByTime(t) {
@@ -48,14 +54,119 @@ function setCopyPanelState(state, summary, hint) {
 function selectionSummaryText(s, e, count) {
   return `GPTコピー対象: ${s.time_jst} ～ ${e.time_jst} / ${count}本 / ${selectionType(s, e)} / ${BASE.mode}`;
 }
+function clearSelectionAnchorTimer() {
+  if (selectionAnchorTimer) clearTimeout(selectionAnchorTimer);
+  selectionAnchorTimer = null;
+}
+function clearStoredSelectionAnchor() {
+  try { localStorage.removeItem(SELECTION_ANCHOR_STORAGE_KEY); } catch (err) { console.debug(err); }
+}
+function clearStoredFinalizedSelection() {
+  try { localStorage.removeItem(SELECTION_FINALIZED_STORAGE_KEY); } catch (err) { console.debug(err); }
+}
+function storeFinalizedSelection(copyState) {
+  if (!selectedStart || !selectedEnd || !selectionRangeFinalized) return;
+  const expiresAtMs = Date.now() + SELECTION_FINALIZED_TTL_MS;
+  try {
+    localStorage.setItem(SELECTION_FINALIZED_STORAGE_KEY, JSON.stringify({ start_time: selectedStart.time, end_time: selectedEnd.time, copy_state: copyState || 'ready', expires_at_ms: expiresAtMs }));
+  } catch (err) { console.debug(err); }
+}
+function restoreFinalizedSelection(series) {
+  try {
+    const raw = localStorage.getItem(SELECTION_FINALIZED_STORAGE_KEY);
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    if (!saved || Number(saved.expires_at_ms) <= Date.now()) { clearStoredFinalizedSelection(); return false; }
+    const start = candleByTime(saved.start_time);
+    const end = candleByTime(saved.end_time);
+    if (!start || !end) { clearStoredFinalizedSelection(); return false; }
+    selectionAnchor = null;
+    selectionRangeFinalized = true;
+    selectedStart = start;
+    selectedEnd = end;
+    updateStatus();
+    markSelection(series);
+    if (saved.copy_state === 'copied') {
+      copiedEl.textContent = 'コピーしました';
+      setCopyPanelState('copied', selectionSummaryEl.textContent, 'コピー成功: 下のJSONと同じ内容をクリップボードへ保存しました。');
+    } else if (saved.copy_state === 'manual') {
+      copiedEl.textContent = '手動コピー待ち';
+      setCopyPanelState('manual', selectionSummaryEl.textContent, '自動コピー不可: 下のJSONをCtrl+Cで手動コピーしてください。');
+    }
+    return true;
+  } catch (err) { console.debug(err); clearStoredFinalizedSelection(); return false; }
+}
+function finalizeAnchorWaitWithoutCopy(series) {
+  if (!selectionAnchor || selectionRangeFinalized) return;
+  selectionAnchor = null;
+  selectionRangeFinalized = true;
+  clearSelectionAnchorTimer();
+  clearStoredSelectionAnchor();
+  updateStatus();
+  markSelection(series);
+}
+function scheduleSelectionAnchorExpiry(series, expiresAtMs) {
+  clearSelectionAnchorTimer();
+  const remaining = Math.max(0, expiresAtMs - Date.now());
+  selectionAnchorTimer = setTimeout(() => finalizeAnchorWaitWithoutCopy(series), remaining);
+}
+function storeSelectionAnchor(c, series) {
+  clearStoredFinalizedSelection();
+  const expiresAtMs = Date.now() + SELECTION_ANCHOR_TTL_MS;
+  try { localStorage.setItem(SELECTION_ANCHOR_STORAGE_KEY, JSON.stringify({ time: c.time, expires_at_ms: expiresAtMs })); } catch (err) { console.debug(err); }
+  scheduleSelectionAnchorExpiry(series, expiresAtMs);
+}
+function restoreSelectionAnchor(series) {
+  try {
+    const raw = localStorage.getItem(SELECTION_ANCHOR_STORAGE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    if (!saved || Number(saved.expires_at_ms) <= Date.now()) { clearStoredSelectionAnchor(); return; }
+    const c = candleByTime(saved.time);
+    if (!c) { clearStoredSelectionAnchor(); return; }
+    selectionAnchor = c;
+    selectionRangeFinalized = false;
+    selectedStart = c;
+    selectedEnd = c;
+    updateStatus();
+    markSelection(series);
+    scheduleSelectionAnchorExpiry(series, Number(saved.expires_at_ms));
+  } catch (err) { console.debug(err); clearStoredSelectionAnchor(); }
+}
+function selectionHintText(s, e) {
+  if (!selectionRangeFinalized) return '開始点を選択中: 5秒以内に同じローソク再クリックで単ポイント確定、別ローソククリックで範囲確定。';
+  return Number(s.time) === Number(e.time) ? '単ポイント確定: ボタンでJSONをコピーできます。' : '範囲確定: ボタンでJSONをコピーできます。';
+}
+function handleCandleClick(c, series) {
+  let finalizedNow = false;
+  if (!selectionAnchor || selectionRangeFinalized) {
+    selectionAnchor = c;
+    selectionRangeFinalized = false;
+    selectedStart = c;
+    selectedEnd = c;
+    storeSelectionAnchor(c, series);
+  } else {
+    selectedStart = selectionAnchor;
+    selectedEnd = c;
+    selectionAnchor = null;
+    selectionRangeFinalized = true;
+    clearSelectionAnchorTimer();
+    clearStoredSelectionAnchor();
+    finalizedNow = true;
+  }
+  copiedEl.textContent = '';
+  updateStatus();
+  markSelection(series);
+  if (finalizedNow) copySelection();
+}
 function updateStatus() {
   if (!selectedStart || !selectedEnd) {
-    statusEl.textContent = 'ローソクをクリック、または範囲ドラッグしてください。';
+    statusEl.textContent = 'ローソクをクリックしてください。2回クリックで範囲を確定できます。';
     copyBtn.disabled = true;
     packetPreviewEl.style.display = 'none';
     packetPreviewEl.value = '';
     copiedEl.textContent = '';
-    setCopyPanelState('pending', '未選択: ローソクをクリック、または範囲ドラッグしてください。', '選択後にGPT分析用JSONを自動コピーできます。');
+    setCopyPanelState('pending', '未選択: ローソクをクリックしてください。', '1回目クリックで開始点、2回目クリックで単ポイントまたは範囲を確定します。');
     return;
   }
   const [s, e] = orderSelection(selectedStart, selectedEnd);
@@ -63,7 +174,7 @@ function updateStatus() {
   statusEl.textContent = `選択: ${s.time_jst} ～ ${e.time_jst} / ${count}本 / ${selectionType(s, e)}`;
   packetPreviewEl.value = selectionPacketText();
   packetPreviewEl.style.display = 'block';
-  setCopyPanelState('ready', selectionSummaryText(s, e, count), 'ボタンでJSONをコピー。ブラウザが拒否した場合は下のJSONが自動選択されます。');
+  setCopyPanelState('ready', selectionSummaryText(s, e, count), selectionHintText(s, e));
   copyBtn.disabled = false;
 }
 function buildPacket() {
@@ -128,10 +239,12 @@ async function copySelection() {
     await navigator.clipboard.writeText(text);
     copiedEl.textContent = 'コピーしました';
     setCopyPanelState('copied', selectionSummaryEl.textContent, 'コピー成功: 下のJSONと同じ内容をクリップボードへ保存しました。');
+    storeFinalizedSelection('copied');
   } catch (err) {
     selectPreviewForManualCopy();
     copiedEl.textContent = '手動コピー待ち';
     setCopyPanelState('manual', selectionSummaryEl.textContent, '自動コピー不可: 下のJSONをCtrl+Cで手動コピーしてください。');
+    storeFinalizedSelection('manual');
     console.error(err);
   }
 }

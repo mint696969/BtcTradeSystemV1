@@ -51,17 +51,17 @@ def build_interactive_chart_html(
 <div id="wrap">
   <div id="toolbar">
     <span class="badge">{title}</span>
-    <span class="badge">click=1本選択</span>
-    <span class="badge">drag=範囲選択</span>
+    <span class="badge">click1=開始点</span>
+    <span class="badge">click2=範囲確定</span>
     <span class="badge">wheel=zoom / drag blank=pan</span>
     <button id="copy" disabled>この範囲をGPTへコピー</button>
-    <span id="status">ローソクをクリック、または範囲ドラッグしてください。</span>
+    <span id="status">ローソクをクリックしてください。2回クリックで範囲を確定できます。</span>
     <span id="copied"></span>
   </div>
   <div id="chart"></div>
   <div id="copy-panel" class="pending" aria-live="polite">
-    <div id="selection-summary">未選択: ローソクをクリック、または範囲ドラッグしてください。</div>
-    <div id="copy-hint">選択後にGPT分析用JSONを自動コピーできます。</div>
+    <div id="selection-summary">未選択: ローソクをクリックしてください。</div>
+    <div id="copy-hint">1回目クリックで開始点、2回目クリックで単ポイントまたは範囲を確定します。</div>
     <div id="copy-safety">read-only / no broker send / no order / no prediction</div>
   </div>
   <textarea id="packet-preview" readonly aria-label="GPT選択範囲JSONプレビュー"></textarea>

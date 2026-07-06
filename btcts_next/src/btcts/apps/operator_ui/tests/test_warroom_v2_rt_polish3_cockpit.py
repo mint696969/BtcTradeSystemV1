@@ -194,6 +194,23 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "selectPreviewForManualCopy" in html
     assert "renderOverlayLayers" in html
     assert "renderMarkerOverlay" in html
+    assert "click2=範囲確定" in html
+    assert "handleCandleClick" in html
+    assert "finalizedNow" in html
+    assert "if (finalizedNow) copySelection();" in html
+    assert "SELECTION_ANCHOR_TTL_MS = 5000" in html
+    assert "SELECTION_FINALIZED_TTL_MS = 5000" in html
+    assert "storeSelectionAnchor(c, series)" in html
+    assert "clearStoredFinalizedSelection();" in html
+    assert "storeFinalizedSelection('copied')" in html
+    assert "storeFinalizedSelection('manual')" in html
+    assert "restoreFinalizedSelection(series)" in html
+    assert "restoreSelectionAnchor(series)" in html
+    assert "finalizeAnchorWaitWithoutCopy" in html
+    assert "selectionAnchor" in html
+    assert "selectionRangeFinalized" in html
+    assert "subscribeCrosshairMove" not in html
+    assert "dragLatestCandle" not in html
     assert "future_space_is_visual_blank_only" in html
 
 
