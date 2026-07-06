@@ -251,6 +251,8 @@ def test_interactive_chart_overlay_layers_are_read_only_and_renderable() -> None
     assert "warroom_board_bid_ask_band" in html
     assert "renderMarkerOverlay" in html
     assert "renderBoardBandOverlay" in html
+    assert "hide_label: true" in html
+    assert "const title = layer.hide_label ? ''" in html
     assert "renderOverlayLayers(chart, series);" in html
 
 

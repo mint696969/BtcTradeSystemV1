@@ -13,7 +13,8 @@ function lineStyleValue(value) {
 function renderLineOverlay(chart, layer) {
   if (!Array.isArray(layer.points) || layer.points.length < 2) return;
   let series = null;
-  const options = { color: layer.color || '#7c3aed', lineWidth: layer.line_width || 2, lineStyle: lineStyleValue(layer.line_style || 'dashed'), priceLineVisible: false, lastValueVisible: false, title: layer.label || layer.layer_id || 'overlay' };
+  const title = layer.hide_label ? '' : (layer.label || layer.layer_id || 'overlay');
+  const options = { color: layer.color || '#7c3aed', lineWidth: layer.line_width || 2, lineStyle: lineStyleValue(layer.line_style || 'dashed'), priceLineVisible: false, lastValueVisible: false, title };
   if (chart.addSeries && LightweightCharts.LineSeries) {
     series = chart.addSeries(LightweightCharts.LineSeries, options);
   } else if (chart.addLineSeries) {
@@ -31,9 +32,9 @@ function renderMarkerOverlay(baseSeries, layer) {
 }
 function renderBoardBandOverlay(chart, layer) {
   if (!Array.isArray(layer.points) || layer.points.length < 2) return;
-  renderLineOverlay(chart, { layer_id: `${layer.layer_id || 'board_band'}_bid`, label: `${layer.label || 'board'} bid`, color: layer.bid_color || '#60a5fa', line_width: layer.line_width || 1, line_style: 'solid', points: layer.points.map(p => ({ time: p.time, value: p.bid })) });
-  renderLineOverlay(chart, { layer_id: `${layer.layer_id || 'board_band'}_ask`, label: `${layer.label || 'board'} ask`, color: layer.ask_color || '#fb7185', line_width: layer.line_width || 1, line_style: 'solid', points: layer.points.map(p => ({ time: p.time, value: p.ask })) });
-  renderLineOverlay(chart, { layer_id: `${layer.layer_id || 'board_band'}_mid`, label: `${layer.label || 'board'} mid`, color: layer.mid_color || '#64748b', line_width: layer.line_width || 1, line_style: 'dashed', points: layer.points.map(p => ({ time: p.time, value: p.mid })) });
+  renderLineOverlay(chart, { layer_id: `${layer.layer_id || 'board_band'}_bid`, hide_label: true, color: layer.bid_color || '#60a5fa', line_width: layer.line_width || 1, line_style: 'solid', points: layer.points.map(p => ({ time: p.time, value: p.bid })) });
+  renderLineOverlay(chart, { layer_id: `${layer.layer_id || 'board_band'}_ask`, hide_label: true, color: layer.ask_color || '#fb7185', line_width: layer.line_width || 1, line_style: 'solid', points: layer.points.map(p => ({ time: p.time, value: p.ask })) });
+  renderLineOverlay(chart, { layer_id: `${layer.layer_id || 'board_band'}_mid`, hide_label: true, color: layer.mid_color || '#64748b', line_width: layer.line_width || 1, line_style: 'dashed', points: layer.points.map(p => ({ time: p.time, value: p.mid })) });
 }
 function renderOverlayLayers(chart, baseSeries) {
   const layers = Array.isArray(BASE.overlay_layers) ? BASE.overlay_layers : [];
