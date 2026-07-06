@@ -8,7 +8,7 @@ import json
 from typing import Any, Mapping
 
 from .constants import INTERACTIVE_CHART_COMPONENT_VERSION, LIGHTWEIGHT_CHARTS_CDN, recommended_visible_candle_count
-from .html_assets import CHART_CSS, CHART_JS
+from .frontend_assets import CHART_CSS, CHART_JS
 from .overlays import normalize_interactive_overlay_layers
 
 

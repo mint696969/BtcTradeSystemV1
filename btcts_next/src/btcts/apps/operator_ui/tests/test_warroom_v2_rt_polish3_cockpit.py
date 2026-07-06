@@ -141,6 +141,11 @@ def test_modules_and_doc_markers() -> None:
     assert (RT_UI / "interactive_chart" / "renderer.py").exists()
     assert (RT_UI / "interactive_chart" / "html_builder.py").exists()
     assert (RT_UI / "interactive_chart" / "overlays.py").exists()
+    assert not (RT_UI / "interactive_chart" / "html_assets.py").exists()
+    assert (RT_UI / "interactive_chart" / "frontend_assets" / "styles.py").exists()
+    assert (RT_UI / "interactive_chart" / "frontend_assets" / "selection_js.py").exists()
+    assert (RT_UI / "interactive_chart" / "frontend_assets" / "overlay_js.py").exists()
+    assert (RT_UI / "interactive_chart" / "frontend_assets" / "boot_js.py").exists()
     chart_text = (RT_UI / "chart_view.py").read_text(encoding="utf-8-sig")
     assert "zero=False" in chart_text
     assert "render_interactive_candle_chart" in chart_text

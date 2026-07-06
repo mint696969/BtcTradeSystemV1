@@ -1,0 +1,18 @@
+# path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/rt_ui/interactive_chart/frontend_assets/styles.py
+# desc: CSS for WarRoom interactive chart frontend component.
+
+from __future__ import annotations
+
+CHART_CSS = """
+html, body { margin: 0; padding: 0; background: transparent; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0f172a; }
+#wrap { width: 100%; box-sizing: border-box; }
+#toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding: 2px 0 8px 0; font-size: 12px; }
+#chart { width:100%; height:390px; border: 1px solid rgba(148,163,184,.35); border-radius: 10px; overflow:hidden; background: #ffffff; }
+button { border:1px solid rgba(37,99,235,.35); background:#eff6ff; color:#1d4ed8; border-radius:8px; padding:5px 10px; font-weight:700; cursor:pointer; }
+button:disabled { opacity:.45; cursor:not-allowed; }
+.badge { border:1px solid rgba(148,163,184,.4); border-radius:999px; padding:4px 8px; background:#f8fafc; }
+#status { color:#334155; }
+#copied { color:#15803d; font-weight:700; }
+#fallback { color:#b91c1c; padding: 10px; display:none; }
+#packet-preview { display:none; width:100%; min-height:96px; box-sizing:border-box; margin-top:8px; padding:8px; border:1px solid rgba(37,99,235,.25); border-radius:8px; background:#f8fafc; color:#0f172a; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:11px; white-space:pre; }
+""".strip()
