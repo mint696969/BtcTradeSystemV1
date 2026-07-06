@@ -1,0 +1,66 @@
+# path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/rt_ui/interactive_chart/html_builder.py
+# desc: Assemble WarRoom interactive chart HTML document from frontend assets and backend records.
+
+from __future__ import annotations
+
+from html import escape
+import json
+from typing import Any, Mapping
+
+from .constants import INTERACTIVE_CHART_COMPONENT_VERSION, LIGHTWEIGHT_CHARTS_CDN, recommended_visible_candle_count
+from .html_assets import CHART_CSS, CHART_JS
+
+
+def json_for_script(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True).replace("</", "<\\/")
+
+
+def component_height(candle_count: int) -> int:
+    return 470 if candle_count >= 40 else 430
+
+
+def build_interactive_chart_html(
+    *,
+    candles: list[dict[str, Any]],
+    mode: str,
+    chart_context: Mapping[str, Any] | None = None,
+    visible_candle_count: int | None = None,
+) -> str:
+    visible_count = int(visible_candle_count or recommended_visible_candle_count(mode))
+    selection_base = {
+        "mode": mode,
+        "visible_candle_count": visible_count,
+        "chart_context": dict(chart_context or {}),
+        "component_version": INTERACTIVE_CHART_COMPONENT_VERSION,
+    }
+    title = escape(f"Interactive candlestick / {mode} / read-only")
+    return f"""<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+{CHART_CSS}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="toolbar">
+    <span class="badge">{title}</span>
+    <span class="badge">click=1本選択</span>
+    <span class="badge">drag=範囲選択</span>
+    <span class="badge">wheel=zoom / drag blank=pan</span>
+    <button id="copy" disabled>この範囲をGPTへコピー</button>
+    <span id="status">ローソクをクリック、または範囲ドラッグしてください。</span>
+    <span id="copied"></span>
+  </div>
+  <div id="chart"></div>
+  <div id="fallback">Lightweight Charts の読み込みに失敗しました。既存のWarRoom表示はPython側フォールバックで維持されます。</div>
+</div>
+<script src="{LIGHTWEIGHT_CHARTS_CDN}"></script>
+<script>
+const CANDLES = {json_for_script(candles)};
+const BASE = {json_for_script(selection_base)};
+{CHART_JS}
+</script>
+</body>
+</html>"""

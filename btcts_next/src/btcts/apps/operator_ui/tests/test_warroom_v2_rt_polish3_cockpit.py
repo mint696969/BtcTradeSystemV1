@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import sys
+
+import pandas as pd
 from pathlib import Path
 
 _SRC_ROOT = Path(__file__).resolve().parents[4]
@@ -20,6 +22,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.copy_packet_view import 
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.inference_guidance_view import build_inference_guidance_packet  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_strip_view import build_market_strip_packet  # noqa: E402
 from btcts.apps.operator_ui.views.warroom_v2_page import build_warroom_v2_page_mount_packet  # noqa: E402
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart import build_interactive_candle_records, build_interactive_chart_html, build_chart_selection_copy_request  # noqa: E402
 
 
 def _widgets_packet() -> dict[str, object]:
@@ -135,11 +138,46 @@ def test_page_uses_cockpit_modules_and_mount_marker() -> None:
 def test_modules_and_doc_markers() -> None:
     assert (RT_UI / "market_strip_view.py").exists()
     assert (RT_UI / "copy_packet_view.py").exists()
+    assert (RT_UI / "interactive_chart" / "renderer.py").exists()
+    assert (RT_UI / "interactive_chart" / "html_builder.py").exists()
     chart_text = (RT_UI / "chart_view.py").read_text(encoding="utf-8-sig")
     assert "zero=False" in chart_text
+    assert "render_interactive_candle_chart" in chart_text
     doc = DOC.read_text(encoding="utf-8-sig")
     assert "warroom_v2_rt_polish3_cockpit_done=true" in doc
     assert "gpt_review_copy_packet_added=true" in doc
+
+
+
+def test_interactive_chart_package_builds_selection_copy_surface() -> None:
+    frame = pd.DataFrame(
+        [
+            {"ts": "2026-07-05T14:00:00Z", "open": 100.0, "high": 105.0, "low": 99.0, "close": 103.0, "candle_status": "closed", "source_role": "last"},
+            {"ts": "2026-07-05T14:01:00Z", "open": 103.0, "high": 108.0, "low": 102.0, "close": 104.0, "candle_status": "forming", "source_role": "last"},
+        ]
+    )
+    candles = build_interactive_candle_records(frame)
+    assert len(candles) == 2
+    assert candles[0]["time_utc"] == "2026-07-05T14:00:00Z"
+    assert candles[0]["time_jst"].startswith("2026-07-05T23:00:00")
+    packet = build_chart_selection_copy_request(
+        mode="1分足",
+        selection_type="range",
+        start_candle=candles[0],
+        end_candle=candles[1],
+        candle_count=2,
+        visible_candle_count=120,
+        chart_context={"primary_market_trade_path": "D:/btc_ts_hot/data/market_data/example.jsonl"},
+    )
+    assert packet["timeframe"] == "1m"
+    assert packet["selected_range"]["candle_count"] == 2
+    assert packet["source"]["primary_market_trade_path"].endswith("example.jsonl")
+    assert packet["safety"]["broker_send_enabled"] is False
+    html = build_interactive_chart_html(candles=candles, mode="1分足", chart_context=packet["source"], visible_candle_count=120)
+    assert "lightweight-charts" in html
+    assert "この範囲をGPTへコピー" in html
+    assert "navigator.clipboard.writeText" in html
+    assert "future_space_is_visual_blank_only" in html
 
 
 def test_gpt_copy_packet_render_shows_copy_range_guidance() -> None:

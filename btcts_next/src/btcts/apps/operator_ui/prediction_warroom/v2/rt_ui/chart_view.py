@@ -23,6 +23,10 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_timeframe_view imp
     prepare_chart_display_frame,
     select_chart_display_config,
 )
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart import (
+    INTERACTIVE_CHART_COMPONENT_VERSION,
+    render_interactive_candle_chart,
+)
 
 BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v13_dhot_history_bootstrap"
 _PRICE_RE = re.compile(r"(?:best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
@@ -420,8 +424,24 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     if chart_config.historical_cache_required:
         st_api.info("1時間足/日足は現在のLive保持履歴からの暫定表示です。10日超やcold archive統合は、後続の集約キャッシュ接続で扱います。")
 
+    interactive_chart_summary: dict[str, Any] = {"interactive_chart_rendered": False}
     if not display_frame.empty:
-        rendered = _render_price_chart(display_frame, band_frame, candle_frame, st_api, x_domain=x_domain)
+        interactive_chart_summary = render_interactive_candle_chart(
+            candle_frame,
+            mode=chart_config.mode,
+            chart_context={
+                "display_mode": chart_config.mode,
+                "viewport_label": chart_config.viewport_label,
+                "viewport_minutes": chart_config.viewport_minutes,
+                "primary_market_trade_path": dict(dhot_bootstrap_meta).get("source_path") if isinstance(dhot_bootstrap_meta, Mapping) else None,
+                "dhot_bootstrap": dict(dhot_bootstrap_meta) if isinstance(dhot_bootstrap_meta, Mapping) else {},
+                "input_source": "retained_market_state_rows_plus_dhot_market_trade_bootstrap",
+            },
+            st_api=st_api,
+        )
+        rendered = bool(interactive_chart_summary.get("interactive_chart_rendered"))
+        if not rendered:
+            rendered = _render_price_chart(display_frame, band_frame, candle_frame, st_api, x_domain=x_domain)
         assert latest is not None
         st_api.caption(
             f"latest={_fmt_price(latest['price'])} / topic={latest['topic']} / role={latest['role']} / freshness={latest['freshness_label']} / 表示モード={chart_config.mode} / 表示窓={chart_config.viewport_label} / history={len(frame)} / visible={len(display_frame)} / candles={len(candle_frame)} / closed={closed_candle_count} / forming={forming_candle_count} / helper={CHART_TIMEFRAME_VIEW_VERSION} / version={BOTTOM_CHART_POLISH_VERSION}"
@@ -452,6 +472,9 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "ok": True,
         "bottom_chart_polish_version": BOTTOM_CHART_POLISH_VERSION,
         "chart_graph_rendered": rendered,
+        "interactive_chart_component_version": INTERACTIVE_CHART_COMPONENT_VERSION,
+        "interactive_chart_rendered": bool(interactive_chart_summary.get("interactive_chart_rendered")),
+        "interactive_chart_selection_copy_ready": bool(interactive_chart_summary.get("selection_copy_ready", False)),
         "history_retention_ready": True,
         "rolling_viewport_ready": True,
         "timeframe_modes_ready": True,
