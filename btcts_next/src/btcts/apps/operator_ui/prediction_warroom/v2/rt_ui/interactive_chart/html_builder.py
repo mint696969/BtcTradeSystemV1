@@ -58,6 +58,11 @@ def build_interactive_chart_html(
     <span id="copied"></span>
   </div>
   <div id="chart"></div>
+  <div id="copy-panel" class="pending" aria-live="polite">
+    <div id="selection-summary">未選択: ローソクをクリック、または範囲ドラッグしてください。</div>
+    <div id="copy-hint">選択後にGPT分析用JSONを自動コピーできます。</div>
+    <div id="copy-safety">read-only / no broker send / no order / no prediction</div>
+  </div>
   <textarea id="packet-preview" readonly aria-label="GPT選択範囲JSONプレビュー"></textarea>
   <div id="fallback">Lightweight Charts の読み込みに失敗しました。既存のWarRoom表示はPython側フォールバックで維持されます。</div>
 </div>

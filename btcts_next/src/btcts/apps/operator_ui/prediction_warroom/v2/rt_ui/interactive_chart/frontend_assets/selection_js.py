@@ -9,6 +9,10 @@ const statusEl = document.getElementById('status');
 const copiedEl = document.getElementById('copied');
 const copyBtn = document.getElementById('copy');
 const packetPreviewEl = document.getElementById('packet-preview');
+const copyPanelEl = document.getElementById('copy-panel');
+const selectionSummaryEl = document.getElementById('selection-summary');
+const copyHintEl = document.getElementById('copy-hint');
+const copySafetyEl = document.getElementById('copy-safety');
 let selectedStart = null;
 let selectedEnd = null;
 let mouseDownTime = null;
@@ -35,12 +39,23 @@ function candleCount(a, b) {
   return CANDLES.filter(c => Number(c.time) >= Number(s.time) && Number(c.time) <= Number(e.time)).length;
 }
 function selectionType(a, b) { return a && b && Number(a.time) !== Number(b.time) ? 'range' : 'single_candle'; }
+function setCopyPanelState(state, summary, hint) {
+  copyPanelEl.className = state;
+  selectionSummaryEl.textContent = summary;
+  copyHintEl.textContent = hint;
+  copySafetyEl.textContent = 'read-only / broker_send=false / order_intent=false / prediction=false / classifier=false';
+}
+function selectionSummaryText(s, e, count) {
+  return `GPTコピー対象: ${s.time_jst} ～ ${e.time_jst} / ${count}本 / ${selectionType(s, e)} / ${BASE.mode}`;
+}
 function updateStatus() {
   if (!selectedStart || !selectedEnd) {
     statusEl.textContent = 'ローソクをクリック、または範囲ドラッグしてください。';
     copyBtn.disabled = true;
     packetPreviewEl.style.display = 'none';
     packetPreviewEl.value = '';
+    copiedEl.textContent = '';
+    setCopyPanelState('pending', '未選択: ローソクをクリック、または範囲ドラッグしてください。', '選択後にGPT分析用JSONを自動コピーできます。');
     return;
   }
   const [s, e] = orderSelection(selectedStart, selectedEnd);
@@ -48,6 +63,7 @@ function updateStatus() {
   statusEl.textContent = `選択: ${s.time_jst} ～ ${e.time_jst} / ${count}本 / ${selectionType(s, e)}`;
   packetPreviewEl.value = selectionPacketText();
   packetPreviewEl.style.display = 'block';
+  setCopyPanelState('ready', selectionSummaryText(s, e, count), 'ボタンでJSONをコピー。ブラウザが拒否した場合は下のJSONが自動選択されます。');
   copyBtn.disabled = false;
 }
 function buildPacket() {
@@ -110,10 +126,12 @@ async function copySelection() {
   packetPreviewEl.style.display = 'block';
   try {
     await navigator.clipboard.writeText(text);
-    copiedEl.textContent = 'コピーしました: 下の内容と同じJSONをクリップボードへ保存';
+    copiedEl.textContent = 'コピーしました';
+    setCopyPanelState('copied', selectionSummaryEl.textContent, 'コピー成功: 下のJSONと同じ内容をクリップボードへ保存しました。');
   } catch (err) {
     selectPreviewForManualCopy();
-    copiedEl.textContent = '自動コピー不可: 下のJSONをCtrl+Cで手動コピー';
+    copiedEl.textContent = '手動コピー待ち';
+    setCopyPanelState('manual', selectionSummaryEl.textContent, '自動コピー不可: 下のJSONをCtrl+Cで手動コピーしてください。');
     console.error(err);
   }
 }

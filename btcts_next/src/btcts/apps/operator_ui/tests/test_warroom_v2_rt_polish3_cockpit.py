@@ -185,7 +185,10 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "この範囲をGPTへコピー" in html
     assert "navigator.clipboard.writeText" in html
     assert "packet-preview" in html
+    assert "copy-panel" in html
+    assert "selection-summary" in html
     assert "自動コピー不可: 下のJSONをCtrl+Cで手動コピー" in html
+    assert "コピー成功: 下のJSONと同じ内容" in html
     assert "selectPreviewForManualCopy" in html
     assert "renderOverlayLayers" in html
     assert "renderMarkerOverlay" in html
