@@ -54,6 +54,7 @@ def build_interactive_chart_html(
     <span id="copied"></span>
   </div>
   <div id="chart"></div>
+  <textarea id="packet-preview" readonly aria-label="GPT選択範囲JSONプレビュー"></textarea>
   <div id="fallback">Lightweight Charts の読み込みに失敗しました。既存のWarRoom表示はPython側フォールバックで維持されます。</div>
 </div>
 <script src="{LIGHTWEIGHT_CHARTS_CDN}"></script>

@@ -177,6 +177,9 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "lightweight-charts" in html
     assert "この範囲をGPTへコピー" in html
     assert "navigator.clipboard.writeText" in html
+    assert "packet-preview" in html
+    assert "自動コピー不可: 下のJSONをCtrl+Cで手動コピー" in html
+    assert "selectPreviewForManualCopy" in html
     assert "future_space_is_visual_blank_only" in html
 
 

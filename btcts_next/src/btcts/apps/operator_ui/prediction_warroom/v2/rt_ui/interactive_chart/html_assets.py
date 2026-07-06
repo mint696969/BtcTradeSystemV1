@@ -14,6 +14,7 @@ button:disabled { opacity:.45; cursor:not-allowed; }
 #status { color:#334155; }
 #copied { color:#15803d; font-weight:700; }
 #fallback { color:#b91c1c; padding: 10px; display:none; }
+#packet-preview { display:none; width:100%; min-height:96px; box-sizing:border-box; margin-top:8px; padding:8px; border:1px solid rgba(37,99,235,.25); border-radius:8px; background:#f8fafc; color:#0f172a; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size:11px; white-space:pre; }
 """.strip()
 
 CHART_JS = r"""
@@ -21,6 +22,7 @@ const chartEl = document.getElementById('chart');
 const statusEl = document.getElementById('status');
 const copiedEl = document.getElementById('copied');
 const copyBtn = document.getElementById('copy');
+const packetPreviewEl = document.getElementById('packet-preview');
 let selectedStart = null;
 let selectedEnd = null;
 let mouseDownTime = null;
@@ -51,11 +53,15 @@ function updateStatus() {
   if (!selectedStart || !selectedEnd) {
     statusEl.textContent = 'ローソクをクリック、または範囲ドラッグしてください。';
     copyBtn.disabled = true;
+    packetPreviewEl.style.display = 'none';
+    packetPreviewEl.value = '';
     return;
   }
   const [s, e] = orderSelection(selectedStart, selectedEnd);
   const count = candleCount(s, e);
   statusEl.textContent = `選択: ${s.time_jst} ～ ${e.time_jst} / ${count}本 / ${selectionType(s, e)}`;
+  packetPreviewEl.value = selectionPacketText();
+  packetPreviewEl.style.display = 'block';
   copyBtn.disabled = false;
 }
 function buildPacket() {
@@ -104,13 +110,24 @@ function buildPacket() {
     }
   };
 }
+function selectionPacketText() {
+  return JSON.stringify(buildPacket(), null, 2);
+}
+function selectPreviewForManualCopy() {
+  packetPreviewEl.style.display = 'block';
+  packetPreviewEl.focus();
+  packetPreviewEl.select();
+}
 async function copySelection() {
-  const text = JSON.stringify(buildPacket(), null, 2);
+  const text = packetPreviewEl.value || selectionPacketText();
+  packetPreviewEl.value = text;
+  packetPreviewEl.style.display = 'block';
   try {
     await navigator.clipboard.writeText(text);
-    copiedEl.textContent = 'コピーしました';
+    copiedEl.textContent = 'コピーしました: 下の内容と同じJSONをクリップボードへ保存';
   } catch (err) {
-    copiedEl.textContent = 'コピー失敗: ブラウザ権限を確認';
+    selectPreviewForManualCopy();
+    copiedEl.textContent = '自動コピー不可: 下のJSONをCtrl+Cで手動コピー';
     console.error(err);
   }
 }
