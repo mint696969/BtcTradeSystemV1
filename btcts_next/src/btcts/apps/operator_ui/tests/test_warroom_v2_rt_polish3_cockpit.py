@@ -144,6 +144,7 @@ def test_modules_and_doc_markers() -> None:
     chart_text = (RT_UI / "chart_view.py").read_text(encoding="utf-8-sig")
     assert "zero=False" in chart_text
     assert "render_interactive_candle_chart" in chart_text
+    assert "_build_board_band_overlay_layers" in chart_text
     doc = DOC.read_text(encoding="utf-8-sig")
     assert "warroom_v2_rt_polish3_cockpit_done=true" in doc
     assert "gpt_review_copy_packet_added=true" in doc
@@ -220,11 +221,28 @@ def test_interactive_chart_overlay_layers_are_read_only_and_renderable() -> None
     assert marker_layers[1]["kind"] == "board_band"
     assert marker_layers[1]["reserved_for_future"] is True
     assert marker_layers[1]["rendered_now"] is False
-    html = build_interactive_chart_html(candles=[{"time": 1, "open": 1, "high": 1, "low": 1, "close": 1, "time_utc": "1970-01-01T00:00:01Z", "time_jst": "1970-01-01T09:00:01+09:00", "candle_index": 0}], mode="1分足", chart_context={"overlay_layers": layers + marker_layers})
+    board_layers = normalize_interactive_overlay_layers(
+        [
+            {
+                "layer_id": "warroom_board_bid_ask_band",
+                "kind": "board_band",
+                "points": [
+                    {"ts": "2026-07-05T14:00:00Z", "bid": 100.0, "ask": 101.0},
+                    {"ts": "2026-07-05T14:01:00Z", "bid": 100.5, "ask": 101.5},
+                ],
+            }
+        ]
+    )
+    assert board_layers[0]["kind"] == "board_band"
+    assert board_layers[0]["rendered_now"] is True
+    assert board_layers[0]["points"][0]["mid"] == 100.5
+    html = build_interactive_chart_html(candles=[{"time": 1, "open": 1, "high": 1, "low": 1, "close": 1, "time_utc": "1970-01-01T00:00:01Z", "time_jst": "1970-01-01T09:00:01+09:00", "candle_index": 0}], mode="1分足", chart_context={"overlay_layers": layers + marker_layers + board_layers})
     assert "prediction_flow_preview" in html
     assert "execution_points" in html
     assert "board_depth_band" in html
+    assert "warroom_board_bid_ask_band" in html
     assert "renderMarkerOverlay" in html
+    assert "renderBoardBandOverlay" in html
     assert "renderOverlayLayers(chart, series);" in html
 
 

@@ -115,6 +115,50 @@ def _board_band_frame(frame: pd.DataFrame) -> pd.DataFrame:
     return pivot
 
 
+def _build_board_band_overlay_layers(band_frame: pd.DataFrame, *, limit: int = 240) -> list[dict[str, Any]]:
+    if band_frame.empty:
+        return []
+    required = {"ts", "bid", "ask"}
+    if not required.issubset(set(band_frame.columns)):
+        return []
+    compact = band_frame.tail(limit).copy()
+    points: list[dict[str, Any]] = []
+    for row in compact.to_dict("records"):
+        ts = row.get("ts")
+        if not hasattr(ts, "isoformat"):
+            continue
+        bid = _as_float(row.get("bid"))
+        ask = _as_float(row.get("ask"))
+        if bid is None or ask is None:
+            continue
+        mid = _as_float(row.get("mid"))
+        spread = _as_float(row.get("spread"))
+        points.append(
+            {
+                "ts": ts.isoformat(),
+                "bid": round(bid, 6),
+                "ask": round(ask, 6),
+                "mid": round(float(mid if mid is not None else (bid + ask) / 2.0), 6),
+                "spread": round(float(spread if spread is not None else ask - bid), 6),
+            }
+        )
+    if len(points) < 2:
+        return []
+    return [
+        {
+            "layer_id": "warroom_board_bid_ask_band",
+            "label": "板気配 bid/ask/mid",
+            "kind": "board_band",
+            "points": points,
+            "read_only": True,
+            "broker_send_enabled": False,
+            "order_intent_submitted": False,
+            "ledger_append_allowed": False,
+            "prediction_invoked": False,
+            "classifier_invoked": False,
+        }
+    ]
+
 def _overlay_rows(packet: Mapping[str, Any]) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for overlay in packet.get("overlays", []):
@@ -436,6 +480,7 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
                 "primary_market_trade_path": dict(dhot_bootstrap_meta).get("source_path") if isinstance(dhot_bootstrap_meta, Mapping) else None,
                 "dhot_bootstrap": dict(dhot_bootstrap_meta) if isinstance(dhot_bootstrap_meta, Mapping) else {},
                 "input_source": "retained_market_state_rows_plus_dhot_market_trade_bootstrap",
+                "overlay_layers": _build_board_band_overlay_layers(band_frame),
             },
             st_api=st_api,
         )

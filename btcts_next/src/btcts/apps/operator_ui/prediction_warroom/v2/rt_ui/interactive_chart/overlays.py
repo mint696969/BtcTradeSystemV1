@@ -8,8 +8,8 @@ from typing import Any, Mapping
 import pandas as pd
 
 SUPPORTED_OVERLAY_KINDS = {"line", "marker", "price_band", "board_band"}
-RENDERED_OVERLAY_KINDS = {"line", "marker"}
-RESERVED_OVERLAY_KINDS = {"price_band", "board_band"}
+RENDERED_OVERLAY_KINDS = {"line", "marker", "board_band"}
+RESERVED_OVERLAY_KINDS = {"price_band"}
 
 
 def _epoch_seconds(value: object) -> int | None:
@@ -79,6 +79,43 @@ def _normalize_marker_layer(raw_layer: Mapping[str, Any], *, max_points_per_laye
     return {"markers": sorted(markers, key=lambda row: row["time"]), "color": _safe_color(raw_layer.get("color"), "#0f766e")}
 
 
+def _normalize_board_band_layer(raw_layer: Mapping[str, Any], *, max_points_per_layer: int) -> dict[str, Any]:
+    points: list[dict[str, Any]] = []
+    for raw_point in list(raw_layer.get("points") or [])[:max_points_per_layer]:
+        if not isinstance(raw_point, Mapping):
+            continue
+        epoch = _epoch_seconds(raw_point.get("ts") or raw_point.get("time"))
+        bid = _number(raw_point.get("bid"))
+        ask = _number(raw_point.get("ask"))
+        if epoch is None or bid is None or ask is None:
+            continue
+        mid = _number(raw_point.get("mid"))
+        spread = _number(raw_point.get("spread"))
+        points.append(
+            {
+                "time": epoch,
+                "bid": round(bid, 6),
+                "ask": round(ask, 6),
+                "mid": round(float(mid if mid is not None else (bid + ask) / 2.0), 6),
+                "spread": round(float(spread if spread is not None else ask - bid), 6),
+            }
+        )
+    if len(points) < 2:
+        return {
+            "reserved_only": True,
+            "rendered_now": False,
+            "reserved_for_future": True,
+            "contract_note": "board_band requires at least two valid bid/ask points; ignored by current frontend renderer",
+            "color": _safe_color(raw_layer.get("color"), "#38bdf8"),
+        }
+    return {
+        "points": sorted(points, key=lambda row: row["time"]),
+        "bid_color": _safe_color(raw_layer.get("bid_color"), "#60a5fa"),
+        "ask_color": _safe_color(raw_layer.get("ask_color"), "#fb7185"),
+        "mid_color": _safe_color(raw_layer.get("mid_color"), "#64748b"),
+        "line_width": int(raw_layer.get("line_width") or 1),
+    }
+
 def _normalize_reserved_layer(raw_layer: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "reserved_only": True,
@@ -95,7 +132,7 @@ def normalize_interactive_overlay_layers(layers: object, *, max_layers: int = 12
     - line: prediction/liquidity flow line. points=[{ts/time, value/price}]
     - marker: order/execution/manual event markers. markers or points=[{ts/time, position, shape, text}]
     - price_band: reserved for spread/liquidity bands. Normalized but not rendered yet.
-    - board_band: reserved for board/depth layers. Normalized but not rendered yet.
+    - board_band: rendered bid/ask/mid board quote lines when valid points exist; otherwise reserved safely.
 
     This function is intentionally pure. It must not call prediction, classifier,
     broker, order, ledger, filesystem, websocket, or runtime side effects.
@@ -114,6 +151,8 @@ def normalize_interactive_overlay_layers(layers: object, *, max_layers: int = 12
             payload = _normalize_line_layer(raw_layer, max_points_per_layer=max_points_per_layer)
         elif kind == "marker":
             payload = _normalize_marker_layer(raw_layer, max_points_per_layer=max_points_per_layer)
+        elif kind == "board_band":
+            payload = _normalize_board_band_layer(raw_layer, max_points_per_layer=max_points_per_layer)
         else:
             payload = _normalize_reserved_layer(raw_layer)
         if payload is None:
