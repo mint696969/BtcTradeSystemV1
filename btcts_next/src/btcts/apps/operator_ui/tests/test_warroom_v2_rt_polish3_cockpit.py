@@ -23,6 +23,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.inference_guidance_view 
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_strip_view import build_market_strip_packet  # noqa: E402
 from btcts.apps.operator_ui.views.warroom_v2_page import build_warroom_v2_page_mount_packet  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart import build_interactive_candle_records, build_interactive_chart_html, build_chart_selection_copy_request, normalize_interactive_overlay_layers  # noqa: E402
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart.html_builder import component_height  # noqa: E402
 
 
 def _widgets_packet() -> dict[str, object]:
@@ -187,6 +188,7 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "packet-preview" in html
     assert "copy-panel" in html
     assert "selection-summary" in html
+    assert component_height(len(candles)) >= 640
     assert "自動コピー不可: 下のJSONをCtrl+Cで手動コピー" in html
     assert "コピー成功: 下のJSONと同じ内容" in html
     assert "selectPreviewForManualCopy" in html

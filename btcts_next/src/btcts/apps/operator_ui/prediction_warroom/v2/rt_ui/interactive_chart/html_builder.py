@@ -17,7 +17,8 @@ def json_for_script(value: object) -> str:
 
 
 def component_height(candle_count: int) -> int:
-    return 470 if candle_count >= 40 else 430
+    _ = candle_count
+    return 640
 
 
 def build_interactive_chart_html(

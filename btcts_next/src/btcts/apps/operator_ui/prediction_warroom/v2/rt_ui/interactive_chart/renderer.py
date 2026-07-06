@@ -39,6 +39,7 @@ def render_interactive_candle_chart(
             "interactive_chart_library": "tradingview_lightweight_charts_standalone",
             "selection_copy_ready": True,
             "clipboard_fallback_preview_ready": True,
+            "copy_panel_visible_height_ready": True,
             "overlay_layers_ready": True,
             "prediction_overlay_layers_ready": True,
             "single_candle_selection_ready": True,
