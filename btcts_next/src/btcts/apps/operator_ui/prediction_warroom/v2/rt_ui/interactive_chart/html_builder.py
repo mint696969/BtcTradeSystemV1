@@ -50,11 +50,14 @@ def build_interactive_chart_html(
 <body>
 <div id="wrap">
   <div id="toolbar">
+    <span class="badge base-focus">Base OHLC + Volume</span>
     <span class="badge">{title}</span>
     <span class="badge">click1=開始点</span>
     <span class="badge">click2=範囲確定</span>
     <span class="badge">wheel=zoom / drag blank=pan</span>
+    <button id="reset-range" class="secondary" type="button">表示範囲へ戻す</button>
     <button id="copy" disabled>この範囲をGPTへコピー</button>
+    <span id="base-meta"></span>
     <span id="status">ローソクをクリックしてください。2回クリックで範囲を確定できます。</span>
     <span id="copied"></span>
   </div>

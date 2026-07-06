@@ -24,6 +24,9 @@ def test_refresh_uses_section_fragments_not_full_body_fragment() -> None:
     assert "_render_section_fragment" in page
     assert "_build_cockpit_snapshot" in page
     assert "rt_section_fragment_refresh_ready" in page
+    assert "rt_chart_engine_polling_ready" in page
+    assert "rt_chart_fragment_refresh_disabled" in page
+    assert "_render_section_fragment(\"chart\"" not in page
     assert "_render_warroom_v2_cockpit_body" not in page
     assert "_render_warroom_v2_cockpit_fragment" not in page
     assert "window.parent.location.reload" not in page
@@ -39,6 +42,8 @@ def test_auto_refresh_transport_marks_section_fragments() -> None:
 def test_page_mount_packet_section_fragment_and_no_action() -> None:
     packet = build_warroom_v2_page_mount_packet(runtime_status={"receiver_runtime_started": True, "socket_opened": True, "receive_loop_started": True}, bridge_packet={"messages_applied": 12}, display_source="live")
     assert packet["rt_section_fragment_refresh_ready"] is True
+    assert packet["rt_chart_engine_polling_ready"] is True
+    assert packet["rt_chart_fragment_refresh_disabled"] is True
     assert packet["page_reload_enabled"] is False
     assert packet["broker_send_enabled"] is False
     assert packet["order_intent_submitted"] is False

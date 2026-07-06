@@ -89,7 +89,7 @@ def build_warroom_v2_page_mount_packet(*, runtime_status: Mapping[str, Any] | No
     socket_opened = bool(runtime.get("socket_opened") or runtime.get("websocket_opened"))
     receive_loop_started = bool(runtime.get("receive_loop_started"))
     messages_applied = int(bridge.get("messages_applied") or 0)
-    return {"ok": True, "page_mount_version": WARROOM_V2_RT_VISIBLE_MOUNT_VERSION, "page_key": "warroom_v2", "page_label": "WarRoom v2", "thin_page_shell_only": False, "rt_visible_mount_ready": True, "rt_ui_polish1_modularized": True, "rt_polish2_live_retention_ready": True, "rt_polish3_cockpit_layout_ready": True, "rt_fragment_refresh_ready": True, "rt_section_fragment_refresh_ready": True, "rt_display_source": display_source, "fallback_sample_suppressed": True, "runtime_connected": receiver_started, "push_connected": bool(socket_opened or receive_loop_started or messages_applied > 0 or display_source in {"live", "retained"}), "websocket_enabled": bool(socket_opened or receive_loop_started), "receive_loop_started": receive_loop_started, "messages_applied": messages_applied, "page_reload_enabled": False, "websocket_send_enabled": False, "broker_send_enabled": False, "order_intent_submitted": False, "ledger_append_allowed": False, "prediction_invoked": False, "classifier_invoked": False}
+    return {"ok": True, "page_mount_version": WARROOM_V2_RT_VISIBLE_MOUNT_VERSION, "page_key": "warroom_v2", "page_label": "WarRoom v2", "thin_page_shell_only": False, "rt_visible_mount_ready": True, "rt_ui_polish1_modularized": True, "rt_polish2_live_retention_ready": True, "rt_polish3_cockpit_layout_ready": True, "rt_fragment_refresh_ready": True, "rt_section_fragment_refresh_ready": True, "rt_chart_engine_polling_ready": True, "rt_chart_fragment_refresh_disabled": True, "rt_display_source": display_source, "fallback_sample_suppressed": True, "runtime_connected": receiver_started, "push_connected": bool(socket_opened or receive_loop_started or messages_applied > 0 or display_source in {"live", "retained"}), "websocket_enabled": bool(socket_opened or receive_loop_started), "receive_loop_started": receive_loop_started, "messages_applied": messages_applied, "page_reload_enabled": False, "websocket_send_enabled": False, "broker_send_enabled": False, "order_intent_submitted": False, "ledger_append_allowed": False, "prediction_invoked": False, "classifier_invoked": False}
 
 
 def _render_section_fragment(name: str, auto_refresh_packet: Mapping[str, Any], body: Callable[[dict[str, Any]], None]) -> None:
@@ -142,7 +142,9 @@ def render() -> None:
         _render_section_fragment("cards", auto_refresh_packet, lambda snapshot: render_rt_prediction_cards(snapshot["display_packets"]["cards"], st))
 
     render_compact_section_label(st, index=5, title="Bottom chart", note="bid/ask board layer + trade points")
-    _render_section_fragment("chart", auto_refresh_packet, _render_chart_and_gpt_copy)
+    # Chart iframe owns high-frequency candle updates through its read-only polling engine.
+    # Do not fragment-refresh this section; fragment rerender recreates the iframe and causes flicker.
+    _render_chart_and_gpt_copy(_build_cockpit_snapshot())
 
     with st.expander("Realtime widget details", expanded=False):
         _render_section_fragment("details", auto_refresh_packet, lambda snapshot: render_rt_top_layout_and_widgets(snapshot["display_packets"]["top"], snapshot["display_packets"]["widgets"], st))

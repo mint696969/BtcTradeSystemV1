@@ -158,11 +158,16 @@ def test_modules_and_doc_markers() -> None:
     assert "plain_trade_ohlc_cache" in chart_text
     assert "interactive_candle_frame = plain_cache_all_candles" in chart_text
     assert "base_candle_pan_history_enabled" in chart_text
+    assert "base_latest_close" in chart_text
     assert "cache_lag_vs_live" in chart_text
+    assert "cache_rows" in chart_text
     assert "base_close=" in chart_text
     assert "live_overlay_price=" in chart_text
     assert "予測線ではありません" in chart_text
     assert "_build_board_band_overlay_layers" in chart_text
+    assert "chart_data_endpoint" in chart_text
+    assert "chart_engine_polling_enabled" in chart_text
+    assert "streamlit_fragment_rerender_required_for_candles" in chart_text
     doc = DOC.read_text(encoding="utf-8-sig")
     assert "warroom_v2_rt_polish3_cockpit_done=true" in doc
     assert "gpt_review_copy_packet_added=true" in doc
@@ -201,6 +206,8 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert len(candles) == 2
     assert candles[0]["time_utc"] == "2026-07-05T14:00:00Z"
     assert candles[0]["time_jst"].startswith("2026-07-05T23:00:00")
+    assert "volume" in candles[0]
+    assert "trade_count" in candles[0]
     packet = build_chart_selection_copy_request(
         mode="1分足",
         selection_type="range",
@@ -222,6 +229,20 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "copy-panel" in html
     assert "selection-summary" in html
     assert component_height(len(candles)) >= 640
+    assert "Base OHLC + Volume" in html
+    assert "reset-range" in html
+    assert "base-meta" in html
+    assert "表示範囲へ戻す" in html
+    assert "addHistogramSeries" in html
+    assert "createPriceLine" in html
+    assert "scaleMargins" in html
+    assert "cache遅延=" in html
+    assert "resetVisibleRange" in html
+    assert "pollChartDataEndpoint" in html
+    assert "wasFollowingLatest" in html
+    assert "liveVisible" in html
+    assert "applyCandlePayload" in html
+    assert "fetch(endpoint" in html
     assert "自動コピー不可: 下のJSONをCtrl+Cで手動コピー" in html
     assert "コピー成功: 下のJSONと同じ内容" in html
     assert "selectPreviewForManualCopy" in html
@@ -246,6 +267,12 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "dragLatestCandle" not in html
     assert "future_space_is_visual_blank_only" in html
     assert "base-candle-range" in html
+    assert "BASE.component_version" in html
+    assert "ctx.viewport_label" in html
+    assert "barSpacing: 4" in html
+    assert "minBarSpacing: 2" in html
+    assert "thinVisible" in html
+    assert "visible, thinVisible, total" in html
     assert "subscribeVisibleLogicalRangeChange" in html
     assert "loadVisibleRange() || defaultVisibleRange" in html
     compact_html = build_interactive_chart_html(candles=candles, mode="1分足", chart_context={"initial_visible_candle_count": 1}, visible_candle_count=1)

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-INTERACTIVE_CHART_COMPONENT_VERSION = "warroom_v2_interactive_chart.2026_07_06.v3_persist_visible_range"
+INTERACTIVE_CHART_COMPONENT_VERSION = "warroom_v2_interactive_chart.2026_07_07.v7_engine_polling"
 LIGHTWEIGHT_CHARTS_CDN = "https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"
 
 

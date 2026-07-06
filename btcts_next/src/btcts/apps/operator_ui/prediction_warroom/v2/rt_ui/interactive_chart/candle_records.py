@@ -61,6 +61,8 @@ def build_interactive_candle_records(candle_frame: pd.DataFrame, *, max_candles:
                 "high": round(float(row["high"]), 6),
                 "low": round(float(row["low"]), 6),
                 "close": round(float(row["close"]), 6),
+                "volume": round(float(row.get("volume") or 0.0), 8),
+                "trade_count": int(row.get("trade_count") or row.get("count") or 0),
                 "candle_index": index,
                 "candle_status": str(row.get("candle_status") or ""),
                 "source_role": str(row.get("source_role") or ""),

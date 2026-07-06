@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from typing import Any, Mapping
 
@@ -37,6 +38,9 @@ CHART_DHOT_BOOTSTRAP_SESSION_STATE_KEY = "warroom_v2_bottom_chart_dhot_bootstrap
 CHART_HISTORY_LIMIT = 1440
 PLAIN_CANDLE_CACHE_MAX_CANDLES = 720
 PLAIN_CANDLE_CACHE_MODES = {"Live", "1分足"}
+DEFAULT_CHART_DATA_ENDPOINT = "http://127.0.0.1:8765/warroom/plain-candles/latest"
+CHART_DATA_ENDPOINT_ENV = "WARROOM_PLAIN_CANDLE_CHART_ENDPOINT"
+CHART_DATA_POLL_INTERVAL_MS = 3000
 
 
 def _as_float(value: object) -> float | None:
@@ -651,6 +655,15 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
                 "initial_visible_candle_count": initial_visible_candle_count,
                 "interactive_candle_count": len(render_candle_frame),
                 "base_candle_pan_history_enabled": bool(plain_cache_connected and len(render_candle_frame) > len(candle_frame)),
+                "base_latest_close": base_latest.get("close"),
+                "base_latest_ts_utc": base_latest_ts.isoformat() if hasattr(base_latest_ts, "isoformat") else base_latest_ts,
+                "cache_lag_vs_live": cache_lag,
+                "cache_rows": cache_rows,
+                "plain_cache_connected": bool(plain_cache_connected),
+                "chart_data_endpoint": os.environ.get(CHART_DATA_ENDPOINT_ENV, DEFAULT_CHART_DATA_ENDPOINT),
+                "chart_data_poll_interval_ms": CHART_DATA_POLL_INTERVAL_MS,
+                "chart_engine_polling_enabled": True,
+                "streamlit_fragment_rerender_required_for_candles": False,
                 "primary_market_trade_path": dict(plain_cache_meta).get("cache_path") if plain_cache_connected and isinstance(plain_cache_meta, Mapping) else None,
                 "dhot_bootstrap": dict(dhot_bootstrap_meta) if isinstance(dhot_bootstrap_meta, Mapping) else {},
                 "plain_candle_cache": dict(plain_cache_meta) if isinstance(plain_cache_meta, Mapping) else {},
@@ -732,6 +745,9 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "gpt_review_chart_snapshot": chart_review_snapshot,
         "chart_trust_level": "plain_trade_ohlc_cache" if plain_cache_connected else "deterministic_provisional_market_state_mid_ohlcv",
         "true_trade_ohlcv_connected": bool(plain_cache_connected),
+        "chart_engine_polling_enabled": True,
+        "chart_data_endpoint": os.environ.get(CHART_DATA_ENDPOINT_ENV, DEFAULT_CHART_DATA_ENDPOINT),
+        "streamlit_fragment_rerender_required_for_candles": False,
         "raw_candle_frame_rows": len(raw_candle_frame),
         "candle_frame_rows": len(candle_frame),
         "closed_candle_count": closed_candle_count,

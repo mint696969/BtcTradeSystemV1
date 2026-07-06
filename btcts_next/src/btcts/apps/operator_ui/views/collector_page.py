@@ -42,6 +42,12 @@ from btcts.collector_vnext.stack_control import (
 )
 from btcts.collector_vnext.unified_state import write_unified_supervisor_request
 from btcts.core import paths as core_paths
+from btcts.processing.l4_consumer_models.operator_ui.warroom_chart_engine_runtime import (
+    chart_engine_runtime_snapshot,
+    request_chart_engine_restart,
+    request_chart_engine_safe_stop,
+    start_chart_engine_detached,
+)
 
 
 def _exchange_status_label(value: str) -> str:
@@ -210,6 +216,72 @@ def _origin_audit_summary(events: list[dict]) -> dict:
 
     return summary
 
+
+
+
+def _request_page_rerun() -> None:
+    rerun = getattr(st, "rerun", None)
+    if callable(rerun):
+        rerun()
+
+
+def _render_warroom_chart_engine_control_section() -> None:
+    snapshot = chart_engine_runtime_snapshot()
+    with live_shell.render_folded_section("WarRoom Chart Engine Runtime", expanded=True):
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        mode = str(snapshot.get("mode") or "-")
+        active = bool(snapshot.get("active"))
+        pending_action = str(snapshot.get("pending_action") or "-") or "-"
+        endpoint = str(snapshot.get("endpoint") or "-")
+        latest_end = str(snapshot.get("latest_candle_end_ts_utc") or "-")
+        gap_policy = str(snapshot.get("gap_policy") or "-")
+
+        with c1:
+            if st.button("Chart 起動", use_container_width=True, disabled=active):
+                ok, msg, already_running = start_chart_engine_detached()
+                if ok and already_running:
+                    st.info(msg)
+                elif ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+                _request_page_rerun()
+        with c2:
+            if st.button("Chart 安全停止", use_container_width=True, disabled=not active):
+                ok, msg = request_chart_engine_safe_stop()
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+                _request_page_rerun()
+        with c3:
+            if st.button("Chart 再起動", use_container_width=True, disabled=not active):
+                ok, msg = request_chart_engine_restart()
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+                _request_page_rerun()
+        c4.metric("Chart Engine", mode)
+        c5.metric("Active", "YES" if active else "NO")
+        c6.metric("Pending", pending_action)
+        st.caption(
+            f"endpoint={endpoint} / latest_candle_end={latest_end} / gap_policy={gap_policy} / "
+            "read_only_source=true / broker_send_enabled=false / prediction_invoked=false / classifier_invoked=false"
+        )
+        rows = [
+            {
+                "mode": mode,
+                "active": active,
+                "runtime_pid": snapshot.get("runtime_pid"),
+                "status_age_sec": snapshot.get("status_age_sec"),
+                "pending_action": pending_action,
+                "state_dir": snapshot.get("state_dir"),
+                "status_path": snapshot.get("status_path"),
+                "request_path": snapshot.get("request_path"),
+            }
+        ]
+        st.dataframe(rows, width="stretch")
 
 def _request_unified_start() -> tuple[bool, str, bool]:
     try:
@@ -463,6 +535,8 @@ def _render_collector_page_body():
         is_restart_request_pending=_is_restart_request_pending,
         supervisor_status_rows=_supervisor_status_rows,
     )
+
+    _render_warroom_chart_engine_control_section()
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_collector_runtime_state"), expanded=False):
         _render_scrollable_json_block(

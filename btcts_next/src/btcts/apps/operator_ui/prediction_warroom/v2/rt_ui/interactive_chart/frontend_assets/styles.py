@@ -5,15 +5,19 @@ from __future__ import annotations
 
 CHART_CSS = """
 html, body { margin: 0; padding: 0; background: transparent; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0f172a; }
+* { box-sizing: border-box; }
 #wrap { width: 100%; box-sizing: border-box; }
 #toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding: 2px 0 8px 0; font-size: 12px; }
-#chart { width:100%; height:390px; border: 1px solid rgba(148,163,184,.35); border-radius: 10px; overflow:hidden; background: #ffffff; }
+#toolbar .base-focus { background:#ecfdf5; border-color:rgba(5,150,105,.32); color:#065f46; font-weight:800; }
+#toolbar button.secondary { background:#f8fafc; color:#334155; border-color:rgba(148,163,184,.45); }
+#base-meta { color:#475569; font-weight:700; }
+#chart { width:100%; height:500px; border: 1px solid rgba(148,163,184,.32); border-radius: 12px; overflow:hidden; background: linear-gradient(180deg,#ffffff 0%,#f8fafc 100%); box-shadow:0 1px 2px rgba(15,23,42,.05); }
 button { border:1px solid rgba(37,99,235,.35); background:#eff6ff; color:#1d4ed8; border-radius:8px; padding:5px 10px; font-weight:700; cursor:pointer; }
 button:disabled { opacity:.45; cursor:not-allowed; }
 .badge { border:1px solid rgba(148,163,184,.4); border-radius:999px; padding:4px 8px; background:#f8fafc; }
 #status { color:#334155; }
 #copied { color:#15803d; font-weight:700; }
-#copy-panel { margin-top:8px; padding:9px 10px; border:1px solid rgba(148,163,184,.34); border-radius:10px; background:#ffffff; box-shadow:0 1px 2px rgba(15,23,42,.05); font-size:12px; }
+#copy-panel { margin-top:8px; padding:8px 10px; border:1px solid rgba(148,163,184,.34); border-radius:10px; background:#ffffff; box-shadow:0 1px 2px rgba(15,23,42,.05); font-size:12px; }
 #copy-panel.pending { background:#f8fafc; color:#475569; }
 #copy-panel.ready { border-color:rgba(37,99,235,.28); background:#eff6ff; }
 #copy-panel.copied { border-color:rgba(21,128,61,.28); background:#f0fdf4; }
