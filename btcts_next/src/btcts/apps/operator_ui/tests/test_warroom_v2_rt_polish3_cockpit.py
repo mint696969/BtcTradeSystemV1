@@ -24,6 +24,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_strip_view import
 from btcts.apps.operator_ui.views.warroom_v2_page import build_warroom_v2_page_mount_packet  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart import build_interactive_candle_records, build_interactive_chart_html, build_chart_selection_copy_request, normalize_interactive_overlay_layers  # noqa: E402
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart.html_builder import component_height  # noqa: E402
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_view import _cache_candles_to_display_points, _plain_cache_to_candle_frame  # noqa: E402
 
 
 def _widgets_packet() -> dict[str, object]:
@@ -150,12 +151,33 @@ def test_modules_and_doc_markers() -> None:
     chart_text = (RT_UI / "chart_view.py").read_text(encoding="utf-8-sig")
     assert "zero=False" in chart_text
     assert "render_interactive_candle_chart" in chart_text
+    assert "read_plain_candle_cache" in chart_text
+    assert "raw_trade_read_from_ui_enabled" in chart_text
+    assert "load_dhot_market_trade_history" not in chart_text
+    assert "plain_trade_ohlc_cache" in chart_text
     assert "_build_board_band_overlay_layers" in chart_text
     doc = DOC.read_text(encoding="utf-8-sig")
     assert "warroom_v2_rt_polish3_cockpit_done=true" in doc
     assert "gpt_review_copy_packet_added=true" in doc
 
 
+
+
+
+def test_plain_trade_cache_candles_can_seed_display_points_without_live_overlay() -> None:
+    cache_frame = pd.DataFrame(
+        [
+            {"time_utc": "2026-07-06T14:40:00Z", "open": 100.0, "high": 105.0, "low": 99.0, "close": 104.0, "volume": 1.0, "trade_count": 3, "timeframe_sec": 60},
+            {"time_utc": "2026-07-06T14:41:00Z", "open": 104.0, "high": 106.0, "low": 103.0, "close": 105.0, "volume": 1.2, "trade_count": 4, "timeframe_sec": 60},
+        ]
+    )
+    candles = _plain_cache_to_candle_frame(cache_frame)
+    points = _cache_candles_to_display_points(candles)
+    assert len(candles) == 2
+    assert list(points["topic"]) == ["plain_trade_ohlc_cache.close", "plain_trade_ohlc_cache.close"]
+    assert list(points["role"]) == ["last", "last"]
+    assert list(points["price"]) == [104.0, 105.0]
+    assert points.iloc[-1]["freshness_label"] == "plain_trade_cache"
 
 def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     frame = pd.DataFrame(

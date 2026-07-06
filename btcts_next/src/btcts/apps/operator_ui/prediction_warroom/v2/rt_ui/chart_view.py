@@ -8,9 +8,10 @@ from typing import Any, Mapping
 
 import pandas as pd
 
-from btcts.prediction.warroom_chart_history_bootstrap import (
-    WARROOM_CHART_DHOT_BOOTSTRAP_VERSION,
-    load_dhot_market_trade_history,
+from btcts.prediction.warroom_chart_history_bootstrap import WARROOM_CHART_DHOT_BOOTSTRAP_VERSION
+from btcts.prediction.warroom_plain_candle_cache import (
+    WARROOM_PLAIN_CANDLE_CACHE_VERSION,
+    read_plain_candle_cache,
 )
 from btcts.prediction.warroom_chart_series import (
     WARROOM_CHART_SERIES_VERSION,
@@ -28,12 +29,14 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart import
     render_interactive_candle_chart,
 )
 
-BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_05.v13_dhot_history_bootstrap"
+BOTTOM_CHART_POLISH_VERSION = "warroom_v2_bottom_chart_polish.2026_07_06.v14_plain_trade_cache"
 _PRICE_RE = re.compile(r"(?:best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 _NAMED_PRICE_RE = re.compile(r"(best_ask|best_bid|last_price|spread)=([0-9]+(?:\.[0-9]+)?)")
 CHART_HISTORY_SESSION_STATE_KEY = "warroom_v2_bottom_chart_history_rows"
 CHART_DHOT_BOOTSTRAP_SESSION_STATE_KEY = "warroom_v2_bottom_chart_dhot_bootstrap"
 CHART_HISTORY_LIMIT = 1440
+PLAIN_CANDLE_CACHE_MAX_CANDLES = 720
+PLAIN_CANDLE_CACHE_MODES = {"Live", "1分足"}
 
 
 def _as_float(value: object) -> float | None:
@@ -114,6 +117,118 @@ def _board_band_frame(frame: pd.DataFrame) -> pd.DataFrame:
     pivot["spread"] = pivot["ask"] - pivot["bid"]
     return pivot
 
+
+
+def _plain_cache_to_candle_frame(cache_frame: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "ts",
+        "open",
+        "high",
+        "low",
+        "close",
+        "direction",
+        "count",
+        "volume",
+        "trade_count",
+        "source_role",
+        "timeframe_sec",
+        "candle_status",
+        "is_closed",
+    ]
+    if cache_frame.empty:
+        return pd.DataFrame(columns=columns)
+    required = {"time_utc", "open", "high", "low", "close"}
+    if not required.issubset(set(cache_frame.columns)):
+        return pd.DataFrame(columns=columns)
+    work = cache_frame.copy()
+    work["ts"] = pd.to_datetime(work["time_utc"], utc=True, errors="coerce")
+    for column in ("open", "high", "low", "close", "volume"):
+        if column in work.columns:
+            work[column] = pd.to_numeric(work[column], errors="coerce")
+    if "trade_count" not in work.columns:
+        work["trade_count"] = 0
+    work["trade_count"] = pd.to_numeric(work["trade_count"], errors="coerce").fillna(0).astype(int)
+    if "timeframe_sec" not in work.columns:
+        work["timeframe_sec"] = 60
+    work["timeframe_sec"] = pd.to_numeric(work["timeframe_sec"], errors="coerce").fillna(60).astype(int)
+    work = work.dropna(subset=["ts", "open", "high", "low", "close"]).sort_values("ts").reset_index(drop=True)
+    if work.empty:
+        return pd.DataFrame(columns=columns)
+    if "volume" not in work.columns:
+        work["volume"] = 0.0
+    work["volume"] = pd.to_numeric(work["volume"], errors="coerce").fillna(0.0)
+    work["direction"] = work.apply(lambda row: "up" if float(row["close"]) >= float(row["open"]) else "down", axis=1)
+    work["count"] = work["trade_count"]
+    work["source_role"] = "plain_trade_ohlc_cache"
+    work["candle_status"] = "closed"
+    work.loc[work.index == work.index.max(), "candle_status"] = "forming"
+    work["is_closed"] = work["candle_status"] == "closed"
+    return work[columns]
+
+
+def _filter_candles_to_domain(candles: pd.DataFrame, x_domain: tuple[pd.Timestamp, pd.Timestamp] | None) -> pd.DataFrame:
+    if candles.empty or x_domain is None:
+        return candles
+    start, end = x_domain
+    visible = candles[(candles["ts"] >= start) & (candles["ts"] <= end)].copy()
+    return visible if not visible.empty else candles.tail(12).copy()
+
+
+def _candle_x_domain(candles: pd.DataFrame, *, minutes: int) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+    if candles.empty or "ts" not in candles.columns:
+        return None
+    ts = pd.to_datetime(candles["ts"], utc=True, errors="coerce").dropna()
+    if ts.empty:
+        return None
+    end = ts.max()
+    start = end - pd.Timedelta(minutes=minutes)
+    return start, end
+
+
+def _cache_candles_to_display_points(candles: pd.DataFrame) -> pd.DataFrame:
+    columns = ["ts", "topic", "role", "price", "sequence", "freshness_label"]
+    if candles.empty:
+        return pd.DataFrame(columns=columns)
+    rows = [
+        {
+            "ts": row["ts"],
+            "topic": "plain_trade_ohlc_cache.close",
+            "role": "last",
+            "price": float(row["close"]),
+            "sequence": int(index),
+            "freshness_label": "plain_trade_cache",
+        }
+        for index, row in enumerate(candles.sort_values("ts").reset_index(drop=True).to_dict("records"))
+        if row.get("ts") is not None and row.get("close") is not None
+    ]
+    return pd.DataFrame(rows, columns=columns)
+
+
+def _plain_cache_chart_series_meta(*, cache_frame: pd.DataFrame, candle_frame: pd.DataFrame, mode: str) -> dict[str, Any]:
+    return {
+        "version": WARROOM_PLAIN_CANDLE_CACHE_VERSION,
+        "source_family": "warroom_plain_trade_ohlc_cache",
+        "mode": mode,
+        "timeframe_sec": 60,
+        "input_row_count": len(cache_frame),
+        "usable_row_count": len(candle_frame),
+        "candle_count": len(candle_frame),
+        "latest_candle_forming": not candle_frame.empty,
+        "provisional": False,
+        "source_notice": "D-hot derived plain trade OHLC cache. Base candle uses market.trade payload.price only.",
+        "read_only": True,
+        "broker_send_enabled": False,
+        "prediction_invoked": False,
+        "classifier_invoked": False,
+    }
+
+
+def _meta_to_dict(meta: Any) -> dict[str, Any]:
+    if hasattr(meta, "to_dict"):
+        return meta.to_dict()
+    if isinstance(meta, Mapping):
+        return dict(meta)
+    return {}
 
 def _build_board_band_overlay_layers(band_frame: pd.DataFrame, *, limit: int = 240) -> list[dict[str, Any]]:
     if band_frame.empty:
@@ -240,10 +355,10 @@ def _build_gpt_review_chart_snapshot(
             "rows": len(candle_frame),
             "closed": int((candle_frame.get("candle_status") == "closed").sum()) if not candle_frame.empty and "candle_status" in candle_frame.columns else 0,
             "forming": int((candle_frame.get("candle_status") == "forming").sum()) if not candle_frame.empty and "candle_status" in candle_frame.columns else 0,
-            "source": "non_ui_warroom_chart_series",
-            "true_trade_ohlcv_connected": False,
+            "source": "dhot_derived_plain_trade_ohlc_cache" if _meta_to_dict(chart_series_meta).get("source_family") == "warroom_plain_trade_ohlc_cache" else "non_ui_warroom_chart_series",
+            "true_trade_ohlcv_connected": _meta_to_dict(chart_series_meta).get("source_family") == "warroom_plain_trade_ohlc_cache",
         },
-        "chart_series_meta": chart_series_meta.to_dict() if hasattr(chart_series_meta, "to_dict") else {},
+        "chart_series_meta": _meta_to_dict(chart_series_meta),
         "dhot_bootstrap": dict(dhot_bootstrap_meta),
         "sample_preview": {
             "visible_price_tail_count": min(len(display_frame), 12),
@@ -255,12 +370,12 @@ def _build_gpt_review_chart_snapshot(
         },
         "overlays_summary": overlay_rows[:4],
         "trust_boundary": {
-            "chart_logic_owner": "btcts.prediction.warroom_chart_series",
+            "chart_logic_owner": "btcts.prediction.warroom_plain_candle_cache",
             "ui_role": "render_only",
-            "input_source": "retained_market_state_rows_plus_dhot_market_trade_bootstrap",
+            "input_source": "dhot_derived_plain_trade_ohlc_cache_plus_retained_market_state_overlay" if _meta_to_dict(chart_series_meta).get("source_family") == "warroom_plain_trade_ohlc_cache" else "retained_market_state_rows",
             "latest_candle_may_change": True,
             "closed_candles_should_not_change_in_session": True,
-            "official_exchange_ohlc_connected": False,
+            "official_exchange_ohlc_connected": _meta_to_dict(chart_series_meta).get("source_family") == "warroom_plain_trade_ohlc_cache",
             "manual_review_only": True,
         },
         "safety": {
@@ -349,24 +464,17 @@ def _retain_chart_history(current_frame: pd.DataFrame, st_api: Any) -> pd.DataFr
     return history
 
 def _bootstrap_dhot_chart_history(current_frame: pd.DataFrame, st_api: Any) -> tuple[pd.DataFrame, dict[str, Any]]:
-    state = _session_state(st_api)
-    if state is None:
-        return current_frame, {"ok": False, "version": WARROOM_CHART_DHOT_BOOTSTRAP_VERSION, "reason": "session_state_unavailable"}
-    previous = _history_records_to_frame(state.get(CHART_HISTORY_SESSION_STATE_KEY, []))
-    bootstrap_meta = state.get(CHART_DHOT_BOOTSTRAP_SESSION_STATE_KEY)
-    if not previous.empty or isinstance(bootstrap_meta, Mapping):
-        return current_frame, dict(bootstrap_meta or {"ok": False, "version": WARROOM_CHART_DHOT_BOOTSTRAP_VERSION, "reason": "already_attempted"})
-    bootstrap_frame, result = load_dhot_market_trade_history()
-    meta = result.to_dict()
-    state[CHART_DHOT_BOOTSTRAP_SESSION_STATE_KEY] = meta
-    if bootstrap_frame.empty:
-        return current_frame, meta
-    if current_frame.empty:
-        return bootstrap_frame, meta
-    merged = pd.concat([bootstrap_frame, current_frame], ignore_index=True)
-    merged = merged.drop_duplicates(subset=["ts", "topic", "role", "price", "sequence"]).sort_values(["ts", "role", "topic"]).tail(CHART_HISTORY_LIMIT)
-    return merged, meta
-
+    return current_frame, {
+        "ok": False,
+        "version": WARROOM_CHART_DHOT_BOOTSTRAP_VERSION,
+        "reason": "disabled_after_plain_trade_candle_cache_connected",
+        "raw_trade_read_from_ui_enabled": False,
+        "read_only": True,
+        "broker_send_enabled": False,
+        "order_intent_submitted": False,
+        "prediction_invoked": False,
+        "classifier_invoked": False,
+    }
 
 def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, candle_frame: pd.DataFrame, st_api: Any, *, x_domain: tuple[pd.Timestamp, pd.Timestamp] | None = None) -> bool:
     if frame.empty:
@@ -438,12 +546,26 @@ def _render_price_chart(frame: pd.DataFrame, band_frame: pd.DataFrame, candle_fr
 def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
     st_api.caption("チャート: Live/分足/時足/日足モード + rolling表示窓 / 読み取り専用")
     current_frame = chart_rows_to_frame(packet)
-    current_frame, dhot_bootstrap_meta = _bootstrap_dhot_chart_history(current_frame, st_api)
+    dhot_bootstrap_meta = {
+        "ok": False,
+        "version": WARROOM_CHART_DHOT_BOOTSTRAP_VERSION,
+        "reason": "disabled_after_plain_trade_candle_cache_connected",
+        "raw_trade_read_from_ui_enabled": False,
+    }
     frame = _retain_chart_history(current_frame, st_api)
     chart_config: ChartDisplayConfig = select_chart_display_config(st_api)
     display_frame = prepare_chart_display_frame(frame, chart_config)
-    x_domain = chart_x_domain(frame, minutes=chart_config.viewport_minutes)
-    candle_frame, chart_series_meta = build_warroom_chart_candles(frame, mode=chart_config.mode, x_domain=x_domain)
+    plain_cache_frame, plain_cache_meta = read_plain_candle_cache(max_candles=PLAIN_CANDLE_CACHE_MAX_CANDLES)
+    plain_cache_all_candles = _plain_cache_to_candle_frame(plain_cache_frame)
+    plain_cache_connected = (chart_config.mode in PLAIN_CANDLE_CACHE_MODES) and not plain_cache_all_candles.empty
+    x_domain = _candle_x_domain(plain_cache_all_candles, minutes=chart_config.viewport_minutes) if plain_cache_connected else chart_x_domain(frame, minutes=chart_config.viewport_minutes)
+    if plain_cache_connected:
+        candle_frame = _filter_candles_to_domain(plain_cache_all_candles, x_domain)
+        chart_series_meta = _plain_cache_chart_series_meta(cache_frame=plain_cache_frame, candle_frame=candle_frame, mode=chart_config.mode)
+        if display_frame.empty:
+            display_frame = _cache_candles_to_display_points(candle_frame)
+    else:
+        candle_frame, chart_series_meta = build_warroom_chart_candles(frame, mode=chart_config.mode, x_domain=x_domain)
     raw_candle_frame = candle_frame
     closed_candle_count = int((candle_frame.get("candle_status") == "closed").sum()) if not candle_frame.empty and "candle_status" in candle_frame.columns else 0
     forming_candle_count = int((candle_frame.get("candle_status") == "forming").sum()) if not candle_frame.empty and "candle_status" in candle_frame.columns else 0
@@ -462,9 +584,9 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
     c6.metric("売気配", _fmt_price(None if latest_band is None else latest_band.get("ask")))
     c7.metric("スプレッド", _fmt_spread(None if latest_band is None else latest_band.get("spread")))
 
+    cache_rows = int(plain_cache_meta.get("rows_returned") or 0) if isinstance(plain_cache_meta, Mapping) else 0
     st_api.caption(f"データ範囲={chart_config.source_label} / 注意={chart_config.source_notice}")
-    bootstrap_rows = int(dhot_bootstrap_meta.get("rows_returned") or 0) if isinstance(dhot_bootstrap_meta, Mapping) else 0
-    st_api.caption(f"チャート信頼境界=非UI chart series生成ロジック / D-hot market.trade bootstrap={bootstrap_rows}行 / 最新足のみ未確定 / 正式約定OHLCキャッシュは未接続")
+    st_api.caption(f"チャート信頼境界=plain trade OHLC cache優先 / cache={cache_rows}行 / UI raw market.trade bootstrap=disabled / 最新足のみ未確定")
     if chart_config.historical_cache_required:
         st_api.info("1時間足/日足は現在のLive保持履歴からの暫定表示です。10日超やcold archive統合は、後続の集約キャッシュ接続で扱います。")
 
@@ -477,9 +599,10 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
                 "display_mode": chart_config.mode,
                 "viewport_label": chart_config.viewport_label,
                 "viewport_minutes": chart_config.viewport_minutes,
-                "primary_market_trade_path": dict(dhot_bootstrap_meta).get("source_path") if isinstance(dhot_bootstrap_meta, Mapping) else None,
+                "primary_market_trade_path": dict(plain_cache_meta).get("cache_path") if plain_cache_connected and isinstance(plain_cache_meta, Mapping) else None,
                 "dhot_bootstrap": dict(dhot_bootstrap_meta) if isinstance(dhot_bootstrap_meta, Mapping) else {},
-                "input_source": "retained_market_state_rows_plus_dhot_market_trade_bootstrap",
+                "plain_candle_cache": dict(plain_cache_meta) if isinstance(plain_cache_meta, Mapping) else {},
+                "input_source": "dhot_derived_plain_trade_ohlc_cache_plus_retained_market_state_overlay" if plain_cache_connected else "retained_market_state_rows",
                 "overlay_layers": _build_board_band_overlay_layers(band_frame),
             },
             st_api=st_api,
@@ -529,7 +652,10 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "historical_cache_required": chart_config.historical_cache_required,
         "chart_source_label": chart_config.source_label,
         "chart_source_notice": chart_config.source_notice,
-        "historical_cache_connected": False,
+        "historical_cache_connected": bool(plain_cache_connected),
+        "plain_candle_cache_connected": bool(plain_cache_connected),
+        "plain_candle_cache_version": WARROOM_PLAIN_CANDLE_CACHE_VERSION,
+        "plain_candle_cache_meta": dict(plain_cache_meta) if isinstance(plain_cache_meta, Mapping) else {},
         "cold_archive_direct_read_enabled": False,
         "timeframe_helper_version": CHART_TIMEFRAME_VIEW_VERSION,
         "chart_series_version": WARROOM_CHART_SERIES_VERSION,
@@ -549,16 +675,16 @@ def render_rt_bottom_chart_graph(packet: Mapping[str, Any], st_api: Any) -> dict
         "stable_candles_ready": True,
         "sealed_candles_ready": False,
         "chart_series_logic_split_ready": True,
-        "chart_series_meta": chart_series_meta.to_dict(),
+        "chart_series_meta": _meta_to_dict(chart_series_meta),
         "gpt_review_chart_snapshot_ready": True,
         "gpt_review_chart_snapshot": chart_review_snapshot,
-        "chart_trust_level": "deterministic_provisional_market_state_mid_ohlcv",
-        "true_trade_ohlcv_connected": False,
+        "chart_trust_level": "plain_trade_ohlc_cache" if plain_cache_connected else "deterministic_provisional_market_state_mid_ohlcv",
+        "true_trade_ohlcv_connected": bool(plain_cache_connected),
         "raw_candle_frame_rows": len(raw_candle_frame),
         "candle_frame_rows": len(candle_frame),
         "closed_candle_count": closed_candle_count,
         "forming_candle_count": forming_candle_count,
-        "candle_source": "dhot_bootstrap_plus_retained_market_state_mid_rows",
+        "candle_source": "dhot_derived_plain_trade_ohlc_cache" if plain_cache_connected else "retained_market_state_mid_rows",
         "board_band_rows": len(band_frame),
         "overlay_rows": len(overlay_rows),
         "bid_ask_layer_ready": True,
