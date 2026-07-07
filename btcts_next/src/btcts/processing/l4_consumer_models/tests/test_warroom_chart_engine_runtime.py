@@ -106,3 +106,23 @@ def test_runtime_normalizes_nested_data_dir_to_hot_root(tmp_path: Path) -> None:
     assert runtime._normalize_runtime_root(nested) == hot
     assert runtime._normalize_runtime_root(hot) == hot
 
+
+def test_candle_store_cli_exposes_history_rebuild_mode() -> None:
+    source = Path(runtime.__file__).with_name("warroom_candle_store.py").read_text(encoding="utf-8-sig")
+    assert "--rebuild-history" in source
+    assert "--history-raw-root" in source
+    assert "rebuild_candle_store_from_trade_history" in source
+    assert "_trade_parts_asc_from_roots" in source
+    assert "later_roots_replace_earlier_roots_by_date_partition" in source
+    assert "history_rebuild" in source
+    assert "append_boundary" in source
+
+
+def test_chart_engine_start_clears_stale_request_marker() -> None:
+    source = Path("btcts_next/src/btcts/processing/l4_consumer_models/operator_ui/warroom_chart_engine_runtime.py").read_text(encoding="utf-8-sig")
+    tool = Path("tools/run_warroom_chart_engine.ps1").read_text(encoding="utf-8-sig")
+    assert "def _clear_stale_request_on_start" in source
+    assert "cleared_stale_request_on_start" in source
+    assert "clearing stale startup request" in tool
+    assert "Clear-RequestFile" in tool
+

@@ -186,6 +186,27 @@ def _child_env(data_root: Path) -> dict[str, str]:
     return env
 
 
+
+
+def _clear_stale_request_on_start(paths: dict[str, Path]) -> bool:
+    """Remove a stale request before launching a stopped Chart Engine runtime."""
+    request_path = paths.get("request")
+    if request_path is None or not request_path.exists():
+        return False
+    try:
+        request = _read_json(request_path)
+        action = str(request.get("action") or "").strip().lower()
+        if action in {"safe_stop", "stop", "stop_stack", "restart"}:
+            request_path.unlink(missing_ok=True)
+            return True
+    except Exception:
+        try:
+            request_path.unlink(missing_ok=True)
+            return True
+        except Exception:
+            return False
+    return False
+
 def start_chart_engine_detached(data_root: Path | None = None, *, interval_sec: int = DEFAULT_INTERVAL_SEC) -> tuple[bool, str, bool]:
     root = data_root or _data_root()
     snapshot = chart_engine_runtime_snapshot(root)
@@ -197,6 +218,7 @@ def start_chart_engine_detached(data_root: Path | None = None, *, interval_sec: 
         return False, f"runtime tool missing: {script}", False
     paths = chart_engine_paths(root)
     paths["state_dir"].mkdir(parents=True, exist_ok=True)
+    cleared_stale_request = _clear_stale_request_on_start(paths)
     command_args = [
         _pwsh_exe(),
         "-NoLogo",
@@ -239,6 +261,7 @@ def start_chart_engine_detached(data_root: Path | None = None, *, interval_sec: 
             "stdout_path": str(paths["stdout"]),
             "stderr_path": str(paths["stderr"]),
             "max_cycles": 0,
+            "cleared_stale_request_on_start": bool(cleared_stale_request),
             "version": WARROOM_CHART_ENGINE_RUNTIME_VERSION,
             "layer": WARROOM_CHART_ENGINE_LAYER,
             "read_only_source": True,

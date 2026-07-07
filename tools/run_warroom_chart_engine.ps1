@@ -275,6 +275,10 @@ function Invoke-RefreshOnce {
 
 try {
   New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
+  if (Test-Path $RequestPath) {
+    Write-Host "[warroom-chart-engine] clearing stale startup request: $RequestPath"
+    Clear-RequestFile
+  }
   Write-JsonFile -Path $LockPath -Payload ([ordered]@{ pid = $PID; started_at = Get-NowIsoUtc; command = "tools/run_warroom_chart_engine.ps1"; endpoint = $Endpoint })
   Write-ChartEngineStatus -Mode "STARTING" -LastAction "runtime_starting"
   Write-ChartEngineHealth -Ok $true -Reason "starting"

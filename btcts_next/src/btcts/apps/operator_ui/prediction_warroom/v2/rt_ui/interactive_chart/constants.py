@@ -3,19 +3,23 @@
 
 from __future__ import annotations
 
-INTERACTIVE_CHART_COMPONENT_VERSION = "warroom_v2_interactive_chart.2026_07_07.v7_engine_polling"
+INTERACTIVE_CHART_COMPONENT_VERSION = "warroom_v2_interactive_chart.2026_07_07.v9_selection_payload_jst_axis"
 LIGHTWEIGHT_CHARTS_CDN = "https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"
 
 
 def recommended_visible_candle_count(mode: str) -> int:
+    if mode == "Live":
+        return 120
     if mode == "日足":
         return 60
     if mode == "1時間足":
         return 96
-    if mode == "1分足":
-        return 120
-    return 90
+    if mode in {"15分足", "30分足"}:
+        return 96
+    if mode in {"1分足", "5分足"}:
+        return 180
+    return 120
 
 
 def timeframe_key(mode: str) -> str:
-    return {"Live": "live", "1分足": "1m", "1時間足": "1h", "日足": "1d"}.get(str(mode), "live")
+    return {"Live": "live", "1分足": "1m", "5分足": "5m", "15分足": "15m", "30分足": "30m", "1時間足": "1h", "日足": "1d"}.get(str(mode), "live")

@@ -177,15 +177,36 @@ function updateStatus() {
   setCopyPanelState('ready', selectionSummaryText(s, e, count), selectionHintText(s, e));
   copyBtn.disabled = false;
 }
+function selectionTimeframeSec() {
+  return { Live: 60, '1分足': 60, '5分足': 300, '15分足': 900, '30分足': 1800, '1時間足': 3600, '日足': 86400 }[BASE.mode] || 60;
+}
+function selectionTimeframeKey() {
+  return { Live: 'live', '1分足': '1m', '5分足': '5m', '15分足': '15m', '30分足': '30m', '1時間足': '1h', '日足': '1d' }[BASE.mode] || 'live';
+}
+function candleStoreRelPath(timeframeSec) {
+  return `data/derived/warroom/candles/exchange=bitflyer/symbol=FX_BTC_JPY/timeframe=${timeframeSec}s`;
+}
+function selectedCandlesBetween(s, e) {
+  return CANDLES.filter(c => Number(c.time) >= Number(s.time) && Number(c.time) <= Number(e.time));
+}
+function isFormingCandle(c) {
+  return String((c && (c.candle_status || c.status)) || '').toLowerCase() === 'forming';
+}
 function buildPacket() {
   const [s, e] = orderSelection(selectedStart, selectedEnd);
+  const selectedCandles = selectedCandlesBetween(s, e);
+  const timeframe = selectionTimeframeKey();
+  const timeframeSec = selectionTimeframeSec();
+  const storeRelPath = candleStoreRelPath(timeframeSec);
   return {
     schema_version: 'warroom_chart_analysis_request.2026_07_06.v2_interactive_selection',
     selection_origin: 'warroom_v2_interactive_candlestick_chart',
     selection_type: selectionType(s, e),
     purpose: 'manual review only; use Actions/data tools for deeper evidence; no order action',
-    timeframe: { Live: 'live', '1分足': '1m', '1時間足': '1h', '日足': '1d' }[BASE.mode] || 'live',
+    timeframe: timeframe,
     timeframe_label: BASE.mode,
+    timeframe_sec: timeframeSec,
+    market: { exchange: 'bitflyer', symbol: 'FX_BTC_JPY' },
     selected_range: {
       start_ts_utc: s.time_utc,
       end_ts_utc: e.time_utc,
@@ -194,12 +215,21 @@ function buildPacket() {
       start_candle_index: s.candle_index,
       end_candle_index: e.candle_index,
       candle_count: candleCount(s, e),
-      inclusive: true
+      inclusive: true,
+      lookup_key: 'time_utc',
+      candle_index_role: 'frontend_tail_record_index_not_store_index',
+      candle_ts_semantics: 'bucket_start_utc',
+      start_candle_status: s.candle_status || null,
+      end_candle_status: e.candle_status || null,
+      contains_forming_candle: selectedCandles.some(isFormingCandle)
     },
     viewport: {
       right_edge_is_now_or_latest: true,
       future_space_is_visual_blank_only: true,
-      visible_candle_count: BASE.visible_candle_count
+      visible_candle_count: BASE.visible_candle_count,
+      viewport_label: BASE.chart_context.viewport_label || null,
+      viewport_minutes: BASE.chart_context.viewport_minutes || null,
+      chart_axis_timezone: 'Asia/Tokyo'
     },
     source: {
       hot_data_root: 'D:/btc_ts_hot',
@@ -207,7 +237,15 @@ function buildPacket() {
       cold_root_policy: 'Use cold archive only when the operator explicitly asks for archive/replay/historical validation.',
       primary_market_trade_path: BASE.chart_context.primary_market_trade_path || null,
       dhot_bootstrap: BASE.chart_context.dhot_bootstrap || {},
-      input_source: BASE.chart_context.input_source || 'retained_market_state_rows_plus_dhot_market_trade_bootstrap'
+      input_source: BASE.chart_context.input_source || 'warroom_l4_candle_store_plus_retained_market_state_overlay',
+      candle_store_family: 'warroom_l4_candle_store',
+      candle_store_relpath: storeRelPath,
+      closed_candles_relpath: `${storeRelPath}/closed.jsonl`,
+      forming_candle_relpath: `${storeRelPath}/forming.json`,
+      timeframe_meta_relpath: `${storeRelPath}/meta.json`,
+      update_state_relpath: 'data/derived/warroom/candles/exchange=bitflyer/symbol=FX_BTC_JPY/update_state.json',
+      gap_policy: 'absent_candles_no_synthetic_null',
+      preferred_analysis_source: 'D-hot derived L4 candle store first; use E-cold only when explicitly requested.'
     },
     display_timezone: 'Asia/Tokyo',
     canonical_timezone: 'UTC',

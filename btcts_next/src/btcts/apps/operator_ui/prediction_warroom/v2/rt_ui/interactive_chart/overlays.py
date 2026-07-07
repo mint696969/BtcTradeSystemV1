@@ -8,7 +8,7 @@ from typing import Any, Mapping
 import pandas as pd
 
 SUPPORTED_OVERLAY_KINDS = {"line", "marker", "price_band", "board_band"}
-RENDERED_OVERLAY_KINDS = {"line", "marker", "board_band"}
+RENDERED_OVERLAY_KINDS = {"line", "marker"}
 RESERVED_OVERLAY_KINDS = {"price_band"}
 
 
@@ -132,7 +132,7 @@ def normalize_interactive_overlay_layers(layers: object, *, max_layers: int = 12
     - line: prediction/liquidity flow line. points=[{ts/time, value/price}]
     - marker: order/execution/manual event markers. markers or points=[{ts/time, position, shape, text}]
     - price_band: reserved for spread/liquidity bands. Normalized but not rendered yet.
-    - board_band: rendered bid/ask/mid board quote lines when valid points exist; otherwise reserved safely.
+    - board_band: normalized as reserved by default so Base OHLC remains a pure candle chart.
 
     This function is intentionally pure. It must not call prediction, classifier,
     broker, order, ledger, filesystem, websocket, or runtime side effects.
@@ -153,6 +153,10 @@ def normalize_interactive_overlay_layers(layers: object, *, max_layers: int = 12
             payload = _normalize_marker_layer(raw_layer, max_points_per_layer=max_points_per_layer)
         elif kind == "board_band":
             payload = _normalize_board_band_layer(raw_layer, max_points_per_layer=max_points_per_layer)
+            if payload is not None:
+                payload["rendered_now"] = False
+                payload["reserved_for_future"] = True
+                payload["contract_note"] = "board_band is reserved by default so Base OHLC remains a pure candle chart"
         else:
             payload = _normalize_reserved_layer(raw_layer)
         if payload is None:
@@ -162,8 +166,8 @@ def normalize_interactive_overlay_layers(layers: object, *, max_layers: int = 12
                 "layer_id": _safe_text(raw_layer.get("layer_id") or raw_layer.get("id") or f"overlay_{len(normalized) + 1}", limit=64),
                 "label": _safe_text(raw_layer.get("label") or raw_layer.get("layer_id") or kind, limit=96),
                 "kind": kind,
-                "rendered_now": kind in RENDERED_OVERLAY_KINDS,
-                "reserved_for_future": kind in RESERVED_OVERLAY_KINDS,
+                "rendered_now": bool(payload.get("rendered_now", kind in RENDERED_OVERLAY_KINDS)),
+                "reserved_for_future": bool(payload.get("reserved_for_future", kind in RESERVED_OVERLAY_KINDS)),
                 "read_only": True,
                 "websocket_send_enabled": False,
                 "broker_send_enabled": False,

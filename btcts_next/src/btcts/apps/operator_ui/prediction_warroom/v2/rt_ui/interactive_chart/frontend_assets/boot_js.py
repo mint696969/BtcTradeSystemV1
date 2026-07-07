@@ -4,6 +4,23 @@
 from __future__ import annotations
 
 CHART_BOOT_JS = r"""
+const WARROOM_CHART_DISPLAY_TIMEZONE = 'Asia/Tokyo';
+function chartDisplayTimestamp(time) {
+  if (time === undefined || time === null) return null;
+  if (typeof time === 'object' && time.timestamp) return Number(time.timestamp) * 1000;
+  if (typeof time === 'object' && time.year && time.month && time.day) return Date.UTC(Number(time.year), Number(time.month) - 1, Number(time.day));
+  const seconds = Number(time);
+  if (!Number.isFinite(seconds)) return null;
+  return seconds * 1000;
+}
+function formatChartTimeJst(time, includeDate) {
+  const ts = chartDisplayTimestamp(time);
+  if (ts === null) return '';
+  const options = includeDate
+    ? { timeZone: WARROOM_CHART_DISPLAY_TIMEZONE, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }
+    : { timeZone: WARROOM_CHART_DISPLAY_TIMEZONE, hour: '2-digit', minute: '2-digit', hour12: false };
+  return new Intl.DateTimeFormat('ja-JP', options).format(new Date(ts));
+}
 function boot() {
   if (!window.LightweightCharts || !CANDLES.length) { document.getElementById('fallback').style.display = 'block'; return; }
   const resetRangeBtn = document.getElementById('reset-range');
@@ -18,10 +35,10 @@ function boot() {
   const chart = LightweightCharts.createChart(chartEl, {
     layout: { background: { type: 'solid', color: '#ffffff' }, textColor: '#334155', fontSize: 12 },
     grid: { vertLines: { color: 'rgba(148,163,184,.18)' }, horzLines: { color: 'rgba(148,163,184,.20)' } },
-    localization: { locale: 'ja-JP', priceFormatter: price => Number(price).toLocaleString('ja-JP', { maximumFractionDigits: 0 }) },
+    localization: { locale: 'ja-JP', priceFormatter: price => Number(price).toLocaleString('ja-JP', { maximumFractionDigits: 0 }), timeFormatter: time => formatChartTimeJst(time, true) },
     crosshair: { mode: LightweightCharts.CrosshairMode ? LightweightCharts.CrosshairMode.Normal : 0 },
     rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.24 } },
-    timeScale: { borderVisible: false, rightOffset: 12, barSpacing: 4, minBarSpacing: 2, fixLeftEdge: false, fixRightEdge: false, timeVisible: true, secondsVisible: false },
+    timeScale: { borderVisible: false, rightOffset: 14, barSpacing: 2, minBarSpacing: 1, fixLeftEdge: false, fixRightEdge: false, timeVisible: true, secondsVisible: false, tickMarkFormatter: time => formatChartTimeJst(time, false) },
     handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
     handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
   });
@@ -34,25 +51,99 @@ function boot() {
   if (!series) { document.getElementById('fallback').style.display = 'block'; return; }
   let volumeSeries = null;
   let lastClosePriceLine = null;
+  let operatorViewportLocked = false;
+  let plotBarCount = Array.isArray(CANDLES) ? CANDLES.length : 0;
+  const MAX_WHITESPACE_BARS = Number(ctx.max_whitespace_bars || 200000);
   function candleBar(c) { return { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }; }
   function volumeBar(c) { return { time: c.time, value: Number(c.volume || 0), color: c.close >= c.open ? 'rgba(22,163,74,.28)' : 'rgba(220,38,38,.28)' }; }
+  function chartTimeframeSec(candles) {
+    const configured = Number(ctx.candle_store_timeframe_sec || ctx.timeframe_sec || 0);
+    if (Number.isFinite(configured) && configured > 0) return configured;
+    if (!Array.isArray(candles) || candles.length < 2) return 60;
+    for (let i = 1; i < candles.length; i += 1) {
+      const diff = Number(candles[i].time) - Number(candles[i - 1].time);
+      if (Number.isFinite(diff) && diff > 0) return diff;
+    }
+    return 60;
+  }
+  function chartCandleBars(candles) {
+    const bars = [];
+    const step = Math.max(1, chartTimeframeSec(candles));
+    let whitespaceCount = 0;
+    for (let i = 0; i < candles.length; i += 1) {
+      const candle = candles[i];
+      if (i > 0) {
+        const prev = candles[i - 1];
+        const prevTime = Number(prev.time);
+        const nextTime = Number(candle.time);
+        const missing = Math.floor((nextTime - prevTime) / step) - 1;
+        if (Number.isFinite(missing) && missing > 0) {
+          const available = Math.max(0, MAX_WHITESPACE_BARS - whitespaceCount);
+          const addCount = Math.min(missing, available);
+          for (let n = 1; n <= addCount; n += 1) {
+            bars.push({ time: prevTime + (step * n) });
+          }
+          whitespaceCount += addCount;
+        }
+      }
+      bars.push(candleBar(candle));
+    }
+    plotBarCount = bars.length;
+    return bars;
+  }
+  function setSeriesCandles(candles) {
+    const bars = chartCandleBars(candles);
+    series.setData(bars);
+    return bars;
+  }
+  function candleStatus(candle) {
+    return String((candle && (candle.candle_status || candle.status)) || '').toLowerCase();
+  }
+  function shouldReplaceExistingCandle(previous, incoming) {
+    if (!previous) return true;
+    const previousStatus = candleStatus(previous);
+    const incomingStatus = candleStatus(incoming);
+    if (previousStatus === 'closed') return false;
+    if (incomingStatus === 'forming') return true;
+    if (previousStatus === 'forming' && incomingStatus === 'closed') return true;
+    return previousStatus !== 'closed';
+  }
+  function mergeCandlesByTime(nextCandles) {
+    const byTime = new Map();
+    for (const candle of CANDLES) {
+      const key = Number(candle && candle.time);
+      if (Number.isFinite(key)) byTime.set(key, candle);
+    }
+    for (const candle of nextCandles) {
+      const key = Number(candle && candle.time);
+      if (!Number.isFinite(key)) continue;
+      const previous = byTime.get(key) || null;
+      if (shouldReplaceExistingCandle(previous, candle)) {
+        byTime.set(key, { ...(previous || {}), ...candle, time: key });
+      }
+    }
+    return Array.from(byTime.values()).sort((a, b) => Number(a.time) - Number(b.time));
+  }
+
   function updateBaseMeta(candles, meta) {
     if (!baseMetaEl || !Array.isArray(candles) || !candles.length) return;
     const last = candles[candles.length - 1];
     const close = Number(last.close).toLocaleString('ja-JP', { maximumFractionDigits: 0 });
     const lag = meta.cache_lag_vs_live || meta.cache_lag || ctx.cache_lag_vs_live || '--';
     const rows = meta.rows_returned || meta.candles_returned || meta.candles_written || candles.length;
-    const server = meta.server_poll_ok === false ? ' / engine=waiting' : ' / engine=polling';
+    const pollMode = ctx.chart_engine_polling_enabled === false ? 'review' : 'live';
+    const server = meta.server_poll_ok === false ? ` / engine=${pollMode}-waiting` : ` / engine=${pollMode}-polling`;
     baseMetaEl.textContent = `base close=${close} / cache遅延=${lag} / rows=${rows}${server}`;
   }
   function applyCandlePayload(payload, preserveRange) {
     const nextCandles = payload && Array.isArray(payload.candles) ? payload.candles : [];
     if (!nextCandles.length) return false;
     const previousRange = preserveRange && chart.timeScale().getVisibleLogicalRange ? chart.timeScale().getVisibleLogicalRange() : null;
-    const previousTotal = CANDLES.length;
-    const wasFollowingLatest = !previousRange || previousRange.to >= previousTotal - 2;
-    CANDLES.splice(0, CANDLES.length, ...nextCandles);
-    series.setData(CANDLES.map(candleBar));
+    const previousTotal = plotBarCount || CANDLES.length;
+    const wasFollowingLatest = !previousRange || previousRange.to >= previousTotal + 4;
+    const mergedCandles = mergeCandlesByTime(nextCandles);
+    CANDLES.splice(0, CANDLES.length, ...mergedCandles);
+    setSeriesCandles(CANDLES);
     if (lastClosePriceLine && series.removePriceLine) {
       try { series.removePriceLine(lastClosePriceLine); } catch (err) { console.debug(err); }
     }
@@ -72,26 +163,28 @@ function boot() {
     }
     updateBaseMeta(CANDLES, payload.meta || {});
     if (preserveRange && chart.timeScale().setVisibleLogicalRange) {
-      if (previousRange && !wasFollowingLatest) {
+      if (previousRange && (operatorViewportLocked || !wasFollowingLatest)) {
         chart.timeScale().setVisibleLogicalRange(previousRange);
       } else {
-        const liveVisible = Math.min(CANDLES.length, Math.max(visible || 90, Math.ceil((visible || 90) * 3)));
-        chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, CANDLES.length - liveVisible), to: CANDLES.length + 8 });
+        const liveVisible = Math.max(visible || 120, Math.ceil((visible || 120) * 3.0));
+        const latestPlotBar = plotBarCount || CANDLES.length;
+        chart.timeScale().setVisibleLogicalRange({ from: latestPlotBar - liveVisible, to: latestPlotBar + 8 });
       }
     }
     return true;
   }
   applyCandlePayload({ candles: CANDLES, meta: ctx }, false);
   renderOverlayLayers(chart, series);
-  const total = CANDLES.length;
-  const visible = Math.min(total, BASE.visible_candle_count || 90);
-  const thinVisible = Math.min(total, Math.max(visible, Math.ceil(visible * 3)));
+  const liveFollowLatestOnLoad = ctx.chart_engine_polling_enabled !== false;
+  const visible = Math.max(12, BASE.visible_candle_count || 120);
+  const thinVisible = Math.max(visible, Math.ceil(visible * 3.0));
+  const total = Math.max(plotBarCount || 0, CANDLES.length);
   const rangeStorageKey = ['warroom', 'base-candle-range', BASE.component_version || 'v1', BASE.mode || 'live', ctx.viewport_label || BASE.chart_context?.viewport_label || 'window', visible, thinVisible, total].join(':');
-  const defaultVisibleRange = { from: Math.max(0, total - thinVisible), to: total + 8 };
+  const defaultVisibleRange = { from: total - thinVisible, to: total + 10 };
   function clampVisibleRange(range) {
     if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return null;
     const width = Math.max(5, Math.min(thinVisible * 4, range.to - range.from));
-    const maxTo = total + 10;
+    const maxTo = total + 16;
     const minFrom = Math.min(0, total - width);
     let from = Math.max(minFrom, Math.min(range.from, maxTo - 1));
     let to = Math.max(from + 1, Math.min(range.to, maxTo));
@@ -118,17 +211,27 @@ function boot() {
     }
   }
   function resetVisibleRange() {
+    operatorViewportLocked = false;
     try { window.localStorage.removeItem(rangeStorageKey); } catch (err) { /* ignore unavailable storage */ }
-    chart.timeScale().setVisibleLogicalRange(defaultVisibleRange);
+    const latestTotal = Math.max(plotBarCount || 0, CANDLES.length, total);
+    const latestRange = { from: latestTotal - thinVisible, to: latestTotal + 10 };
+    chart.timeScale().setVisibleLogicalRange(latestRange);
   }
-  chart.timeScale().setVisibleLogicalRange(loadVisibleRange() || defaultVisibleRange);
+  const loadedVisibleRange = liveFollowLatestOnLoad ? null : loadVisibleRange();
+  if (loadedVisibleRange) operatorViewportLocked = true;
+  chart.timeScale().setVisibleLogicalRange(loadedVisibleRange || defaultVisibleRange);
   if (chart.timeScale().subscribeVisibleLogicalRangeChange) {
     chart.timeScale().subscribeVisibleLogicalRangeChange(saveVisibleRange);
   }
+  chartEl.addEventListener('wheel', () => { operatorViewportLocked = true; }, { passive: true });
+  chartEl.addEventListener('pointerdown', () => { operatorViewportLocked = true; });
   if (resetRangeBtn) resetRangeBtn.addEventListener('click', resetVisibleRange);
   async function pollChartDataEndpoint() {
     const endpoint = ctx.chart_data_endpoint || '';
-    if (!endpoint || endpoint === 'disabled') return;
+    if (!endpoint || endpoint === 'disabled' || ctx.chart_engine_polling_enabled === false) {
+      updateBaseMeta(CANDLES, { ...ctx, server_poll_ok: true, cache_lag: ctx.cache_lag_vs_live });
+      return;
+    }
     try {
       const response = await fetch(endpoint, { cache: 'no-store' });
       if (!response.ok) throw new Error(`chart data HTTP ${response.status}`);

@@ -225,10 +225,10 @@ def _request_page_rerun() -> None:
         rerun()
 
 
-def _render_warroom_chart_engine_control_section() -> None:
+def _render_warroom_chart_engine_status_section() -> None:
     snapshot = chart_engine_runtime_snapshot()
-    with live_shell.render_folded_section("WarRoom Chart Engine Runtime", expanded=True):
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with live_shell.render_folded_section("WarRoom Chart Engine Runtime", expanded=False):
+        c1, c2, c3 = st.columns(3)
         mode = str(snapshot.get("mode") or "-")
         active = bool(snapshot.get("active"))
         pending_action = str(snapshot.get("pending_action") or "-") or "-"
@@ -236,35 +236,12 @@ def _render_warroom_chart_engine_control_section() -> None:
         latest_end = str(snapshot.get("latest_candle_end_ts_utc") or "-")
         gap_policy = str(snapshot.get("gap_policy") or "-")
 
-        with c1:
-            if st.button("Chart 起動", use_container_width=True, disabled=active):
-                ok, msg, already_running = start_chart_engine_detached()
-                if ok and already_running:
-                    st.info(msg)
-                elif ok:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-                _request_page_rerun()
-        with c2:
-            if st.button("Chart 安全停止", use_container_width=True, disabled=not active):
-                ok, msg = request_chart_engine_safe_stop()
-                if ok:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-                _request_page_rerun()
-        with c3:
-            if st.button("Chart 再起動", use_container_width=True, disabled=not active):
-                ok, msg = request_chart_engine_restart()
-                if ok:
-                    st.success(msg)
-                else:
-                    st.error(msg)
-                _request_page_rerun()
-        c4.metric("Chart Engine", mode)
-        c5.metric("Active", "YES" if active else "NO")
-        c6.metric("Pending", pending_action)
+        c1.metric("Chart Engine", mode)
+        c2.metric("Active", "YES" if active else "NO")
+        c3.metric("Pending", pending_action)
+        st.caption(
+            "Chart Engine は Collector 起動・停止・再起動ボタンに連動します。"
+        )
         st.caption(
             f"endpoint={endpoint} / latest_candle_end={latest_end} / gap_policy={gap_policy} / "
             "read_only_source=true / broker_send_enabled=false / prediction_invoked=false / classifier_invoked=false"
@@ -287,22 +264,30 @@ def _request_unified_start() -> tuple[bool, str, bool]:
     try:
         result = start_stack_detached()
         started_components = result.get("started_components") or []
+        chart_ok, chart_msg, chart_already = start_chart_engine_detached()
         if result.get("already_running"):
-            return True, "stack already running", True
+            if chart_ok:
+                return True, f"stack already running; chart_engine={chart_msg}", bool(chart_already)
+            return False, f"stack already running; chart_engine_start_failed={chart_msg}", True
+
+        if not chart_ok:
+            return False, f"stack start requested but chart_engine_start_failed={chart_msg}", False
 
         if started_components:
             joined = ", ".join(
                 f"{item.get('component')} pid={item.get('pid')}"
                 for item in started_components
             )
-            return True, f"stack started components={joined}", False
+            return True, f"stack started components={joined}; chart_engine={chart_msg}", False
 
-        return True, "stack start completed (no additional component launch was required)", False
+        return True, f"stack start completed (no additional component launch was required); chart_engine={chart_msg}", False
     except Exception as exc:
         return False, str(exc), False
 
 
 def _request_unified_safe_stop() -> tuple[bool, str]:
+    messages: list[str] = []
+    ok_all = True
     try:
         cfg = load_config()
         request_id = uuid4().hex
@@ -314,14 +299,22 @@ def _request_unified_safe_stop() -> tuple[bool, str]:
                 "requested_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                 "requested_by": "operator_ui",
                 "reason": "maintenance_safe_stop",
+                "linked_chart_engine_action": "safe_stop",
             },
         )
-        return True, f"safe stop request file written request_id={request_id}"
+        messages.append(f"collector safe stop request_id={request_id}")
     except Exception as exc:
-        return False, str(exc)
+        ok_all = False
+        messages.append(f"collector_safe_stop_failed={exc}")
+    chart_ok, chart_msg = request_chart_engine_safe_stop()
+    ok_all = ok_all and chart_ok
+    messages.append(f"chart_engine={chart_msg}")
+    return ok_all, "; ".join(messages)
 
 
 def _request_unified_restart() -> tuple[bool, str]:
+    messages: list[str] = []
+    ok_all = True
     try:
         cfg = load_config()
         request_id = uuid4().hex
@@ -333,11 +326,24 @@ def _request_unified_restart() -> tuple[bool, str]:
                 "requested_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                 "requested_by": "operator_ui",
                 "reason": "manual_code_apply",
+                "linked_chart_engine_action": "restart_or_start",
             },
         )
-        return True, f"restart request file written request_id={request_id}"
+        messages.append(f"collector restart request_id={request_id}")
     except Exception as exc:
-        return False, str(exc)
+        ok_all = False
+        messages.append(f"collector_restart_failed={exc}")
+
+    chart_snapshot = chart_engine_runtime_snapshot()
+    if chart_snapshot.get("active"):
+        chart_ok, chart_msg = request_chart_engine_restart()
+        ok_all = ok_all and chart_ok
+        messages.append(f"chart_engine={chart_msg}")
+    else:
+        chart_ok, chart_msg, _already = start_chart_engine_detached()
+        ok_all = ok_all and chart_ok
+        messages.append(f"chart_engine={chart_msg}")
+    return ok_all, "; ".join(messages)
 
 
 def _supervisor_status_rows(supervisor_status: dict, supervisor_request: dict) -> list[dict]:
@@ -437,6 +443,7 @@ def _render_collector_page_body():
     supervisor_status = collector_state.get("supervisor_status", {})
     supervisor_request = collector_state.get("supervisor_request", {})
     stack_control = stack_runtime_snapshot()
+    chart_engine_snapshot = chart_engine_runtime_snapshot()
     status_state = collector_state.get("status", {})
     daemon_stop_request = collector_state.get("daemon_stop_request", {})
     archive_copy_state = collector_state.get("archive_copy_state", {})
@@ -531,12 +538,14 @@ def _render_collector_page_body():
         request_unified_start=_request_unified_start,
         request_unified_safe_stop=_request_unified_safe_stop,
         request_unified_restart=_request_unified_restart,
+        linked_runtime_active=bool(chart_engine_snapshot.get("active")),
+        linked_runtime_label="Chart Engine",
         is_supervisor_running=_is_supervisor_running,
         is_restart_request_pending=_is_restart_request_pending,
         supervisor_status_rows=_supervisor_status_rows,
     )
 
-    _render_warroom_chart_engine_control_section()
+    _render_warroom_chart_engine_status_section()
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_collector_runtime_state"), expanded=False):
         _render_scrollable_json_block(

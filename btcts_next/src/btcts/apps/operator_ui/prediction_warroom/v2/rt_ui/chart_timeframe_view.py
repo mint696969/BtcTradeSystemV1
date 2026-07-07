@@ -9,11 +9,11 @@ from typing import Any
 import pandas as pd
 
 CHART_TIMEFRAME_VIEW_VERSION = "warroom_v2_chart_timeframe_view.2026_07_05.v6_unsealed_edge"
-CHART_VIEWPORT_OPTIONS: tuple[tuple[str, int], ...] = (("3分", 3), ("15分", 15), ("1時間", 60))
+CHART_VIEWPORT_OPTIONS: tuple[tuple[str, int], ...] = (("15分", 15), ("1時間", 60), ("6時間", 360), ("24時間", 1440))
 CHART_DEFAULT_VIEWPORT_LABEL = "15分"
-CHART_MODE_OPTIONS: tuple[str, ...] = ("Live", "1分足", "1時間足", "日足")
+CHART_MODE_OPTIONS: tuple[str, ...] = ("Live", "1分足", "5分足", "15分足", "30分足", "1時間足", "日足")
 CHART_DEFAULT_MODE = "Live"
-CHART_MODE_FREQUENCY: dict[str, str | None] = {"Live": None, "1分足": "1min", "1時間足": "1h", "日足": "1D"}
+CHART_MODE_FREQUENCY: dict[str, str | None] = {"Live": None, "1分足": "1min", "5分足": "5min", "15分足": "15min", "30分足": "30min", "1時間足": "1h", "日足": "1D"}
 UNSEALED_EDGE_CANDLE_COUNT = 2
 
 
@@ -66,7 +66,7 @@ def select_chart_display_config(st_api: Any) -> ChartDisplayConfig:
         mode_options,
         index=mode_options.index(CHART_DEFAULT_MODE),
         key="warroom_v2_bottom_chart_mode",
-        help_text="Liveは受信履歴そのまま、分足/時足/日足は現在保持している履歴を読み取り専用で集約します。",
+        help_text="Live/分足/時足/日足はL4 WarRoom candle storeを読み取り専用で表示します。",
     )
     viewport_label = _safe_selectbox(
         viewport_col,
@@ -76,7 +76,7 @@ def select_chart_display_config(st_api: Any) -> ChartDisplayConfig:
         key="warroom_v2_bottom_chart_viewport",
         help_text="表示だけを切り替えます。履歴は保持され、broker/order/predictionには接続しません。",
     )
-    historical_cache_required = mode in {"1時間足", "日足"}
+    historical_cache_required = False
     source_notice = chart_source_notice(mode=mode, historical_cache_required=historical_cache_required)
     return ChartDisplayConfig(
         mode=mode,
@@ -89,11 +89,7 @@ def select_chart_display_config(st_api: Any) -> ChartDisplayConfig:
 
 
 def chart_source_notice(*, mode: str, historical_cache_required: bool) -> str:
-    if historical_cache_required:
-        return "現在の1時間足/日足は、保持中のLive履歴からの暫定集約です。hot/cold長期キャッシュは未接続です。"
-    if mode == "1分足":
-        return "1分足は保持中のLive履歴を1分単位に読み取り専用で集約しています。"
-    return "Liveは受信履歴をそのままrolling表示しています。"
+    return f"{mode} は L4 WarRoom candle store を読み取り専用で表示しています。closed はappend安定、最新formingのみ更新されます。"
 
 
 def apply_rolling_viewport(frame: pd.DataFrame, *, minutes: int) -> pd.DataFrame:

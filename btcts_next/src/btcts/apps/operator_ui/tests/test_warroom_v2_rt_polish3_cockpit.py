@@ -156,7 +156,10 @@ def test_modules_and_doc_markers() -> None:
     assert "raw_trade_read_from_ui_enabled" in chart_text
     assert "load_dhot_market_trade_history" not in chart_text
     assert "plain_trade_ohlc_cache" in chart_text
-    assert "interactive_candle_frame = plain_cache_all_candles" in chart_text
+    assert "interactive_candle_frame = base_all_candles" in chart_text
+    assert "CANDLE_STORE_MODE_TIMEFRAME_SEC" in chart_text
+    assert "read_candle_store_chart_payload" in chart_text
+    assert "candle_store_connected" in chart_text
     assert "base_candle_pan_history_enabled" in chart_text
     assert "base_latest_close" in chart_text
     assert "cache_lag_vs_live" in chart_text
@@ -167,6 +170,9 @@ def test_modules_and_doc_markers() -> None:
     assert "_build_board_band_overlay_layers" in chart_text
     assert "chart_data_endpoint" in chart_text
     assert "chart_engine_polling_enabled" in chart_text
+    assert "live_polling_enabled" in chart_text
+    assert "chart_mode_role" in chart_text
+    assert "mode_role=" in chart_text
     assert "streamlit_fragment_rerender_required_for_candles" in chart_text
     doc = DOC.read_text(encoding="utf-8-sig")
     assert "warroom_v2_rt_polish3_cockpit_done=true" in doc
@@ -218,9 +224,31 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
         chart_context={"primary_market_trade_path": "D:/btc_ts_hot/data/market_data/example.jsonl"},
     )
     assert packet["timeframe"] == "1m"
+    assert packet["timeframe_sec"] == 60
+    assert packet["market"] == {"exchange": "bitflyer", "symbol": "FX_BTC_JPY"}
+    assert packet["selected_range"]["lookup_key"] == "time_utc"
+    assert packet["selected_range"]["candle_index_role"] == "frontend_tail_record_index_not_store_index"
+    assert packet["selected_range"]["candle_ts_semantics"] == "bucket_start_utc"
+    assert packet["selected_range"]["end_candle_status"] == "forming"
+    assert packet["selected_range"]["contains_forming_candle"] is True
+    assert packet["viewport"]["chart_axis_timezone"] == "Asia/Tokyo"
+    assert packet["source"]["candle_store_family"] == "warroom_l4_candle_store"
+    assert packet["source"]["candle_store_relpath"].endswith("timeframe=60s")
+    assert packet["source"]["closed_candles_relpath"].endswith("timeframe=60s/closed.jsonl")
+    assert packet["source"]["update_state_relpath"].endswith("update_state.json")
     assert packet["selected_range"]["candle_count"] == 2
     assert packet["source"]["primary_market_trade_path"].endswith("example.jsonl")
     assert packet["safety"]["broker_send_enabled"] is False
+    packet_5m = build_chart_selection_copy_request(mode="5分足", selection_type="single_candle", start_candle=candles[0], end_candle=candles[0], candle_count=1, visible_candle_count=180)
+    assert packet_5m["timeframe"] == "5m"
+    assert packet_5m["timeframe_sec"] == 300
+    assert packet_5m["source"]["candle_store_relpath"].endswith("timeframe=300s")
+    assert build_chart_selection_copy_request(mode="15分足", selection_type="single_candle", start_candle=candles[0], end_candle=candles[0], candle_count=1, visible_candle_count=96)["timeframe"] == "15m"
+    assert build_chart_selection_copy_request(mode="30分足", selection_type="single_candle", start_candle=candles[0], end_candle=candles[0], candle_count=1, visible_candle_count=96)["timeframe"] == "30m"
+    assert build_chart_selection_copy_request(mode="1時間足", selection_type="single_candle", start_candle=candles[0], end_candle=candles[0], candle_count=1, visible_candle_count=96)["timeframe"] == "1h"
+    assert build_chart_selection_copy_request(mode="日足", selection_type="single_candle", start_candle=candles[0], end_candle=candles[0], candle_count=1, visible_candle_count=60)["timeframe"] == "1d"
+    assert build_chart_selection_copy_request(mode="Live", selection_type="single_candle", start_candle=candles[0], end_candle=candles[0], candle_count=1, visible_candle_count=120)["source"]["input_source"] == "warroom_l4_candle_store_plus_retained_market_state_overlay"
+    # selection copy supports all L4 timeframe keys without falling back to live.
     html = build_interactive_chart_html(candles=candles, mode="1分足", chart_context=packet["source"], visible_candle_count=120)
     assert "lightweight-charts" in html
     assert "この範囲をGPTへコピー" in html
@@ -240,13 +268,32 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "resetVisibleRange" in html
     assert "pollChartDataEndpoint" in html
     assert "wasFollowingLatest" in html
+    assert "operatorViewportLocked" in html
+    assert "loadedVisibleRange" in html
+    assert "liveFollowLatestOnLoad" in html
+    assert "chart_engine_polling_enabled !== false" in html
+    assert "latestRange" in html
+    assert "pointerdown" in html
     assert "liveVisible" in html
+    assert "chartCandleBars" in html
+    assert "MAX_WHITESPACE_BARS" in html
+    assert "plotBarCount" in html
+    assert "setSeriesCandles(CANDLES)" in html
     assert "applyCandlePayload" in html
+    assert "mergeCandlesByTime" in html
+    assert "shouldReplaceExistingCandle" in html
+    assert "previousStatus === 'closed'" in html
+    assert "incomingStatus === 'forming'" in html
+    assert "byTime.set" in html
+    assert "mergedCandles" in html
     assert "fetch(endpoint" in html
     assert "自動コピー不可: 下のJSONをCtrl+Cで手動コピー" in html
     assert "コピー成功: 下のJSONと同じ内容" in html
     assert "selectPreviewForManualCopy" in html
     assert "renderOverlayLayers" in html
+    overlay_text = (RT_UI / "interactive_chart" / "overlays.py").read_text(encoding="utf-8-sig")
+    assert "RENDERED_OVERLAY_KINDS = {\"line\", \"marker\"}" in overlay_text
+    assert "board_band is reserved by default" in overlay_text
     assert "renderMarkerOverlay" in html
     assert "click2=範囲確定" in html
     assert "handleCandleClick" in html
@@ -269,16 +316,30 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "base-candle-range" in html
     assert "BASE.component_version" in html
     assert "ctx.viewport_label" in html
-    assert "barSpacing: 4" in html
-    assert "minBarSpacing: 2" in html
+    assert "barSpacing: 2" in html
+    assert "minBarSpacing: 1" in html
     assert "thinVisible" in html
+    assert "Math.ceil(visible * 3.0)" in html
     assert "visible, thinVisible, total" in html
     assert "subscribeVisibleLogicalRangeChange" in html
-    assert "loadVisibleRange() || defaultVisibleRange" in html
+    assert "loadedVisibleRange || defaultVisibleRange" in html
+    assert "'5分足': '5m'" in html
+    assert "'15分足': '15m'" in html
+    assert "'30分足': '30m'" in html
+    assert "warroom_l4_candle_store_plus_retained_market_state_overlay" in html
+    assert "chart_axis_timezone" in html
+    assert "candle_store_relpath" in html
+    assert "contains_forming_candle" in html
+    assert "lookup_key" in html
+    assert "frontend_tail_record_index_not_store_index" in html
+    assert "WARROOM_CHART_DISPLAY_TIMEZONE" in html
+    assert "tickMarkFormatter" in html
     compact_html = build_interactive_chart_html(candles=candles, mode="1分足", chart_context={"initial_visible_candle_count": 1}, visible_candle_count=1)
     assert '"visible_candle_count": 1' in compact_html
     assert _resolve_visible_candle_count(mode="1分足", chart_context={"initial_visible_candle_count": 16}) == 16
-    assert _resolve_visible_candle_count(mode="1分足", chart_context={}) == 120
+    assert _resolve_visible_candle_count(mode="1分足", chart_context={}) == 180
+    assert _resolve_visible_candle_count(mode="Live", chart_context={}) == 120
+    assert _resolve_visible_candle_count(mode="日足", chart_context={}) == 60
 
 
 def test_interactive_chart_overlay_layers_are_read_only_and_renderable() -> None:
@@ -328,7 +389,9 @@ def test_interactive_chart_overlay_layers_are_read_only_and_renderable() -> None
         ]
     )
     assert board_layers[0]["kind"] == "board_band"
-    assert board_layers[0]["rendered_now"] is True
+    assert board_layers[0]["reserved_for_future"] is True
+    assert board_layers[0]["rendered_now"] is False
+    assert "Base OHLC remains a pure candle chart" in board_layers[0]["contract_note"]
     assert board_layers[0]["points"][0]["mid"] == 100.5
     html = build_interactive_chart_html(candles=[{"time": 1, "open": 1, "high": 1, "low": 1, "close": 1, "time_utc": "1970-01-01T00:00:01Z", "time_jst": "1970-01-01T09:00:01+09:00", "candle_index": 0}], mode="1分足", chart_context={"overlay_layers": layers + marker_layers + board_layers})
     assert "prediction_flow_preview" in html
@@ -373,3 +436,37 @@ def test_gpt_copy_packet_render_shows_copy_range_guidance() -> None:
     assert any("rows: history=813 / visible=813" in line for line in fake.captions)
     assert any("D-hot source:" in line for line in fake.captions)
     assert fake.text_areas[0]["label"] == "GPTに貼る軽量リクエスト"
+
+
+def test_warroom_v2_chart_modes_map_to_l4_candle_store_timeframes() -> None:
+    from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_view import CANDLE_STORE_MODE_TIMEFRAME_SEC, _candle_store_to_candle_frame
+    from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.chart_timeframe_view import CHART_MODE_OPTIONS, chart_source_notice
+    from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.interactive_chart.constants import timeframe_key, recommended_visible_candle_count
+
+    assert CHART_MODE_OPTIONS == ("Live", "1分足", "5分足", "15分足", "30分足", "1時間足", "日足")
+    assert CANDLE_STORE_MODE_TIMEFRAME_SEC["Live"] == 60
+    assert CANDLE_STORE_MODE_TIMEFRAME_SEC["5分足"] == 300
+    assert CANDLE_STORE_MODE_TIMEFRAME_SEC["15分足"] == 900
+    assert CANDLE_STORE_MODE_TIMEFRAME_SEC["30分足"] == 1800
+    assert CANDLE_STORE_MODE_TIMEFRAME_SEC["1時間足"] == 3600
+    assert CANDLE_STORE_MODE_TIMEFRAME_SEC["日足"] == 86400
+    assert timeframe_key("5分足") == "5m"
+    assert timeframe_key("15分足") == "15m"
+    assert timeframe_key("30分足") == "30m"
+    assert recommended_visible_candle_count("1分足") >= 180
+    assert recommended_visible_candle_count("Live") == 120
+    assert "L4 WarRoom candle store" in chart_source_notice(mode="1時間足", historical_cache_required=False)
+
+    frame = _candle_store_to_candle_frame(
+        {
+            "ok": True,
+            "timeframe_sec": 300,
+            "candles": [
+                {"time_utc": "2026-07-06T23:00:00Z", "open": 100, "high": 110, "low": 90, "close": 105, "volume": 1.5, "trade_count": 7, "timeframe_sec": 300, "candle_status": "closed"}
+            ],
+        }
+    )
+    assert len(frame) == 1
+    assert frame.iloc[0]["source_role"] == "warroom_candle_store"
+    assert int(frame.iloc[0]["timeframe_sec"]) == 300
+    assert float(frame.iloc[0]["close"]) == 105.0

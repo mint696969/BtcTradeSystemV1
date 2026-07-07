@@ -98,7 +98,9 @@ def render_supervisor_control_section(
     request_unified_start: Callable[[], tuple[bool, str, bool]],
     request_unified_safe_stop: Callable[[], tuple[bool, str]],
     request_unified_restart: Callable[[], tuple[bool, str]],
-    is_supervisor_running: Callable[[dict], bool],
+    linked_runtime_active: bool = False,
+    linked_runtime_label: str = "linked runtime",
+    is_supervisor_running: Callable[[dict], bool] | None = None,
     is_restart_request_pending: Callable[[dict], bool],
     supervisor_status_rows: Callable[[dict, dict], list[dict]],
 ) -> None:
@@ -113,7 +115,7 @@ def render_supervisor_control_section(
             priority=40,
         )
     ):
-        supervisor_running = is_supervisor_running(supervisor_status)
+        supervisor_running = is_supervisor_running(supervisor_status) if is_supervisor_running is not None else False
 
         pending_action = str(
             stack_control_snapshot.get("pending_action") or ""
@@ -122,6 +124,8 @@ def render_supervisor_control_section(
 
         safe_stop_pending = pending_action == "stop_stack"
         stack_active = bool(stack_control_snapshot.get("stack_active"))
+        linked_runtime_active = bool(linked_runtime_active)
+        stop_restart_target_active = bool(stack_active or linked_runtime_active)
         supervisor_active = bool(stack_control_snapshot.get("supervisor_active"))
         archive_active = bool(stack_control_snapshot.get("archive_active"))
 
@@ -156,6 +160,9 @@ def render_supervisor_control_section(
         if safe_stop_pending:
             st.info(get_text(lang, "collector_msg_safe_stop_pending"))
 
+        if linked_runtime_active and not stack_active:
+            st.info(f"{linked_runtime_label} is active; unified safe stop remains available.")
+
         sup_col1, sup_col2, sup_col3, sup_col4, sup_col5, sup_col6 = st.columns(6)
 
         with sup_col1:
@@ -189,7 +196,7 @@ def render_supervisor_control_section(
             if st.button(
                 get_text(lang, "collector_button_safe_stop_unified"),
                 use_container_width=True,
-                disabled=(not stack_active) or safe_stop_pending,
+                disabled=(not stop_restart_target_active) or safe_stop_pending,
             ):
                 ok, msg = request_unified_safe_stop()
                 if ok:
@@ -210,7 +217,7 @@ def render_supervisor_control_section(
             if st.button(
                 get_text(lang, "collector_button_restart_unified"),
                 use_container_width=True,
-                disabled=(not stack_active) or restart_pending or safe_stop_pending,
+                disabled=(not stop_restart_target_active) or restart_pending or safe_stop_pending,
             ):
                 ok, msg = request_unified_restart()
                 if ok:
