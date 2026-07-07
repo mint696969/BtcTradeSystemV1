@@ -36,10 +36,10 @@ def _inject_live_shell_styles() -> None:
         <style>
         .live-shell-page-title {
             margin-top: 0.10rem;
-            margin-bottom: 0.15rem;
-            font-size: 1.05rem;
-            font-weight: 700;
-            line-height: 1.2;
+            margin-bottom: 0.35rem;
+            font-size: 1.40rem;
+            font-weight: 800;
+            line-height: 1.12;
         }
 
         .live-shell-page-subtitle {

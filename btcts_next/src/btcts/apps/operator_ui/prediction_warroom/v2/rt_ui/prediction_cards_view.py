@@ -1,77 +1,63 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/rt_ui/prediction_cards_view.py
-# desc: WarRoom v2 realtime prediction-card context renderer. Compact important-order cards without invoking prediction/classifier.
+# desc: WarRoom v2 realtime prediction-card context renderer. Reuses original WarRoom market-regime card shell first; no prediction/classifier/broker action.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Mapping
 
+from btcts.apps.operator_ui.prediction_warroom.panels.warroom_market_regime_card_panel import (
+    WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION,
+    render_warroom_market_regime_card_shell,
+)
+
 ENTRY_GATE_VERSION = "warroom_v2_rt_entry_gate.2026_07_05.v1"
-_IMPORTANCE = {"market_context_card": 10, "risk_context_card": 20, "manual_review_card": 30, "scenario_guidance_card": 15}
+RT_MARKET_REGIME_CARD_BRIDGE_VERSION = "warroom_v2_rt_market_regime_card_bridge.2026_07_08.v1"
+RT_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT = r"D:tc_ts_hot"
+FUTURE_PREDICTION_CARD_ROWS = ("方向感", "反転候補", "ボラ警戒", "流動性 / 約定品質")
 
 
-def _badge(state: str) -> str:
-    if state in {"live", "ready", "normal"}:
-        return f"🟢 {state}"
-    if state in {"attention", "review", "not_ready", "stale"}:
-        return f"🟡 {state}"
-    return f"⚪ {state or 'waiting'}"
-
-
-def _container(st_api: Any) -> Any:
-    try:
-        return st_api.container(border=True)
-    except TypeError:
-        return st_api.container()
-
-
-def _sort_cards(cards: list[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
-    return sorted(cards, key=lambda card: _IMPORTANCE.get(str(card.get("context_id") or ""), 99))
-
-
-def _card_state(card: Mapping[str, Any]) -> str:
-    stale_guard = str(card.get("stale_guard") or "").lower()
-    state = str(card.get("market_state") or "unknown")
-    if stale_guard in {"stale", "expired", "old"}:
-        return "stale"
-    return state
+def _generated_at(packet: Mapping[str, Any]) -> str:
+    for key in ("generated_at", "forecast_generated_at", "source_generated_at"):
+        value = packet.get(key)
+        if value:
+            return str(value)
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def _render_prediction_boundary(packet: Mapping[str, Any], st_api: Any) -> None:
     generated_at = packet.get("generated_at") or packet.get("forecast_generated_at") or packet.get("source_generated_at")
     parts = [
         f"entry_gate={ENTRY_GATE_VERSION}",
-        "prediction_cards_scope=context_only",
+        f"bridge={RT_MARKET_REGIME_CARD_BRIDGE_VERSION}",
+        "prediction_cards_scope=market_regime_first",
+        "original_warroom_market_regime_shell=true",
         "prediction_invoked=false",
         "classifier_invoked=false",
         "broker_action_allowed=false",
-        "next_thread_target=prediction_card_enrichment",
     ]
     if generated_at:
         parts.append(f"source_generated_at={generated_at}")
     st_api.caption(" / ".join(parts))
 
 
-def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
-    cards = _sort_cards([card for card in packet.get("cards", []) if isinstance(card, Mapping)])
-    st_api.caption("Prediction cards: context-only / read-only / no prediction invocation / enrichment deferred")
-    _render_prediction_boundary(packet, st_api)
+def _render_future_row_reservation(st_api: Any) -> None:
+    st_api.caption(
+        "次の予測カード行 追加枠: "
+        + " / ".join(FUTURE_PREDICTION_CARD_ROWS)
+        + "（未接続・今後追加）"
+    )
+
+
+def _render_context_packets(packet: Mapping[str, Any], st_api: Any) -> None:
+    cards = [card for card in packet.get("cards", []) if isinstance(card, Mapping)]
     if not cards:
-        st_api.info("Prediction card context is not available yet. This does not block non-prediction WarRoom widget polish.")
-        return {"ok": True, "rendered_prediction_card_count": 0, "read_only": True, "prediction_invoked": False, "classifier_invoked": False}
-    columns = st_api.columns(len(cards))
-    for column, card in zip(columns, cards, strict=False):
-        with _container(column):
-            state = _card_state(card)
-            column.markdown(f"**{card.get('title', '')}**")
-            column.metric("state", _badge(state))
-            column.caption(str(card.get("chart_summary") or ""))
-            column.write(str(card.get("operator_note") or ""))
-            column.caption(f"stale={card.get('stale_guard')} / read_only={bool(card.get('read_only', True))}")
+        return
     with st_api.expander("Prediction card context packets", expanded=False):
         st_api.dataframe([
             {
                 "card": str(card.get("title") or ""),
-                "market_state": _card_state(card),
+                "market_state": str(card.get("market_state") or ""),
                 "chart": str(card.get("chart_summary") or ""),
                 "operator_note": str(card.get("operator_note") or ""),
                 "stale_guard": str(card.get("stale_guard") or ""),
@@ -81,13 +67,30 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
             }
             for card in cards
         ], width="stretch")
+
+
+def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
+    _render_prediction_boundary(packet, st_api)
+    render_warroom_market_regime_card_shell(
+        preview_enabled=True,
+        hot_root=RT_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT,
+        generated_at=_generated_at(packet),
+    )
+    _render_future_row_reservation(st_api)
+    _render_context_packets(packet, st_api)
     return {
         "ok": True,
         "entry_gate_version": ENTRY_GATE_VERSION,
-        "rendered_prediction_card_count": len(cards),
-        "card_style_rendered": True,
+        "rt_market_regime_card_bridge_version": RT_MARKET_REGIME_CARD_BRIDGE_VERSION,
+        "renderer_version": WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION,
+        "market_regime_card_shell_rendered": True,
+        "market_regime_first": True,
+        "future_prediction_rows_reserved": True,
+        "future_prediction_card_rows": list(FUTURE_PREDICTION_CARD_ROWS),
+        "rendered_prediction_card_count": 1,
         "read_only": True,
         "prediction_invoked": False,
         "classifier_invoked": False,
+        "broker_action_allowed": False,
         "prediction_card_enrichment_deferred": True,
     }

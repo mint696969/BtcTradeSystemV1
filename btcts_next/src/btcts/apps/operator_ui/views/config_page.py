@@ -16,7 +16,7 @@ from btcts.apps.operator_ui.components.market_summary_presenter import (
 
 def render():
 
-    st.header("Exchange Configuration")
+    live_shell.render_compact_page_header("Config")
     summary_widget = load_market_summary_widget_model()
 
     exchange = st.selectbox(

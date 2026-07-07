@@ -822,7 +822,7 @@ def _render_parameter_settings() -> None:
 
 
 def render():
-    st.title("AutoTrade")
+    live_shell.render_compact_page_header("AutoTrade")
     st.caption("Logic-driven AutoTrade observer/control-request tab. No broker execution from UI.")
     _render_top_critical_state()
     st.divider()

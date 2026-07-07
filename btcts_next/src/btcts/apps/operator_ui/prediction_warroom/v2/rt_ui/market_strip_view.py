@@ -227,7 +227,6 @@ def _state_summary(states: Mapping[str, Any]) -> str:
 
 
 def render_market_strip(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
-    st_api.caption("市場データ: 手動取引用の必須情報 / コンパクト表示 / 読み取り専用 / broker送信なし")
     cols = st_api.columns(8)
     _metric(cols[0], "銘柄", str(packet.get("symbol") or "--"), "取引対象。現在は Collector/D-hot 由来の市場状態を表示します。")
     _metric(cols[1], "買気配", _fmt_price(packet.get("best_bid")), "最良買い気配。成行で売る場合に近い価格の目安です。")
@@ -247,7 +246,6 @@ def render_market_strip(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any
             f"データ源={_source_label(packet.get('source'))}",
         ]
     )
-    st_api.caption(compact_context)
     with st_api.expander("市場データの詳細", expanded=False):
         st_api.dataframe(
             [
@@ -261,6 +259,7 @@ def render_market_strip(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any
             ],
             width="stretch",
         )
+        st_api.caption(compact_context)
     return {
         "ok": True,
         "market_top_strip_version": MARKET_TOP_STRIP_VERSION,

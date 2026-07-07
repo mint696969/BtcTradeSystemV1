@@ -1,7 +1,10 @@
 # path: ./btcts_next/src/btcts/apps/operator_ui/app.py
 # desc: BTC-TS Operator UI のエントリ。Streamlit サイドバーで各 Operator ページを切り替える。
 
+import html
+
 import streamlit as st
+import streamlit.components.v1 as components
 import time
 
 from btcts.apps.operator_ui.components import live_shell
@@ -12,7 +15,6 @@ from btcts.apps.operator_ui.views import (
     config_page,
     research_page,
     replay_page,
-    warroom_page,
     warroom_v2_page,
     autotrade_page,
 )
@@ -52,6 +54,14 @@ def apply_ui_scale(scale: str):
             font-size: {factor}em !important;
         }}
 
+        [data-testid="stMainBlockContainer"] {{
+            padding-top: 0.35rem !important;
+        }}
+
+        [data-testid="stSidebarContent"] {{
+            padding-top: 0.05rem !important;
+        }}
+
         h1 {{
             font-size: {2.2 * factor}rem !important;
         }}
@@ -62,6 +72,39 @@ def apply_ui_scale(scale: str):
 
         h3 {{
             font-size: {1.4 * factor}rem !important;
+        }}
+
+        .btcts-sidebar-brand {{
+            margin: 0.00rem 0 0.12rem 0;
+            font-size: 1.03rem;
+            font-weight: 800;
+            line-height: 1.04;
+            letter-spacing: 0.005em;
+            color: rgba(49, 51, 63, 0.96);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+
+        .btcts-sidebar-section-label {{
+            margin: 0.72rem 0 0.20rem 0;
+            font-size: 0.78rem;
+            font-weight: 700;
+            line-height: 1.10;
+            letter-spacing: 0.02em;
+            color: rgba(49, 51, 63, 0.70);
+        }}
+
+        .btcts-page-top-label {{
+            margin: 0.00rem 0 0.38rem 0;
+            font-size: 1.18rem;
+            font-weight: 850;
+            line-height: 1.08;
+            letter-spacing: 0.01em;
+            color: rgba(49, 51, 63, 0.82);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }}
 
         .warroom-badges {{
@@ -115,6 +158,95 @@ def apply_ui_scale(scale: str):
         unsafe_allow_html=True,
     )
 
+
+
+def _sidebar_clock_html(lang: str) -> str:
+    """Return a display-only live JST 24-hour clock for the sidebar brand area."""
+    return """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow: hidden;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.btcts-clock {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 39px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.10rem 0.42rem;
+    border-radius: 0.42rem;
+    background: rgba(49, 51, 63, 0.055);
+    border: 1px solid rgba(49, 51, 63, 0.08);
+    color: rgba(49, 51, 63, 0.86);
+    white-space: nowrap;
+}
+.btcts-clock-time {
+    font-size: 1.28rem;
+    font-weight: 850;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.035em;
+}
+</style>
+</head>
+<body>
+<div class="btcts-clock" aria-label="JST 24-hour clock">
+  <span id="btcts-clock-time" class="btcts-clock-time">--:--:--</span>
+</div>
+<script>
+const timeEl = document.getElementById("btcts-clock-time");
+const formatter = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false
+});
+function renderClock() {
+  timeEl.textContent = formatter.format(new Date());
+}
+renderClock();
+window.setInterval(renderClock, 1000);
+</script>
+</body>
+</html>
+"""
+
+
+def render_sidebar_brand(lang: str) -> None:
+    """Render the shared app brand in the sidebar without consuming main viewport height."""
+    title = html.escape(get_text(lang, "app_title"))
+    st.sidebar.markdown(
+        f"<div class='btcts-sidebar-brand'>{title}</div>",
+        unsafe_allow_html=True,
+    )
+    with st.sidebar:
+        components.html(_sidebar_clock_html(lang), height=44)
+
+
+def render_page_top_label(label: str) -> None:
+    """Render a compact selected-page label above the page body."""
+    safe_label = html.escape(str(label))
+    st.markdown(
+        f"<div class='btcts-page-top-label'>{safe_label}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_sidebar_section_label(label: str) -> None:
+    safe_label = html.escape(str(label))
+    st.sidebar.markdown(
+        f"<div class='btcts-sidebar-section-label'>{safe_label}</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def render_dashboard_hub_status_strip(
@@ -178,6 +310,17 @@ if "ui_refresh_interval" not in st.session_state:
 if "ui_selected_page_key" not in st.session_state:
     st.session_state.ui_selected_page_key = persisted_ui_state.get("ui_selected_page_key", "collector")
 
+LEGACY_PAGE_KEY_REDIRECTS = {
+    "warroom": "warroom_v2",
+}
+st.session_state.ui_selected_page_key = LEGACY_PAGE_KEY_REDIRECTS.get(
+    str(st.session_state.ui_selected_page_key),
+    st.session_state.ui_selected_page_key,
+)
+
+render_sidebar_brand(st.session_state.ui_lang)
+nav_slot = st.sidebar.container()
+
 st.session_state.ui_lang = st.sidebar.selectbox(
     get_text(st.session_state.ui_lang, "lang_label"),
     ["ja", "en"],
@@ -210,13 +353,11 @@ st.session_state.ui_refresh_interval = st.sidebar.selectbox(
 
 apply_ui_scale(st.session_state.ui_scale)
 
-st.title(get_text(lang, "app_title"))
-st.subheader(get_text(lang, "app_subtitle"))
+# Shared app brand is rendered as compact sidebar chrome to preserve vertical viewport.
 
 page_defs = [
     ("collector", get_text(lang, "page_collector"), collector_page),
-    ("warroom", get_text(lang, "page_warroom"), warroom_page),
-    ("warroom_v2", "WarRoom v2", warroom_v2_page),
+    ("warroom_v2", get_text(lang, "page_warroom"), warroom_v2_page),
     ("autotrade", get_text(lang, "page_autotrade"), autotrade_page),
     ("health", get_text(lang, "page_health"), health_page),
     ("logs", get_text(lang, "page_logs"), logs_page),
@@ -239,32 +380,16 @@ selected_page_label = next(
     if page_key == st.session_state.ui_selected_page_key
 )
 
-st.sidebar.title(get_text(lang, "sidebar_title"))
-
 if "ui_check_auto_save_enabled" not in st.session_state:
     st.session_state.ui_check_auto_save_enabled = load_gpt_ui_check_auto_save_enabled()
 
-previous_auto_save_enabled = bool(st.session_state.ui_check_auto_save_enabled)
-st.session_state.ui_check_auto_save_enabled = st.sidebar.checkbox(
-    "GPT UI Auto Save",
-    value=previous_auto_save_enabled,
-    key="ui_check_auto_save_checkbox",
-    help="Save one GPT-facing UI Check file after a full page render. Turn this off during normal browsing.",
-)
-ui_check_auto_save_enabled = bool(st.session_state.ui_check_auto_save_enabled)
-if ui_check_auto_save_enabled != previous_auto_save_enabled:
-    save_gpt_ui_check_auto_save_enabled(ui_check_auto_save_enabled)
-
-ui_check_save_status_slot = st.sidebar.empty()
-if not ui_check_auto_save_enabled:
-    ui_check_save_status_slot.caption("GPT UI Check auto-save is OFF")
-
-selection = st.sidebar.radio(
-    get_text(lang, "sidebar_nav"),
-    page_labels,
-    index=page_labels.index(selected_page_label),
-    key="ui_sidebar_page_radio",
-)
+with nav_slot:
+    selection = st.radio(
+        get_text(lang, "sidebar_nav"),
+        page_labels,
+        index=page_labels.index(selected_page_label),
+        key="ui_sidebar_page_radio",
+    )
 
 st.session_state.ui_selected_page_key = page_label_to_key[selection]
 selected_page_label = selection
@@ -288,6 +413,7 @@ selected_page_key = str(st.session_state.ui_selected_page_key)
 page_module = pages[selected_page_key]
 
 live_shell.reset_registered_slots(selected_page_key)
+render_page_top_label(selected_page_label)
 page_render_started_at = time.perf_counter()
 page_module.render()
 page_render_elapsed_ms = int((time.perf_counter() - page_render_started_at) * 1000)
@@ -302,12 +428,21 @@ effective_refresh_interval_sec = int(
     refresh_plan["effective_refresh_interval_sec"]
 )
 
-if refresh_plan["refresh_status_visible"]:
-    st.sidebar.caption(
-        f"{get_text(lang, 'refresh_status_on')} / {effective_refresh_interval_sec}s"
-    )
-else:
-    st.sidebar.caption(get_text(lang, "refresh_status_off"))
+render_sidebar_section_label(get_text(lang, "sidebar_title"))
+previous_auto_save_enabled = bool(st.session_state.ui_check_auto_save_enabled)
+st.session_state.ui_check_auto_save_enabled = st.sidebar.checkbox(
+    "GPT UI Auto Save",
+    value=previous_auto_save_enabled,
+    key="ui_check_auto_save_checkbox",
+    help="Save one GPT-facing UI Check file after a full page render. Turn this off during normal browsing.",
+)
+ui_check_auto_save_enabled = bool(st.session_state.ui_check_auto_save_enabled)
+if ui_check_auto_save_enabled != previous_auto_save_enabled:
+    save_gpt_ui_check_auto_save_enabled(ui_check_auto_save_enabled)
+
+ui_check_save_status_slot = st.sidebar.empty()
+if not ui_check_auto_save_enabled:
+    ui_check_save_status_slot.caption("GPT UI Check auto-save is OFF")
 
 render_dashboard_hub_status_strip(
     lang=lang,

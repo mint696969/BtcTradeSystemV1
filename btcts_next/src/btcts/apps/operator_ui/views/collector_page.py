@@ -431,7 +431,7 @@ def render():
 def _render_collector_page_body():
     lang = st.session_state.get("ui_lang", "en")
 
-    live_shell.render_compact_page_header(get_text(lang, "collector_title"))
+    live_shell.render_compact_page_header(get_text(lang, "page_collector"))
 
     runtime = collector_runtime_snapshot()
     live_summary = runtime["live_summary"]

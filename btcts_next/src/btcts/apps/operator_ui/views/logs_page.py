@@ -91,7 +91,7 @@ def _render_logs_scrollable_json_block(payload: object, *, max_height_px: int = 
     )
 
 def render():
-    st.header("System Logs")
+    live_shell.render_compact_page_header("Logs")
     summary_widget = load_market_summary_widget_model()
 
     audit_rows = _read_recent_audit(lines=120)

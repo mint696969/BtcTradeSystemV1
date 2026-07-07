@@ -135,7 +135,7 @@ def _render_replay_scrollable_text(value: object, *, max_height_px: int = 120) -
 def render():
     lang = st.session_state.get("ui_lang", "en")
 
-    st.title(get_text(lang, "replay_title"))
+    live_shell.render_compact_page_header(get_text(lang, "page_replay"))
     st.caption("Replay export / report / results / sandbox を閲覧する bridge")
     summary_widget = load_market_summary_widget_model()
 

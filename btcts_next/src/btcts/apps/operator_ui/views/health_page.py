@@ -518,7 +518,7 @@ def render():
     def section_title_with_range_local(title: str, range_key: str) -> str:
         return _section_title_with_range(title, range_key, lang)
 
-    live_shell.render_compact_page_header(get_text(lang, "health_title"))
+    live_shell.render_compact_page_header(get_text(lang, "page_health"))
     selected_range_key = _render_health_range_selector(lang)
     # Build the expensive Health read model once per page render and share it
     # across all sections.  st.cache_data(ttl=1) can expire during a heavy

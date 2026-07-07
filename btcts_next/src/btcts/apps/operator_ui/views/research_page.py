@@ -235,7 +235,7 @@ def render():
 
     lang = st.session_state.get("ui_lang", "en")
 
-    st.title(get_text(lang, "research_title"))
+    live_shell.render_compact_page_header(get_text(lang, "page_research"))
     st.caption(get_text(lang, "research_subtitle"))
 
     replay_ctx = st.session_state.get("research_replay_context")

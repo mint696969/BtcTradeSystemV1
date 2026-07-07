@@ -182,7 +182,6 @@ def _metric(column: Any, label: str, value: str, help_text: str, *, delta: str |
 
 
 def render_trade_strip(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
-    st_api.caption("取引データ: 注文 / 建玉 / 確定時刻 / 損益 / コンパクト表示 / 読み取り専用")
     cols = st_api.columns(8)
     _metric(cols[0], "注文", _orders_label(packet.get("active_orders"), packet.get("pending_orders")), "有効注文と待機中注文の数。未接続時は下段のデータ源を確認します。")
     _metric(cols[1], "確定時刻", str(packet.get("confirmed_at") or "--"), "直近の注文受付・確定日時。手動判断の時刻整合に使います。")
@@ -193,18 +192,16 @@ def render_trade_strip(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]
     _metric(cols[6], "確定損益", _fmt_pnl(packet.get("realized_pnl")), "実現済み損益。決済済みの損益です。")
     _metric(cols[7], "約定後", _fmt_pnl(packet.get("after_fill_pnl")), "注文が約定した後の想定または反映後損益。信頼できる読み取り専用ソース接続後に有効化します。")
 
-    st_api.caption(
-        " / ".join(
-            [
-                f"データ源={packet.get('trade_state_source') or '未接続'}",
-                f"注文接続={bool(packet.get('orders_connected'))}",
-                f"建玉接続={bool(packet.get('positions_connected'))}",
-                f"損益接続={bool(packet.get('pnl_connected'))}",
-                f"受信適用={packet.get('messages_applied', 0)}",
-                "broker_send_enabled=false",
-                "order_intent_submitted=false",
-            ]
-        )
+    trade_context = " / ".join(
+        [
+            f"データ源={packet.get('trade_state_source') or '未接続'}",
+            f"注文接続={bool(packet.get('orders_connected'))}",
+            f"建玉接続={bool(packet.get('positions_connected'))}",
+            f"損益接続={bool(packet.get('pnl_connected'))}",
+            f"受信適用={packet.get('messages_applied', 0)}",
+            "broker_send_enabled=false",
+            "order_intent_submitted=false",
+        ]
     )
     with st_api.expander("取引データの詳細", expanded=False):
         st_api.dataframe(
@@ -216,6 +213,7 @@ def render_trade_strip(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]
             ],
             width="stretch",
         )
+        st_api.caption(trade_context)
     return {
         "ok": True,
         "trade_second_strip_version": TRADE_SECOND_STRIP_VERSION,

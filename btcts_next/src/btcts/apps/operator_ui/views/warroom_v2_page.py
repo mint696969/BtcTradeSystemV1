@@ -30,7 +30,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.live_packets import sele
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_strip_view import build_market_strip_packet, render_market_strip
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.prediction_cards_view import render_rt_prediction_cards
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.runtime_env import endpoint_from_env, runtime_config_from_env
-from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.status_view import render_rt_runtime_status
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.status_view import build_rt_runtime_status_view_model, render_rt_runtime_diagnostics, render_rt_runtime_status
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.top_widgets_view import render_rt_top_layout_and_widgets
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.trade_strip_view import build_trade_strip_packet, render_trade_strip
 
@@ -106,9 +106,31 @@ def _render_section_fragment(name: str, auto_refresh_packet: Mapping[str, Any], 
 
 
 def _runtime_section(snapshot: dict[str, Any], auto_refresh_packet: Mapping[str, Any]) -> None:
-    render_rt_runtime_status(snapshot["runtime_status"], snapshot["bridge_packet"], st)
+    view_model = build_rt_runtime_status_view_model(
+        snapshot["runtime_status"],
+        snapshot["bridge_packet"],
+        display_source=str(snapshot["display_source"]),
+        auto_refresh_packet=auto_refresh_packet,
+    )
+    render_compact_page_header(st, status_badges=view_model["badges"])
+    render_rt_runtime_status(
+        snapshot["runtime_status"],
+        snapshot["bridge_packet"],
+        st,
+        view_model=view_model,
+        render_badges=False,
+    )
+
+
+def _runtime_diagnostics_section(snapshot: dict[str, Any], auto_refresh_packet: Mapping[str, Any]) -> None:
+    view_model = build_rt_runtime_status_view_model(
+        snapshot["runtime_status"],
+        snapshot["bridge_packet"],
+        display_source=str(snapshot["display_source"]),
+        auto_refresh_packet=auto_refresh_packet,
+    )
+    render_rt_runtime_diagnostics(view_model, st)
     render_cockpit_auto_refresh_tick(auto_refresh_packet, st)
-    st.caption(f"display_source={snapshot['display_source']} / fallback_sample_suppressed=true / rt_section_fragment_refresh_ready=true")
 
 
 def _render_chart_and_gpt_copy(snapshot: dict[str, Any]) -> None:
@@ -125,21 +147,20 @@ def _render_chart_and_gpt_copy(snapshot: dict[str, Any]) -> None:
 
 def render() -> None:
     auto_refresh_packet = build_cockpit_auto_refresh_packet(st.session_state)
-    render_compact_page_header(st)
 
     _render_section_fragment("runtime", auto_refresh_packet, lambda snapshot: _runtime_section(snapshot, auto_refresh_packet))
 
-    render_compact_section_label(st, index=1, title="Market strip", note="manual-trade market essentials")
+    render_compact_section_label(st, index=1, title="Market strip", note="manual-trade market essentials　　市場データ: 手動取引用の必須情報 / コンパクト表示 / 読み取り専用 / broker送信なし")
     _render_section_fragment("market", auto_refresh_packet, lambda snapshot: render_market_strip(snapshot["market_packet"], st))
 
-    render_compact_section_label(st, index=2, title="Trade strip", note="orders / position / PnL")
+    render_compact_section_label(st, index=2, title="Trade strip", note="orders / position / PnL　　取引データ: 注文 / 建玉 / 確定時刻 / 損益 / コンパクト表示 / 読み取り専用")
     _render_section_fragment("trade", auto_refresh_packet, lambda snapshot: render_trade_strip(snapshot["trade_packet"], st))
 
-    with st.expander("3. Inference scenario guidance — deferred compact review", expanded=False):
-        _render_section_fragment("guidance", auto_refresh_packet, lambda snapshot: render_inference_guidance(snapshot["guidance_packet"], st))
+    render_compact_section_label(st, index=3, title="Inference scenario guidance", note="予測シナリオ: 観測ベース / 読み取り専用 / prediction実行なし")
+    _render_section_fragment("guidance", auto_refresh_packet, lambda snapshot: render_inference_guidance(snapshot["guidance_packet"], st))
 
-    with st.expander("4. Prediction cards — deferred to next thread", expanded=False):
-        _render_section_fragment("cards", auto_refresh_packet, lambda snapshot: render_rt_prediction_cards(snapshot["display_packets"]["cards"], st))
+    render_compact_section_label(st, index=4, title="Prediction cards", note="予測カード: context-only / 読み取り専用 / broker操作なし")
+    _render_section_fragment("cards", auto_refresh_packet, lambda snapshot: render_rt_prediction_cards(snapshot["display_packets"]["cards"], st))
 
     render_compact_section_label(st, index=5, title="Bottom chart", note="bid/ask board layer + trade points")
     # Chart iframe owns high-frequency candle updates through its read-only polling engine.
@@ -150,4 +171,6 @@ def render() -> None:
         _render_section_fragment("details", auto_refresh_packet, lambda snapshot: render_rt_top_layout_and_widgets(snapshot["display_packets"]["top"], snapshot["display_packets"]["widgets"], st))
     with st.expander("RT debug packets", expanded=False):
         _render_section_fragment("debug", auto_refresh_packet, lambda snapshot: render_rt_debug_packets({"page_mount": snapshot["page_packet"], "runtime_status": snapshot["runtime_status"], "bridge_packet": snapshot["bridge_packet"], "market_strip": snapshot["market_packet"], "trade_strip": snapshot["trade_packet"], "inference_guidance": snapshot["guidance_packet"]}, st))
+    with st.expander("Runtime diagnostics", expanded=False):
+        _render_section_fragment("runtime_diagnostics", auto_refresh_packet, lambda snapshot: _runtime_diagnostics_section(snapshot, auto_refresh_packet))
     st.caption(compact_footer_caption())
