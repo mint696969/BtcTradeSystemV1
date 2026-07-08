@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/prediction/market_regime/tools/write_latest.py
-# desc: Manual once-run writer for market-regime latest artifacts. Reads explicit root and atomically writes prediction/market_regime latest artifacts. No scheduler, UI import, broker, AutoTrade, or ledger append.
+# desc: Manual once-run writer for market-regime latest artifacts. Reads explicit root and atomically writes prediction/market_regime latest artifacts. No scheduler, UI import, broker, AutoTrade, or trade ledger behavior. CP9 appends prediction trace JSONL only.
 
 from __future__ import annotations
 
@@ -38,6 +38,11 @@ from btcts.prediction.market_regime.parameter_set_registry import (
     validate_market_regime_parameter_set_registry,
 )
 from btcts.prediction.market_regime.sources import build_market_regime_source_snapshot
+from btcts.prediction.market_regime.trace_ledger import (
+    append_market_regime_trace_row_once,
+    build_market_regime_trace_row,
+    trace_ledger_part_relpath,
+)
 
 MARKET_REGIME_WRITE_LATEST_TOOL_VERSION = "prediction.market_regime.tools.write_latest.2026_07_08.v1"
 
@@ -65,8 +70,8 @@ def _run_manifest_relpath(run_id: str) -> str:
     return f"prediction/market_regime/runs/{run_id}/manifest.json"
 
 
-def _refs(run_id: str) -> MarketRegimeArtifactRefs:
-    return MarketRegimeArtifactRefs(run_manifest_json=_run_manifest_relpath(run_id))
+def _refs(run_id: str, *, trace_part_jsonl: str = "") -> MarketRegimeArtifactRefs:
+    return MarketRegimeArtifactRefs(run_manifest_json=_run_manifest_relpath(run_id), trace_part_jsonl=trace_part_jsonl)
 
 
 def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_at: str, run_id: str | None = None) -> dict[str, Any]:
@@ -126,6 +131,17 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
     source_summary["parameter_set_registry"] = parameter_set_registry.to_dict()
     source_summary["parameter_set_registry_validation"] = parameter_set_registry_validation
     source_summary["active_parameter_set"] = active_parameter_set.to_dict()
+    trace_part_jsonl = trace_ledger_part_relpath(generated_at)
+    trace_row = build_market_regime_trace_row(
+        generated_at=generated_at,
+        run_id=effective_run_id,
+        source_refs=source_refs,
+        feature_bundle=feature_bundle,
+        prediction_packet=prediction_packet,
+        signal_score_report=signal_score_report,
+        active_parameter_set_id=active_parameter_set.parameter_set_id,
+        parameter_set_registry_validation=parameter_set_registry_validation,
+    )
     latest_read_model = build_market_regime_latest_read_model_artifact(
         generated_at=generated_at,
         run_id=effective_run_id,
@@ -135,7 +151,8 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         invalidation_summary=summaries["invalidation_summary"],
     )
     status = build_market_regime_status_artifact(generated_at=generated_at, status="latest_ready", latest_run_id=effective_run_id)
-    manifest = build_market_regime_run_manifest_artifact(generated_at=generated_at, run_id=effective_run_id, refs=_refs(effective_run_id))
+    status["trace_ledger_available"] = True
+    manifest = build_market_regime_run_manifest_artifact(generated_at=generated_at, run_id=effective_run_id, refs=_refs(effective_run_id, trace_part_jsonl=trace_part_jsonl))
     return {
         "run_id": effective_run_id,
         "generated_at": generated_at,
@@ -144,6 +161,8 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         "latest_read_model": latest_read_model,
         "status": status,
         "manifest": manifest,
+        "trace_row": trace_row,
+        "trace_part_jsonl": trace_part_jsonl,
         "validation": validation,
         "source_snapshot_ok": source_snapshot.ok,
         "feature_bundle_available_signal_count": feature_bundle.available_signal_count(),
@@ -167,6 +186,9 @@ def write_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated
     for relpath, payload in rel_payloads.items():
         _write_json_atomic(root / relpath, payload)
         written.append(relpath)
+    trace_append = append_market_regime_trace_row_once(root, artifacts["trace_row"])
+    written.append(str(trace_append["trace_part_jsonl"]))
+    written.append(str(trace_append["trace_part_meta_json"]))
     return {
         "ok": True,
         "tool_version": MARKET_REGIME_WRITE_LATEST_TOOL_VERSION,
@@ -178,11 +200,13 @@ def write_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated
         "source_snapshot_ok": bool(artifacts["source_snapshot_ok"]),
         "feature_bundle_available_signal_count": int(artifacts["feature_bundle_available_signal_count"]),
         "card_count": int(artifacts["card_count"]),
+        "trace_ledger_append": trace_append,
+        "prediction_trace_append_allowed": True,
+        "trade_ledger_append_allowed": False,
         "scheduler_enabled": False,
         "producer_loop_enabled": False,
         "broker_private_api_allowed": False,
         "autotrade_trigger_allowed": False,
-        "ledger_append_allowed": False,
         "would_send_to_broker": False,
     }
 

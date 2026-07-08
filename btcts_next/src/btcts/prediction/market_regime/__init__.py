@@ -55,6 +55,14 @@ from .signal_scoring import (
     MARKET_REGIME_SIGNAL_REGISTRY_VERSION,
     score_market_regime_signals,
 )
+from .trace_ledger import (
+    MARKET_REGIME_TRACE_LEDGER_VERSION,
+    append_market_regime_trace_row_once,
+    build_market_regime_trace_row,
+    trace_ledger_meta_relpath,
+    trace_ledger_part_relpath,
+    validate_market_regime_trace_row,
+)
 from .source_snapshot import (
     ForecastRecordsSnapshot,
     JsonSourceArtifact,
@@ -65,6 +73,12 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "validate_market_regime_trace_row",
+    "trace_ledger_part_relpath",
+    "trace_ledger_meta_relpath",
+    "build_market_regime_trace_row",
+    "append_market_regime_trace_row_once",
+    "MARKET_REGIME_TRACE_LEDGER_VERSION",
     "validate_market_regime_parameter_set_registry",
     "build_default_market_regime_parameter_set_registry",
     "MarketRegimeParameterSetRegistryEntry",
