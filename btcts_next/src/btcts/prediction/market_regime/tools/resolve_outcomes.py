@@ -230,6 +230,182 @@ def _safety() -> dict[str, Any]:
     }
 
 
+
+
+
+def _trace_part_paths(root: str | Path) -> list[Path]:
+    base = Path(root) / "prediction/market_regime/ledgers"
+    if not base.exists():
+        return []
+    return sorted(base.glob("date=*/hour=*/part-00001.jsonl"))
+
+
+def _iter_trace_rows(root: str | Path, *, max_rows: int = 5000) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    limit = max(1, int(max_rows))
+    for path in _trace_part_paths(root):
+        with path.open("r", encoding="utf-8") as handle:
+            for raw in handle:
+                if not raw.strip():
+                    continue
+                try:
+                    payload = json.loads(raw)
+                except Exception:
+                    continue
+                if isinstance(payload, Mapping) and payload.get("artifact_kind") == "trace_row":
+                    rows.append(dict(payload))
+                    if len(rows) >= limit:
+                        return rows
+    return rows
+
+
+def _prediction_from_trace_horizon(trace_row: Mapping[str, Any], horizon: Mapping[str, Any]) -> dict[str, Any]:
+    run_id = str(trace_row.get("run_id") or "")
+    generated_at = str(trace_row.get("generated_at") or trace_row.get("prediction_summary", {}).get("generated_at") if isinstance(trace_row.get("prediction_summary"), Mapping) else "")
+    horizon_sec = int(horizon.get("horizon_sec") or 0)
+    horizon_key = str(horizon.get("horizon_key") or ("current" if horizon_sec == 0 else f"{horizon_sec}s"))
+    return {
+        "run_id": run_id,
+        "prediction_id": f"{run_id}:{horizon_key}" if run_id else f"{generated_at}:{horizon_key}",
+        "generated_at": generated_at,
+        "horizon": str(horizon.get("horizon") or ""),
+        "horizon_key": horizon_key,
+        "horizon_sec": horizon_sec,
+        "regime_code": str(horizon.get("regime_code") or "UNKNOWN"),
+        "confidence_percent": int(horizon.get("confidence_percent") or 0),
+        "evidence_quality": str(horizon.get("evidence_quality") or ""),
+        "freshness_badge": str(horizon.get("freshness_state") or horizon.get("freshness_badge") or ""),
+        "parameter_set_id": str(horizon.get("parameter_set_id") or trace_row.get("active_parameter_set_id") or ""),
+        "detail": {"trace_part_jsonl": str(trace_row.get("trace_part_jsonl") or "")},
+    }
+
+
+def _trace_predictions(root: str | Path, *, resolved_at: str, max_rows: int = 5000) -> tuple[list[dict[str, Any]], int, int]:
+    predictions: list[dict[str, Any]] = []
+    trace_rows = _iter_trace_rows(root, max_rows=max_rows)
+    skipped_current_count = 0
+    for trace_row in trace_rows:
+        summary = trace_row.get("prediction_summary") if isinstance(trace_row.get("prediction_summary"), Mapping) else {}
+        horizons = summary.get("horizons") if isinstance(summary.get("horizons"), list) else []
+        for horizon in horizons:
+            if not isinstance(horizon, Mapping):
+                continue
+            prediction = _prediction_from_trace_horizon(trace_row, horizon)
+            if int(prediction.get("horizon_sec") or 0) <= 0:
+                skipped_current_count += 1
+                continue
+            predictions.append(prediction)
+    return predictions, len(trace_rows), skipped_current_count
+
+
+def _existing_outcome_ids_for_predictions(root: str | Path, predictions: list[Mapping[str, Any]]) -> set[str]:
+    ids: set[str] = set()
+    seen_parts: set[Path] = set()
+    for prediction in predictions:
+        generated_at = str(prediction.get("generated_at") or "")
+        path = Path(root) / outcome_part_relpath(generated_at)
+        if path in seen_parts:
+            continue
+        seen_parts.add(path)
+        if not path.exists():
+            continue
+        with path.open("r", encoding="utf-8") as handle:
+            for raw in handle:
+                if not raw.strip():
+                    continue
+                try:
+                    payload = json.loads(raw)
+                except Exception:
+                    continue
+                if isinstance(payload, Mapping) and payload.get("outcome_id"):
+                    ids.add(str(payload.get("outcome_id")))
+    return ids
+
+
+def build_market_regime_trace_outcome_once_plan(*, hot_root: str | Path, resolved_at: str | None = None, max_trace_rows: int = 5000) -> dict[str, Any]:
+    root = Path(hot_root)
+    effective_resolved_at = resolved_at or _utc_now_iso()
+    payload = _load_latest_cards(root)
+    current = _current_card(_cards(payload))
+    if current is None:
+        raise ValueError("latest_cards has no current/observable card")
+    observation = _observation_from_current_card(payload=payload, current_card=current, resolved_at=effective_resolved_at)
+    predictions, trace_row_count, skipped_current_count = _trace_predictions(root, resolved_at=effective_resolved_at, max_rows=max_trace_rows)
+    expired_predictions: list[dict[str, Any]] = []
+    unexpired_count = 0
+    for prediction in predictions:
+        if _is_expired(prediction, effective_resolved_at):
+            expired_predictions.append(prediction)
+        else:
+            unexpired_count += 1
+    existing_ids = _existing_outcome_ids_for_predictions(root, expired_predictions)
+    candidate_rows: list[dict[str, Any]] = []
+    duplicate_count = 0
+    for prediction in expired_predictions:
+        row = build_market_regime_outcome_row(prediction=prediction, observation=observation, resolved_at=effective_resolved_at)
+        if str(row.get("outcome_id")) in existing_ids:
+            duplicate_count += 1
+            continue
+        candidate_rows.append(row)
+    return {
+        "ok": True,
+        "tool_version": MARKET_REGIME_RESOLVE_OUTCOMES_TOOL_VERSION,
+        "source": "trace_ledger",
+        "hot_root": str(root),
+        "latest_cards_relpath": LATEST_CARDS_RELPATH,
+        "latest_run_id": str(payload.get("run_id") or ""),
+        "resolved_at": effective_resolved_at,
+        "trace_row_count": trace_row_count,
+        "trace_prediction_count": len(predictions),
+        "skipped_current_count": skipped_current_count,
+        "expired_prediction_count": len(expired_predictions),
+        "unexpired_prediction_count": unexpired_count,
+        "duplicate_outcome_count": duplicate_count,
+        "candidate_outcome_count": len(candidate_rows),
+        "observed_regime_code": str(observation.get("observed_regime_code") or "UNKNOWN"),
+        "candidate_rows": candidate_rows,
+        "would_write": False,
+        "would_update_calibration": bool(candidate_rows),
+        "safety": _safety(),
+    }
+
+
+def resolve_market_regime_trace_outcomes_once(
+    *,
+    hot_root: str | Path,
+    resolved_at: str | None = None,
+    update_calibration: bool = True,
+    max_trace_rows: int = 5000,
+) -> dict[str, Any]:
+    root = Path(hot_root)
+    plan = build_market_regime_trace_outcome_once_plan(hot_root=root, resolved_at=resolved_at, max_trace_rows=max_trace_rows)
+    appended: list[dict[str, Any]] = []
+    affected_dates: set[str] = set()
+    for row in plan["candidate_rows"]:
+        appended.append(append_market_regime_outcome_row_once(root, row))
+        affected_dates.add(_date(row.get("generated_at")))
+    calibration_results: list[dict[str, Any]] = []
+    if update_calibration and appended:
+        for date in sorted(affected_dates):
+            calibration_results.append(write_market_regime_calibration_artifacts(root, date=date))
+    return {
+        "ok": True,
+        "tool_version": MARKET_REGIME_RESOLVE_OUTCOMES_TOOL_VERSION,
+        "source": "trace_ledger",
+        "hot_root": str(root),
+        "latest_run_id": plan["latest_run_id"],
+        "resolved_at": plan["resolved_at"],
+        "trace_row_count": plan["trace_row_count"],
+        "trace_prediction_count": plan["trace_prediction_count"],
+        "expired_prediction_count": plan["expired_prediction_count"],
+        "candidate_outcome_count": plan["candidate_outcome_count"],
+        "duplicate_outcome_count": plan["duplicate_outcome_count"],
+        "appended_outcome_count": len(appended),
+        "appended": appended,
+        "calibration_results": calibration_results,
+        "safety": _safety(),
+    }
+
 def _json_for_print(payload: Mapping[str, Any]) -> str:
     clean = dict(payload)
     if "candidate_rows" in clean:
@@ -238,9 +414,11 @@ def _json_for_print(payload: Mapping[str, Any]) -> str:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Resolve expired market-regime latest_cards predictions into outcomes once.")
-    parser.add_argument("--hot-root", required=True, help="Hot or fixture root containing prediction/market_regime/latest_cards.json.")
+    parser = argparse.ArgumentParser(description="Resolve expired market-regime predictions into outcomes once.")
+    parser.add_argument("--hot-root", required=True, help="Hot or fixture root containing prediction/market_regime artifacts.")
     parser.add_argument("--resolved-at", default=None, help="UTC resolution timestamp. Defaults to current UTC.")
+    parser.add_argument("--source", choices=("latest_cards", "trace_ledger"), default="latest_cards", help="Prediction source to evaluate. latest_cards keeps CP17 behavior; trace_ledger evaluates historical trace rows.")
+    parser.add_argument("--max-trace-rows", type=int, default=5000, help="Maximum trace rows to scan when --source trace_ledger is used.")
     parser.add_argument("--preflight", action="store_true", help="Build outcome plan without writing outcome/calibration artifacts.")
     parser.add_argument("--once", action="store_true", help="Required acknowledgement for outcome/calibration writes.")
     parser.add_argument("--no-calibration", action="store_true", help="Append outcomes but skip calibration artifact refresh.")
@@ -250,13 +428,25 @@ def _build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    source = str(args.source or "latest_cards")
     if args.preflight:
-        result = build_market_regime_outcome_once_plan(hot_root=args.hot_root, resolved_at=args.resolved_at)
+        if source == "trace_ledger":
+            result = build_market_regime_trace_outcome_once_plan(hot_root=args.hot_root, resolved_at=args.resolved_at, max_trace_rows=args.max_trace_rows)
+        else:
+            result = build_market_regime_outcome_once_plan(hot_root=args.hot_root, resolved_at=args.resolved_at)
         print(_json_for_print(result))
         return 0
     if not args.once:
         parser.error("--once is required unless --preflight is used")
-    result = resolve_market_regime_outcomes_once(hot_root=args.hot_root, resolved_at=args.resolved_at, update_calibration=not args.no_calibration)
+    if source == "trace_ledger":
+        result = resolve_market_regime_trace_outcomes_once(
+            hot_root=args.hot_root,
+            resolved_at=args.resolved_at,
+            update_calibration=not args.no_calibration,
+            max_trace_rows=args.max_trace_rows,
+        )
+    else:
+        result = resolve_market_regime_outcomes_once(hot_root=args.hot_root, resolved_at=args.resolved_at, update_calibration=not args.no_calibration)
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0
 
