@@ -48,7 +48,7 @@ def test_bridge_source_uses_original_market_regime_panel_not_v2_placeholder_matr
     assert "render_warroom_market_regime_card_shell" in source
     assert "preview_enabled=True" in source
     assert "hot_root=RT_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT" in source
-    assert "D:\btc_ts_hot" in source
+    assert "D:/btc_ts_hot" in source
     assert "panels.warroom_v2.prediction_cards" not in source
     assert "warroom_v2_prediction_matrix_html" not in source
 

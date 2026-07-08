@@ -13,7 +13,7 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_market_regime_card
 
 ENTRY_GATE_VERSION = "warroom_v2_rt_entry_gate.2026_07_05.v1"
 RT_MARKET_REGIME_CARD_BRIDGE_VERSION = "warroom_v2_rt_market_regime_card_bridge.2026_07_08.v1"
-RT_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT = r"D:tc_ts_hot"
+RT_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT = "D:/btc_ts_hot"
 FUTURE_PREDICTION_CARD_ROWS = ("方向感", "反転候補", "ボラ警戒", "流動性 / 約定品質")
 
 
@@ -49,12 +49,31 @@ def _render_future_row_reservation(st_api: Any) -> None:
     )
 
 
+def _as_text_list(value: Any) -> list[str]:
+    if isinstance(value, (list, tuple)):
+        return [str(item) for item in value if str(item)]
+    if value:
+        return [str(value)]
+    return []
+
+
+def _short_list(values: list[str], *, limit: int = 4) -> str:
+    shown = values[:limit]
+    if len(values) > limit:
+        shown.append(f"+{len(values) - limit}")
+    return ",".join(shown)
+
+
 def _market_regime_render_summary(renderer_packet: Mapping[str, Any] | None) -> dict[str, Any]:
     if not isinstance(renderer_packet, Mapping):
         return {
             "packet_available": False,
             "preview_cards_used": False,
             "source_snapshot_ok": None,
+            "source_snapshot_missing_sources": [],
+            "source_snapshot_warnings": [],
+            "prediction_warnings": [],
+            "feature_bundle_available_signal_count": 0,
             "card_count": 0,
             "first_card_label": "",
             "first_card_confidence": None,
@@ -67,6 +86,10 @@ def _market_regime_render_summary(renderer_packet: Mapping[str, Any] | None) -> 
         "packet_available": True,
         "preview_cards_used": bool(renderer_packet.get("preview_cards_used")),
         "source_snapshot_ok": renderer_packet.get("source_snapshot_ok"),
+        "source_snapshot_missing_sources": _as_text_list(renderer_packet.get("source_snapshot_missing_sources")),
+        "source_snapshot_warnings": _as_text_list(renderer_packet.get("source_snapshot_warnings")),
+        "prediction_warnings": _as_text_list(renderer_packet.get("prediction_warnings")),
+        "feature_bundle_available_signal_count": int(renderer_packet.get("feature_bundle_available_signal_count") or 0),
         "card_count": int(renderer_packet.get("card_count") or len(cards)),
         "first_card_label": str(first.get("regime_label") or first.get("regime_code") or ""),
         "first_card_confidence": first.get("confidence_percent"),
@@ -85,8 +108,15 @@ def _render_market_regime_render_status(renderer_packet: Mapping[str, Any] | Non
         f"地合いカード: {source_label}",
         f"cards={summary['card_count']}",
         f"source_snapshot={summary['source_snapshot_ok']}",
+        f"signals={summary['feature_bundle_available_signal_count']}",
         f"first={first_label}/{first_confidence}%/{first_freshness}",
     ]
+    if summary["source_snapshot_missing_sources"]:
+        parts.append(f"missing={_short_list(summary['source_snapshot_missing_sources'])}")
+    if summary["source_snapshot_warnings"]:
+        parts.append(f"source_warn={_short_list(summary['source_snapshot_warnings'])}")
+    if summary["prediction_warnings"]:
+        parts.append(f"pred_warn={_short_list(summary['prediction_warnings'])}")
     if summary["preview_disabled_reason"]:
         parts.append(f"reason={summary['preview_disabled_reason']}")
     st_api.caption(" / ".join(parts))
@@ -132,6 +162,10 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         "market_regime_renderer_packet_available": bool(market_regime_summary["packet_available"]),
         "market_regime_preview_cards_used": bool(market_regime_summary["preview_cards_used"]),
         "market_regime_source_snapshot_ok": market_regime_summary["source_snapshot_ok"],
+        "market_regime_source_snapshot_missing_sources": list(market_regime_summary["source_snapshot_missing_sources"]),
+        "market_regime_source_snapshot_warnings": list(market_regime_summary["source_snapshot_warnings"]),
+        "market_regime_prediction_warnings": list(market_regime_summary["prediction_warnings"]),
+        "market_regime_feature_bundle_available_signal_count": int(market_regime_summary["feature_bundle_available_signal_count"]),
         "market_regime_card_count": int(market_regime_summary["card_count"]),
         "market_regime_first_card_label": str(market_regime_summary["first_card_label"]),
         "market_regime_first_card_confidence": market_regime_summary["first_card_confidence"],

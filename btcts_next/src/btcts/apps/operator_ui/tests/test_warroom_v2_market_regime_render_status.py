@@ -51,6 +51,9 @@ def test_original_market_regime_shell_returns_renderer_packet_for_rt_status() ->
     assert "market_regime_packet = render_warroom_market_regime_card_shell" in cards_view
     assert "_render_market_regime_render_status" in cards_view
     assert "market_regime_preview_cards_used" in cards_view
+    assert "market_regime_source_snapshot_missing_sources" in cards_view
+    assert "feature_bundle_available_signal_count" in cards_view
+    assert "D:/btc_ts_hot" in cards_view
     assert "market_regime_first_card_label" in cards_view
 
 
@@ -62,6 +65,10 @@ def test_market_regime_render_status_reports_live_preview_card_summary(monkeypat
         return {
             "preview_cards_used": True,
             "source_snapshot_ok": True,
+            "source_snapshot_missing_sources": [],
+            "source_snapshot_warnings": [],
+            "prediction_warnings": [],
+            "feature_bundle_available_signal_count": 19,
             "card_count": 8,
             "preview_disabled_reason": "",
             "cards": [
@@ -82,6 +89,10 @@ def test_market_regime_render_status_reports_live_preview_card_summary(monkeypat
     assert result["market_regime_renderer_packet_available"] is True
     assert result["market_regime_preview_cards_used"] is True
     assert result["market_regime_source_snapshot_ok"] is True
+    assert result["market_regime_source_snapshot_missing_sources"] == []
+    assert result["market_regime_source_snapshot_warnings"] == []
+    assert result["market_regime_prediction_warnings"] == []
+    assert result["market_regime_feature_bundle_available_signal_count"] == 19
     assert result["market_regime_card_count"] == 8
     assert result["market_regime_first_card_label"] == "レンジ"
     assert result["market_regime_first_card_confidence"] == 70
@@ -99,3 +110,37 @@ def test_market_regime_render_status_reports_sample_fallback_when_packet_missing
     assert summary["preview_disabled_reason"] == "renderer_packet_unavailable"
     assert any("地合いカード: sample/fallback" in caption for caption in fake_st.captions)
     assert any("reason=renderer_packet_unavailable" in caption for caption in fake_st.captions)
+
+
+def test_market_regime_render_status_reports_missing_reason_when_source_snapshot_fails() -> None:
+    fake_st = FakeStreamlit()
+    summary = view._render_market_regime_render_status(
+        {
+            "preview_cards_used": True,
+            "source_snapshot_ok": False,
+            "source_snapshot_missing_sources": ["latest_manifest", "forecast_records"],
+            "source_snapshot_warnings": ["market_regime_records_missing"],
+            "prediction_warnings": ["source_snapshot_not_ok"],
+            "feature_bundle_available_signal_count": 4,
+            "card_count": 8,
+            "cards": [
+                {
+                    "regime_label": "予測不能",
+                    "confidence_percent": 15,
+                    "freshness_badge": "MISSING",
+                }
+            ],
+        },
+        fake_st,
+    )
+
+    assert summary["source_snapshot_ok"] is False
+    assert summary["source_snapshot_missing_sources"] == ["latest_manifest", "forecast_records"]
+    assert summary["source_snapshot_warnings"] == ["market_regime_records_missing"]
+    assert summary["prediction_warnings"] == ["source_snapshot_not_ok"]
+    assert summary["feature_bundle_available_signal_count"] == 4
+    assert any("source_snapshot=False" in caption for caption in fake_st.captions)
+    assert any("signals=4" in caption for caption in fake_st.captions)
+    assert any("missing=latest_manifest,forecast_records" in caption for caption in fake_st.captions)
+    assert any("source_warn=market_regime_records_missing" in caption for caption in fake_st.captions)
+    assert any("pred_warn=source_snapshot_not_ok" in caption for caption in fake_st.captions)
