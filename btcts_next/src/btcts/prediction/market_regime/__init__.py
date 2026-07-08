@@ -42,6 +42,11 @@ from .horizon_policy import MarketRegimeHorizon, MarketRegimeHorizonGroup, Marke
 from .inference import MARKET_REGIME_CLASSIFIER_VERSION, classify_market_regime_feature_bundle
 from .parameter_set import MarketRegimeParameterSet, build_default_market_regime_parameter_set
 from .source_priority_policy import HorizonSourcePriority, SourcePriorityPolicy, build_default_source_priority_policy
+from .signal_scoring import (
+    MARKET_REGIME_SIGNAL_SCORING_VERSION,
+    MARKET_REGIME_SIGNAL_REGISTRY_VERSION,
+    score_market_regime_signals,
+)
 from .source_snapshot import (
     ForecastRecordsSnapshot,
     JsonSourceArtifact,
@@ -52,6 +57,9 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "score_market_regime_signals",
+    "MARKET_REGIME_SIGNAL_REGISTRY_VERSION",
+    "MARKET_REGIME_SIGNAL_SCORING_VERSION",
     "build_market_regime_read_model_summaries",
     "build_market_regime_read_model_horizons",
     "build_market_regime_cards_from_packet",

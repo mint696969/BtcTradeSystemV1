@@ -30,6 +30,7 @@ from btcts.prediction.market_regime.artifact_projection import (
     build_market_regime_source_refs_from_snapshot,
 )
 from btcts.prediction.market_regime.features import build_market_regime_feature_bundle
+from btcts.prediction.market_regime.signal_scoring import MARKET_REGIME_SIGNAL_SCORING_VERSION, score_market_regime_signals
 from btcts.prediction.market_regime.inference import MARKET_REGIME_CLASSIFIER_VERSION, classify_market_regime_feature_bundle
 from btcts.prediction.market_regime.sources import build_market_regime_source_snapshot
 
@@ -69,6 +70,7 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
     source_snapshot = build_market_regime_source_snapshot(root)
     feature_bundle = build_market_regime_feature_bundle(source_snapshot, generated_at=generated_at)
     prediction_packet = classify_market_regime_feature_bundle(feature_bundle, generated_at=generated_at)
+    signal_score_report = score_market_regime_signals(feature_bundle)
     cards = build_market_regime_cards_from_packet(prediction_packet)
     source_refs = build_market_regime_source_refs_from_snapshot(source_snapshot)
     summaries = build_market_regime_read_model_summaries(prediction_packet)
@@ -84,6 +86,8 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
             "tool_version": MARKET_REGIME_WRITE_LATEST_TOOL_VERSION,
             "projection_version": MARKET_REGIME_ARTIFACT_PROJECTION_VERSION,
             "classifier_version": MARKET_REGIME_CLASSIFIER_VERSION,
+            "signal_scoring_version": MARKET_REGIME_SIGNAL_SCORING_VERSION,
+            "signal_votes_available": bool(signal_score_report.get("total_vote_count")),
             "source_snapshot_ok": source_snapshot.ok,
             "feature_bundle_available_signal_count": feature_bundle.available_signal_count(),
             "missing_sources": list(source_snapshot.missing_sources),
@@ -93,11 +97,22 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
     validation = validate_market_regime_latest_cards_artifact(latest_cards)
     if not validation.get("ok"):
         raise ValueError(f"latest_cards validation failed: {validation}")
+    read_model_horizons = build_market_regime_read_model_horizons(prediction_packet)
+    signal_horizons = {str(row.get("horizon_key")): row for row in signal_score_report.get("horizons", []) if isinstance(row, Mapping)}
+    for horizon_row in read_model_horizons:
+        signal_row = signal_horizons.get(str(horizon_row.get("horizon_key")), {})
+        horizon_row["signal_votes_top_n"] = list(signal_row.get("signal_votes_top_n", []))
+        horizon_row["signal_conflicts_top_n"] = list(signal_row.get("signal_conflicts_top_n", []))
+        horizon_row["source_family_scores"] = dict(signal_row.get("source_family_scores", {}))
+        horizon_row["source_family_weights_used"] = dict(signal_row.get("source_family_weights_used", {}))
+        horizon_row["regime_scores"] = dict(signal_row.get("regime_scores", {}))
+    source_summary = dict(summaries["source_contribution_summary"])
+    source_summary["signal_score_report"] = signal_score_report
     latest_read_model = build_market_regime_latest_read_model_artifact(
         generated_at=generated_at,
         run_id=effective_run_id,
-        horizons=build_market_regime_read_model_horizons(prediction_packet),
-        source_contribution_summary=summaries["source_contribution_summary"],
+        horizons=read_model_horizons,
+        source_contribution_summary=source_summary,
         conflict_summary=summaries["conflict_summary"],
         invalidation_summary=summaries["invalidation_summary"],
     )
