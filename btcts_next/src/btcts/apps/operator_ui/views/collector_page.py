@@ -17,6 +17,7 @@ from btcts.apps.operator_ui.components.slot_definitions import (
 )
 from btcts.apps.operator_ui.components import system_stats
 from btcts.apps.operator_ui.components.collector_top_panels import (
+    render_linked_runtime_summary_section,
     render_origin_continuity_summary_section,
     render_overview_summary_panel,
     render_rate_control_section,
@@ -565,6 +566,7 @@ def _render_collector_page_body():
     stack_control = stack_runtime_snapshot()
     chart_engine_snapshot = chart_engine_runtime_snapshot()
     market_regime_loop_snapshot = market_regime_producer_loop_runtime_snapshot()
+    market_regime_snapshot = market_regime_operator_ui_snapshot()
     status_state = collector_state.get("status", {})
     daemon_stop_request = collector_state.get("daemon_stop_request", {})
     archive_copy_state = collector_state.get("archive_copy_state", {})
@@ -577,6 +579,14 @@ def _render_collector_page_body():
     summary_widget = load_execution_market_summary_widget_model()
     recent_audit_events = read_recent_audit_events(lines=200)
     origin_audit_summary = _origin_audit_summary(recent_audit_events)
+
+    render_linked_runtime_summary_section(
+        live_summary=live_summary,
+        runtime=runtime,
+        chart_engine_snapshot=chart_engine_snapshot,
+        market_regime_loop_snapshot=market_regime_loop_snapshot,
+        market_regime_snapshot=market_regime_snapshot,
+    )
 
     render_overview_summary_panel(
         lang=lang,
