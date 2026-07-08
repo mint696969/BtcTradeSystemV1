@@ -435,8 +435,8 @@ def render_warroom_market_regime_card_shell(
     preview_enabled: bool = False,
     hot_root: str | Any | None = None,
     generated_at: str = "",
-) -> None:
-    """Render market-regime cards. Default remains sample-only; preview requires explicit args."""
+) -> dict[str, Any]:
+    """Render market-regime cards and return the actual renderer packet used for display."""
     if cards is not None:
         packet = build_warroom_market_regime_card_renderer_packet(cards)
     else:
@@ -447,3 +447,4 @@ def render_warroom_market_regime_card_shell(
         )
     st.session_state["warroom_market_regime_card_renderer"] = dict(packet)
     st.markdown(market_regime_cards_html(packet["cards"]), unsafe_allow_html=True)
+    return dict(packet)

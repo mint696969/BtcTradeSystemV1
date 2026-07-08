@@ -49,6 +49,50 @@ def _render_future_row_reservation(st_api: Any) -> None:
     )
 
 
+def _market_regime_render_summary(renderer_packet: Mapping[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(renderer_packet, Mapping):
+        return {
+            "packet_available": False,
+            "preview_cards_used": False,
+            "source_snapshot_ok": None,
+            "card_count": 0,
+            "first_card_label": "",
+            "first_card_confidence": None,
+            "first_card_freshness": "",
+            "preview_disabled_reason": "renderer_packet_unavailable",
+        }
+    cards = [card for card in renderer_packet.get("cards", []) if isinstance(card, Mapping)]
+    first = cards[0] if cards else {}
+    return {
+        "packet_available": True,
+        "preview_cards_used": bool(renderer_packet.get("preview_cards_used")),
+        "source_snapshot_ok": renderer_packet.get("source_snapshot_ok"),
+        "card_count": int(renderer_packet.get("card_count") or len(cards)),
+        "first_card_label": str(first.get("regime_label") or first.get("regime_code") or ""),
+        "first_card_confidence": first.get("confidence_percent"),
+        "first_card_freshness": str(first.get("freshness_badge") or ""),
+        "preview_disabled_reason": str(renderer_packet.get("preview_disabled_reason") or ""),
+    }
+
+
+def _render_market_regime_render_status(renderer_packet: Mapping[str, Any] | None, st_api: Any) -> dict[str, Any]:
+    summary = _market_regime_render_summary(renderer_packet)
+    source_label = "D-hot preview" if summary["preview_cards_used"] else "sample/fallback"
+    first_label = summary["first_card_label"] or "-"
+    first_confidence = summary["first_card_confidence"]
+    first_freshness = summary["first_card_freshness"] or "-"
+    parts = [
+        f"地合いカード: {source_label}",
+        f"cards={summary['card_count']}",
+        f"source_snapshot={summary['source_snapshot_ok']}",
+        f"first={first_label}/{first_confidence}%/{first_freshness}",
+    ]
+    if summary["preview_disabled_reason"]:
+        parts.append(f"reason={summary['preview_disabled_reason']}")
+    st_api.caption(" / ".join(parts))
+    return summary
+
+
 def _render_context_packets(packet: Mapping[str, Any], st_api: Any) -> None:
     cards = [card for card in packet.get("cards", []) if isinstance(card, Mapping)]
     if not cards:
@@ -71,11 +115,12 @@ def _render_context_packets(packet: Mapping[str, Any], st_api: Any) -> None:
 
 def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
     _render_prediction_boundary(packet, st_api)
-    render_warroom_market_regime_card_shell(
+    market_regime_packet = render_warroom_market_regime_card_shell(
         preview_enabled=True,
         hot_root=RT_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT,
         generated_at=_generated_at(packet),
     )
+    market_regime_summary = _render_market_regime_render_status(market_regime_packet, st_api)
     _render_future_row_reservation(st_api)
     _render_context_packets(packet, st_api)
     return {
@@ -84,6 +129,13 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         "rt_market_regime_card_bridge_version": RT_MARKET_REGIME_CARD_BRIDGE_VERSION,
         "renderer_version": WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION,
         "market_regime_card_shell_rendered": True,
+        "market_regime_renderer_packet_available": bool(market_regime_summary["packet_available"]),
+        "market_regime_preview_cards_used": bool(market_regime_summary["preview_cards_used"]),
+        "market_regime_source_snapshot_ok": market_regime_summary["source_snapshot_ok"],
+        "market_regime_card_count": int(market_regime_summary["card_count"]),
+        "market_regime_first_card_label": str(market_regime_summary["first_card_label"]),
+        "market_regime_first_card_confidence": market_regime_summary["first_card_confidence"],
+        "market_regime_first_card_freshness": str(market_regime_summary["first_card_freshness"]),
         "market_regime_first": True,
         "future_prediction_rows_reserved": True,
         "future_prediction_card_rows": list(FUTURE_PREDICTION_CARD_ROWS),
