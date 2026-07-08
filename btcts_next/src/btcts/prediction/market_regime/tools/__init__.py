@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
-from .write_latest import MARKET_REGIME_WRITE_LATEST_TOOL_VERSION, write_market_regime_latest_artifacts_once
+from .write_latest import MARKET_REGIME_WRITE_LATEST_TOOL_VERSION, preflight_market_regime_latest_artifacts_once, write_market_regime_latest_artifacts_once
 
 __all__ = [
+    "preflight_market_regime_latest_artifacts_once",
     "MARKET_REGIME_WRITE_LATEST_TOOL_VERSION",
     "write_market_regime_latest_artifacts_once",
 ]

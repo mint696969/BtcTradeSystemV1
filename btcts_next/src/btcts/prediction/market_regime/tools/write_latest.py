@@ -205,6 +205,55 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
     }
 
 
+
+
+def _expected_artifact_refs(run_id: str, generated_at: str) -> dict[str, str]:
+    return {
+        "latest_json": LATEST_JSON_RELPATH,
+        "latest_cards_json": LATEST_CARDS_JSON_RELPATH,
+        "latest_read_model_json": LATEST_READ_MODEL_JSON_RELPATH,
+        "status_json": STATUS_JSON_RELPATH,
+        "run_manifest_json": _run_manifest_relpath(run_id),
+        "trace_part_jsonl": trace_ledger_part_relpath(generated_at),
+    }
+
+
+def preflight_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated_at: str | None = None, run_id: str | None = None) -> dict[str, Any]:
+    root = Path(hot_root)
+    effective_generated_at = generated_at or _utc_now_iso()
+    artifacts = build_market_regime_latest_artifact_set(hot_root=root, generated_at=effective_generated_at, run_id=run_id)
+    effective_run_id = str(artifacts["run_id"])
+    latest_cards = artifacts["latest_cards"] if isinstance(artifacts.get("latest_cards"), Mapping) else {}
+    compact = latest_cards.get("compact_summary") if isinstance(latest_cards.get("compact_summary"), Mapping) else {}
+    missing_sources = list(compact.get("missing_sources", [])) if isinstance(compact, Mapping) else []
+    warnings = list(compact.get("warnings", [])) if isinstance(compact, Mapping) else []
+    source_snapshot_ok = bool(artifacts.get("source_snapshot_ok"))
+    validation = artifacts.get("validation") if isinstance(artifacts.get("validation"), Mapping) else {}
+    can_write_live_once = bool(source_snapshot_ok and validation.get("ok") and int(artifacts.get("card_count") or 0) > 0)
+    return {
+        "ok": True,
+        "tool_version": MARKET_REGIME_WRITE_LATEST_TOOL_VERSION,
+        "preflight_only": True,
+        "would_write": False,
+        "can_write_live_once": can_write_live_once,
+        "hot_root": str(root),
+        "run_id": effective_run_id,
+        "generated_at": effective_generated_at,
+        "source_snapshot_ok": source_snapshot_ok,
+        "missing_sources": missing_sources,
+        "warnings": warnings,
+        "feature_bundle_available_signal_count": int(artifacts.get("feature_bundle_available_signal_count") or 0),
+        "card_count": int(artifacts.get("card_count") or 0),
+        "latest_cards_validation": dict(validation),
+        "expected_artifacts": _expected_artifact_refs(effective_run_id, effective_generated_at),
+        "prediction_trace_append_would_run": can_write_live_once,
+        "scheduler_enabled": False,
+        "producer_loop_enabled": False,
+        "broker_private_api_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "would_send_to_broker": False,
+    }
+
 def write_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated_at: str | None = None, run_id: str | None = None) -> dict[str, Any]:
     root = Path(hot_root)
     effective_generated_at = generated_at or _utc_now_iso()
@@ -252,14 +301,19 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--generated-at", default=None, help="UTC generation timestamp. Defaults to current UTC.")
     parser.add_argument("--run-id", default=None, help="Optional stable run id. Defaults to generated_at-derived id.")
     parser.add_argument("--once", action="store_true", help="Required safety acknowledgement for one-shot write.")
+    parser.add_argument("--preflight", action="store_true", help="Read and validate inputs/build artifact set without writing latest artifacts or trace rows.")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    if args.preflight:
+        result = preflight_market_regime_latest_artifacts_once(hot_root=args.hot_root, generated_at=args.generated_at, run_id=args.run_id)
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        return 0
     if not args.once:
-        parser.error("--once is required; scheduler/producer loop is intentionally not available in this tool")
+        parser.error("--once is required unless --preflight is used; scheduler/producer loop is intentionally not available in this tool")
     result = write_market_regime_latest_artifacts_once(hot_root=args.hot_root, generated_at=args.generated_at, run_id=args.run_id)
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0
