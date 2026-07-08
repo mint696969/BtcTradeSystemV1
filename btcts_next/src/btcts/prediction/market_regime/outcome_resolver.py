@@ -79,6 +79,28 @@ def _regime(value: object) -> str:
     return str(value or "UNKNOWN").strip().upper() or "UNKNOWN"
 
 
+def _normalize_observation_source(value: object) -> str:
+    source = str(value or "").strip().lower()
+    if source in {"candle", "candles", "candle_summary", "derived_candles"}:
+        return "candle_summary"
+    if source in {"latest_cards", "current", "latest_current", "latest_cards_current", ""}:
+        return "latest_cards_current"
+    return source
+
+
+def _observation_source(observation: Mapping[str, Any]) -> str:
+    explicit = observation.get("observation_source")
+    if explicit:
+        return _normalize_observation_source(explicit)
+    summary = str(observation.get("summary") or "")
+    if observation.get("observation_evaluator_version") or summary.startswith("candle_summary_observation"):
+        return "candle_summary"
+    return "latest_cards_current"
+
+
+def _observation_evaluator_version(observation: Mapping[str, Any]) -> str:
+    return str(observation.get("observation_evaluator_version") or "")
+
 def _prediction_fields(prediction: Mapping[str, Any]) -> dict[str, Any]:
     detail = prediction.get("detail") if isinstance(prediction.get("detail"), Mapping) else {}
     generated_at = str(prediction.get("generated_at") or prediction.get("prediction_generated_at") or detail.get("generated_at") or "")
@@ -151,6 +173,8 @@ def build_market_regime_outcome_row(
         expiry_at=fields["expiry_at"],
     )
     observed_regime = _regime(observation.get("observed_regime_code") or observation.get("regime_code"))
+    observation_source = _observation_source(observation)
+    observation_evaluator_version = _observation_evaluator_version(observation)
     run_id = fields["run_id"]
     horizon_key = fields["horizon_key"]
     outcome_id = f"{run_id}:{horizon_key}:outcome" if run_id else f"{fields['generated_at']}:{horizon_key}:outcome"
@@ -173,6 +197,8 @@ def build_market_regime_outcome_row(
         "expiry_at": fields["expiry_at"],
         "predicted_regime_code": fields["predicted_regime_code"],
         "observed_regime_code": observed_regime,
+        "observation_source": observation_source,
+        "observation_evaluator_version": observation_evaluator_version,
         "outcome_label": label,
         "outcome_reason": reason,
         "confidence_percent": fields["confidence_percent"],
@@ -184,6 +210,8 @@ def build_market_regime_outcome_row(
             "observation_at": str(observation.get("observation_at") or observation.get("observed_at") or ""),
             "observation_available": bool(observation.get("observation_available", True)),
             "observed_regime_code": observed_regime,
+            "observation_source": observation_source,
+            "observation_evaluator_version": observation_evaluator_version,
             "invalidated": bool(observation.get("invalidated")),
             "invalidation_reason": str(observation.get("invalidation_reason") or ""),
             "partial_match": bool(observation.get("partial_match")),

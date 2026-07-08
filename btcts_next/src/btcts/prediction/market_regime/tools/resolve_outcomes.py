@@ -96,6 +96,7 @@ def _observation_from_current_card(*, payload: Mapping[str, Any], current_card: 
         "observation_at": resolved_at,
         "observation_available": True,
         "observed_regime_code": str(current_card.get("regime_code") or "UNKNOWN"),
+        "observation_source": "latest_cards_current",
         "source_refs": [LATEST_CARDS_RELPATH, str(current_card.get("detail", {}).get("trace_part_jsonl") if isinstance(current_card.get("detail"), Mapping) else "")],
         "summary": f"observed_from_latest_cards_current run_id={payload.get('run_id') or '-'} horizon={current_card.get('horizon') or '-'} regime={current_card.get('regime_code') or 'UNKNOWN'}",
         "invalidated": False,

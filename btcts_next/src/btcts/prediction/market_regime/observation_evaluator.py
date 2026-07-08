@@ -185,6 +185,7 @@ def build_market_regime_candle_observation(
         "observation_at": effective_resolved_at,
         "observation_available": available,
         "observed_regime_code": observed,
+        "observation_source": "candle_summary",
         "source_refs": [relpath],
         "summary": (
             f"candle_summary_observation horizon_sec={horizon_sec} timeframe_sec={tf} "
@@ -205,6 +206,7 @@ def _unavailable_observation(*, reason: str, resolved_at: str) -> dict[str, Any]
         "observation_at": str(resolved_at or ""),
         "observation_available": False,
         "observed_regime_code": "UNKNOWN",
+        "observation_source": "candle_summary",
         "source_refs": [],
         "summary": reason,
         "invalidated": False,

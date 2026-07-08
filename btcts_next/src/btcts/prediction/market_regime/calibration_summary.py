@@ -57,6 +57,25 @@ def _has_forbidden_raw_keys(value: Any) -> bool:
     return False
 
 
+def _normalize_observation_source(value: object) -> str:
+    source = str(value or "").strip().lower()
+    if source in {"candle", "candles", "candle_summary", "derived_candles"}:
+        return "candle_summary"
+    if source in {"latest_cards", "current", "latest_current", "latest_cards_current", ""}:
+        return "latest_cards_current"
+    return source
+
+
+def _row_observation_source(row: Mapping[str, Any]) -> str:
+    if row.get("observation_source"):
+        return _normalize_observation_source(row.get("observation_source"))
+    observation_summary = row.get("observation_summary") if isinstance(row.get("observation_summary"), Mapping) else {}
+    if observation_summary.get("observation_source"):
+        return _normalize_observation_source(observation_summary.get("observation_source"))
+    if row.get("observation_evaluator_version") or observation_summary.get("observation_evaluator_version"):
+        return "candle_summary"
+    return "latest_cards_current"
+
 def _empty_counts() -> dict[str, int]:
     return {label: 0 for label in _ALLOWED_OUTCOME_LABELS}
 
@@ -113,6 +132,8 @@ def _safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
         "predicted_regime_code": str(row.get("predicted_regime_code") or "UNKNOWN"),
         "observed_regime_code": str(row.get("observed_regime_code") or "UNKNOWN"),
         "outcome_label": str(row.get("outcome_label") or "unknown"),
+        "observation_source": _row_observation_source(row),
+        "observation_evaluator_version": str(row.get("observation_evaluator_version") or (row.get("observation_summary") or {}).get("observation_evaluator_version") if isinstance(row.get("observation_summary"), Mapping) else ""),
         "confidence_percent": row.get("confidence_percent"),
         "parameter_set_id": str(row.get("parameter_set_id") or ""),
         "trace_part_jsonl": str(row.get("trace_part_jsonl") or ""),
@@ -125,6 +146,8 @@ def build_market_regime_calibration_summary(*, rows: Iterable[Mapping[str, Any]]
     by_regime: dict[str, dict[str, Any]] = defaultdict(_bucket)
     by_parameter: dict[str, dict[str, Any]] = defaultdict(_bucket)
     by_parameter_horizon: dict[str, dict[str, Any]] = defaultdict(_bucket)
+    by_observation_source: dict[str, dict[str, Any]] = defaultdict(_bucket)
+    by_observation_source_horizon: dict[str, dict[str, Any]] = defaultdict(_bucket)
     failures: list[str] = []
     for index, row in enumerate(rows):
         if not isinstance(row, Mapping):
@@ -140,10 +163,13 @@ def build_market_regime_calibration_summary(*, rows: Iterable[Mapping[str, Any]]
         horizon_key = safe["horizon_key"] or "unknown"
         regime_key = safe["predicted_regime_code"] or "UNKNOWN"
         parameter_key = safe["parameter_set_id"] or "unknown_parameter_set"
+        observation_source_key = safe["observation_source"] or "latest_cards_current"
         _update_bucket(by_horizon[horizon_key], safe)
         _update_bucket(by_regime[regime_key], safe)
         _update_bucket(by_parameter[parameter_key], safe)
         _update_bucket(by_parameter_horizon[f"{parameter_key}|{horizon_key}"], safe)
+        _update_bucket(by_observation_source[observation_source_key], safe)
+        _update_bucket(by_observation_source_horizon[f"{observation_source_key}|{horizon_key}"], safe)
     effective_date = date or (_date_from_ts(safe_rows[0]["generated_at"]) if safe_rows else "unknown-date")
     summary = {
         "schema_version": "market_regime_calibration_daily_summary.2026_07_08.v1",
@@ -160,6 +186,8 @@ def build_market_regime_calibration_summary(*, rows: Iterable[Mapping[str, Any]]
         "by_predicted_regime": [_finalize_bucket(key, by_regime[key]) for key in sorted(by_regime)],
         "by_parameter_set": [_finalize_bucket(key, by_parameter[key]) for key in sorted(by_parameter)],
         "by_parameter_set_horizon": [_finalize_bucket(key, by_parameter_horizon[key]) for key in sorted(by_parameter_horizon)],
+        "by_observation_source": [_finalize_bucket(key, by_observation_source[key]) for key in sorted(by_observation_source)],
+        "by_observation_source_horizon": [_finalize_bucket(key, by_observation_source_horizon[key]) for key in sorted(by_observation_source_horizon)],
         "promotion_candidates": _promotion_candidates(by_parameter),
         "safety": _safety(),
     }
@@ -211,6 +239,7 @@ def _safety() -> dict[str, Any]:
 def build_market_regime_calibration_table(*, daily_summaries: Iterable[Mapping[str, Any]], month: str = "") -> Dict[str, Any]:
     summaries = [dict(item) for item in daily_summaries if isinstance(item, Mapping)]
     rows: list[dict[str, Any]] = []
+    observation_source_rows: list[dict[str, Any]] = []
     for summary in summaries:
         date = str(summary.get("date") or "")
         for item in summary.get("by_parameter_set_horizon", []):
@@ -219,6 +248,12 @@ def build_market_regime_calibration_table(*, daily_summaries: Iterable[Mapping[s
             row = dict(item)
             row["date"] = date
             rows.append(row)
+        for item in summary.get("by_observation_source_horizon", []):
+            if not isinstance(item, Mapping):
+                continue
+            row = dict(item)
+            row["date"] = date
+            observation_source_rows.append(row)
     effective_month = month or (_month_from_date(str(summaries[0].get("date") or "")) if summaries else "unknown-month")
     return {
         "schema_version": "market_regime_calibration_table.2026_07_08.v1",
@@ -230,6 +265,8 @@ def build_market_regime_calibration_table(*, daily_summaries: Iterable[Mapping[s
         "daily_summary_count": len(summaries),
         "row_count": len(rows),
         "rows": rows,
+        "observation_source_row_count": len(observation_source_rows),
+        "observation_source_rows": observation_source_rows,
         "promotion_candidates": [candidate for summary in summaries for candidate in summary.get("promotion_candidates", []) if isinstance(candidate, Mapping)],
         "safety": _safety(),
     }
