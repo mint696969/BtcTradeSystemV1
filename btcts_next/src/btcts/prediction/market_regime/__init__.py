@@ -24,6 +24,13 @@ from .artifact_contracts import (
     build_market_regime_status_artifact,
     validate_market_regime_latest_cards_artifact,
 )
+from .calibration_read_model import (
+    CALIBRATION_LATEST_READ_MODEL_RELPATH,
+    MARKET_REGIME_CALIBRATION_READ_MODEL_VERSION,
+    build_market_regime_calibration_read_model,
+    calibration_latest_read_model_relpath,
+    write_market_regime_calibration_read_model,
+)
 from .calibration_summary import (
     MARKET_REGIME_CALIBRATION_SUMMARY_VERSION,
     MARKET_REGIME_CALIBRATION_TABLE_VERSION,
@@ -118,6 +125,11 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "write_market_regime_calibration_read_model",
+    "calibration_latest_read_model_relpath",
+    "build_market_regime_calibration_read_model",
+    "MARKET_REGIME_CALIBRATION_READ_MODEL_VERSION",
+    "CALIBRATION_LATEST_READ_MODEL_RELPATH",
     "write_market_regime_producer_control_request",
     "run_market_regime_producer_loop",
     "market_regime_producer_loop_snapshot",
