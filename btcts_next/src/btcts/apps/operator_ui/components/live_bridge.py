@@ -169,6 +169,15 @@ def load_checkpoint() -> Optional[dict]:
     )
 
 
+def load_origin_status() -> Optional[dict]:
+    return _read_json_first(
+        [
+            state_root() / "unified_origin_status.json",
+            state_root() / "origin_status.json",
+        ]
+    )
+
+
 def read_recent_audit_events(lines: int = 80) -> list[dict]:
     log_path = logs_path()
     if not log_path.exists():
@@ -471,6 +480,15 @@ def _payload_age_seconds(payload: dict | None) -> Optional[float]:
     return max(age, 0.0)
 
 
+def _timestamp_age_seconds(value: object) -> Optional[float]:
+    ts = _parse_iso_utc(str(value) if value is not None else None)
+    if ts is None:
+        return None
+    now = datetime.now(timezone.utc)
+    age = (now - ts).total_seconds()
+    return max(age, 0.0)
+
+
 def _origin_continuity_feed_state(
     status: dict | None,
     *,
@@ -497,6 +515,33 @@ def _origin_continuity_feed_state(
         return "LIVE"
 
     if status_age <= stale_threshold_sec:
+        return "QUIET"
+
+    return "STALE"
+
+
+def _origin_status_feed_state(
+    origin_status: dict | None,
+    *,
+    live_threshold_sec: int = 30,
+    stale_threshold_sec: int = 120,
+) -> Optional[str]:
+    if not isinstance(origin_status, dict) or not origin_status:
+        return None
+
+    ws_state = str(origin_status.get("ws_state") or "").upper()
+    event_age = _timestamp_age_seconds(origin_status.get("last_event_ts") or origin_status.get("ts"))
+
+    if ws_state != "LIVE":
+        return "STALE"
+
+    if event_age is None:
+        return "UNKNOWN"
+
+    if event_age <= live_threshold_sec:
+        return "LIVE"
+
+    if event_age <= stale_threshold_sec:
         return "QUIET"
 
     return "STALE"
@@ -554,6 +599,7 @@ def _build_live_summary(
     health: dict,
     daemon_health: dict,
     checkpoint: dict,
+    origin_status: dict,
     audit_rows: list[dict],
 ) -> dict:
     status_mode = str(status.get("mode") or "UNKNOWN").upper()
@@ -566,7 +612,7 @@ def _build_live_summary(
     health_checks = health.get("checks") or []
     warn_count = sum(1 for check in health_checks if check.get("result") != "ok")
 
-    feed_state = _origin_continuity_feed_state(status) or _feed_state(audit_rows)
+    feed_state = _origin_status_feed_state(origin_status) or _origin_continuity_feed_state(status) or _feed_state(audit_rows)
 
     status_age = _payload_age_seconds(status)
     health_age = _payload_age_seconds(health)
@@ -638,6 +684,7 @@ def collector_runtime_snapshot() -> dict:
     health = load_health() or {}
     daemon_health = load_daemon_health() or {}
     checkpoint = load_checkpoint() or {}
+    origin_status = load_origin_status() or {}
     audit_rows = read_recent_audit_events(lines=80)
 
     mode = str(status.get("mode") or "UNKNOWN").upper()
@@ -683,6 +730,7 @@ def collector_runtime_snapshot() -> dict:
         health=health,
         daemon_health=daemon_health,
         checkpoint=checkpoint,
+        origin_status=origin_status,
         audit_rows=audit_rows,
     )
 
@@ -700,5 +748,6 @@ def collector_runtime_snapshot() -> dict:
         "health": health,
         "daemon_health": daemon_health,
         "checkpoint": checkpoint,
+        "origin_status": origin_status,
         "live_summary": live_summary,
     }
