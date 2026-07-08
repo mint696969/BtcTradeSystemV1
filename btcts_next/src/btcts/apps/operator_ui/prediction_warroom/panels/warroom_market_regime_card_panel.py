@@ -225,21 +225,88 @@ def _joined_detail_items(items: Iterable[Any], *, limit: int = 3) -> str:
     return " / ".join(shown)
 
 
+def _detail_metric_pairs(value: Any, *, limit: int = 4) -> str:
+    if not isinstance(value, Mapping):
+        return ""
+    pairs: list[str] = []
+    for key, item in list(value.items())[:limit]:
+        pairs.append(f"{_text(key)}={_text(item)}")
+    if len(value) > limit:
+        pairs.append(f"+{len(value) - limit}")
+    return " / ".join(pairs)
+
+
+def _detail_vote_items(value: Any, *, limit: int = 4) -> str:
+    if not isinstance(value, list):
+        return ""
+    parts: list[str] = []
+    for vote in value[:limit]:
+        if not isinstance(vote, Mapping):
+            continue
+        signal_id = vote.get("signal_id") or ""
+        regime = vote.get("supports_regime") or ""
+        strength = vote.get("weighted_strength")
+        parts.append(f"{_text(signal_id)}→{_text(regime)}({_text(strength)})")
+    if len(value) > limit:
+        parts.append(f"+{len(value) - limit}")
+    return " / ".join(parts)
+
+
+def _detail_conflict_items(value: Any, *, limit: int = 3) -> str:
+    if not isinstance(value, list):
+        return ""
+    parts: list[str] = []
+    for conflict in value[:limit]:
+        if not isinstance(conflict, Mapping):
+            continue
+        primary = conflict.get("primary_regime") or ""
+        other = conflict.get("conflicting_regime") or ""
+        parts.append(f"{_text(primary)} vs {_text(other)}")
+    if len(value) > limit:
+        parts.append(f"+{len(value) - limit}")
+    return " / ".join(parts)
+
+
 def _detail_lines(card: Mapping[str, Any]) -> str:
     detail = card.get("detail") if isinstance(card.get("detail"), Mapping) else {}
     reason_lines = detail.get("reason_lines") if isinstance(detail.get("reason_lines"), list) else []
     source_lines = detail.get("source_lines") if isinstance(detail.get("source_lines"), list) else []
     warning_lines = detail.get("warning_lines") if isinstance(detail.get("warning_lines"), list) else []
-    reason = _joined_detail_items(reason_lines)
-    source = _joined_detail_items(source_lines)
-    warning = _joined_detail_items(warning_lines)
+    invalidation_lines = detail.get("invalidation_lines") if isinstance(detail.get("invalidation_lines"), list) else []
+    reason = _joined_detail_items(reason_lines, limit=4)
+    source = _joined_detail_items(source_lines, limit=4)
+    warning = _joined_detail_items(warning_lines, limit=4)
+    invalidation = _joined_detail_items(invalidation_lines, limit=4)
+    votes = _detail_vote_items(detail.get("signal_votes_top_n"), limit=5)
+    conflicts = _detail_conflict_items(detail.get("signal_conflicts_top_n"), limit=4)
+    source_family = _detail_metric_pairs(detail.get("source_family_scores"), limit=5)
+    regime_scores = _detail_metric_pairs(detail.get("regime_scores"), limit=5)
+    percent_meaning = str(detail.get("percent_meaning") or "")
+    trace_ref = str(detail.get("trace_part_jsonl") or "")
+    parameter_set_id = str(detail.get("active_parameter_set_id") or detail.get("parameter_set_id") or "")
     lines = ["<div class='mr-detail-title'>概要</div>"]
+    if percent_meaning:
+        lines.append(f"<div class='mr-detail-line'><b>%:</b> {_text(percent_meaning)}</div>")
     if reason:
         lines.append(f"<div class='mr-detail-line'><b>理由:</b> {reason}</div>")
+    if votes:
+        lines.append(f"<div class='mr-detail-line'><b>主な票:</b> {votes}</div>")
+    if conflicts:
+        lines.append(f"<div class='mr-detail-line'><b>競合:</b> {conflicts}</div>")
+    if source_family:
+        lines.append(f"<div class='mr-detail-line'><b>ソース寄与:</b> {source_family}</div>")
+    if regime_scores:
+        lines.append(f"<div class='mr-detail-line'><b>地合いスコア:</b> {regime_scores}</div>")
     if source:
         lines.append(f"<div class='mr-detail-line'><b>情報源:</b> {source}</div>")
+    if invalidation:
+        lines.append(f"<div class='mr-detail-line'><b>無効化:</b> {invalidation}</div>")
     if warning:
         lines.append(f"<div class='mr-detail-line'><b>注意:</b> {warning}</div>")
+    if trace_ref:
+        lines.append(f"<div class='mr-detail-line'><b>Trace:</b> {_text(trace_ref)}</div>")
+    if parameter_set_id:
+        lines.append(f"<div class='mr-detail-line'><b>Parameter:</b> {_text(parameter_set_id)}</div>")
     return "".join(lines)
 
 

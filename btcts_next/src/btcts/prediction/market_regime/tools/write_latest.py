@@ -46,6 +46,34 @@ from btcts.prediction.market_regime.trace_ledger import (
 
 MARKET_REGIME_WRITE_LATEST_TOOL_VERSION = "prediction.market_regime.tools.write_latest.2026_07_08.v1"
 
+MARKET_REGIME_CARD_DETAIL_ENRICHMENT_VERSION = "prediction_warroom.market_regime_card_detail_enrichment.2026_07_08.v1"
+
+
+def _enrich_cards_for_warroom_detail(
+    cards: list[dict[str, Any]],
+    *,
+    signal_score_report: Mapping[str, Any],
+    trace_part_jsonl: str,
+    active_parameter_set_id: str,
+) -> list[dict[str, Any]]:
+    signal_horizons = {str(row.get("horizon_key")): row for row in signal_score_report.get("horizons", []) if isinstance(row, Mapping)}
+    enriched: list[dict[str, Any]] = []
+    for card in cards:
+        row = dict(card)
+        detail = dict(row.get("detail") if isinstance(row.get("detail"), Mapping) else {})
+        signal_row = signal_horizons.get(str(row.get("horizon_key") or ""), {})
+        detail["signal_votes_top_n"] = list(signal_row.get("signal_votes_top_n", []))
+        detail["signal_conflicts_top_n"] = list(signal_row.get("signal_conflicts_top_n", []))
+        detail["source_family_scores"] = dict(signal_row.get("source_family_scores", {}))
+        detail["source_family_weights_used"] = dict(signal_row.get("source_family_weights_used", {}))
+        detail["regime_scores"] = dict(signal_row.get("regime_scores", {}))
+        detail["trace_part_jsonl"] = trace_part_jsonl
+        detail["active_parameter_set_id"] = active_parameter_set_id
+        detail["card_detail_enrichment_version"] = MARKET_REGIME_CARD_DETAIL_ENRICHMENT_VERSION
+        row["detail"] = detail
+        enriched.append(row)
+    return enriched
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -87,6 +115,13 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
     prediction_packet = classify_market_regime_feature_bundle(feature_bundle, generated_at=generated_at)
     signal_score_report = score_market_regime_signals(feature_bundle)
     cards = build_market_regime_cards_from_packet(prediction_packet)
+    trace_part_jsonl = trace_ledger_part_relpath(generated_at)
+    cards = _enrich_cards_for_warroom_detail(
+        cards,
+        signal_score_report=signal_score_report,
+        trace_part_jsonl=trace_part_jsonl,
+        active_parameter_set_id=active_parameter_set.parameter_set_id,
+    )
     source_refs = build_market_regime_source_refs_from_snapshot(source_snapshot)
     summaries = build_market_regime_read_model_summaries(prediction_packet)
     latest = build_market_regime_latest_artifact(packet=prediction_packet, run_id=effective_run_id)
@@ -106,6 +141,7 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
             "parameter_set_registry_version": MARKET_REGIME_PARAMETER_SET_REGISTRY_VERSION,
             "active_parameter_set_id": active_parameter_set.parameter_set_id,
             "parameter_set_registry_ok": bool(parameter_set_registry_validation.get("ok")),
+            "card_detail_enrichment_version": MARKET_REGIME_CARD_DETAIL_ENRICHMENT_VERSION,
             "source_snapshot_ok": source_snapshot.ok,
             "feature_bundle_available_signal_count": feature_bundle.available_signal_count(),
             "missing_sources": list(source_snapshot.missing_sources),
@@ -131,7 +167,6 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
     source_summary["parameter_set_registry"] = parameter_set_registry.to_dict()
     source_summary["parameter_set_registry_validation"] = parameter_set_registry_validation
     source_summary["active_parameter_set"] = active_parameter_set.to_dict()
-    trace_part_jsonl = trace_ledger_part_relpath(generated_at)
     trace_row = build_market_regime_trace_row(
         generated_at=generated_at,
         run_id=effective_run_id,
