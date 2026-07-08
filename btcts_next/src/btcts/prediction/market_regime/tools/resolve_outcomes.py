@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from btcts.prediction.market_regime.calibration_summary import write_market_regime_calibration_artifacts
+from btcts.prediction.market_regime.calibration_read_model import write_market_regime_calibration_read_model
 from btcts.prediction.market_regime.observation_evaluator import build_market_regime_candle_observation
 from btcts.prediction.market_regime.outcome_resolver import (
     append_market_regime_outcome_row_once,
@@ -196,9 +197,11 @@ def resolve_market_regime_outcomes_once(*, hot_root: str | Path, resolved_at: st
     for row in plan["candidate_rows"]:
         appended.append(append_market_regime_outcome_row_once(root, row))
     calibration_result: dict[str, Any] = {}
+    calibration_read_model_result: dict[str, Any] = {}
     if update_calibration and appended:
         date = _date(plan.get("latest_generated_at") or plan.get("resolved_at"))
         calibration_result = write_market_regime_calibration_artifacts(root, date=date)
+        calibration_read_model_result = write_market_regime_calibration_read_model(root, date=date)
     return {
         "ok": True,
         "tool_version": MARKET_REGIME_RESOLVE_OUTCOMES_TOOL_VERSION,
@@ -212,6 +215,7 @@ def resolve_market_regime_outcomes_once(*, hot_root: str | Path, resolved_at: st
         "appended_outcome_count": len(appended),
         "appended": appended,
         "calibration_result": calibration_result,
+        "calibration_read_model_result": calibration_read_model_result,
         "safety": _safety(),
     }
 
@@ -452,9 +456,11 @@ def resolve_market_regime_trace_outcomes_once(
         appended.append(append_market_regime_outcome_row_once(root, row))
         affected_dates.add(_date(row.get("generated_at")))
     calibration_results: list[dict[str, Any]] = []
+    calibration_read_model_results: list[dict[str, Any]] = []
     if update_calibration and appended:
         for date in sorted(affected_dates):
             calibration_results.append(write_market_regime_calibration_artifacts(root, date=date))
+            calibration_read_model_results.append(write_market_regime_calibration_read_model(root, date=date))
     return {
         "ok": True,
         "tool_version": MARKET_REGIME_RESOLVE_OUTCOMES_TOOL_VERSION,
@@ -472,6 +478,7 @@ def resolve_market_regime_trace_outcomes_once(
         "appended_outcome_count": len(appended),
         "appended": appended,
         "calibration_results": calibration_results,
+        "calibration_read_model_results": calibration_read_model_results,
         "safety": _safety(plan["observation_source"]),
     }
 
