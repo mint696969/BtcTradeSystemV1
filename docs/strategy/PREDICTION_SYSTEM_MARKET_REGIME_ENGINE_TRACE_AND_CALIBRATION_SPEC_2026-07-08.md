@@ -827,3 +827,25 @@ unrecorded cross-family influence
 Market-regime trace rows should include `cross_family_refs` when they used other family outputs. The refs must include family_id, prediction_id, run_id, generated_at_utc, horizon_key, artifact_ref, and use_role.
 
 This preserves the operator's intended behavior: signals and prediction families may influence the final answer, but the engine remains replayable, explainable, and free of hidden circular dependencies.
+## 29. Market-regime signal registry v1 reference
+<!-- PS_MARKET_REGIME_SIGNAL_REGISTRY_V1_LOCK_2026_07_08 -->
+
+The market-regime signal registry v1 is fixed in:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_SIGNAL_REGISTRY_V1_2026-07-08.md
+```
+
+v1 signal families:
+
+```text
+candle_structure
+trend_structure
+orderflow
+orderbook_liquidity
+volatility
+cross_venue
+source_quality
+```
+
+Implementation must treat signals as explainable votes/modifiers, not final answers. Parameter sets may override weights and thresholds by versioned changes. UI must not compute these signals during render.
