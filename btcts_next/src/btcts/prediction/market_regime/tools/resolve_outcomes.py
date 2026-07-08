@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from btcts.prediction.market_regime.calibration_summary import write_market_regime_calibration_artifacts
+from btcts.prediction.market_regime.observation_evaluator import build_market_regime_candle_observation
 from btcts.prediction.market_regime.outcome_resolver import (
     append_market_regime_outcome_row_once,
     build_market_regime_outcome_row,
@@ -214,10 +215,13 @@ def resolve_market_regime_outcomes_once(*, hot_root: str | Path, resolved_at: st
     }
 
 
-def _safety() -> dict[str, Any]:
+def _safety(observation_source: str = "latest_cards_current") -> dict[str, Any]:
+    source = _normalize_observation_source(observation_source)
     return {
         "artifact_snapshot_only": True,
-        "reads_latest_cards_only": True,
+        "observation_source": source,
+        "reads_latest_cards_only": source == "latest_cards_current",
+        "reads_derived_warroom_candles_only": source == "candle_summary",
         "raw_market_data_read": False,
         "raw_market_data_duplicated": False,
         "scheduler_enabled": False,
@@ -232,6 +236,37 @@ def _safety() -> dict[str, Any]:
 
 
 
+
+def _normalize_observation_source(value: object) -> str:
+    source = str(value or "latest_cards_current").strip().lower()
+    if source in {"latest_cards", "current", "latest_current", "latest_cards_current"}:
+        return "latest_cards_current"
+    if source in {"candle", "candles", "candle_summary", "derived_candles"}:
+        return "candle_summary"
+    raise ValueError(f"unsupported market-regime observation source: {value}")
+
+
+def _outcome_id_for_prediction(prediction: Mapping[str, Any]) -> str:
+    run_id = str(prediction.get("run_id") or "")
+    horizon_sec = int(prediction.get("horizon_sec") or 0)
+    horizon_key = str(prediction.get("horizon_key") or ("current" if horizon_sec == 0 else f"{horizon_sec}s"))
+    generated_at = str(prediction.get("generated_at") or prediction.get("prediction_generated_at") or "")
+    return f"{run_id}:{horizon_key}:outcome" if run_id else f"{generated_at}:{horizon_key}:outcome"
+
+
+def _observation_for_prediction(
+    root: str | Path,
+    *,
+    payload: Mapping[str, Any],
+    current_card: Mapping[str, Any],
+    prediction: Mapping[str, Any],
+    resolved_at: str,
+    observation_source: str,
+) -> dict[str, Any]:
+    source = _normalize_observation_source(observation_source)
+    if source == "candle_summary":
+        return build_market_regime_candle_observation(root, prediction=prediction, resolved_at=resolved_at)
+    return _observation_from_current_card(payload=payload, current_card=current_card, resolved_at=resolved_at)
 
 def _trace_part_paths(root: str | Path) -> list[Path]:
     base = Path(root) / "prediction/market_regime/ledgers"
@@ -322,14 +357,20 @@ def _existing_outcome_ids_for_predictions(root: str | Path, predictions: list[Ma
     return ids
 
 
-def build_market_regime_trace_outcome_once_plan(*, hot_root: str | Path, resolved_at: str | None = None, max_trace_rows: int = 5000) -> dict[str, Any]:
+def build_market_regime_trace_outcome_once_plan(
+    *,
+    hot_root: str | Path,
+    resolved_at: str | None = None,
+    max_trace_rows: int = 5000,
+    observation_source: str = "latest_cards_current",
+) -> dict[str, Any]:
     root = Path(hot_root)
     effective_resolved_at = resolved_at or _utc_now_iso()
+    effective_observation_source = _normalize_observation_source(observation_source)
     payload = _load_latest_cards(root)
     current = _current_card(_cards(payload))
     if current is None:
         raise ValueError("latest_cards has no current/observable card")
-    observation = _observation_from_current_card(payload=payload, current_card=current, resolved_at=effective_resolved_at)
     predictions, trace_row_count, skipped_current_count = _trace_predictions(root, resolved_at=effective_resolved_at, max_rows=max_trace_rows)
     expired_predictions: list[dict[str, Any]] = []
     unexpired_count = 0
@@ -341,16 +382,35 @@ def build_market_regime_trace_outcome_once_plan(*, hot_root: str | Path, resolve
     existing_ids = _existing_outcome_ids_for_predictions(root, expired_predictions)
     candidate_rows: list[dict[str, Any]] = []
     duplicate_count = 0
+    observed_regime_counts: dict[str, int] = {}
     for prediction in expired_predictions:
-        row = build_market_regime_outcome_row(prediction=prediction, observation=observation, resolved_at=effective_resolved_at)
-        if str(row.get("outcome_id")) in existing_ids:
+        if _outcome_id_for_prediction(prediction) in existing_ids:
             duplicate_count += 1
             continue
+        observation = _observation_for_prediction(
+            root,
+            payload=payload,
+            current_card=current,
+            prediction=prediction,
+            resolved_at=effective_resolved_at,
+            observation_source=effective_observation_source,
+        )
+        row = build_market_regime_outcome_row(prediction=prediction, observation=observation, resolved_at=effective_resolved_at)
+        observed = str(row.get("observed_regime_code") or "UNKNOWN")
+        observed_regime_counts[observed] = observed_regime_counts.get(observed, 0) + 1
         candidate_rows.append(row)
+    observed_regime_code = ""
+    if len(observed_regime_counts) == 1:
+        observed_regime_code = next(iter(observed_regime_counts))
+    elif observed_regime_counts:
+        observed_regime_code = "MIXED"
+    else:
+        observed_regime_code = str(current.get("regime_code") or "UNKNOWN") if effective_observation_source == "latest_cards_current" else "UNKNOWN"
     return {
         "ok": True,
         "tool_version": MARKET_REGIME_RESOLVE_OUTCOMES_TOOL_VERSION,
         "source": "trace_ledger",
+        "observation_source": effective_observation_source,
         "hot_root": str(root),
         "latest_cards_relpath": LATEST_CARDS_RELPATH,
         "latest_run_id": str(payload.get("run_id") or ""),
@@ -362,13 +422,13 @@ def build_market_regime_trace_outcome_once_plan(*, hot_root: str | Path, resolve
         "unexpired_prediction_count": unexpired_count,
         "duplicate_outcome_count": duplicate_count,
         "candidate_outcome_count": len(candidate_rows),
-        "observed_regime_code": str(observation.get("observed_regime_code") or "UNKNOWN"),
+        "observed_regime_code": observed_regime_code,
+        "observed_regime_counts": observed_regime_counts,
         "candidate_rows": candidate_rows,
         "would_write": False,
         "would_update_calibration": bool(candidate_rows),
-        "safety": _safety(),
+        "safety": _safety(effective_observation_source),
     }
-
 
 def resolve_market_regime_trace_outcomes_once(
     *,
@@ -376,9 +436,15 @@ def resolve_market_regime_trace_outcomes_once(
     resolved_at: str | None = None,
     update_calibration: bool = True,
     max_trace_rows: int = 5000,
+    observation_source: str = "latest_cards_current",
 ) -> dict[str, Any]:
     root = Path(hot_root)
-    plan = build_market_regime_trace_outcome_once_plan(hot_root=root, resolved_at=resolved_at, max_trace_rows=max_trace_rows)
+    plan = build_market_regime_trace_outcome_once_plan(
+        hot_root=root,
+        resolved_at=resolved_at,
+        max_trace_rows=max_trace_rows,
+        observation_source=observation_source,
+    )
     appended: list[dict[str, Any]] = []
     affected_dates: set[str] = set()
     for row in plan["candidate_rows"]:
@@ -392,6 +458,7 @@ def resolve_market_regime_trace_outcomes_once(
         "ok": True,
         "tool_version": MARKET_REGIME_RESOLVE_OUTCOMES_TOOL_VERSION,
         "source": "trace_ledger",
+        "observation_source": plan["observation_source"],
         "hot_root": str(root),
         "latest_run_id": plan["latest_run_id"],
         "resolved_at": plan["resolved_at"],
@@ -400,10 +467,11 @@ def resolve_market_regime_trace_outcomes_once(
         "expired_prediction_count": plan["expired_prediction_count"],
         "candidate_outcome_count": plan["candidate_outcome_count"],
         "duplicate_outcome_count": plan["duplicate_outcome_count"],
+        "observed_regime_counts": plan["observed_regime_counts"],
         "appended_outcome_count": len(appended),
         "appended": appended,
         "calibration_results": calibration_results,
-        "safety": _safety(),
+        "safety": _safety(plan["observation_source"]),
     }
 
 def _json_for_print(payload: Mapping[str, Any]) -> str:
@@ -419,6 +487,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resolved-at", default=None, help="UTC resolution timestamp. Defaults to current UTC.")
     parser.add_argument("--source", choices=("latest_cards", "trace_ledger"), default="latest_cards", help="Prediction source to evaluate. latest_cards keeps CP17 behavior; trace_ledger evaluates historical trace rows.")
     parser.add_argument("--max-trace-rows", type=int, default=5000, help="Maximum trace rows to scan when --source trace_ledger is used.")
+    parser.add_argument("--observation-source", choices=("latest_cards_current", "candle_summary"), default="latest_cards_current", help="Observation source used for trace-ledger outcomes. Default keeps CP18 latest-current behavior; candle_summary uses derived WarRoom closed candles.")
     parser.add_argument("--preflight", action="store_true", help="Build outcome plan without writing outcome/calibration artifacts.")
     parser.add_argument("--once", action="store_true", help="Required acknowledgement for outcome/calibration writes.")
     parser.add_argument("--no-calibration", action="store_true", help="Append outcomes but skip calibration artifact refresh.")
@@ -431,7 +500,7 @@ def main(argv: list[str] | None = None) -> int:
     source = str(args.source or "latest_cards")
     if args.preflight:
         if source == "trace_ledger":
-            result = build_market_regime_trace_outcome_once_plan(hot_root=args.hot_root, resolved_at=args.resolved_at, max_trace_rows=args.max_trace_rows)
+            result = build_market_regime_trace_outcome_once_plan(hot_root=args.hot_root, resolved_at=args.resolved_at, max_trace_rows=args.max_trace_rows, observation_source=args.observation_source)
         else:
             result = build_market_regime_outcome_once_plan(hot_root=args.hot_root, resolved_at=args.resolved_at)
         print(_json_for_print(result))
@@ -444,6 +513,7 @@ def main(argv: list[str] | None = None) -> int:
             resolved_at=args.resolved_at,
             update_calibration=not args.no_calibration,
             max_trace_rows=args.max_trace_rows,
+            observation_source=args.observation_source,
         )
     else:
         result = resolve_market_regime_outcomes_once(hot_root=args.hot_root, resolved_at=args.resolved_at, update_calibration=not args.no_calibration)
