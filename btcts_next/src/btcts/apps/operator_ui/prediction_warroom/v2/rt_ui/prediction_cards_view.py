@@ -17,7 +17,9 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_market_regime_card
 ENTRY_GATE_VERSION = "warroom_v2_rt_entry_gate.2026_07_05.v1"
 RT_MARKET_REGIME_CARD_BRIDGE_VERSION = "warroom_v2_rt_market_regime_card_bridge.2026_07_08.v2_artifact_read_model_only"
 RT_MARKET_REGIME_CARDS_ARTIFACT_RELATIVE_PATH = "prediction/market_regime/latest_cards.json"
+RT_MARKET_REGIME_CALIBRATION_READ_MODEL_RELATIVE_PATH = "prediction/market_regime/calibration/latest_read_model.json"
 RT_MARKET_REGIME_CARDS_ARTIFACT_MAX_BYTES = 2_000_000
+RT_MARKET_REGIME_CALIBRATION_READ_MODEL_MAX_BYTES = 1_000_000
 FUTURE_PREDICTION_CARD_ROWS = ("方向感", "反転候補", "ボラ警戒", "流動性 / 約定品質")
 
 
@@ -87,6 +89,10 @@ def _market_regime_cards_artifact_path() -> Path:
     return _market_regime_cards_artifact_root() / RT_MARKET_REGIME_CARDS_ARTIFACT_RELATIVE_PATH
 
 
+def _market_regime_calibration_read_model_path() -> Path:
+    return _market_regime_cards_artifact_root() / RT_MARKET_REGIME_CALIBRATION_READ_MODEL_RELATIVE_PATH
+
+
 def _extract_market_regime_cards(payload: Any) -> list[dict[str, Any]]:
     if not isinstance(payload, Mapping):
         return []
@@ -142,6 +148,81 @@ def _read_market_regime_latest_cards_artifact() -> dict[str, Any]:
         base["artifact_read_error"] = f"latest_cards_artifact_read_failed:{type(exc).__name__}"
         return base
 
+
+def _read_market_regime_calibration_read_model_artifact() -> dict[str, Any]:
+    path = _market_regime_calibration_read_model_path()
+    base: dict[str, Any] = {
+        "read_attempted": True,
+        "artifact_relative_path": RT_MARKET_REGIME_CALIBRATION_READ_MODEL_RELATIVE_PATH,
+        "artifact_path": str(path),
+        "artifact_present": False,
+        "artifact_used": False,
+        "artifact_read_error": "",
+        "primary_observation_source": "",
+        "primary_score": None,
+        "primary_known_total": 0,
+        "primary_counts": {"hit": 0, "partial": 0, "miss": 0, "unknown": 0, "invalidated": 0},
+        "reference_score": None,
+        "raw_market_source_read_performed": False,
+        "preview_inference_invoked": False,
+        "classifier_invoked": False,
+    }
+    try:
+        if not path.exists():
+            base["artifact_read_error"] = "calibration_read_model_missing"
+            return base
+        size = path.stat().st_size
+        if size > RT_MARKET_REGIME_CALIBRATION_READ_MODEL_MAX_BYTES:
+            base["artifact_present"] = True
+            base["artifact_read_error"] = f"calibration_read_model_too_large:{size}"
+            return base
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, Mapping):
+            base["artifact_present"] = True
+            base["artifact_read_error"] = "calibration_read_model_not_object"
+            return base
+        primary = payload.get("primary") if isinstance(payload.get("primary"), Mapping) else {}
+        counts = primary.get("counts") if isinstance(primary.get("counts"), Mapping) else {}
+        reference = payload.get("latest_cards_current_reference") if isinstance(payload.get("latest_cards_current_reference"), Mapping) else {}
+        score = primary.get("calibration_score")
+        reference_score = reference.get("calibration_score")
+        base.update({
+            "artifact_present": True,
+            "artifact_used": bool(primary),
+            "artifact_read_error": "" if primary else "calibration_read_model_has_no_primary",
+            "primary_observation_source": str(payload.get("primary_observation_source") or ""),
+            "primary_score": round(float(score), 4) if score is not None else None,
+            "primary_known_total": int(primary.get("known_total") or 0),
+            "primary_counts": {
+                "hit": int(counts.get("hit") or 0),
+                "partial": int(counts.get("partial") or 0),
+                "miss": int(counts.get("miss") or 0),
+                "unknown": int(counts.get("unknown") or 0),
+                "invalidated": int(counts.get("invalidated") or 0),
+            },
+            "reference_score": round(float(reference_score), 4) if reference_score is not None else None,
+        })
+        return base
+    except Exception as exc:  # pragma: no cover - defensive UI read path
+        base["artifact_read_error"] = f"calibration_read_model_read_failed:{type(exc).__name__}"
+        return base
+
+
+def _render_market_regime_calibration_status(calibration_packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
+    if not calibration_packet.get("artifact_used"):
+        st_api.caption(f"地合い評価: {calibration_packet.get('artifact_read_error') or 'calibration_read_model_unavailable'} / display_only=true")
+        return dict(calibration_packet)
+    counts = calibration_packet.get("primary_counts") if isinstance(calibration_packet.get("primary_counts"), Mapping) else {}
+    st_api.caption(
+        "地合い評価: "
+        f"source={calibration_packet.get('primary_observation_source') or '-'} / "
+        f"score={calibration_packet.get('primary_score')} / "
+        f"known={calibration_packet.get('primary_known_total')} / "
+        f"hit/partial/miss={counts.get('hit', 0)}/{counts.get('partial', 0)}/{counts.get('miss', 0)} / "
+        f"reference={calibration_packet.get('reference_score')} / "
+        f"calibration_path={calibration_packet.get('artifact_path') or '-'} / display_only=true"
+    )
+    return dict(calibration_packet)
 
 def _market_regime_render_summary(renderer_packet: Mapping[str, Any] | None) -> dict[str, Any]:
     if not isinstance(renderer_packet, Mapping):
@@ -267,6 +348,7 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         "classifier_invoked": False,
     })
     market_regime_summary = _render_market_regime_render_status(market_regime_packet, st_api)
+    calibration_packet = _render_market_regime_calibration_status(_read_market_regime_calibration_read_model_artifact(), st_api)
     _render_future_row_reservation(st_api)
     _render_context_packets(packet, st_api)
     return {
@@ -292,6 +374,14 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         "market_regime_first_card_label": str(market_regime_summary["first_card_label"]),
         "market_regime_first_card_confidence": market_regime_summary["first_card_confidence"],
         "market_regime_first_card_freshness": str(market_regime_summary["first_card_freshness"]),
+        "market_regime_calibration_read_model_used": bool(calibration_packet.get("artifact_used")),
+        "market_regime_calibration_artifact_path": str(calibration_packet.get("artifact_path") or ""),
+        "market_regime_calibration_read_error": str(calibration_packet.get("artifact_read_error") or ""),
+        "market_regime_calibration_primary_observation_source": str(calibration_packet.get("primary_observation_source") or ""),
+        "market_regime_calibration_primary_score": calibration_packet.get("primary_score"),
+        "market_regime_calibration_primary_known_total": int(calibration_packet.get("primary_known_total") or 0),
+        "market_regime_calibration_primary_counts": dict(calibration_packet.get("primary_counts") or {}),
+        "market_regime_calibration_reference_score": calibration_packet.get("reference_score"),
         "market_regime_first": True,
         "future_prediction_rows_reserved": True,
         "future_prediction_card_rows": list(FUTURE_PREDICTION_CARD_ROWS),
