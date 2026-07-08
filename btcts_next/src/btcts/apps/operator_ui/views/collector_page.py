@@ -44,8 +44,12 @@ from btcts.collector_vnext.unified_state import write_unified_supervisor_request
 from btcts.core import paths as core_paths
 from btcts.prediction.market_regime.operator_ui_runtime import (
     market_regime_operator_ui_snapshot,
+    market_regime_producer_loop_runtime_snapshot,
     request_market_regime_preflight,
+    request_market_regime_producer_loop_restart,
+    request_market_regime_producer_loop_safe_stop,
     request_market_regime_run_once,
+    start_market_regime_producer_loop_detached,
 )
 from btcts.processing.l4_consumer_models.operator_ui.warroom_chart_engine_runtime import (
     chart_engine_runtime_snapshot,
@@ -267,24 +271,30 @@ def _render_warroom_chart_engine_status_section() -> None:
 
 
 
+
 def _render_market_regime_inference_runtime_section() -> None:
     snapshot = market_regime_operator_ui_snapshot()
+    loop_snapshot = market_regime_producer_loop_runtime_snapshot()
     with live_shell.render_folded_section("MarketRegime Inference Runtime", expanded=False):
-        c1, c2, c3, c4, c5 = st.columns(5)
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric("Mode", snapshot.get("mode") or "-")
-        c2.metric("Latest cards", "YES" if snapshot.get("latest_cards_available") else "NO")
-        c3.metric("Cards", snapshot.get("card_count") or 0)
-        c4.metric("First", f"{snapshot.get('first_card_label') or '-'} / {snapshot.get('first_card_confidence') or '-'}%")
-        c5.metric("Can write", "YES" if snapshot.get("last_preflight_can_write") else "-")
+        c2.metric("Loop", "RUNNING" if loop_snapshot.get("active") else str(loop_snapshot.get("mode") or "STOPPED"))
+        c3.metric("Latest cards", "YES" if snapshot.get("latest_cards_available") else "NO")
+        c4.metric("Cards", snapshot.get("card_count") or 0)
+        c5.metric("First", f"{snapshot.get('first_card_label') or '-'} / {snapshot.get('first_card_confidence') or '-'}%")
+        c6.metric("Writes", loop_snapshot.get("writes") or 0)
         st.caption(
             f"hot_root={snapshot.get('hot_root')} / latest_run_id={snapshot.get('latest_run_id') or '-'} / "
-            f"generated_at={snapshot.get('latest_generated_at') or '-'} / active_process=false / scheduler=false / broker=false / autotrade=false"
+            f"generated_at={snapshot.get('latest_generated_at') or '-'} / loop_pid={loop_snapshot.get('runtime_pid') or '-'} / "
+            "preflight_required=true / scheduler=false / broker=false / autotrade=false"
         )
         if snapshot.get("last_error"):
             st.warning(f"last_error={snapshot.get('last_error')}")
+        if loop_snapshot.get("last_error"):
+            st.warning(f"loop_last_error={loop_snapshot.get('last_error')}")
         if snapshot.get("last_preflight_missing_sources"):
             st.info("missing_sources=" + ",".join(snapshot.get("last_preflight_missing_sources") or []))
-        b1, b2, b3 = st.columns(3)
+        b1, b2, b3, b4, b5 = st.columns(5)
         with b1:
             if st.button("Preflight", key="market_regime_preflight", use_container_width=True):
                 ok, msg, _status = request_market_regime_preflight()
@@ -302,22 +312,54 @@ def _render_market_regime_inference_runtime_section() -> None:
                     st.error(msg)
                 _request_page_rerun()
         with b3:
-            st.caption("Safe Stop/Restart: 常駐 loop 未導入のため対象なし。Run Once は1回実行して終了します。")
+            if st.button("Start Loop", key="market_regime_start_loop", use_container_width=True):
+                ok, msg, _already = start_market_regime_producer_loop_detached()
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+                _request_page_rerun()
+        with b4:
+            if st.button("Safe Stop", key="market_regime_safe_stop_loop", use_container_width=True):
+                ok, msg = request_market_regime_producer_loop_safe_stop()
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+                _request_page_rerun()
+        with b5:
+            if st.button("Restart Request", key="market_regime_restart_loop", use_container_width=True):
+                ok, msg = request_market_regime_producer_loop_restart()
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+                _request_page_rerun()
+        st.caption("Collector 起動/停止/再起動ボタンへの自動連動は未接続です。安定確認後に Watchdog 連動へ進めます。")
         rows = [
             {
                 "mode": snapshot.get("mode"),
-                "latest_run_id": snapshot.get("latest_run_id"),
+                "loop_mode": loop_snapshot.get("mode"),
+                "loop_active": loop_snapshot.get("active"),
+                "runtime_pid": loop_snapshot.get("runtime_pid"),
+                "pending_action": loop_snapshot.get("pending_action"),
+                "iteration": loop_snapshot.get("iteration"),
+                "writes": loop_snapshot.get("writes"),
+                "blocked": loop_snapshot.get("blocked"),
+                "latest_run_id": snapshot.get("latest_run_id") or loop_snapshot.get("latest_run_id"),
                 "latest_generated_at": snapshot.get("latest_generated_at"),
                 "latest_cards_path": snapshot.get("latest_cards_path"),
                 "status_path": snapshot.get("status_path"),
+                "loop_status_path": loop_snapshot.get("loop_status_path"),
+                "loop_control_path": loop_snapshot.get("loop_control_path"),
                 "scheduler_enabled": False,
-                "producer_loop_enabled": False,
                 "broker_private_api_allowed": False,
                 "autotrade_trigger_allowed": False,
                 "would_send_to_broker": False,
             }
         ]
         st.dataframe(rows, width="stretch")
+
 
 def _request_unified_start() -> tuple[bool, str, bool]:
     try:

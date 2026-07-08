@@ -5,10 +5,14 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
+from uuid import uuid4
 
+from btcts.collector_vnext.lock import is_pid_alive
 from btcts.core import paths as core_paths
 
 from .tools.write_latest import preflight_market_regime_latest_artifacts_once, write_market_regime_latest_artifacts_once
@@ -64,6 +68,229 @@ def _read_json(path: Path) -> dict[str, Any]:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+
+
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parents[5]
+
+
+def _runtime_python() -> str:
+    repo_root = _repo_root()
+    override = str(os.environ.get("BTCTS_RUNTIME_PYTHON") or "").strip()
+    if override and Path(override).exists():
+        return override
+    candidates: list[Path] = []
+    if os.name == "nt":
+        candidates.extend([repo_root / ".venv" / "Scripts" / "pythonw.exe", repo_root / ".venv" / "Scripts" / "python.exe"])
+    else:
+        candidates.append(repo_root / ".venv" / "bin" / "python")
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
+
+
+def _windows_startupinfo():
+    if os.name != "nt":
+        return None
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+    startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
+    return startupinfo
+
+
+def _windows_creationflags() -> int:
+    if os.name != "nt":
+        return 0
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+
+
+def _child_env(hot_root: Path) -> dict[str, str]:
+    repo_root = _repo_root()
+    env = dict(os.environ)
+    env.setdefault("PYTHONPATH", str(repo_root / "btcts_next" / "src"))
+    env["BTCTS_HOT_ROOT"] = str(hot_root)
+    env.setdefault("BTCTS_DATA_ROOT", str(hot_root / "data"))
+    env.setdefault("BTC_TS_DATA_DIR", str(hot_root / "data"))
+    return env
+
+
+def _pid_active(value: object) -> bool:
+    try:
+        return bool(is_pid_alive(value))
+    except Exception:
+        return False
+
+
+def market_regime_producer_loop_runtime_paths(hot_root: Path | None = None) -> dict[str, Path]:
+    base = market_regime_operator_ui_paths(hot_root)
+    state_dir = base["state_dir"]
+    return {
+        **base,
+        "loop_control": state_dir / "control.json",
+        "loop_status": state_dir / "producer_loop_status.json",
+        "loop_heartbeat": state_dir / "producer_loop_heartbeat.json",
+        "loop_lock": state_dir / "producer_loop.lock.json",
+        "loop_stdout": state_dir / "producer_loop.stdout.log",
+        "loop_stderr": state_dir / "producer_loop.stderr.log",
+    }
+
+
+def market_regime_producer_loop_runtime_snapshot(hot_root: Path | None = None) -> dict[str, Any]:
+    root = _normalize_hot_root(hot_root or market_regime_hot_root())
+    paths = market_regime_producer_loop_runtime_paths(root)
+    status = _read_json(paths["loop_status"])
+    heartbeat = _read_json(paths["loop_heartbeat"])
+    control = _read_json(paths["loop_control"])
+    lock = _read_json(paths["loop_lock"])
+    pid = lock.get("pid") or status.get("runtime_pid")
+    active = _pid_active(pid)
+    mode = str(status.get("mode") or ("RUNNING" if active else "STOPPED"))
+    return {
+        "ok": True,
+        "version": MARKET_REGIME_OPERATOR_UI_RUNTIME_VERSION,
+        "hot_root": str(root),
+        "state_dir": str(paths["state_dir"]),
+        "loop_control_path": str(paths["loop_control"]),
+        "loop_status_path": str(paths["loop_status"]),
+        "loop_heartbeat_path": str(paths["loop_heartbeat"]),
+        "loop_lock_path": str(paths["loop_lock"]),
+        "mode": mode,
+        "active": active,
+        "runtime_pid": pid,
+        "pending_action": str(control.get("action") or ""),
+        "iteration": int(status.get("iteration") or heartbeat.get("iteration") or 0),
+        "writes": int(status.get("writes") or heartbeat.get("writes") or 0),
+        "blocked": int(status.get("blocked") or heartbeat.get("blocked") or 0),
+        "latest_run_id": str(status.get("latest_run_id") or heartbeat.get("latest_run_id") or ""),
+        "last_error": str(status.get("last_error") or heartbeat.get("last_error") or ""),
+        "last_heartbeat_ts": heartbeat.get("ts") or status.get("ts") or "",
+        "stdout_path": str(paths["loop_stdout"]),
+        "stderr_path": str(paths["loop_stderr"]),
+        "status": status,
+        "heartbeat": heartbeat,
+        "control": control,
+        "lock": lock,
+        "preflight_required": True,
+        "scheduler_enabled": False,
+        "producer_loop_enabled": active,
+        "broker_private_api_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
+def _clear_stale_market_regime_loop_control(paths: Mapping[str, Path]) -> bool:
+    control_path = paths.get("loop_control")
+    if control_path is None or not control_path.exists():
+        return False
+    try:
+        payload = _read_json(control_path)
+        action = str(payload.get("action") or "").strip().lower()
+        if action in {"safe_stop", "stop", "restart"}:
+            control_path.unlink(missing_ok=True)
+            return True
+    except Exception:
+        try:
+            control_path.unlink(missing_ok=True)
+            return True
+        except Exception:
+            return False
+    return False
+
+
+def start_market_regime_producer_loop_detached(hot_root: Path | None = None, *, interval_sec: int = 30) -> tuple[bool, str, bool]:
+    root = _normalize_hot_root(hot_root or market_regime_hot_root())
+    snapshot = market_regime_producer_loop_runtime_snapshot(root)
+    if snapshot.get("active"):
+        return True, f"market_regime producer loop already running pid={snapshot.get('runtime_pid')}", True
+    paths = market_regime_producer_loop_runtime_paths(root)
+    paths["state_dir"].mkdir(parents=True, exist_ok=True)
+    cleared_stale_control = _clear_stale_market_regime_loop_control(paths)
+    command_args = [
+        _runtime_python(),
+        "-m",
+        "btcts.prediction.market_regime.producer_loop",
+        "--hot-root",
+        str(root),
+        "--interval-sec",
+        str(max(5, int(interval_sec))),
+        "--max-iterations",
+        "0",
+        "--once-loop",
+    ]
+    with paths["loop_stdout"].open("ab") as stdout_handle, paths["loop_stderr"].open("ab") as stderr_handle:
+        proc = subprocess.Popen(
+            command_args,
+            cwd=str(_repo_root()),
+            env=_child_env(root),
+            stdin=subprocess.DEVNULL,
+            stdout=stdout_handle,
+            stderr=stderr_handle,
+            creationflags=_windows_creationflags(),
+            startupinfo=_windows_startupinfo(),
+            close_fds=True,
+        )
+    lock = {
+        "ok": True,
+        "version": MARKET_REGIME_OPERATOR_UI_RUNTIME_VERSION,
+        "pid": int(proc.pid),
+        "started_at": _now_iso(),
+        "requested_by": "operator_ui",
+        "hot_root": str(root),
+        "command_args": command_args,
+        "stdout_path": str(paths["loop_stdout"]),
+        "stderr_path": str(paths["loop_stderr"]),
+        "cleared_stale_control_on_start": bool(cleared_stale_control),
+        "preflight_required": True,
+        "scheduler_enabled": False,
+        "broker_private_api_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "would_send_to_broker": False,
+    }
+    _write_json(paths["loop_lock"], lock)
+    _write_json(
+        paths["loop_status"],
+        {
+            "ok": True,
+            "version": MARKET_REGIME_OPERATOR_UI_RUNTIME_VERSION,
+            "mode": "STARTING",
+            "active": True,
+            "runtime_pid": int(proc.pid),
+            "ts": _now_iso(),
+            "hot_root": str(root),
+            "interval_sec": max(5, int(interval_sec)),
+            "cleared_stale_control_on_start": bool(cleared_stale_control),
+            "preflight_required": True,
+            "scheduler_enabled": False,
+            "broker_private_api_allowed": False,
+            "autotrade_trigger_allowed": False,
+            "would_send_to_broker": False,
+        },
+    )
+    return True, f"market_regime producer loop start requested pid={int(proc.pid)}", False
+
+
+def request_market_regime_producer_loop_safe_stop(hot_root: Path | None = None) -> tuple[bool, str]:
+    from .producer_loop import write_market_regime_producer_control_request
+
+    root = _normalize_hot_root(hot_root or market_regime_hot_root())
+    result = write_market_regime_producer_control_request(root, action="safe_stop", reason="operator_ui_safe_stop")
+    return bool(result.get("ok")), f"market_regime producer loop safe_stop request written action={result.get('action')}"
+
+
+def request_market_regime_producer_loop_restart(hot_root: Path | None = None, *, interval_sec: int = 30) -> tuple[bool, str]:
+    from .producer_loop import write_market_regime_producer_control_request
+
+    root = _normalize_hot_root(hot_root or market_regime_hot_root())
+    snapshot = market_regime_producer_loop_runtime_snapshot(root)
+    if snapshot.get("active"):
+        result = write_market_regime_producer_control_request(root, action="restart", reason="operator_ui_restart")
+        return bool(result.get("ok")), f"market_regime producer loop restart request written action={result.get('action')}"
+    ok, msg, _already = start_market_regime_producer_loop_detached(root, interval_sec=interval_sec)
+    return ok, msg
 
 
 def market_regime_operator_ui_snapshot(hot_root: Path | None = None) -> dict[str, Any]:
