@@ -70,6 +70,12 @@ from .outcome_resolver import (
     resolve_market_regime_outcome_label,
     validate_market_regime_outcome_row,
 )
+from .producer_loop import (
+    MARKET_REGIME_PRODUCER_LOOP_VERSION,
+    market_regime_producer_loop_snapshot,
+    run_market_regime_producer_loop,
+    write_market_regime_producer_control_request,
+)
 from .parameter_set import MarketRegimeParameterSet, build_default_market_regime_parameter_set
 from .parameter_set_registry import (
     MARKET_REGIME_DEFAULT_ACTIVE_PARAMETER_SET_ID,
@@ -103,6 +109,10 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "write_market_regime_producer_control_request",
+    "run_market_regime_producer_loop",
+    "market_regime_producer_loop_snapshot",
+    "MARKET_REGIME_PRODUCER_LOOP_VERSION",
     "write_market_regime_hypothesis_trust_snapshot",
     "validate_market_regime_hypothesis_candidate",
     "hypothesis_trust_latest_relpath",
