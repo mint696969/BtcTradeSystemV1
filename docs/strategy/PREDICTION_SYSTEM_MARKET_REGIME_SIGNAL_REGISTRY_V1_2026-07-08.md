@@ -482,3 +482,13 @@ Which version of the registry and parameter set were used?
 ## 14. v1 restraint
 
 Do not over-expand v1. Keep the first implementation explainable and testable. Add macro, derivatives, onchain, and news/event signals later through SourceRegistry + signal_registry_v2+ after acquisition and replay/calibration evidence exist.
+## 15. Horizon weight v1 reference
+<!-- PS_MARKET_REGIME_HORIZON_WEIGHT_V1_LOCK_2026_07_08 -->
+
+Default horizon-aware family weights are fixed in:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_HORIZON_WEIGHT_V1_2026-07-08.md
+```
+
+Signal registry entries define what a signal means. Horizon-weight policy defines how much each family should matter by horizon. Parameter sets may override both weights and thresholds through versioned changes.

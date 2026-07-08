@@ -849,3 +849,30 @@ source_quality
 ```
 
 Implementation must treat signals as explainable votes/modifiers, not final answers. Parameter sets may override weights and thresholds by versioned changes. UI must not compute these signals during render.
+## 30. Market-regime horizon weight v1 reference
+<!-- PS_MARKET_REGIME_HORIZON_WEIGHT_V1_LOCK_2026_07_08 -->
+
+The market-regime horizon weight v1 is fixed in:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_HORIZON_WEIGHT_V1_2026-07-08.md
+```
+
+Key locks:
+
+```text
+liquidity_history_priority=true
+orderbook_transition_priority=true
+confirmed_technical_structure_priority=true
+weights_are_initial_design_not_calibrated_truth=true
+parameter_set_overridable=true
+```
+
+Important operator thesis:
+
+```text
+Past-to-current liquidity and orderbook transitions are important because they expose supply/demand pressure, participant intent, absorption, stop/run behavior, and behavior of other algorithms or AI strategies.
+Confirmed historical price structure and technical indicators are important because human and systematic participants react to them.
+```
+
+UI must not compute horizon weights or family scores during render.
