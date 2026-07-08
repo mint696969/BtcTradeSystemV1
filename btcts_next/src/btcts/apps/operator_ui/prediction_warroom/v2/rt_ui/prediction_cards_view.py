@@ -208,6 +208,45 @@ def _read_market_regime_calibration_read_model_artifact() -> dict[str, Any]:
         return base
 
 
+def _market_regime_calibration_detail_line(calibration_packet: Mapping[str, Any]) -> str:
+    if not calibration_packet.get("artifact_used"):
+        return ""
+    counts = calibration_packet.get("primary_counts") if isinstance(calibration_packet.get("primary_counts"), Mapping) else {}
+    return (
+        "地合い評価: "
+        f"source={calibration_packet.get('primary_observation_source') or '-'} / "
+        f"score={calibration_packet.get('primary_score')} / "
+        f"known={calibration_packet.get('primary_known_total')} / "
+        f"hit/partial/miss={counts.get('hit', 0)}/{counts.get('partial', 0)}/{counts.get('miss', 0)} / "
+        f"reference={calibration_packet.get('reference_score')} / display_only=true"
+    )
+
+
+def _enrich_market_regime_cards_with_calibration_detail(cards: list[dict[str, Any]] | None, calibration_packet: Mapping[str, Any]) -> tuple[list[dict[str, Any]] | None, bool]:
+    if not isinstance(cards, list):
+        return cards, False
+    line = _market_regime_calibration_detail_line(calibration_packet)
+    if not line:
+        return [dict(card) for card in cards], False
+    enriched: list[dict[str, Any]] = []
+    changed = False
+    for card in cards:
+        item = dict(card)
+        detail = dict(item.get("detail")) if isinstance(item.get("detail"), Mapping) else {}
+        source_lines = list(detail.get("source_lines")) if isinstance(detail.get("source_lines"), list) else []
+        if line not in source_lines:
+            source_lines.append(line)
+            changed = True
+        detail["source_lines"] = source_lines
+        detail["calibration_read_model_path"] = str(calibration_packet.get("artifact_path") or "")
+        detail["calibration_primary_observation_source"] = str(calibration_packet.get("primary_observation_source") or "")
+        detail["calibration_primary_score"] = calibration_packet.get("primary_score")
+        detail["calibration_primary_known_total"] = int(calibration_packet.get("primary_known_total") or 0)
+        detail["calibration_context_display_only"] = True
+        item["detail"] = detail
+        enriched.append(item)
+    return enriched, changed
+
 def _render_market_regime_calibration_status(calibration_packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
     if not calibration_packet.get("artifact_used"):
         st_api.caption(f"地合い評価: {calibration_packet.get('artifact_read_error') or 'calibration_read_model_unavailable'} / display_only=true")
@@ -319,7 +358,12 @@ def _render_context_packets(packet: Mapping[str, Any], st_api: Any) -> None:
 def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
     _render_prediction_boundary(packet, st_api)
     artifact_packet = _read_market_regime_latest_cards_artifact()
+    calibration_packet = _read_market_regime_calibration_read_model_artifact()
     artifact_cards = artifact_packet.get("cards") if artifact_packet.get("artifact_cards_used") else None
+    artifact_cards, calibration_detail_enriched = _enrich_market_regime_cards_with_calibration_detail(
+        artifact_cards if isinstance(artifact_cards, list) else None,
+        calibration_packet,
+    )
     market_regime_packet = render_warroom_market_regime_card_shell(
         cards=artifact_cards if isinstance(artifact_cards, list) else None,
     )
@@ -348,7 +392,7 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         "classifier_invoked": False,
     })
     market_regime_summary = _render_market_regime_render_status(market_regime_packet, st_api)
-    calibration_packet = _render_market_regime_calibration_status(_read_market_regime_calibration_read_model_artifact(), st_api)
+    calibration_packet = _render_market_regime_calibration_status(calibration_packet, st_api)
     _render_future_row_reservation(st_api)
     _render_context_packets(packet, st_api)
     return {
@@ -382,6 +426,7 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         "market_regime_calibration_primary_known_total": int(calibration_packet.get("primary_known_total") or 0),
         "market_regime_calibration_primary_counts": dict(calibration_packet.get("primary_counts") or {}),
         "market_regime_calibration_reference_score": calibration_packet.get("reference_score"),
+        "market_regime_calibration_detail_enriched": bool(calibration_detail_enriched),
         "market_regime_first": True,
         "future_prediction_rows_reserved": True,
         "future_prediction_card_rows": list(FUTURE_PREDICTION_CARD_ROWS),
