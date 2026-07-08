@@ -32,6 +32,11 @@ from btcts.prediction.market_regime.artifact_projection import (
 from btcts.prediction.market_regime.features import build_market_regime_feature_bundle
 from btcts.prediction.market_regime.signal_scoring import MARKET_REGIME_SIGNAL_SCORING_VERSION, score_market_regime_signals
 from btcts.prediction.market_regime.inference import MARKET_REGIME_CLASSIFIER_VERSION, classify_market_regime_feature_bundle
+from btcts.prediction.market_regime.parameter_set_registry import (
+    MARKET_REGIME_PARAMETER_SET_REGISTRY_VERSION,
+    build_default_market_regime_parameter_set_registry,
+    validate_market_regime_parameter_set_registry,
+)
 from btcts.prediction.market_regime.sources import build_market_regime_source_snapshot
 
 MARKET_REGIME_WRITE_LATEST_TOOL_VERSION = "prediction.market_regime.tools.write_latest.2026_07_08.v1"
@@ -67,6 +72,11 @@ def _refs(run_id: str) -> MarketRegimeArtifactRefs:
 def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_at: str, run_id: str | None = None) -> dict[str, Any]:
     root = Path(hot_root)
     effective_run_id = run_id or _safe_run_id(generated_at)
+    parameter_set_registry = build_default_market_regime_parameter_set_registry()
+    active_parameter_set = parameter_set_registry.active_parameter_set()
+    parameter_set_registry_validation = validate_market_regime_parameter_set_registry(parameter_set_registry)
+    if not parameter_set_registry_validation.get("ok"):
+        raise ValueError(f"parameter-set registry validation failed: {parameter_set_registry_validation}")
     source_snapshot = build_market_regime_source_snapshot(root)
     feature_bundle = build_market_regime_feature_bundle(source_snapshot, generated_at=generated_at)
     prediction_packet = classify_market_regime_feature_bundle(feature_bundle, generated_at=generated_at)
@@ -79,7 +89,7 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         generated_at=generated_at,
         run_id=effective_run_id,
         prediction_id=f"{effective_run_id}:latest",
-        parameter_set_id=prediction_packet.parameter_set_id,
+        parameter_set_id=active_parameter_set.parameter_set_id,
         cards=cards,
         source_refs=source_refs,
         compact_summary={
@@ -88,6 +98,9 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
             "classifier_version": MARKET_REGIME_CLASSIFIER_VERSION,
             "signal_scoring_version": MARKET_REGIME_SIGNAL_SCORING_VERSION,
             "signal_votes_available": bool(signal_score_report.get("total_vote_count")),
+            "parameter_set_registry_version": MARKET_REGIME_PARAMETER_SET_REGISTRY_VERSION,
+            "active_parameter_set_id": active_parameter_set.parameter_set_id,
+            "parameter_set_registry_ok": bool(parameter_set_registry_validation.get("ok")),
             "source_snapshot_ok": source_snapshot.ok,
             "feature_bundle_available_signal_count": feature_bundle.available_signal_count(),
             "missing_sources": list(source_snapshot.missing_sources),
@@ -106,8 +119,13 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         horizon_row["source_family_scores"] = dict(signal_row.get("source_family_scores", {}))
         horizon_row["source_family_weights_used"] = dict(signal_row.get("source_family_weights_used", {}))
         horizon_row["regime_scores"] = dict(signal_row.get("regime_scores", {}))
+        horizon_row["active_parameter_set_id"] = active_parameter_set.parameter_set_id
+        horizon_row["parameter_set_registry_version"] = MARKET_REGIME_PARAMETER_SET_REGISTRY_VERSION
     source_summary = dict(summaries["source_contribution_summary"])
     source_summary["signal_score_report"] = signal_score_report
+    source_summary["parameter_set_registry"] = parameter_set_registry.to_dict()
+    source_summary["parameter_set_registry_validation"] = parameter_set_registry_validation
+    source_summary["active_parameter_set"] = active_parameter_set.to_dict()
     latest_read_model = build_market_regime_latest_read_model_artifact(
         generated_at=generated_at,
         run_id=effective_run_id,

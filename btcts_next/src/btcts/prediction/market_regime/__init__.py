@@ -41,6 +41,14 @@ from .features import FeatureBundleSafetyFlags, FeatureSignal, MarketRegimeFeatu
 from .horizon_policy import MarketRegimeHorizon, MarketRegimeHorizonGroup, MarketRegimeHorizonPolicy, build_default_horizon_policy
 from .inference import MARKET_REGIME_CLASSIFIER_VERSION, classify_market_regime_feature_bundle
 from .parameter_set import MarketRegimeParameterSet, build_default_market_regime_parameter_set
+from .parameter_set_registry import (
+    MARKET_REGIME_DEFAULT_ACTIVE_PARAMETER_SET_ID,
+    MARKET_REGIME_PARAMETER_SET_REGISTRY_VERSION,
+    MarketRegimeParameterSetRegistry,
+    MarketRegimeParameterSetRegistryEntry,
+    build_default_market_regime_parameter_set_registry,
+    validate_market_regime_parameter_set_registry,
+)
 from .source_priority_policy import HorizonSourcePriority, SourcePriorityPolicy, build_default_source_priority_policy
 from .signal_scoring import (
     MARKET_REGIME_SIGNAL_SCORING_VERSION,
@@ -57,6 +65,12 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "validate_market_regime_parameter_set_registry",
+    "build_default_market_regime_parameter_set_registry",
+    "MarketRegimeParameterSetRegistryEntry",
+    "MarketRegimeParameterSetRegistry",
+    "MARKET_REGIME_PARAMETER_SET_REGISTRY_VERSION",
+    "MARKET_REGIME_DEFAULT_ACTIVE_PARAMETER_SET_ID",
     "score_market_regime_signals",
     "MARKET_REGIME_SIGNAL_REGISTRY_VERSION",
     "MARKET_REGIME_SIGNAL_SCORING_VERSION",
