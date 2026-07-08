@@ -61,6 +61,15 @@ from .hypothesis_lane import (
     write_market_regime_hypothesis_trust_snapshot,
 )
 from .inference import MARKET_REGIME_CLASSIFIER_VERSION, classify_market_regime_feature_bundle
+from .observation_evaluator import (
+    MARKET_REGIME_CANDLE_OBSERVATION_EVALUATOR_VERSION,
+    build_market_regime_candle_observation,
+    classify_candle_window_regime,
+    read_warroom_closed_candles_for_window,
+    select_observation_candle_timeframe_sec,
+    summarize_candle_window,
+    warroom_closed_candle_relpath,
+)
 from .outcome_resolver import (
     MARKET_REGIME_OUTCOME_RESOLVER_VERSION,
     append_market_regime_outcome_row_once,
