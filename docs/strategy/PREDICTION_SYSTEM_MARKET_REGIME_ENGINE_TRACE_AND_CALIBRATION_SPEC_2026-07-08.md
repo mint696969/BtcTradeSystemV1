@@ -798,3 +798,32 @@ ReadModelContract
 ```
 
 The system is bitFlyer-first, not bitFlyer-only. Future sources such as cross-exchange, derivatives, macro, FX, equities, gold, on-chain, session/calendar, news/event, and manual/GPT review artifacts must be addable through source registry and parameter-set changes without breaking existing market-regime traces.
+## 28. Market-regime cross-family influence rule
+<!-- PS_CROSS_FAMILY_INFLUENCE_NO_CYCLE_LOCK_2026_07_08 -->
+
+Market-regime is central tactical context and may influence other prediction families. Other prediction families may also influence market-regime as context, conflict, confidence cap, or invalidation evidence.
+
+The relationship must not be implemented as recursive classifier calls.
+
+Allowed:
+
+```text
+market_regime reads prior/frozen volatility_risk output as a conflict/cap
+market_regime reads prior/frozen liquidity_quality output as a source-quality/cap signal
+trend_bias reads market_regime as tactical context
+reversal_zone reads market_regime as tactical context
+all families store cross_family_refs in their traces
+```
+
+Forbidden:
+
+```text
+market_regime current run calls trend_bias current run, while trend_bias current run calls market_regime current run
+WarRoom UI triggers multiple family classifiers during render
+family classifiers import and execute each other directly
+unrecorded cross-family influence
+```
+
+Market-regime trace rows should include `cross_family_refs` when they used other family outputs. The refs must include family_id, prediction_id, run_id, generated_at_utc, horizon_key, artifact_ref, and use_role.
+
+This preserves the operator's intended behavior: signals and prediction families may influence the final answer, but the engine remains replayable, explainable, and free of hidden circular dependencies.

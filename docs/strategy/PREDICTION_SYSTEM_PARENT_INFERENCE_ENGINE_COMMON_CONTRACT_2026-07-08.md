@@ -310,3 +310,75 @@ After this parent contract is locked, return to market-regime design in this ord
 ```
 
 No runtime or broker/AutoTrade behavior is enabled by this document.
+## 16. Cross-family influence and cycle prevention
+<!-- PS_CROSS_FAMILY_INFLUENCE_NO_CYCLE_LOCK_2026_07_08 -->
+
+Prediction families may influence each other, but circular inference inside the same run is forbidden.
+
+The intended model is not isolated independent cards. The intended model is a coordinated inference graph:
+
+```text
+market_regime may influence trend_bias / reversal_zone / volatility_risk / liquidity_quality / execution_quality.
+trend_bias, volatility_risk, liquidity_quality, and other family outputs may also become context for market_regime.
+```
+
+However, this must be implemented as an acyclic, versioned, snapshot-based graph.
+
+Hard rule:
+
+```text
+same_run_circular_dependency_forbidden=true
+```
+
+Allowed dependency forms:
+
+```text
+1. Prior snapshot dependency
+   A family may read another family's latest closed artifact from a previous run or previous generation time.
+
+2. Two-pass orchestrated dependency
+   Parent engine may run base families first, freeze their outputs, then run dependent families using the frozen snapshot.
+
+3. Context-only dependency
+   A family may use another family output only as a confidence cap, conflict, scenario context, or source_ref, not as recursive live input.
+
+4. Parameter-set declared dependency
+   Cross-family dependency must be declared in parameter_set / family registry and preserved in trace.
+```
+
+Forbidden dependency forms:
+
+```text
+market_regime_current_run -> trend_bias_current_run -> market_regime_current_run
+ui_render -> family_A_classifier -> family_B_classifier -> family_A_classifier
+implicit import-time dependency between family classifiers
+unrecorded use of another family output
+```
+
+Each family trace must record cross-family references:
+
+```text
+cross_family_refs:
+  - family_id
+  - prediction_id
+  - run_id
+  - generated_at_utc
+  - horizon_key
+  - artifact_ref
+  - use_role=context|support|conflict|confidence_cap|invalidation|tactical_context
+  - dependency_policy=prior_snapshot|two_pass_frozen|context_only
+```
+
+The parent orchestrator owns dependency order. Family classifiers do not call each other recursively.
+
+Recommended initial dependency graph:
+
+```text
+source_quality -> all families as cap/veto
+market_regime -> trend_bias / reversal_zone / breakout_false_break / liquidity_quality as tactical context
+volatility_risk -> market_regime as conflict/cap/context
+liquidity_quality -> market_regime as conflict/cap/context
+trend_bias -> market_regime as prior-snapshot context only
+```
+
+Market-regime remains the first canonical family, but it is not an isolated truth source. It participates in a controlled inference graph.
