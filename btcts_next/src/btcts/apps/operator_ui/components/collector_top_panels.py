@@ -124,7 +124,7 @@ def _collector_runtime_summary_item(*, live_summary: dict, runtime: dict) -> dic
         severity = "healthy"
         badge = "RUNNING"
         primary = "正常稼働"
-    elif overall_state == "RUNNING":
+    elif overall_state in {"RUNNING", "DEGRADED", "WATCH", "STALE"} or feed == "STALE":
         severity = "warning"
         badge = "WATCH"
         primary = "要監視"
@@ -279,7 +279,8 @@ def _render_runtime_status_card(item: dict) -> None:
     st.markdown(
         (
             f"<div style='border:1px solid {border}; border-left:4px solid {border}; "
-            "border-radius:0.55rem; padding:0.50rem 0.60rem; min-height:7.2rem; "
+            "border-radius:0.55rem; padding:0.50rem 0.60rem; height:7.35rem; "
+            "box-sizing:border-box; overflow:hidden; display:flex; flex-direction:column; "
             "background:rgba(148,163,184,0.06);'>"
             "<div style='display:flex; justify-content:space-between; gap:0.45rem; align-items:center;'>"
             f"<div style='font-weight:800; font-size:0.86rem;'>{name}</div>"
@@ -288,7 +289,8 @@ def _render_runtime_status_card(item: dict) -> None:
             "</div>"
             f"<div style='font-size:1.00rem; font-weight:800; margin-top:0.32rem;'>{primary}</div>"
             f"<div style='font-size:0.76rem; opacity:0.82; margin-top:0.20rem;'>{secondary}</div>"
-            f"<div style='font-size:0.68rem; opacity:0.68; margin-top:0.35rem; overflow-wrap:anywhere;'>{meta_line}</div>"
+            f"<div style='font-size:0.68rem; opacity:0.68; margin-top:auto; overflow:hidden; "
+            f"text-overflow:ellipsis; white-space:nowrap;'>{meta_line}</div>"
             "</div>"
         ),
         unsafe_allow_html=True,

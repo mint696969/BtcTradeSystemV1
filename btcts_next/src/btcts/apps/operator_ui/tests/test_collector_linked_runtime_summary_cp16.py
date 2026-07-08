@@ -30,6 +30,8 @@ def test_cp16_build_summary_items_have_expected_runtimes_and_severities() -> Non
     by_id = {item["runtime_id"]: item for item in items}
     assert set(by_id) == {"collector", "chart_engine", "market_regime"}
     assert by_id["collector"]["severity"] == "warning"
+    assert by_id["collector"]["primary_status"] == "要監視"
+    assert by_id["collector"]["badge_label"] == "WATCH"
     assert by_id["chart_engine"]["severity"] == "healthy"
     assert by_id["market_regime"]["severity"] == "healthy"
     assert by_id["market_regime"]["badge_label"] == "RUNNING"
@@ -70,6 +72,8 @@ def test_cp16_top_panels_render_cards_and_detail_popovers() -> None:
         "#d97706",
         "#dc2626",
         "#64748b",
+        "height:7.35rem",
+        "text-overflow:ellipsis",
     ]
     assert [token for token in required if token not in text] == []
 
@@ -86,3 +90,17 @@ def test_cp16_summary_has_no_execution_side_effects() -> None:
         "autotrade_trigger_allowed: bool = True",
     ]
     assert [token for token in forbidden if token in text] == []
+
+
+def test_cp16_degraded_healthy_collector_with_stale_feed_is_warning_not_unknown() -> None:
+    items = build_linked_runtime_summary_items(
+        live_summary={"overall_state": "DEGRADED", "overall_reason": "feed=STALE"},
+        runtime={"mode": "RUNNING", "health_status": "healthy", "feed_state": "STALE"},
+        chart_engine_snapshot={"mode": "RUNNING", "active": True},
+        market_regime_loop_snapshot={"mode": "RUNNING_WRITE_OK", "active": True},
+        market_regime_snapshot={"latest_cards_available": True, "card_count": 8, "first_card_label": "レンジ", "first_card_confidence": 70},
+    )
+    collector = {item["runtime_id"]: item for item in items}["collector"]
+    assert collector["severity"] == "warning"
+    assert collector["badge_label"] == "WATCH"
+    assert collector["primary_status"] == "要監視"
