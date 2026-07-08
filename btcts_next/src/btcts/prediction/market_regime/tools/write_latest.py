@@ -145,7 +145,8 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
             "source_snapshot_ok": source_snapshot.ok,
             "feature_bundle_available_signal_count": feature_bundle.available_signal_count(),
             "missing_sources": list(source_snapshot.missing_sources),
-            "warnings": list(source_snapshot.warnings),
+            # MR_A1_COMPACT_SUMMARY_FEATURE_WARNINGS_2026_07_09
+            "warnings": list(dict.fromkeys(list(source_snapshot.warnings) + list(feature_bundle.warnings))),
         },
     )
     validation = validate_market_regime_latest_cards_artifact(latest_cards)

@@ -287,3 +287,47 @@ def test_q27j_inference_modules_do_not_import_ui_or_runtime_paths() -> None:
         text = path.read_text(encoding="utf-8-sig")
         for token in forbidden:
             assert token not in text, f"forbidden token {token!r} found in {path}"
+
+
+def test_mr_a1_stale_forecast_records_are_blocked_by_currentness_gate(tmp_path: Path) -> None:
+    forecast_path = tmp_path / "prediction/runs/2026-07-01/171500/forecast_records.jsonl"
+    _write_json(tmp_path / "prediction/latest_manifest.json", {
+        "generated_at": "2026-07-01T17:15:00Z",
+        "legacy_latest_path": "prediction/latest_prediction_system_result.json",
+        "sidecars": {"forecast_records": "prediction/runs/2026-07-01/171500/forecast_records.jsonl"},
+    })
+    _write_json(tmp_path / "prediction/latest_prediction_system_result.json", {"read_only": True, "non_executing": True})
+    _write_jsonl(forecast_path, [
+        {"family": "market_regime", "generated_at": "2026-07-01T17:15:00Z", "horizon_sec": 300, "primary_label": "trend_candidate", "score": 0.95, "values_snapshot": {"estimated_signal_strength_percent": 95, "estimated_reference_hit_rate_percent": 90, "volatility_state": "normal", "cross_venue_agreement": "aligned"}},
+    ])
+    _write_json(tmp_path / "state/collector_vnext/unified_market_state_status.json", {
+        "last_symbol_raw": "FX_BTC_JPY",
+        "last_best_bid": 9729064.0,
+        "last_best_ask": 9730264.0,
+        "last_spread": 1200.0,
+        "read_only": True,
+        "would_send_to_broker": False,
+    })
+    _write_json(tmp_path / "state/collector_vnext/unified_health.json", {"ok": True, "ws_state": "LIVE", "read_only": True, "would_send_to_broker": False})
+    _write_json(tmp_path / "state/collector_vnext/unified_executions_status.json", {"ws_state": "LIVE", "trade_count": 20450, "read_only": True, "would_send_to_broker": False})
+    _write_json(tmp_path / "state/collector_vnext/unified_daemon_status.json", {"read_only": True, "would_send_to_broker": False})
+
+    snapshot = build_market_regime_source_snapshot(tmp_path)
+    bundle = build_market_regime_feature_bundle(snapshot, generated_at="2026-07-08T17:15:02Z")
+    source_quality = {signal.name: signal for signal in bundle.signals_by_group(FeatureGroup.SOURCE_QUALITY)}
+    assert source_quality["forecast_records_current_enough"].value is False
+    assert "forecast_records_stale" in bundle.warnings
+    coverage_by_group = {coverage.feature_group: coverage for coverage in bundle.coverage}
+    assert coverage_by_group[FeatureGroup.PRICE_STRUCTURE].freshness_state.value == "STALE"
+    assert coverage_by_group[FeatureGroup.VOLATILITY].freshness_state.value == "STALE"
+    assert coverage_by_group[FeatureGroup.CROSS_VENUE].freshness_state.value == "STALE"
+
+    packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-08T17:15:03Z")
+    first = packet.predictions[0]
+    assert first.regime_code == MarketRegimeCode.UNKNOWN
+    assert first.freshness_state.value == "STALE"
+    assert first.confidence_percent == 15
+    assert "forecast_records_stale" in first.warnings
+    assert first.diagnostic_record["forecast_records_currentness_gate_applied"] is True
+    assert first.diagnostic_record["selected_forecast_label"] == ""
+    assert first.diagnostic_record["label_selection_reason"] == "forecast_records_stale_blocked"

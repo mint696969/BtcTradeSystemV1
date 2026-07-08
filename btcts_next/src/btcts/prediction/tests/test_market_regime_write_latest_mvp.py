@@ -118,3 +118,17 @@ def test_cp5_cli_requires_once_and_writes_when_acknowledged(tmp_path: Path, caps
     out = capsys.readouterr().out
     assert "market_regime_cli_run" in out
     assert (tmp_path / "prediction/market_regime/latest_cards.json").exists()
+
+
+def test_mr_a1_write_latest_compact_summary_surfaces_stale_forecast_warning(tmp_path: Path) -> None:
+    _fixture_root(tmp_path)
+    artifacts = build_market_regime_latest_artifact_set(
+        hot_root=tmp_path,
+        generated_at="2026-07-10T09:12:00Z",
+        run_id="market_regime_stale_warning_test",
+    )
+    compact = artifacts["latest_cards"]["compact_summary"]
+    assert "forecast_records_stale" in compact["warnings"]
+    first = artifacts["latest_read_model"]["horizons"][0]
+    assert first["diagnostic_record"]["forecast_records_currentness_gate_applied"] is True
+    assert first["freshness_state"] == "STALE"
