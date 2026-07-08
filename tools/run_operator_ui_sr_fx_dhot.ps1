@@ -16,6 +16,7 @@ if (!(Test-Path $Py)) {
 $env:PYTHONPATH = "C:\BtcTradeSystem\btcts_next\src"
 
 # D-hot realtime roots. E-cold and D:\BtcTS_V1 are not runtime success evidence.
+$env:BTCTS_HOT_ROOT = "D:\btc_ts_hot"
 $env:BTC_TS_DATA_DIR = "D:\btc_ts_hot\data"
 $env:BTC_TS_LOGS_DIR = "D:\btc_ts_hot\logs"
 $env:BTCTS_STATE_ROOT = "D:\btc_ts_hot\state"
@@ -69,6 +70,7 @@ if (-not $env:BTCTS_WS_CA_FILE) {
 Write-Host "[operator-ui-srfx-dhot] repo=C:\BtcTradeSystem"
 Write-Host "[operator-ui-srfx-dhot] python=$Py"
 Write-Host "[operator-ui-srfx-dhot] data=$env:BTC_TS_DATA_DIR"
+Write-Host "[operator-ui-srfx-dhot] hot_root=$env:BTCTS_HOT_ROOT"
 Write-Host "[operator-ui-srfx-dhot] logs=$env:BTC_TS_LOGS_DIR"
 Write-Host "[operator-ui-srfx-dhot] state=$env:BTCTS_STATE_ROOT"
 Write-Host "[operator-ui-srfx-dhot] symbol=$env:BTCTS_SYMBOL"

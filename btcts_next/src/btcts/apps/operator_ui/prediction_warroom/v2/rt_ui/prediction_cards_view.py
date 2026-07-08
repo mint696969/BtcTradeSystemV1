@@ -70,9 +70,21 @@ def _short_list(values: list[str], *, limit: int = 4) -> str:
     return ",".join(shown)
 
 
+def _market_regime_cards_artifact_root() -> Path:
+    hot_root = os.environ.get("BTCTS_HOT_ROOT")
+    if hot_root:
+        return Path(hot_root)
+    data_root = os.environ.get("BTCTS_DATA_ROOT")
+    if data_root:
+        candidate = Path(data_root)
+        if candidate.name.lower() == "data":
+            return candidate.parent
+        return candidate
+    return Path("D:/btc_ts_hot")
+
+
 def _market_regime_cards_artifact_path() -> Path:
-    root = os.environ.get("BTCTS_HOT_ROOT") or os.environ.get("BTCTS_DATA_ROOT") or "D:/btc_ts_hot"
-    return Path(root) / RT_MARKET_REGIME_CARDS_ARTIFACT_RELATIVE_PATH
+    return _market_regime_cards_artifact_root() / RT_MARKET_REGIME_CARDS_ARTIFACT_RELATIVE_PATH
 
 
 def _extract_market_regime_cards(payload: Any) -> list[dict[str, Any]]:
