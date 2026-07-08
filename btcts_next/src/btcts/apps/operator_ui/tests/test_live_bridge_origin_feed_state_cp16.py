@@ -14,6 +14,7 @@ if str(_SRC_ROOT) not in sys.path:
 from btcts.apps.operator_ui.components.live_bridge import (  # noqa: E402
     _build_live_summary,
     _origin_status_feed_state,
+    _resolve_feed_state,
 )
 
 
@@ -76,3 +77,34 @@ def test_cp16_live_bridge_source_has_no_runtime_control_side_effects() -> None:
         "autotrade_trigger_allowed: bool = True",
     ]
     assert [token for token in forbidden if token in text] == []
+
+
+def test_cp16_collector_runtime_snapshot_top_level_feed_matches_origin_status(monkeypatch) -> None:
+    from btcts.apps.operator_ui.components import live_bridge
+
+    monkeypatch.setattr(live_bridge, "load_status", lambda: {"ts": _iso(300), "mode": "RUNNING"})
+    monkeypatch.setattr(live_bridge, "load_health", lambda: {"ts": _iso(5), "status": "healthy", "checks": []})
+    monkeypatch.setattr(live_bridge, "load_daemon_health", lambda: {"ts": _iso(5), "status": "healthy", "consecutive_failures": 0})
+    monkeypatch.setattr(live_bridge, "load_checkpoint", lambda: {"ts": _iso(5)})
+    monkeypatch.setattr(live_bridge, "load_origin_status", lambda: {"ts": _iso(300), "ws_state": "LIVE", "lane_state": "live", "last_event_ts": _iso(3)})
+    monkeypatch.setattr(live_bridge, "read_recent_audit_events", lambda lines=80: [])
+
+    snapshot = live_bridge.collector_runtime_snapshot()
+    assert snapshot["feed_state"] == "LIVE"
+    assert snapshot["live_summary"]["feed_state"] == "LIVE"
+    assert snapshot["live_summary"]["overall_state"] == "RUNNING"
+
+
+def test_cp16_feed_state_has_single_canonical_resolver() -> None:
+    assert _resolve_feed_state(
+        {"ts": _iso(300), "mode": "RUNNING"},
+        {"ts": _iso(300), "ws_state": "LIVE", "lane_state": "live", "last_event_ts": _iso(3)},
+        [],
+    ) == "LIVE"
+
+    path = Path(__file__).resolve().parents[1] / "components/live_bridge.py"
+    text = path.read_text(encoding="utf-8")
+    assert text.count("def _resolve_feed_state") == 1
+    assert text.count("_resolve_feed_state(status, origin_status, audit_rows)") == 2
+    duplicated_expr = "_origin_status_feed_state(origin_status) or _origin_continuity_feed_state(status) or _feed_state(audit_rows)"
+    assert duplicated_expr not in text

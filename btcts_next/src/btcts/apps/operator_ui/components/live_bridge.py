@@ -589,6 +589,18 @@ def _feed_state(events: list[dict], *, live_threshold_sec: int = 30, stale_thres
     return "STALE"
 
 
+def _resolve_feed_state(status: dict, origin_status: dict, audit_rows: list[dict]) -> str:
+    origin_feed = _origin_status_feed_state(origin_status)
+    if origin_feed is not None:
+        return origin_feed
+
+    continuity_feed = _origin_continuity_feed_state(status)
+    if continuity_feed is not None:
+        return continuity_feed
+
+    return _feed_state(audit_rows)
+
+
 def feed_state_from_events(events: list[dict]) -> str:
     return _feed_state(events)
 
@@ -612,7 +624,7 @@ def _build_live_summary(
     health_checks = health.get("checks") or []
     warn_count = sum(1 for check in health_checks if check.get("result") != "ok")
 
-    feed_state = _origin_status_feed_state(origin_status) or _origin_continuity_feed_state(status) or _feed_state(audit_rows)
+    feed_state = _resolve_feed_state(status, origin_status, audit_rows)
 
     status_age = _payload_age_seconds(status)
     health_age = _payload_age_seconds(health)
@@ -707,7 +719,7 @@ def collector_runtime_snapshot() -> dict:
     elif mode == "RUNNING" and health_status == "healthy":
         exchange_state = "CONNECTED"
 
-    feed_state = _origin_continuity_feed_state(status) or _feed_state(audit_rows)
+    feed_state = _resolve_feed_state(status, origin_status, audit_rows)
 
     active_topics = len(
         {
