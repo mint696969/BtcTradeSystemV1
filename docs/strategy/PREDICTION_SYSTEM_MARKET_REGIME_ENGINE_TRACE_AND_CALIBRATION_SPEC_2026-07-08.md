@@ -771,3 +771,30 @@ shared replay/calibration comparability
 ```
 
 Market-regime work must not hard-code assumptions that prevent direction, volatility, liquidity, execution-quality, shock-risk, or other future cards from using the same infrastructure.
+## 27. Parent inference engine common contract reference
+<!-- PS_PARENT_INFERENCE_ENGINE_COMMON_CONTRACT_LOCK_2026_07_08 -->
+
+Market-regime is the first canonical prediction family under the parent inference engine contract:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_PARENT_INFERENCE_ENGINE_COMMON_CONTRACT_2026-07-08.md
+```
+
+Market-regime-specific signal, outcome, and card rules must follow the parent rules for:
+
+```text
+PredictionFamilyRegistry
+SourceRegistry
+HorizonPolicy
+SourceRefContract
+FeatureBundleContract
+SignalRegistry
+ParameterSetRegistry
+InferenceRun
+PredictionTrace
+OutcomeLedger
+Calibration
+ReadModelContract
+```
+
+The system is bitFlyer-first, not bitFlyer-only. Future sources such as cross-exchange, derivatives, macro, FX, equities, gold, on-chain, session/calendar, news/event, and manual/GPT review artifacts must be addable through source registry and parameter-set changes without breaking existing market-regime traces.

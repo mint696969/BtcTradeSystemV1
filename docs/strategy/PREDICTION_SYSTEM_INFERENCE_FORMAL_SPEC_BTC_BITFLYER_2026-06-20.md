@@ -992,4 +992,28 @@ PS-Q9A must still be contract/preflight only. It should decide the exact artifac
 Do not begin PS-Q9B actual read until PS-Q9A is committed and guarded.
 
 PS-Q9B, when eventually reached, must be a minimal read-only loader for explicitly allowed JSON artifacts only. It must not connect AutoTrade, broker/private APIs, command ledger append, approval/grant mutation, Collector runtime loops, or Prediction core collection ownership.
+## 2026-07-08 parent inference engine common contract lock
+<!-- PS_PARENT_INFERENCE_ENGINE_COMMON_CONTRACT_LOCK_2026_07_08 -->
 
+The parent/common contract is fixed in:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_PARENT_INFERENCE_ENGINE_COMMON_CONTRACT_2026-07-08.md
+```
+
+Key points:
+
+```text
+bitflyer_first_not_bitflyer_only=true
+multi_source_ready=true
+multi_prediction_family_ready=true
+source_registry_required=true
+prediction_family_registry_required=true
+lead_lag_assumption_is_hypothesis_not_truth=true
+source_reliability_calibratable=true
+raw_external_data_duplication_forbidden=true
+ui_displays_read_models_only=true
+market_regime_first_canonical_family=true
+```
+
+This parent contract must be honored before adding external sources such as cross-exchange, derivatives, macro, FX, equities, gold, on-chain, session/calendar, news/event, or operator/manual review sources.
