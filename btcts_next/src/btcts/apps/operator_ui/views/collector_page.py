@@ -42,6 +42,11 @@ from btcts.collector_vnext.stack_control import (
 )
 from btcts.collector_vnext.unified_state import write_unified_supervisor_request
 from btcts.core import paths as core_paths
+from btcts.prediction.market_regime.operator_ui_runtime import (
+    market_regime_operator_ui_snapshot,
+    request_market_regime_preflight,
+    request_market_regime_run_once,
+)
 from btcts.processing.l4_consumer_models.operator_ui.warroom_chart_engine_runtime import (
     chart_engine_runtime_snapshot,
     request_chart_engine_restart,
@@ -256,6 +261,60 @@ def _render_warroom_chart_engine_status_section() -> None:
                 "state_dir": snapshot.get("state_dir"),
                 "status_path": snapshot.get("status_path"),
                 "request_path": snapshot.get("request_path"),
+            }
+        ]
+        st.dataframe(rows, width="stretch")
+
+
+
+def _render_market_regime_inference_runtime_section() -> None:
+    snapshot = market_regime_operator_ui_snapshot()
+    with live_shell.render_folded_section("MarketRegime Inference Runtime", expanded=False):
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Mode", snapshot.get("mode") or "-")
+        c2.metric("Latest cards", "YES" if snapshot.get("latest_cards_available") else "NO")
+        c3.metric("Cards", snapshot.get("card_count") or 0)
+        c4.metric("First", f"{snapshot.get('first_card_label') or '-'} / {snapshot.get('first_card_confidence') or '-'}%")
+        c5.metric("Can write", "YES" if snapshot.get("last_preflight_can_write") else "-")
+        st.caption(
+            f"hot_root={snapshot.get('hot_root')} / latest_run_id={snapshot.get('latest_run_id') or '-'} / "
+            f"generated_at={snapshot.get('latest_generated_at') or '-'} / active_process=false / scheduler=false / broker=false / autotrade=false"
+        )
+        if snapshot.get("last_error"):
+            st.warning(f"last_error={snapshot.get('last_error')}")
+        if snapshot.get("last_preflight_missing_sources"):
+            st.info("missing_sources=" + ",".join(snapshot.get("last_preflight_missing_sources") or []))
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            if st.button("Preflight", key="market_regime_preflight", use_container_width=True):
+                ok, msg, _status = request_market_regime_preflight()
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+                _request_page_rerun()
+        with b2:
+            if st.button("Run Once", key="market_regime_run_once", use_container_width=True):
+                ok, msg, _status = request_market_regime_run_once()
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+                _request_page_rerun()
+        with b3:
+            st.caption("Safe Stop/Restart: 常駐 loop 未導入のため対象なし。Run Once は1回実行して終了します。")
+        rows = [
+            {
+                "mode": snapshot.get("mode"),
+                "latest_run_id": snapshot.get("latest_run_id"),
+                "latest_generated_at": snapshot.get("latest_generated_at"),
+                "latest_cards_path": snapshot.get("latest_cards_path"),
+                "status_path": snapshot.get("status_path"),
+                "scheduler_enabled": False,
+                "producer_loop_enabled": False,
+                "broker_private_api_allowed": False,
+                "autotrade_trigger_allowed": False,
+                "would_send_to_broker": False,
             }
         ]
         st.dataframe(rows, width="stretch")
@@ -546,6 +605,7 @@ def _render_collector_page_body():
     )
 
     _render_warroom_chart_engine_status_section()
+    _render_market_regime_inference_runtime_section()
 
     with live_shell.render_folded_section(get_text(lang, "ui_label_collector_runtime_state"), expanded=False):
         _render_scrollable_json_block(
