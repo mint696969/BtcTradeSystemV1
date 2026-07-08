@@ -51,6 +51,7 @@ def market_regime_operator_ui_paths(hot_root: Path | None = None) -> dict[str, P
         "status": state_dir / "status.json",
         "latest_cards": root / "prediction" / "market_regime" / "latest_cards.json",
         "latest_read_model": root / "prediction" / "market_regime" / "latest_read_model.json",
+        "calibration_latest_read_model": root / "prediction" / "market_regime" / "calibration" / "latest_read_model.json",
         "trace_ledger_dir": root / "prediction" / "market_regime" / "ledgers",
     }
 
@@ -293,10 +294,33 @@ def request_market_regime_producer_loop_restart(hot_root: Path | None = None, *,
     return ok, msg
 
 
+def _calibration_bucket_counts(bucket: Mapping[str, Any]) -> dict[str, int]:
+    counts = bucket.get("counts") if isinstance(bucket.get("counts"), Mapping) else {}
+    return {
+        "hit": int(counts.get("hit") or 0),
+        "partial": int(counts.get("partial") or 0),
+        "miss": int(counts.get("miss") or 0),
+        "unknown": int(counts.get("unknown") or 0),
+        "invalidated": int(counts.get("invalidated") or 0),
+    }
+
+
+def _calibration_score(bucket: Mapping[str, Any]) -> float | None:
+    value = bucket.get("calibration_score")
+    if value is None:
+        return None
+    try:
+        return round(float(value), 4)
+    except Exception:
+        return None
+
 def market_regime_operator_ui_snapshot(hot_root: Path | None = None) -> dict[str, Any]:
     paths = market_regime_operator_ui_paths(hot_root)
     status = _read_json(paths["status"])
     latest_cards = _read_json(paths["latest_cards"])
+    calibration_read_model = _read_json(paths["calibration_latest_read_model"])
+    calibration_primary = calibration_read_model.get("primary") if isinstance(calibration_read_model.get("primary"), Mapping) else {}
+    calibration_reference = calibration_read_model.get("latest_cards_current_reference") if isinstance(calibration_read_model.get("latest_cards_current_reference"), Mapping) else {}
     first_card = {}
     cards = latest_cards.get("cards") if isinstance(latest_cards.get("cards"), list) else []
     if cards and isinstance(cards[0], dict):
@@ -310,6 +334,14 @@ def market_regime_operator_ui_snapshot(hot_root: Path | None = None) -> dict[str
         "status_path": str(paths["status"]),
         "latest_cards_path": str(paths["latest_cards"]),
         "latest_cards_available": bool(paths["latest_cards"].exists()),
+        "calibration_latest_read_model_path": str(paths["calibration_latest_read_model"]),
+        "calibration_read_model_available": bool(paths["calibration_latest_read_model"].exists()),
+        "calibration_primary_observation_source": str(calibration_read_model.get("primary_observation_source") or ""),
+        "calibration_primary_score": _calibration_score(calibration_primary),
+        "calibration_primary_known_total": int(calibration_primary.get("known_total") or 0),
+        "calibration_primary_counts": _calibration_bucket_counts(calibration_primary),
+        "calibration_reference_score": _calibration_score(calibration_reference),
+        "calibration_read_model": calibration_read_model,
         "latest_run_id": latest_cards.get("run_id") or status.get("latest_run_id") or "",
         "latest_generated_at": latest_cards.get("generated_at") or status.get("generated_at") or "",
         "card_count": int(latest_cards.get("horizon_count") or len(cards) or 0),
