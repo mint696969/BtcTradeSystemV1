@@ -525,3 +525,28 @@ not_allowed_to_rewrite_past_prediction_trace=true
 ```
 
 Outcome rules exist to improve inference quality, not to create fake certainty.
+## 17. AI/GPT hypothesis adaptive trust addendum
+<!-- PS_AI_HYPOTHESIS_ADAPTIVE_TRUST_LOCK_2026_07_08 -->
+
+AI/GPT hypotheses should be incorporated actively as candidate knowledge and then ranked by outcomes.
+
+Do not treat GPT hypotheses as forbidden or too dangerous by default. Treat them as measurable candidates:
+
+```text
+candidate -> shadow -> active -> demoted|rejected|archived
+```
+
+Outcome/calibration must update trust by:
+
+```text
+horizon
+regime
+source_family
+confidence_bucket
+parameter_set_id
+hypothesis_id
+```
+
+A GPT hypothesis may be promoted when it repeatedly improves hit/partial outcomes or reduces overconfidence. It may be demoted when it adds false confidence, worsens misses, or only works in narrow conditions.
+
+The point is to let GPT/operator insight enter the system while allowing evidence to move its trust rank up or down.

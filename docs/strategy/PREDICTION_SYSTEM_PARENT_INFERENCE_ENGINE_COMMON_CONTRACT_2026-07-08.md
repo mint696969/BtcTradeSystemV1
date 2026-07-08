@@ -382,3 +382,67 @@ trend_bias -> market_regime as prior-snapshot context only
 ```
 
 Market-regime remains the first canonical family, but it is not an isolated truth source. It participates in a controlled inference graph.
+## 17. AI/GPT hypothesis and adaptive trust ranking
+<!-- PS_AI_HYPOTHESIS_ADAPTIVE_TRUST_LOCK_2026_07_08 -->
+
+The Prediction System should actively accept AI/GPT/operator hypotheses as candidate market-reading knowledge.
+
+The design must not over-suppress AI-origin ideas. GPT may suggest patterns, hidden relationships, participant-behavior hypotheses, cross-market lead/lag hypotheses, liquidity-hunt interpretations, or signal-combination ideas that the operator did not explicitly know.
+
+The correct safety model is not to reject such hypotheses. The correct model is:
+
+```text
+accept_as_candidate
+trace_usage
+compare_outcomes
+adjust_trust_rank
+promote_or_demote_by_evidence
+```
+
+AI/GPT hypothesis sources may include:
+
+```text
+chart pattern interpretation
+liquidity behavior interpretation
+other-AI/algorithm participant behavior hypothesis
+human technical reaction hypothesis
+cross-market lead/lag hypothesis
+macro/session context hypothesis
+false-break/stop-run/liquidity-hunt hypothesis
+replay-discovered pattern
+```
+
+Trust is dynamic. Every hypothesis/source/signal/parameter set may gain or lose influence by horizon, regime, confidence bucket, and outcome evidence.
+
+Required adaptive trust fields or equivalents:
+
+```text
+hypothesis_id
+origin=gpt|operator|replay|manual_rule|model_assisted
+trust_rank
+trust_rank_reason
+trust_rank_updated_at_utc
+promotion_state=candidate|shadow|active|demoted|rejected|archived
+usage_count
+hit_rate_by_horizon
+partial_rate_by_horizon
+miss_rate_by_horizon
+invalidated_rate_by_horizon
+overconfidence_score
+underconfidence_score
+best_regime_context
+worst_regime_context
+last_reviewed_by
+```
+
+Principles:
+
+```text
+AI-origin is neither automatically trusted nor automatically distrusted.
+Good outcomes may promote trust rank.
+Bad outcomes may demote trust rank.
+A hypothesis can be useful for one horizon/regime and harmful for another.
+Historical traces must preserve which hypothesis and trust rank were used at prediction time.
+```
+
+This enables the system to incorporate GPT's broader pattern knowledge while remaining measurable, replayable, and adjustable.

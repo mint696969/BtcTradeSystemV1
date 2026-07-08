@@ -897,3 +897,17 @@ parameter_set_promotion_requires_human_gate=true
 ```
 
 Outcome evaluation must judge each regime according to its own meaning. Watch regimes such as BREAKOUT_WATCH and REVERSAL_WATCH are not evaluated as guaranteed breakout/reversal predictions.
+## 32. AI/GPT hypothesis adaptive trust reference
+<!-- PS_AI_HYPOTHESIS_ADAPTIVE_TRUST_LOCK_2026_07_08 -->
+
+Market-regime inference should actively accept AI/GPT/operator hypotheses as candidate market-reading knowledge.
+
+```text
+accept_as_candidate=true
+trace_usage=true
+compare_outcomes=true
+adaptive_trust_rank=true
+promote_or_demote_by_evidence=true
+```
+
+This is intended to capture useful patterns beyond a single human operator's knowledge while keeping every hypothesis measurable by replay/outcome/calibration.
