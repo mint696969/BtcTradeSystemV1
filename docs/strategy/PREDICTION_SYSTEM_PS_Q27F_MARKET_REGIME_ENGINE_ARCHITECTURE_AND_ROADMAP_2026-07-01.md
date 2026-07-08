@@ -453,3 +453,28 @@ autotrade_broker_ledger_parameter_runtime_write_remain_false=true
 ## Safety boundary
 
 PS-Q27F is design-only. It changes no production UI behavior, no runtime behavior, no Collector behavior, no prediction producer/scheduler behavior, no artifacts, no AutoTrade, no broker, no ledger, no mode, and no parameter behavior.
+## 2026-07-08 operator-agreed market-regime trace/calibration lock
+<!-- PS_MARKET_REGIME_ENGINE_TRACE_CALIBRATION_SPEC_LOCK_2026_07_08 -->
+
+The operator-agreed implementation premise is now fixed in:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_ENGINE_TRACE_AND_CALIBRATION_SPEC_2026-07-08.md
+```
+
+Key locks:
+
+```text
+first_implementation_slice=remove_ui_render_path_classifier_and_dhot_preview_inference
+card_percent_meaning=market_regime_reading_confidence_not_win_rate
+card_percent_explainer_location=help_button_or_detail_balloon_not_card_surface
+market_records_and_market_regime_prediction_traces_are_separate=true
+prediction_trace_required=true
+raw_market_data_duplication_forbidden=true
+giants_files_forbidden=true
+bounded_date_hour_partitioned_ledgers_required=true
+outcome_and_calibration_ledgers_required=true
+chart_selection_packets_are_manual_review_artifacts_not_canonical_predictions=true
+```
+
+This update does not change code or runtime behavior. It fixes the design baseline before implementation resumes.
