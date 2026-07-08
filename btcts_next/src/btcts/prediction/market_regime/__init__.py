@@ -50,6 +50,16 @@ from .contracts import (
 from .freshness_policy import FreshnessThreshold, MarketRegimeFreshnessPolicy, build_default_freshness_policy
 from .features import FeatureBundleSafetyFlags, FeatureSignal, MarketRegimeFeatureBundle, build_market_regime_feature_bundle
 from .horizon_policy import MarketRegimeHorizon, MarketRegimeHorizonGroup, MarketRegimeHorizonPolicy, build_default_horizon_policy
+from .hypothesis_lane import (
+    MARKET_REGIME_HYPOTHESIS_LANE_VERSION,
+    append_market_regime_hypothesis_candidate_once,
+    build_market_regime_hypothesis_candidate,
+    build_market_regime_hypothesis_trust_snapshot,
+    hypothesis_candidate_part_relpath,
+    hypothesis_trust_latest_relpath,
+    validate_market_regime_hypothesis_candidate,
+    write_market_regime_hypothesis_trust_snapshot,
+)
 from .inference import MARKET_REGIME_CLASSIFIER_VERSION, classify_market_regime_feature_bundle
 from .outcome_resolver import (
     MARKET_REGIME_OUTCOME_RESOLVER_VERSION,
@@ -93,6 +103,14 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "write_market_regime_hypothesis_trust_snapshot",
+    "validate_market_regime_hypothesis_candidate",
+    "hypothesis_trust_latest_relpath",
+    "hypothesis_candidate_part_relpath",
+    "build_market_regime_hypothesis_trust_snapshot",
+    "build_market_regime_hypothesis_candidate",
+    "append_market_regime_hypothesis_candidate_once",
+    "MARKET_REGIME_HYPOTHESIS_LANE_VERSION",
     "write_market_regime_calibration_artifacts",
     "validate_market_regime_calibration_summary",
     "read_market_regime_outcome_rows",
