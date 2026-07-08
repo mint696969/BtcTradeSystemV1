@@ -335,7 +335,7 @@ def _render_market_regime_inference_runtime_section() -> None:
                 else:
                     st.error(msg)
                 _request_page_rerun()
-        st.caption("Collector 起動/停止/再起動ボタンへの自動連動は未接続です。安定確認後に Watchdog 連動へ進めます。")
+        st.caption("MarketRegime producer loop は Collector の起動/停止/再起動ボタンにも連動します。個別ボタンは診断・非常用です。")
         rows = [
             {
                 "mode": snapshot.get("mode"),
@@ -366,22 +366,33 @@ def _request_unified_start() -> tuple[bool, str, bool]:
         result = start_stack_detached()
         started_components = result.get("started_components") or []
         chart_ok, chart_msg, chart_already = start_chart_engine_detached()
+        market_ok, market_msg, market_already = start_market_regime_producer_loop_detached()
         if result.get("already_running"):
-            if chart_ok:
-                return True, f"stack already running; chart_engine={chart_msg}", bool(chart_already)
-            return False, f"stack already running; chart_engine_start_failed={chart_msg}", True
+            if chart_ok and market_ok:
+                return True, f"stack already running; chart_engine={chart_msg}; market_regime={market_msg}", bool(chart_already and market_already)
+            failures = []
+            if not chart_ok:
+                failures.append(f"chart_engine_start_failed={chart_msg}")
+            if not market_ok:
+                failures.append(f"market_regime_start_failed={market_msg}")
+            return False, "stack already running; " + "; ".join(failures), True
 
-        if not chart_ok:
-            return False, f"stack start requested but chart_engine_start_failed={chart_msg}", False
+        if not chart_ok or not market_ok:
+            failures = []
+            if not chart_ok:
+                failures.append(f"chart_engine_start_failed={chart_msg}")
+            if not market_ok:
+                failures.append(f"market_regime_start_failed={market_msg}")
+            return False, "stack start requested but " + "; ".join(failures), False
 
         if started_components:
             joined = ", ".join(
                 f"{item.get('component')} pid={item.get('pid')}"
                 for item in started_components
             )
-            return True, f"stack started components={joined}; chart_engine={chart_msg}", False
+            return True, f"stack started components={joined}; chart_engine={chart_msg}; market_regime={market_msg}", False
 
-        return True, f"stack start completed (no additional component launch was required); chart_engine={chart_msg}", False
+        return True, f"stack start completed (no additional component launch was required); chart_engine={chart_msg}; market_regime={market_msg}", False
     except Exception as exc:
         return False, str(exc), False
 
@@ -401,6 +412,7 @@ def _request_unified_safe_stop() -> tuple[bool, str]:
                 "requested_by": "operator_ui",
                 "reason": "maintenance_safe_stop",
                 "linked_chart_engine_action": "safe_stop",
+                "linked_market_regime_action": "safe_stop",
             },
         )
         messages.append(f"collector safe stop request_id={request_id}")
@@ -410,6 +422,9 @@ def _request_unified_safe_stop() -> tuple[bool, str]:
     chart_ok, chart_msg = request_chart_engine_safe_stop()
     ok_all = ok_all and chart_ok
     messages.append(f"chart_engine={chart_msg}")
+    market_ok, market_msg = request_market_regime_producer_loop_safe_stop()
+    ok_all = ok_all and market_ok
+    messages.append(f"market_regime={market_msg}")
     return ok_all, "; ".join(messages)
 
 
@@ -428,6 +443,7 @@ def _request_unified_restart() -> tuple[bool, str]:
                 "requested_by": "operator_ui",
                 "reason": "manual_code_apply",
                 "linked_chart_engine_action": "restart_or_start",
+                "linked_market_regime_action": "restart_or_start",
             },
         )
         messages.append(f"collector restart request_id={request_id}")
@@ -444,6 +460,9 @@ def _request_unified_restart() -> tuple[bool, str]:
         chart_ok, chart_msg, _already = start_chart_engine_detached()
         ok_all = ok_all and chart_ok
         messages.append(f"chart_engine={chart_msg}")
+    market_ok, market_msg = request_market_regime_producer_loop_restart()
+    ok_all = ok_all and market_ok
+    messages.append(f"market_regime={market_msg}")
     return ok_all, "; ".join(messages)
 
 
@@ -545,6 +564,7 @@ def _render_collector_page_body():
     supervisor_request = collector_state.get("supervisor_request", {})
     stack_control = stack_runtime_snapshot()
     chart_engine_snapshot = chart_engine_runtime_snapshot()
+    market_regime_loop_snapshot = market_regime_producer_loop_runtime_snapshot()
     status_state = collector_state.get("status", {})
     daemon_stop_request = collector_state.get("daemon_stop_request", {})
     archive_copy_state = collector_state.get("archive_copy_state", {})
@@ -639,8 +659,8 @@ def _render_collector_page_body():
         request_unified_start=_request_unified_start,
         request_unified_safe_stop=_request_unified_safe_stop,
         request_unified_restart=_request_unified_restart,
-        linked_runtime_active=bool(chart_engine_snapshot.get("active")),
-        linked_runtime_label="Chart Engine",
+        linked_runtime_active=bool(chart_engine_snapshot.get("active") or market_regime_loop_snapshot.get("active")),
+        linked_runtime_label="Chart Engine / MarketRegime",
         is_supervisor_running=_is_supervisor_running,
         is_restart_request_pending=_is_restart_request_pending,
         supervisor_status_rows=_supervisor_status_rows,
