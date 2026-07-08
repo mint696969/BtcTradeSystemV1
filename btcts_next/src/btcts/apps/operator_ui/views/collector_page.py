@@ -295,6 +295,24 @@ def _render_market_regime_inference_runtime_section() -> None:
             st.warning(f"loop_last_error={loop_snapshot.get('last_error')}")
         if snapshot.get("last_preflight_missing_sources"):
             st.info("missing_sources=" + ",".join(snapshot.get("last_preflight_missing_sources") or []))
+        st.caption("Calibration read-model")
+        if snapshot.get("calibration_read_model_available"):
+            cal1, cal2, cal3, cal4, cal5 = st.columns(5)
+            counts = snapshot.get("calibration_primary_counts") if isinstance(snapshot.get("calibration_primary_counts"), dict) else {}
+            hit = counts.get("hit", 0)
+            partial = counts.get("partial", 0)
+            miss = counts.get("miss", 0)
+            cal1.metric("Cal Source", snapshot.get("calibration_primary_observation_source") or "-")
+            cal2.metric("Cal Score", snapshot.get("calibration_primary_score") if snapshot.get("calibration_primary_score") is not None else "-")
+            cal3.metric("Known", snapshot.get("calibration_primary_known_total") or 0)
+            cal4.metric("Hit / Partial / Miss", f"{hit} / {partial} / {miss}")
+            cal5.metric("Reference", snapshot.get("calibration_reference_score") if snapshot.get("calibration_reference_score") is not None else "-")
+            st.caption(
+                f"calibration_path={snapshot.get('calibration_latest_read_model_path') or '-'} / "
+                "primary=candle_summary when available / latest_cards_current=reference / display_only=true"
+            )
+        else:
+            st.caption("Calibration read-model not available yet. outcome/calibration refresh will generate prediction/market_regime/calibration/latest_read_model.json.")
         b1, b2, b3, b4, b5 = st.columns(5)
         with b1:
             if st.button("Preflight", key="market_regime_preflight", use_container_width=True):
@@ -350,6 +368,10 @@ def _render_market_regime_inference_runtime_section() -> None:
                 "latest_run_id": snapshot.get("latest_run_id") or loop_snapshot.get("latest_run_id"),
                 "latest_generated_at": snapshot.get("latest_generated_at"),
                 "latest_cards_path": snapshot.get("latest_cards_path"),
+                "calibration_primary_observation_source": snapshot.get("calibration_primary_observation_source"),
+                "calibration_primary_score": snapshot.get("calibration_primary_score"),
+                "calibration_primary_known_total": snapshot.get("calibration_primary_known_total"),
+                "calibration_latest_read_model_path": snapshot.get("calibration_latest_read_model_path"),
                 "status_path": snapshot.get("status_path"),
                 "loop_status_path": loop_snapshot.get("loop_status_path"),
                 "loop_control_path": loop_snapshot.get("loop_control_path"),
