@@ -446,3 +446,13 @@ Historical traces must preserve which hypothesis and trust rank were used at pre
 ```
 
 This enables the system to incorporate GPT's broader pattern knowledge while remaining measurable, replayable, and adjustable.
+## 18. Market-regime roadmap reference
+<!-- PS_MARKET_REGIME_ROADMAP_TO_UI_CONNECTED_DONE_2026_07_08 -->
+
+The market-regime first-family implementation roadmap is fixed in:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_ROADMAP_TO_UI_CONNECTED_DONE_2026-07-08.md
+```
+
+This roadmap implements the parent contract through a checkpoint sequence ending in UI-connected prediction cards backed by inference artifacts, traces, outcomes, and calibration.

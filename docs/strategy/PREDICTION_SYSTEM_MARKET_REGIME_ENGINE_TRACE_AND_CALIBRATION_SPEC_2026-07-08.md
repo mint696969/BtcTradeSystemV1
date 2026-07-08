@@ -911,3 +911,19 @@ promote_or_demote_by_evidence=true
 ```
 
 This is intended to capture useful patterns beyond a single human operator's knowledge while keeping every hypothesis measurable by replay/outcome/calibration.
+## 33. Roadmap to UI connected done
+<!-- PS_MARKET_REGIME_ROADMAP_TO_UI_CONNECTED_DONE_2026_07_08 -->
+
+The checkpoint roadmap from current state to completed UI-connected market-regime prediction cards is fixed in:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_ROADMAP_TO_UI_CONNECTED_DONE_2026-07-08.md
+```
+
+Immediate next implementation checkpoint:
+
+```text
+CP3: Define market_regime latest artifact contracts and fixture validation.
+```
+
+The final goal is WarRoom prediction cards showing real market-regime artifacts from the inference producer, with details, traces, outcomes, and calibration, while UI render remains non-inference.
