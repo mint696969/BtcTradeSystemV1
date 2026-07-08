@@ -876,3 +876,24 @@ Confirmed historical price structure and technical indicators are important beca
 ```
 
 UI must not compute horizon weights or family scores during render.
+## 31. Market-regime outcome rule v1 reference
+<!-- PS_MARKET_REGIME_OUTCOME_RULE_V1_LOCK_2026_07_08 -->
+
+The market-regime outcome rule v1 is fixed in:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_OUTCOME_RULE_V1_2026-07-08.md
+```
+
+Key locks:
+
+```text
+outcome_labels=hit,partial,miss,invalidated,unknown
+invalidated_is_recorded_separately=true
+prediction_percent_is_not_win_rate=true
+gpt_hypothesis_lane_allowed=true
+gpt_hypothesis_requires_replay_validation=true
+parameter_set_promotion_requires_human_gate=true
+```
+
+Outcome evaluation must judge each regime according to its own meaning. Watch regimes such as BREAKOUT_WATCH and REVERSAL_WATCH are not evaluated as guaranteed breakout/reversal predictions.

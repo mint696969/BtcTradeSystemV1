@@ -303,3 +303,13 @@ operator_manual_review
 ```
 
 v1 deliberately keeps them out of the main weight table until source acquisition and calibration exist.
+## 11. Outcome rule v1 reference
+<!-- PS_MARKET_REGIME_OUTCOME_RULE_V1_LOCK_2026_07_08 -->
+
+Horizon weights must be evaluated by outcome/replay using:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_OUTCOME_RULE_V1_2026-07-08.md
+```
+
+Calibration should detect source-family overweight/underweight by horizon, regime, parameter_set_id, and confidence bucket.

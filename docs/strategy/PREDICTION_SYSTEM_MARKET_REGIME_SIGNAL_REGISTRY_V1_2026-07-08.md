@@ -492,3 +492,13 @@ docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_HORIZON_WEIGHT_V1_2026-07-08.md
 ```
 
 Signal registry entries define what a signal means. Horizon-weight policy defines how much each family should matter by horizon. Parameter sets may override both weights and thresholds through versioned changes.
+## 16. Outcome rule v1 reference
+<!-- PS_MARKET_REGIME_OUTCOME_RULE_V1_LOCK_2026_07_08 -->
+
+Signal usefulness must be evaluated by outcome/replay using:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_OUTCOME_RULE_V1_2026-07-08.md
+```
+
+Signal votes should be calibrated by regime, horizon, parameter_set_id, confidence bucket, and source-family contribution. GPT/operator hypotheses may propose new signals, but must remain candidate/shadow until replay/outcome evidence and human-gated parameter-set promotion approve them.
