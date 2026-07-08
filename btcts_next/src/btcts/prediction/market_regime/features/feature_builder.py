@@ -73,29 +73,81 @@ def _source_quality_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[Featu
     )
 
 
+def _first_float(data: Mapping[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        value = _as_float(data.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _safe_ratio(numerator: float | None, denominator: float | None) -> float | None:
+    if numerator is None or denominator in (None, 0.0):
+        return None
+    return numerator / denominator
+
+
 def _liquidity_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[FeatureSignal, ...]:
     data = snapshot.nowcast.market_state.data
-    spread = _as_float(data.get("last_spread") or data.get("spread"))
-    bid = _as_float(data.get("last_best_bid") or data.get("best_bid"))
-    ask = _as_float(data.get("last_best_ask") or data.get("best_ask"))
+    rel = snapshot.nowcast.market_state.relative_path
+    spread = _first_float(data, "last_spread", "spread")
+    bid = _first_float(data, "last_best_bid", "best_bid")
+    ask = _first_float(data, "last_best_ask", "best_ask")
+    bid_depth = _first_float(data, "bid_depth_size", "best_bid_depth", "bid_depth", "sum_bid_size", "bid_size_total")
+    ask_depth = _first_float(data, "ask_depth_size", "best_ask_depth", "ask_depth", "sum_ask_size", "ask_size_total")
+    mid_price = (bid + ask) / 2.0 if bid is not None and ask is not None else None
+    microprice = _first_float(data, "microprice", "last_microprice")
     abs_spread = abs(spread) if spread is not None else None
     crossed_or_negative = spread is not None and spread < 0
+    spread_bps = abs_spread / mid_price * 10000.0 if abs_spread is not None and mid_price not in (None, 0.0) else None
+    depth_total = (bid_depth or 0.0) + (ask_depth or 0.0) if bid_depth is not None or ask_depth is not None else None
+    depth_imbalance = (bid_depth - ask_depth) / depth_total if bid_depth is not None and ask_depth is not None and depth_total not in (None, 0.0) else None
+    microprice_bias_bps = (microprice - mid_price) / mid_price * 10000.0 if microprice is not None and mid_price not in (None, 0.0) else None
+    replenishment = _first_float(data, "liquidity_replenishment_score", "replenishment_score", "depth_replenishment_score")
+    disappearance = _first_float(data, "liquidity_disappearance_score", "disappearance_score", "depth_disappearance_score")
+    absorption = _first_float(data, "absorption_score", "liquidity_absorption_score", "orderflow_absorption_score")
+    spread_change_1m = _first_float(data, "spread_change_bps_1m", "spread_change_1m_bps")
     return (
-        _signal(FeatureGroup.LIQUIDITY, "best_bid", bid, available=bid is not None, source_refs=(snapshot.nowcast.market_state.relative_path,), weight_hint=0.15),
-        _signal(FeatureGroup.LIQUIDITY, "best_ask", ask, available=ask is not None, source_refs=(snapshot.nowcast.market_state.relative_path,), weight_hint=0.15),
-        _signal(FeatureGroup.LIQUIDITY, "absolute_spread", abs_spread, available=abs_spread is not None, source_refs=(snapshot.nowcast.market_state.relative_path,), warnings=("negative_spread_seen",) if crossed_or_negative else (), weight_hint=0.45),
-        _signal(FeatureGroup.LIQUIDITY, "crossed_or_negative_spread", crossed_or_negative, available=spread is not None, source_refs=(snapshot.nowcast.market_state.relative_path,), weight_hint=0.25),
+        _signal(FeatureGroup.LIQUIDITY, "best_bid", bid, available=bid is not None, source_refs=(rel,), weight_hint=0.10),
+        _signal(FeatureGroup.LIQUIDITY, "best_ask", ask, available=ask is not None, source_refs=(rel,), weight_hint=0.10),
+        _signal(FeatureGroup.LIQUIDITY, "mid_price", mid_price, available=mid_price is not None, source_refs=(rel,), weight_hint=0.08),
+        _signal(FeatureGroup.LIQUIDITY, "absolute_spread", abs_spread, available=abs_spread is not None, source_refs=(rel,), warnings=("negative_spread_seen",) if crossed_or_negative else (), weight_hint=0.18),
+        _signal(FeatureGroup.LIQUIDITY, "spread_bps", spread_bps, available=spread_bps is not None, source_refs=(rel,), warnings=("negative_spread_seen",) if crossed_or_negative else (), weight_hint=0.14),
+        _signal(FeatureGroup.LIQUIDITY, "crossed_or_negative_spread", crossed_or_negative, available=spread is not None, source_refs=(rel,), weight_hint=0.12),
+        _signal(FeatureGroup.LIQUIDITY, "bid_depth_size", bid_depth, available=bid_depth is not None, source_refs=(rel,), weight_hint=0.08),
+        _signal(FeatureGroup.LIQUIDITY, "ask_depth_size", ask_depth, available=ask_depth is not None, source_refs=(rel,), weight_hint=0.08),
+        _signal(FeatureGroup.LIQUIDITY, "depth_imbalance", round(depth_imbalance, 4) if depth_imbalance is not None else None, available=depth_imbalance is not None, source_refs=(rel,), weight_hint=0.18),
+        _signal(FeatureGroup.LIQUIDITY, "microprice", microprice, available=microprice is not None, source_refs=(rel,), weight_hint=0.12),
+        _signal(FeatureGroup.LIQUIDITY, "microprice_bias_bps", microprice_bias_bps, available=microprice_bias_bps is not None, source_refs=(rel,), weight_hint=0.14),
+        _signal(FeatureGroup.LIQUIDITY, "liquidity_replenishment_score", replenishment, available=replenishment is not None, source_refs=(rel,), weight_hint=0.16),
+        _signal(FeatureGroup.LIQUIDITY, "liquidity_disappearance_score", disappearance, available=disappearance is not None, source_refs=(rel,), weight_hint=0.16),
+        _signal(FeatureGroup.LIQUIDITY, "absorption_score", absorption, available=absorption is not None, source_refs=(rel,), weight_hint=0.18),
+        _signal(FeatureGroup.LIQUIDITY, "spread_change_bps_1m", spread_change_1m, available=spread_change_1m is not None, source_refs=(rel,), weight_hint=0.10),
     )
 
 
 def _orderflow_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[FeatureSignal, ...]:
     data = snapshot.nowcast.executions.data
+    rel = snapshot.nowcast.executions.relative_path
     trade_count = _as_int(data.get("trade_count") or data.get("execution_count"))
     ws_state = data.get("ws_state") or data.get("state")
     live = str(ws_state).upper() == "LIVE" if ws_state is not None else False
+    buy_volume = _first_float(data, "aggressive_buy_volume", "buy_aggressor_volume", "taker_buy_volume")
+    sell_volume = _first_float(data, "aggressive_sell_volume", "sell_aggressor_volume", "taker_sell_volume")
+    volume_total = (buy_volume or 0.0) + (sell_volume or 0.0) if buy_volume is not None or sell_volume is not None else None
+    imbalance = (buy_volume - sell_volume) / volume_total if buy_volume is not None and sell_volume is not None and volume_total not in (None, 0.0) else None
+    cvd = _first_float(data, "cvd", "cumulative_volume_delta", "cvd_proxy")
+    large_trade_count = _as_int(data.get("large_trade_count") or data.get("large_execution_count"))
+    volume_acceleration = _first_float(data, "volume_acceleration", "trade_volume_acceleration")
     return (
-        _signal(FeatureGroup.ORDERFLOW, "execution_trade_count", trade_count, available=trade_count is not None, source_refs=(snapshot.nowcast.executions.relative_path,), weight_hint=0.50),
-        _signal(FeatureGroup.ORDERFLOW, "executions_ws_live", live, available=ws_state is not None, source_refs=(snapshot.nowcast.executions.relative_path,), weight_hint=0.50),
+        _signal(FeatureGroup.ORDERFLOW, "execution_trade_count", trade_count, available=trade_count is not None, source_refs=(rel,), weight_hint=0.22),
+        _signal(FeatureGroup.ORDERFLOW, "executions_ws_live", live, available=ws_state is not None, source_refs=(rel,), weight_hint=0.18),
+        _signal(FeatureGroup.ORDERFLOW, "aggressive_buy_volume", buy_volume, available=buy_volume is not None, source_refs=(rel,), weight_hint=0.18),
+        _signal(FeatureGroup.ORDERFLOW, "aggressive_sell_volume", sell_volume, available=sell_volume is not None, source_refs=(rel,), weight_hint=0.18),
+        _signal(FeatureGroup.ORDERFLOW, "orderflow_imbalance", round(imbalance, 4) if imbalance is not None else None, available=imbalance is not None, source_refs=(rel,), weight_hint=0.20),
+        _signal(FeatureGroup.ORDERFLOW, "cvd", cvd, available=cvd is not None, source_refs=(rel,), weight_hint=0.16),
+        _signal(FeatureGroup.ORDERFLOW, "large_trade_count", large_trade_count, available=large_trade_count is not None, source_refs=(rel,), weight_hint=0.10),
+        _signal(FeatureGroup.ORDERFLOW, "volume_acceleration", volume_acceleration, available=volume_acceleration is not None, source_refs=(rel,), weight_hint=0.12),
     )
 
 
@@ -129,14 +181,31 @@ def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[Feat
     scores_by_horizon = _numeric_by_horizon_sec(records, "score")
     signal_strength_by_horizon = _numeric_by_horizon_sec(records, "estimated_signal_strength_percent", values_field="estimated_signal_strength_percent")
     reference_hit_rate_by_horizon = _numeric_by_horizon_sec(records, "estimated_reference_hit_rate_percent", values_field="estimated_reference_hit_rate_percent")
+    values = _record_values(latest)
+    range_high = _first_float(values, "range_high", "recent_range_high", "resistance")
+    range_low = _first_float(values, "range_low", "recent_range_low", "support")
+    vwap = _first_float(values, "vwap", "session_vwap")
+    ma_slope = _first_float(values, "ma_slope", "moving_average_slope")
+    price_position = _first_float(values, "price_position_in_range", "range_position")
+    break_hold_count = _as_int(values.get("break_hold_count") or values.get("confirmed_break_hold_count"))
+    false_break_count = _as_int(values.get("false_break_count") or values.get("failed_break_count"))
+    technical_available = any(value is not None for value in (range_high, range_low, vwap, ma_slope, price_position, break_hold_count, false_break_count))
     return (
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_record_count", len(records), available=True, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.18),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_horizons_sec", list(horizons), available=bool(horizons), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.18),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label", label, available=label is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.16),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_labels_by_horizon_sec", labels_by_horizon, available=bool(labels_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.16),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_scores_by_horizon_sec", scores_by_horizon, available=bool(scores_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.12),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_signal_strength_percent_by_horizon_sec", signal_strength_by_horizon, available=bool(signal_strength_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.10),
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_reference_hit_rate_percent_by_horizon_sec", reference_hit_rate_by_horizon, available=bool(reference_hit_rate_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.10),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_record_count", len(records), available=True, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.12),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_horizons_sec", list(horizons), available=bool(horizons), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.12),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label", label, available=label is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.12),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_labels_by_horizon_sec", labels_by_horizon, available=bool(labels_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.12),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_scores_by_horizon_sec", scores_by_horizon, available=bool(scores_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_signal_strength_percent_by_horizon_sec", signal_strength_by_horizon, available=bool(signal_strength_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_reference_hit_rate_percent_by_horizon_sec", reference_hit_rate_by_horizon, available=bool(reference_hit_rate_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "range_high", range_high, available=range_high is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.10),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "range_low", range_low, available=range_low is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.10),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "vwap", vwap, available=vwap is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.10),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "ma_slope", ma_slope, available=ma_slope is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "price_position_in_range", price_position, available=price_position is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "break_hold_count", break_hold_count, available=break_hold_count is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "false_break_count", false_break_count, available=false_break_count is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "confirmed_technical_structure_available", technical_available, available=True, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
     )
 
 
@@ -144,8 +213,16 @@ def _volatility_signals(snapshot: MarketRegimeSourceSnapshot) -> Tuple[FeatureSi
     latest = _latest_market_regime_record(snapshot)
     values = _record_values(latest)
     volatility_state = values.get("volatility_state")
+    atr = _first_float(values, "atr", "average_true_range")
+    realized_volatility = _first_float(values, "realized_volatility", "rv")
+    compression_score = _first_float(values, "volatility_compression_score", "atr_compression_score")
+    expansion_score = _first_float(values, "volatility_expansion_score", "atr_expansion_score")
     return (
-        _signal(FeatureGroup.VOLATILITY, "volatility_state", volatility_state, available=volatility_state is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=1.0),
+        _signal(FeatureGroup.VOLATILITY, "volatility_state", volatility_state, available=volatility_state is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.40),
+        _signal(FeatureGroup.VOLATILITY, "atr", atr, available=atr is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.20),
+        _signal(FeatureGroup.VOLATILITY, "realized_volatility", realized_volatility, available=realized_volatility is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.20),
+        _signal(FeatureGroup.VOLATILITY, "volatility_compression_score", compression_score, available=compression_score is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.10),
+        _signal(FeatureGroup.VOLATILITY, "volatility_expansion_score", expansion_score, available=expansion_score is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.10),
     )
 
 
