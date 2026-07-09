@@ -35,6 +35,13 @@ from .parameter_sets import (
 from .prearmed_readiness import PredictionPreArmedReadinessSnapshot, build_prediction_prearmed_readiness_snapshot
 from .replay_validation import ReplayValidationResult, ReplayValidationScenario, build_replay_validation_result
 from .rule_based_v0 import build_rule_based_v0_outputs
+from .scenario_guidance import (
+    PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH,
+    PREDICTION_PARENT_SCENARIO_GUIDANCE_ARTIFACT_VERSION,
+    build_parent_scenario_guidance_latest_read_model_artifact,
+    parent_scenario_guidance_latest_read_model_relpath,
+    validate_parent_scenario_guidance_latest_read_model_artifact,
+)
 from .scenario_parts import (
     PREDICTION_FAMILY_SCENARIO_PART_CONTRACT_VERSION,
     PREDICTION_PARENT_SCENARIO_GUIDANCE_CONTRACT_VERSION,
@@ -160,6 +167,8 @@ __all__ = [
     "PredictionOutput",
     "PredictionParameterSetBase",
     "PredictionParameterSetStatus",
+    "PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH",
+    "PREDICTION_PARENT_SCENARIO_GUIDANCE_ARTIFACT_VERSION",
     "PREDICTION_FAMILY_SCENARIO_PART_CONTRACT_VERSION",
     "PREDICTION_PARENT_SCENARIO_GUIDANCE_CONTRACT_VERSION",
     "PredictionPreArmedReadinessSnapshot",
@@ -206,6 +215,9 @@ __all__ = [
     "build_prediction_warroom_display_packet",
     "build_replay_validation_result",
     "build_rule_based_v0_outputs",
+    "build_parent_scenario_guidance_latest_read_model_artifact",
+    "validate_parent_scenario_guidance_latest_read_model_artifact",
+    "parent_scenario_guidance_latest_read_model_relpath",
     "build_prediction_family_scenario_part",
     "build_parent_scenario_guidance_read_model",
     "validate_prediction_family_scenario_part",
