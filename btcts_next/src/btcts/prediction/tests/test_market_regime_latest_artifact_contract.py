@@ -122,7 +122,13 @@ def test_cp3_latest_and_read_model_and_status_are_non_executing() -> None:
         run_id="market_regime_20260708T083000Z_test",
         horizons=[{"horizon": "15分後", "drivers": ["price_in_range"], "conflicts": ["sell_pressure_conflict"], "invalidation": ["range_low_break_with_volume"]}],
     )
-    status = build_market_regime_status_artifact(generated_at=packet.generated_at, status="latest_ready", latest_run_id="market_regime_20260708T083000Z_test")
+    status = build_market_regime_status_artifact(
+        generated_at=packet.generated_at,
+        status="latest_ready",
+        latest_run_id="market_regime_20260708T083000Z_test",
+        trace_ledger_available=True,
+        outcome_resolver_available=True,
+    )
     manifest = build_market_regime_run_manifest_artifact(generated_at=packet.generated_at, run_id="market_regime_20260708T083000Z_test")
 
     for artifact in (latest, read_model, status, manifest):
@@ -136,4 +142,7 @@ def test_cp3_latest_and_read_model_and_status_are_non_executing() -> None:
     assert latest["refs"]["latest_cards_json"] == "prediction/market_regime/latest_cards.json"
     assert "not win rate" in read_model["explanation_note"]
     assert status["latest_cards_available"] is True
+    assert status["latest_read_model_available"] is True
+    assert status["trace_ledger_available"] is True
+    assert status["outcome_resolver_available"] is True
     assert manifest["refs"]["status_json"] == "prediction/market_regime/status.json"

@@ -281,13 +281,15 @@ def build_market_regime_latest_read_model_artifact(
     ).to_dict()
 
 
-def build_market_regime_status_artifact(*, generated_at: str, status: str, latest_run_id: str = "") -> Dict[str, Any]:
+def build_market_regime_status_artifact(*, generated_at: str, status: str, latest_run_id: str = "", trace_ledger_available: bool = False, outcome_resolver_available: bool = False) -> Dict[str, Any]:
     return MarketRegimeStatusArtifact(
         generated_at=generated_at,
         status=status,
         latest_run_id=latest_run_id,
         latest_cards_available=bool(latest_run_id),
         latest_read_model_available=bool(latest_run_id),
+        trace_ledger_available=bool(trace_ledger_available),
+        outcome_resolver_available=bool(outcome_resolver_available),
     ).to_dict()
 
 

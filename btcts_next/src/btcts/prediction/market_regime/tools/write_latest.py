@@ -186,8 +186,13 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         conflict_summary=summaries["conflict_summary"],
         invalidation_summary=summaries["invalidation_summary"],
     )
-    status = build_market_regime_status_artifact(generated_at=generated_at, status="latest_ready", latest_run_id=effective_run_id)
-    status["trace_ledger_available"] = True
+    status = build_market_regime_status_artifact(
+        generated_at=generated_at,
+        status="latest_ready",
+        latest_run_id=effective_run_id,
+        trace_ledger_available=True,
+        outcome_resolver_available=True,
+    )
     manifest = build_market_regime_run_manifest_artifact(generated_at=generated_at, run_id=effective_run_id, refs=_refs(effective_run_id, trace_part_jsonl=trace_part_jsonl))
     return {
         "run_id": effective_run_id,
