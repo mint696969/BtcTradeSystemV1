@@ -12,6 +12,7 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.prediction.market_regime.tools.resolve_outcomes import (  # noqa: E402
+    _prediction_from_trace_horizon,
     build_market_regime_trace_outcome_once_plan,
     resolve_market_regime_trace_outcomes_once,
 )
@@ -163,6 +164,32 @@ def test_cp18_trace_outcome_identity_keeps_parameter_sets_distinct(tmp_path: Pat
     assert second["duplicate_outcome_count"] == 2
 
 
+
+
+def test_cp18_trace_generated_at_prefers_trace_row_when_summary_is_not_mapping() -> None:
+    prediction = _prediction_from_trace_horizon(
+        {
+            "run_id": "trace_run_generated_at_guard",
+            "generated_at": "2026-07-08T12:00:00Z",
+            "prediction_summary": "not-a-mapping",
+            "active_parameter_set_id": "market_regime_engine_parameter_set.v1",
+        },
+        {
+            "horizon": "5分後",
+            "horizon_key": "300s",
+            "horizon_sec": 300,
+            "regime_code": "RANGE",
+            "confidence_percent": 70,
+            "evidence_quality": "PARTIAL",
+            "freshness_state": "LIVE",
+            "parameter_set_id": "market_regime_engine_parameter_set.v1",
+        },
+    )
+
+    assert prediction["generated_at"] == "2026-07-08T12:00:00Z"
+    assert prediction["prediction_id"] == "trace_run_generated_at_guard:300s"
+
+
 def test_cp18_trace_ledger_tool_source_is_artifact_only() -> None:
     path = Path(__file__).resolve().parents[1] / "market_regime/tools/resolve_outcomes.py"
     text = path.read_text(encoding="utf-8")
@@ -174,6 +201,8 @@ def test_cp18_trace_ledger_tool_source_is_artifact_only() -> None:
         "prediction/market_regime/ledgers",
         "reverse=True",
         "for raw in reversed(raw_lines)",
+        "summary = trace_row.get",
+        "generated_at = str(trace_row.get",
     ]
     assert [token for token in required if token not in text] == []
     forbidden = [

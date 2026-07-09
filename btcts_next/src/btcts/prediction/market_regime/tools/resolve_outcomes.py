@@ -334,7 +334,8 @@ def _iter_trace_rows(root: str | Path, *, max_rows: int = 5000) -> list[dict[str
 
 def _prediction_from_trace_horizon(trace_row: Mapping[str, Any], horizon: Mapping[str, Any]) -> dict[str, Any]:
     run_id = str(trace_row.get("run_id") or "")
-    generated_at = str(trace_row.get("generated_at") or trace_row.get("prediction_summary", {}).get("generated_at") if isinstance(trace_row.get("prediction_summary"), Mapping) else "")
+    summary = trace_row.get("prediction_summary") if isinstance(trace_row.get("prediction_summary"), Mapping) else {}
+    generated_at = str(trace_row.get("generated_at") or summary.get("generated_at") or "")
     horizon_sec = int(horizon.get("horizon_sec") or 0)
     horizon_key = str(horizon.get("horizon_key") or ("current" if horizon_sec == 0 else f"{horizon_sec}s"))
     return {
