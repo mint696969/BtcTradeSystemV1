@@ -98,6 +98,28 @@ def test_cp18_trace_ledger_once_is_duplicate_safe(tmp_path: Path) -> None:
 
 
 
+
+
+def test_cp18_trace_ledger_max_rows_prefers_latest_trace_rows(tmp_path: Path) -> None:
+    _write_latest_cards(tmp_path)
+    old_part = tmp_path / "prediction/market_regime/ledgers/date=2026-07-08/hour=11/part-00001.jsonl"
+    new_part = tmp_path / "prediction/market_regime/ledgers/date=2026-07-08/hour=12/part-00001.jsonl"
+    old_part.parent.mkdir(parents=True, exist_ok=True)
+    new_part.parent.mkdir(parents=True, exist_ok=True)
+    old_part.write_text(json.dumps(_trace_row("trace_run_old", "2026-07-08T11:00:00Z"), ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    new_part.write_text(json.dumps(_trace_row("trace_run_new", "2026-07-08T12:00:00Z"), ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+
+    result = build_market_regime_trace_outcome_once_plan(
+        hot_root=tmp_path,
+        resolved_at="2026-07-08T12:20:00Z",
+        max_trace_rows=1,
+    )
+
+    assert result["trace_row_count"] == 1
+    assert result["trace_prediction_count"] == 2
+    assert {row["run_id"] for row in result["candidate_rows"]} == {"trace_run_new"}
+
+
 def test_cp18_trace_outcome_identity_keeps_parameter_sets_distinct(tmp_path: Path) -> None:
     _write_latest_cards(tmp_path)
     part = tmp_path / "prediction/market_regime/ledgers/date=2026-07-08/hour=12/part-00001.jsonl"
@@ -150,6 +172,8 @@ def test_cp18_trace_ledger_tool_source_is_artifact_only() -> None:
         "build_market_regime_trace_outcome_once_plan",
         "resolve_market_regime_trace_outcomes_once",
         "prediction/market_regime/ledgers",
+        "reverse=True",
+        "for raw in reversed(raw_lines)",
     ]
     assert [token for token in required if token not in text] == []
     forbidden = [

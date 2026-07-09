@@ -307,25 +307,28 @@ def _trace_part_paths(root: str | Path) -> list[Path]:
     base = Path(root) / "prediction/market_regime/ledgers"
     if not base.exists():
         return []
-    return sorted(base.glob("date=*/hour=*/part-00001.jsonl"))
+    return sorted(base.glob("date=*/hour=*/part-00001.jsonl"), reverse=True)
 
 
 def _iter_trace_rows(root: str | Path, *, max_rows: int = 5000) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     limit = max(1, int(max_rows))
     for path in _trace_part_paths(root):
-        with path.open("r", encoding="utf-8") as handle:
-            for raw in handle:
-                if not raw.strip():
-                    continue
-                try:
-                    payload = json.loads(raw)
-                except Exception:
-                    continue
-                if isinstance(payload, Mapping) and payload.get("artifact_kind") == "trace_row":
-                    rows.append(dict(payload))
-                    if len(rows) >= limit:
-                        return rows
+        try:
+            raw_lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for raw in reversed(raw_lines):
+            if not raw.strip():
+                continue
+            try:
+                payload = json.loads(raw)
+            except Exception:
+                continue
+            if isinstance(payload, Mapping) and payload.get("artifact_kind") == "trace_row":
+                rows.append(dict(payload))
+                if len(rows) >= limit:
+                    return rows
     return rows
 
 
