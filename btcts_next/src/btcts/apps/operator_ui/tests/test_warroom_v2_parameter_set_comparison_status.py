@@ -126,7 +126,12 @@ def test_parameter_set_comparison_status_caption_and_result_are_read_only(monkey
     assert result["classifier_invoked"] is False
     assert result["broker_action_allowed"] is False
     assert shell_calls and isinstance(shell_calls[0].get("cards"), list)
-    assert any("パラメータ比較" in caption and "ready=False" in caption and "promotions=0" in caption for caption in fake_st.captions)
+    assert any("パラメータ比較" in caption and "比較未準備" in caption and "ready=False" in caption and "promotions=0" in caption for caption in fake_st.captions)
+    assert fake_st.tables
+    detail_rows = fake_st.tables[-1]
+    assert {str(row.get("項目")) for row in detail_rows} >= {"状態", "信頼サンプル", "参考サンプル", "昇格候補", "blockers"}
+    assert any(row.get("項目") == "昇格候補" and row.get("値") == "0" for row in detail_rows)
+    assert any(row.get("項目") == "状態" and "比較未準備" in str(row.get("値")) for row in detail_rows)
 
 
 def test_missing_parameter_set_comparison_read_model_is_safe(monkeypatch, tmp_path: Path) -> None:
@@ -148,6 +153,8 @@ def test_parameter_set_comparison_status_source_has_no_execution_or_write_path()
         "RT_MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_RELATIVE_PATH",
         "_read_market_regime_parameter_set_comparison_read_model_artifact",
         "_render_market_regime_parameter_set_comparison_status",
+        "_render_parameter_set_comparison_detail_table",
+        "_parameter_set_comparison_display_state",
         "market_regime_parameter_set_comparison_ready",
         "market_regime_parameter_set_comparison_promotion_candidate_count",
     ]

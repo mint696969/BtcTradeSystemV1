@@ -327,22 +327,79 @@ def _render_market_regime_calibration_status(calibration_packet: Mapping[str, An
     )
     return dict(calibration_packet)
 
+def _parameter_set_comparison_display_state(comparison_packet: Mapping[str, Any]) -> str:
+    if comparison_packet.get("comparison_ready"):
+        return "比較可能"
+    blockers = _as_text_list(comparison_packet.get("comparison_blockers"))
+    if "fewer_than_two_parameter_sets_with_minimum_trusted_samples" in blockers:
+        return "比較未準備（信頼済みparameter setが1系統のみ）"
+    if blockers:
+        return "比較未準備"
+    return "比較待ち"
+
+
+def _render_parameter_set_comparison_detail_table(comparison_packet: Mapping[str, Any], st_api: Any) -> None:
+    blockers = _as_text_list(comparison_packet.get("comparison_blockers"))
+    rows = [
+        {
+            "項目": "状態",
+            "値": _parameter_set_comparison_display_state(comparison_packet),
+            "補足": f"ready={comparison_packet.get('comparison_ready')}",
+        },
+        {
+            "項目": "信頼サンプル",
+            "値": str(comparison_packet.get("trusted_row_count")),
+            "補足": "source=candle_summary",
+        },
+        {
+            "項目": "参考サンプル",
+            "値": str(comparison_packet.get("reference_only_row_count")),
+            "補足": "source=latest_cards_current / reference-only",
+        },
+        {
+            "項目": "比較可能parameter set",
+            "値": f"{comparison_packet.get('trusted_parameter_set_count')}/{comparison_packet.get('comparable_parameter_set_count')}",
+            "補足": "2系統以上で比較準備完了",
+        },
+        {
+            "項目": "昇格候補",
+            "値": str(comparison_packet.get("promotion_candidate_count")),
+            "補足": "auto promotion disabled",
+        },
+        {
+            "項目": "推奨",
+            "値": str(comparison_packet.get("recommendation_count")),
+            "補足": "human/GPT review only",
+        },
+        {
+            "項目": "blockers",
+            "値": _short_list(blockers, limit=3) or "-",
+            "補足": "display_only=true",
+        },
+    ]
+    with st_api.expander("パラメータ比較の詳細 / read-only", expanded=False):
+        st_api.dataframe(rows, width="stretch")
+
+
 def _render_market_regime_parameter_set_comparison_status(comparison_packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
     if not comparison_packet.get("artifact_used"):
         st_api.caption(f"パラメータ比較: {comparison_packet.get('artifact_read_error') or 'parameter_set_comparison_read_model_unavailable'} / display_only=true")
         return dict(comparison_packet)
     blockers = _as_text_list(comparison_packet.get("comparison_blockers"))
+    state = _parameter_set_comparison_display_state(comparison_packet)
     st_api.caption(
         "パラメータ比較: "
+        f"{state} / "
         f"ready={comparison_packet.get('comparison_ready')} / "
-        f"trusted_rows={comparison_packet.get('trusted_row_count')} / "
-        f"reference_rows={comparison_packet.get('reference_only_row_count')} / "
+        f"trusted={comparison_packet.get('trusted_row_count')} / "
+        f"reference={comparison_packet.get('reference_only_row_count')} / "
         f"sets={comparison_packet.get('trusted_parameter_set_count')}/{comparison_packet.get('comparable_parameter_set_count')} / "
         f"promotions={comparison_packet.get('promotion_candidate_count')} / "
         f"recommendations={comparison_packet.get('recommendation_count')} / "
         f"blockers={_short_list(blockers, limit=3) or '-'} / "
         f"comparison_path={comparison_packet.get('artifact_path') or '-'} / display_only=true"
     )
+    _render_parameter_set_comparison_detail_table(comparison_packet, st_api)
     return dict(comparison_packet)
 
 
