@@ -11,6 +11,7 @@ from ..horizon_policy import build_default_horizon_policy
 
 MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27z.v1"
 # MR_A1_STALE_SOURCE_GATE_2026_07_09
+# MR_A2_CURRENT_L4_CANDLE_FEATURES_2026_07_09
 
 
 
@@ -64,7 +65,11 @@ def _selected_forecast_metric(bundle: MarketRegimeFeatureBundle, name: str, sele
 
 def _selected_label_for_horizon(bundle: MarketRegimeFeatureBundle, horizon_sec: int) -> tuple[Any, int | None, str]:
     forecast_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "forecast_records_current_enough", True))
+    current_l4_candle_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "current_l4_candle_window_current_enough", False))
     if not forecast_current_enough:
+        candle_hint = _value(bundle, FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_regime_hint")
+        if current_l4_candle_current_enough and candle_hint and int(horizon_sec) <= 3600:
+            return candle_hint, None, "current_l4_candle_window_fallback"
         return None, None, "forecast_records_stale_blocked"
     labels = _labels_by_horizon(bundle)
     fallback = _value(bundle, FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label")
@@ -83,6 +88,8 @@ def _label_to_regime(label: Any, *, crossed_or_negative_spread: bool, source_sna
     normalized = str(label or "").lower()
     if normalized in ("range_candidate", "range", "neutral_range"):
         return MarketRegimeCode.RANGE
+    if normalized in ("low_vol_compression", "low_vol", "compression"):
+        return MarketRegimeCode.LOW_VOL_COMPRESSION
     if normalized in ("trend_candidate", "up_trend", "trend_up", "long_bias"):
         return MarketRegimeCode.UP_TREND
     if normalized in ("down_trend", "trend_down", "short_bias"):
@@ -127,8 +134,13 @@ def _evidence_quality(
     if not bundle.source_snapshot_ok:
         return EvidenceQuality.MISSING, "source_snapshot_missing"
     forecast_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "forecast_records_current_enough", True))
-    if not forecast_current_enough:
+    current_l4_candle_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "current_l4_candle_window_current_enough", False))
+    if not forecast_current_enough and not current_l4_candle_current_enough:
         return EvidenceQuality.WEAK, "forecast_records_stale_currentness_gate"
+    if not forecast_current_enough and current_l4_candle_current_enough:
+        if crossed_or_negative_spread:
+            return EvidenceQuality.WEAK, "current_l4_fallback_uncalibrated_with_crossed_or_negative_spread"
+        return EvidenceQuality.PARTIAL, "current_l4_fallback_uncalibrated_partial"
     available_count = bundle.available_signal_count()
     source_score = _float(bundle, FeatureGroup.SOURCE_QUALITY, "source_quality_score", 0.0)
     if forecast_score is not None or signal_strength_percent is not None or reference_hit_rate_percent is not None:
@@ -166,6 +178,7 @@ def _confidence_percent(
     if regime == MarketRegimeCode.UNKNOWN or not bundle.source_snapshot_ok:
         return 15
     forecast_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "forecast_records_current_enough", True))
+    current_l4_candle_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "current_l4_candle_window_current_enough", False))
     source_score = _float(bundle, FeatureGroup.SOURCE_QUALITY, "source_quality_score", 0.0)
     available_count = min(bundle.available_signal_count(), 12)
     if forecast_score is None and signal_strength_percent is None and reference_hit_rate_percent is None:
@@ -197,7 +210,9 @@ def _confidence_percent(
         confidence = base_by_regime + int(source_score * 9) + int(available_count / 12 * 5) + score_component + strength_component + reference_component
     if crossed_or_negative_spread:
         confidence -= 10
-    if not forecast_current_enough:
+    if not forecast_current_enough and current_l4_candle_current_enough:
+        confidence = min(confidence, 65)
+    elif not forecast_current_enough and not current_l4_candle_current_enough:
         confidence = min(confidence, 35)
     return max(0, min(confidence, 99))
 
@@ -215,7 +230,10 @@ def _drivers(
     volatility_state = _value(bundle, FeatureGroup.VOLATILITY, "volatility_state")
     cross_venue = _value(bundle, FeatureGroup.CROSS_VENUE, "cross_venue_agreement")
     if selected_label:
-        drivers.append(f"forecast_label:{selected_label}")
+        if label_selection_reason == "current_l4_candle_window_fallback":
+            drivers.append(f"current_l4_candle_regime_hint:{selected_label}")
+        else:
+            drivers.append(f"forecast_label:{selected_label}")
     if selected_horizon_sec is not None:
         drivers.append(f"forecast_horizon_sec:{selected_horizon_sec}")
     drivers.append(f"forecast_label_selection:{label_selection_reason}")
@@ -235,9 +253,12 @@ def _warnings(bundle: MarketRegimeFeatureBundle, *, crossed_or_negative_spread: 
         warnings.append("negative_spread_seen")
         warnings.append("tactical_hint_forced_no_new_entry")
     forecast_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "forecast_records_current_enough", True))
+    current_l4_candle_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "current_l4_candle_window_current_enough", False))
     if not forecast_current_enough:
         warnings.append("forecast_records_stale")
         warnings.append("forecast_label_blocked_by_currentness_gate")
+        if current_l4_candle_current_enough:
+            warnings.append("current_l4_candle_window_fallback_used")
     if not bundle.source_snapshot_ok:
         warnings.append("source_snapshot_not_ok")
     return tuple(dict.fromkeys(warnings))
@@ -250,6 +271,7 @@ def _missing_sources(bundle: MarketRegimeFeatureBundle) -> Tuple[str, ...]:
 def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, generated_at: str) -> MarketRegimePredictionPacket:
     crossed_or_negative_spread = _bool(bundle, FeatureGroup.LIQUIDITY, "crossed_or_negative_spread")
     forecast_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "forecast_records_current_enough", True))
+    current_l4_candle_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "current_l4_candle_window_current_enough", False))
     warnings = _warnings(bundle, crossed_or_negative_spread=crossed_or_negative_spread)
     missing_sources = _missing_sources(bundle)
 
@@ -298,7 +320,7 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
                 regime_code=regime,
                 confidence_percent=confidence,
                 evidence_quality=evidence,
-                freshness_state=FreshnessState.LIVE if bundle.source_snapshot_ok and forecast_current_enough else (FreshnessState.STALE if bundle.source_snapshot_ok else FreshnessState.MISSING),
+                freshness_state=FreshnessState.LIVE if bundle.source_snapshot_ok and (forecast_current_enough or current_l4_candle_current_enough) else (FreshnessState.STALE if bundle.source_snapshot_ok else FreshnessState.MISSING),
                 tactical_hint=tactical_hint,
                 drivers=drivers,
                 warnings=warnings,
@@ -310,10 +332,16 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
                     "classifier_version": MARKET_REGIME_CLASSIFIER_VERSION,
                     "source_snapshot_ok": bundle.source_snapshot_ok,
                     "available_signal_count": bundle.available_signal_count(),
-                    "selected_forecast_label": str(selected_label or ""),
+                    # MR_A2_DIAGNOSTIC_LABEL_SOURCE_2026_07_09
+                    "selected_label": str(selected_label or ""),
+                    "selected_label_source": "current_l4_candle_window" if label_selection_reason == "current_l4_candle_window_fallback" else ("forecast_records" if selected_label else "none"),
+                    "selected_forecast_label": "" if label_selection_reason == "current_l4_candle_window_fallback" else str(selected_label or ""),
+                    "selected_l4_candle_regime_hint": str(selected_label or "") if label_selection_reason == "current_l4_candle_window_fallback" else "",
                     "selected_forecast_horizon_sec": selected_horizon_sec,
                     "forecast_records_current_enough": forecast_current_enough,
                     "forecast_records_currentness_gate_applied": not forecast_current_enough,
+                    "current_l4_candle_window_current_enough": current_l4_candle_current_enough,
+                    "current_l4_candle_window_fallback_used": label_selection_reason == "current_l4_candle_window_fallback",
                     "selected_forecast_score": forecast_score,
                     "selected_signal_strength_percent": signal_strength_percent,
                     "selected_reference_hit_rate_percent": reference_hit_rate_percent,

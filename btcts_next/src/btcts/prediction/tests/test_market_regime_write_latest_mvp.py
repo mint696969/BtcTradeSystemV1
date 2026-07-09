@@ -132,3 +132,16 @@ def test_mr_a1_write_latest_compact_summary_surfaces_stale_forecast_warning(tmp_
     first = artifacts["latest_read_model"]["horizons"][0]
     assert first["diagnostic_record"]["forecast_records_currentness_gate_applied"] is True
     assert first["freshness_state"] == "STALE"
+
+
+def test_mr_a2_latest_cards_source_refs_include_warroom_candles(tmp_path: Path) -> None:
+    _fixture_root(tmp_path)
+    artifacts = build_market_regime_latest_artifact_set(
+        hot_root=tmp_path,
+        generated_at="2026-07-08T09:12:00Z",
+        run_id="market_regime_source_refs_test",
+    )
+    refs = artifacts["latest_cards"]["source_refs"]
+    assert "warroom_candles" in refs
+    assert refs["warroom_candles"]["relpath"].endswith("timeframe=60s/closed.jsonl")
+    assert refs["warroom_candles"]["ok"] is False

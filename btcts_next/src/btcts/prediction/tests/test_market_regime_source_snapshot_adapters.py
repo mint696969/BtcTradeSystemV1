@@ -108,6 +108,8 @@ def test_q27h_snapshot_builder_composes_manifest_records_and_nowcast(tmp_path: P
     assert data["latest_prediction"]["ok"] is True
     assert data["forecast_records"]["market_regime_horizons_sec"] == [300, 21600]
     assert data["nowcast"]["ok"] is True
+    assert data["warroom_candles"]["ok"] is False
+    assert "warroom_candles_missing_or_unavailable" in data["warnings"]
     assert data["missing_sources"] == []
     assert data["safety"]["read_only"] is True
     for key in (

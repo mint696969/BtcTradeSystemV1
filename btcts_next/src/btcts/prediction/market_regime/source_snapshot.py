@@ -82,6 +82,45 @@ class ForecastRecordsSnapshot:
         }
 
 
+# MR_A2_CURRENT_L4_CANDLE_FEATURES_2026_07_09
+@dataclass(frozen=True)
+class WarroomCandleSourceSnapshot:
+    relative_path: str = "data/derived/warroom/candles/exchange=bitflyer/symbol=FX_BTC_JPY/timeframe=60s/closed.jsonl"
+    ok: bool = False
+    timeframe_sec: int = 60
+    closed_candle_count: int = 0
+    scanned_closed_lines: int = 0
+    closed_candles: Tuple[Mapping[str, Any], ...] = ()
+    forming: Mapping[str, Any] = field(default_factory=dict)
+    meta: Mapping[str, Any] = field(default_factory=dict)
+    latest_closed_time_utc: str = ""
+    latest_forming_time_utc: str = ""
+    latest_time_utc: str = ""
+    meta_relative_path: str = "data/derived/warroom/candles/exchange=bitflyer/symbol=FX_BTC_JPY/timeframe=60s/meta.json"
+    forming_relative_path: str = "data/derived/warroom/candles/exchange=bitflyer/symbol=FX_BTC_JPY/timeframe=60s/forming.json"
+    warnings: Tuple[str, ...] = ()
+    safety: SourceAdapterSafetyFlags = field(default_factory=SourceAdapterSafetyFlags)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "relative_path": self.relative_path,
+            "ok": self.ok,
+            "timeframe_sec": int(self.timeframe_sec),
+            "closed_candle_count": int(self.closed_candle_count),
+            "scanned_closed_lines": int(self.scanned_closed_lines),
+            "closed_candles": [dict(row) for row in self.closed_candles],
+            "forming": dict(self.forming),
+            "meta": dict(self.meta),
+            "latest_closed_time_utc": self.latest_closed_time_utc,
+            "latest_forming_time_utc": self.latest_forming_time_utc,
+            "latest_time_utc": self.latest_time_utc,
+            "meta_relative_path": self.meta_relative_path,
+            "forming_relative_path": self.forming_relative_path,
+            "warnings": list(self.warnings),
+            "safety": self.safety.to_dict(),
+        }
+
+
 @dataclass(frozen=True)
 class NowcastSourceSnapshot:
     market_state: JsonSourceArtifact
@@ -112,6 +151,7 @@ class MarketRegimeSourceSnapshot:
     latest_prediction: JsonSourceArtifact
     forecast_records: ForecastRecordsSnapshot
     nowcast: NowcastSourceSnapshot
+    warroom_candles: WarroomCandleSourceSnapshot = field(default_factory=WarroomCandleSourceSnapshot)
     missing_sources: Tuple[str, ...] = ()
     warnings: Tuple[str, ...] = ()
     logic_version: str = MARKET_REGIME_SOURCE_SNAPSHOT_VERSION
@@ -130,6 +170,7 @@ class MarketRegimeSourceSnapshot:
             "latest_prediction": self.latest_prediction.to_dict(),
             "forecast_records": self.forecast_records.to_dict(),
             "nowcast": self.nowcast.to_dict(),
+            "warroom_candles": self.warroom_candles.to_dict(),
             "missing_sources": list(self.missing_sources),
             "warnings": list(self.warnings),
             "safety": self.safety.to_dict(),

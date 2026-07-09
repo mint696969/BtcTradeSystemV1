@@ -9,10 +9,14 @@ from typing import Any, Mapping, Tuple
 from ..contracts import FeatureGroup, FreshnessState, SourceCoverage
 from ..source_snapshot import MarketRegimeSourceSnapshot
 from .feature_bundle import FeatureSignal, MarketRegimeFeatureBundle
+from .current_l4_candle_window import current_l4_candle_regime_hint, current_l4_candle_rows, summarize_current_l4_candle_rows
 
 
 # MR_A1_STALE_SOURCE_GATE_2026_07_09
 FORECAST_RECORDS_LIVE_MAX_AGE_SEC = 6 * 60 * 60
+# MR_A2_CURRENT_L4_CANDLE_FEATURES_2026_07_09
+CURRENT_L4_CANDLE_WINDOW_LIVE_MAX_AGE_SEC = 15 * 60
+CURRENT_L4_CANDLE_WINDOW_FUTURE_TOLERANCE_SEC = 5 * 60
 
 
 def _parse_utc_ts(value: Any) -> datetime | None:
@@ -66,6 +70,25 @@ def _forecast_records_currentness(snapshot: MarketRegimeSourceSnapshot, *, gener
     if age > FORECAST_RECORDS_LIVE_MAX_AGE_SEC:
         warnings.append("forecast_records_stale")
         warnings.append(f"forecast_records_age_sec:{int(age)}")
+        return False, age, source_ts, tuple(warnings)
+    return True, age, source_ts, ()
+
+
+def _current_l4_candle_currentness(snapshot: MarketRegimeSourceSnapshot, *, generated_at: str) -> tuple[bool, float | None, str | None, tuple[str, ...]]:
+    source_ts = str(getattr(snapshot.warroom_candles, "latest_time_utc", "") or getattr(snapshot.warroom_candles, "latest_closed_time_utc", "") or "")
+    age = _age_sec(generated_at, source_ts)
+    warnings: list[str] = []
+    if not snapshot.warroom_candles.ok:
+        return False, age, source_ts, ("current_l4_candle_window_not_ok",)
+    if age is None:
+        return False, age, source_ts, ("current_l4_candle_window_generated_at_missing",)
+    if age < -CURRENT_L4_CANDLE_WINDOW_FUTURE_TOLERANCE_SEC:
+        warnings.append("current_l4_candle_window_from_future")
+        warnings.append(f"current_l4_candle_window_age_sec:{int(age)}")
+        return False, age, source_ts, tuple(warnings)
+    if age > CURRENT_L4_CANDLE_WINDOW_LIVE_MAX_AGE_SEC:
+        warnings.append("current_l4_candle_window_stale")
+        warnings.append(f"current_l4_candle_window_age_sec:{int(age)}")
         return False, age, source_ts, tuple(warnings)
     return True, age, source_ts, ()
 
@@ -126,16 +149,20 @@ def _source_quality_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_a
     refs = ("latest_manifest", "forecast_records", "collector_market_state", "collector_health")
     missing_count = len(snapshot.missing_sources)
     forecast_current_enough, forecast_age_sec, forecast_source_ts, currentness_warnings = _forecast_records_currentness(snapshot, generated_at=generated_at)
-    currentness_penalty = 1 if not forecast_current_enough else 0
+    candle_current_enough, candle_age_sec, candle_source_ts, candle_warnings = _current_l4_candle_currentness(snapshot, generated_at=generated_at)
+    currentness_penalty = 1 if not forecast_current_enough and not candle_current_enough else 0
     ok_score = max(0.0, 1.0 - min(missing_count + currentness_penalty, 6) / 6.0)
-    combined_warnings = tuple(dict.fromkeys(tuple(snapshot.warnings) + currentness_warnings))
+    combined_warnings = tuple(dict.fromkeys(tuple(snapshot.warnings) + currentness_warnings + candle_warnings))
     return (
-        _signal(FeatureGroup.SOURCE_QUALITY, "source_snapshot_ok", bool(snapshot.ok), available=True, source_refs=refs, weight_hint=0.20),
-        _signal(FeatureGroup.SOURCE_QUALITY, "missing_source_count", missing_count, available=True, source_refs=refs, warnings=tuple(snapshot.missing_sources), weight_hint=0.20),
-        _signal(FeatureGroup.SOURCE_QUALITY, "forecast_records_current_enough", forecast_current_enough, available=True, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.20),
-        _signal(FeatureGroup.SOURCE_QUALITY, "forecast_records_age_sec", int(forecast_age_sec) if forecast_age_sec is not None else None, available=forecast_age_sec is not None, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.10),
-        _signal(FeatureGroup.SOURCE_QUALITY, "forecast_records_generated_at", forecast_source_ts, available=forecast_source_ts is not None, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.05),
-        _signal(FeatureGroup.SOURCE_QUALITY, "source_quality_score", round(ok_score, 4), available=True, source_refs=refs, warnings=combined_warnings, weight_hint=0.25),
+        _signal(FeatureGroup.SOURCE_QUALITY, "source_snapshot_ok", bool(snapshot.ok), available=True, source_refs=refs, weight_hint=0.16),
+        _signal(FeatureGroup.SOURCE_QUALITY, "missing_source_count", missing_count, available=True, source_refs=refs, warnings=tuple(snapshot.missing_sources), weight_hint=0.16),
+        _signal(FeatureGroup.SOURCE_QUALITY, "forecast_records_current_enough", forecast_current_enough, available=True, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.16),
+        _signal(FeatureGroup.SOURCE_QUALITY, "forecast_records_age_sec", int(forecast_age_sec) if forecast_age_sec is not None else None, available=forecast_age_sec is not None, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.08),
+        _signal(FeatureGroup.SOURCE_QUALITY, "forecast_records_generated_at", forecast_source_ts, available=forecast_source_ts is not None, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.04),
+        _signal(FeatureGroup.SOURCE_QUALITY, "current_l4_candle_window_current_enough", candle_current_enough, available=True, source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.16),
+        _signal(FeatureGroup.SOURCE_QUALITY, "current_l4_candle_window_age_sec", int(candle_age_sec) if candle_age_sec is not None else None, available=candle_age_sec is not None, source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.08),
+        _signal(FeatureGroup.SOURCE_QUALITY, "current_l4_candle_window_generated_at", candle_source_ts, available=bool(candle_source_ts), source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.04),
+        _signal(FeatureGroup.SOURCE_QUALITY, "source_quality_score", round(ok_score, 4), available=True, source_refs=refs + (snapshot.warroom_candles.relative_path,), warnings=combined_warnings, weight_hint=0.12),
     )
 
 
@@ -249,6 +276,10 @@ def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_
     signal_strength_by_horizon = _numeric_by_horizon_sec(records, "estimated_signal_strength_percent", values_field="estimated_signal_strength_percent") if forecast_current_enough else {}
     reference_hit_rate_by_horizon = _numeric_by_horizon_sec(records, "estimated_reference_hit_rate_percent", values_field="estimated_reference_hit_rate_percent") if forecast_current_enough else {}
     values = _record_values(latest) if forecast_current_enough else {}
+    candle_rows = current_l4_candle_rows(snapshot)
+    candle_current_enough, _, _, candle_warnings = _current_l4_candle_currentness(snapshot, generated_at=generated_at)
+    candle_summary = summarize_current_l4_candle_rows(candle_rows) if candle_current_enough else {"ok": False, "reason": "current_l4_candle_window_not_current"}
+    candle_regime_hint, candle_regime_reason = current_l4_candle_regime_hint(candle_summary)
     range_high = _first_float(values, "range_high", "recent_range_high", "resistance")
     range_low = _first_float(values, "range_low", "recent_range_low", "support")
     vwap = _first_float(values, "vwap", "session_vwap")
@@ -273,6 +304,15 @@ def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_
         _signal(FeatureGroup.PRICE_STRUCTURE, "break_hold_count", break_hold_count, available=break_hold_count is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
         _signal(FeatureGroup.PRICE_STRUCTURE, "false_break_count", false_break_count, available=false_break_count is not None, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
         _signal(FeatureGroup.PRICE_STRUCTURE, "confirmed_technical_structure_available", technical_available, available=True, source_refs=(snapshot.forecast_records.relative_path,), weight_hint=0.08),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_window_available", bool(candle_summary.get("ok")), available=True, source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.16),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_window_candle_count", int(candle_summary.get("candle_count") or 0), available=True, source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.08),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_window_first_ts", candle_summary.get("first_ts"), available=bool(candle_summary.get("first_ts")), source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.04),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_window_last_ts", candle_summary.get("last_ts"), available=bool(candle_summary.get("last_ts")), source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.04),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_net_change_bps", candle_summary.get("net_change_bps"), available=bool(candle_summary.get("ok")), source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.14),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_range_bps", candle_summary.get("range_bps"), available=bool(candle_summary.get("ok")), source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.12),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_close_position", candle_summary.get("close_position"), available=bool(candle_summary.get("ok")), source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.10),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_regime_hint", candle_regime_hint, available=candle_regime_hint != "UNKNOWN", source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.18),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_regime_reason", candle_regime_reason, available=True, source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.04),
     )
 
 
@@ -280,6 +320,9 @@ def _volatility_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_at: s
     forecast_current_enough, _, _, currentness_warnings = _forecast_records_currentness(snapshot, generated_at=generated_at)
     latest = _latest_market_regime_record(snapshot) if forecast_current_enough else None
     values = _record_values(latest) if forecast_current_enough else {}
+    candle_rows = current_l4_candle_rows(snapshot)
+    candle_current_enough, _, _, candle_warnings = _current_l4_candle_currentness(snapshot, generated_at=generated_at)
+    candle_summary = summarize_current_l4_candle_rows(candle_rows) if candle_current_enough else {"ok": False, "reason": "current_l4_candle_window_not_current"}
     volatility_state = values.get("volatility_state")
     atr = _first_float(values, "atr", "average_true_range")
     realized_volatility = _first_float(values, "realized_volatility", "rv")
@@ -291,6 +334,9 @@ def _volatility_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_at: s
         _signal(FeatureGroup.VOLATILITY, "realized_volatility", realized_volatility, available=realized_volatility is not None, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.20),
         _signal(FeatureGroup.VOLATILITY, "volatility_compression_score", compression_score, available=compression_score is not None, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.10),
         _signal(FeatureGroup.VOLATILITY, "volatility_expansion_score", expansion_score, available=expansion_score is not None, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.10),
+        _signal(FeatureGroup.VOLATILITY, "current_l4_candle_realized_volatility_bps", candle_summary.get("realized_volatility_bps"), available=bool(candle_summary.get("ok")), source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.30),
+        _signal(FeatureGroup.VOLATILITY, "current_l4_candle_average_range_bps", candle_summary.get("average_candle_range_bps"), available=bool(candle_summary.get("ok")), source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.25),
+        _signal(FeatureGroup.VOLATILITY, "current_l4_candle_window_range_bps", candle_summary.get("range_bps"), available=bool(candle_summary.get("ok")), source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.25),
     )
 
 
@@ -312,7 +358,18 @@ def _coverage_for_group(group: FeatureGroup, signals: Tuple[FeatureSignal, ...])
     available = any(signal.available for signal in group_signals)
     used = tuple(dict.fromkeys(ref for signal in group_signals for ref in signal.source_refs if ref))
     warnings = tuple(dict.fromkeys(warn for signal in group_signals for warn in signal.warnings if warn))
-    if "forecast_records_stale" in warnings or "forecast_records_from_future" in warnings or "forecast_records_generated_at_missing" in warnings:
+    has_current_l4_live = any(
+        signal.available
+        and signal.name.startswith("current_l4_candle_")
+        and bool(signal.value)
+        and "current_l4_candle_window_not_ok" not in signal.warnings
+        and "current_l4_candle_window_stale" not in signal.warnings
+        and "current_l4_candle_window_from_future" not in signal.warnings
+        for signal in group_signals
+    )
+    if has_current_l4_live:
+        freshness = FreshnessState.LIVE
+    elif "forecast_records_stale" in warnings or "forecast_records_from_future" in warnings or "forecast_records_generated_at_missing" in warnings:
         freshness = FreshnessState.STALE
     elif not available:
         freshness = FreshnessState.MISSING

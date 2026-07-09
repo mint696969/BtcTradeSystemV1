@@ -10,6 +10,7 @@ from .d_hot_latest_manifest import load_latest_manifest, resolve_forecast_record
 from .d_hot_nowcast import load_nowcast_source_snapshot
 from .forecast_records_reader import load_forecast_records_snapshot
 from .json_io import read_json_artifact
+from .warroom_candle_source_reader import load_warroom_candle_source_snapshot
 
 
 def build_market_regime_source_snapshot(hot_root: str | Path) -> MarketRegimeSourceSnapshot:
@@ -21,6 +22,7 @@ def build_market_regime_source_snapshot(hot_root: str | Path) -> MarketRegimeSou
     forecast_records_relative = resolve_forecast_records_relative_path(manifest_data)
     forecast_records = load_forecast_records_snapshot(root, forecast_records_relative)
     nowcast = load_nowcast_source_snapshot(root)
+    warroom_candles = load_warroom_candle_source_snapshot(root)
 
     missing: list[str] = []
     warnings: list[str] = []
@@ -40,6 +42,8 @@ def build_market_regime_source_snapshot(hot_root: str | Path) -> MarketRegimeSou
         warnings.append("collector_executions_missing")
     if not nowcast.daemon.ok:
         warnings.append("collector_daemon_missing")
+    if not warroom_candles.ok:
+        warnings.append("warroom_candles_missing_or_unavailable")
 
     return MarketRegimeSourceSnapshot(
         hot_root=str(root),
@@ -47,6 +51,7 @@ def build_market_regime_source_snapshot(hot_root: str | Path) -> MarketRegimeSou
         latest_prediction=latest_prediction,
         forecast_records=forecast_records,
         nowcast=nowcast,
+        warroom_candles=warroom_candles,
         missing_sources=tuple(dict.fromkeys(missing)),
-        warnings=tuple(dict.fromkeys(warnings + list(forecast_records.warnings))),
+        warnings=tuple(dict.fromkeys(warnings + list(forecast_records.warnings) + list(warroom_candles.warnings))),
     )

@@ -161,6 +161,8 @@ def build_market_regime_source_refs_from_snapshot(snapshot: object) -> Dict[str,
     market_state = getattr(nowcast, "market_state", None)
     health = getattr(nowcast, "health", None)
     executions = getattr(nowcast, "executions", None)
+    # MR_A2_SOURCE_REFS_WARROOM_CANDLES_2026_07_09
+    warroom_candles = getattr(snapshot, "warroom_candles", None)
     return {
         "latest_manifest": {"relpath": str(getattr(latest_manifest, "relative_path", "")), "ok": bool(getattr(latest_manifest, "ok", False))},
         "latest_prediction": {"relpath": str(getattr(latest_prediction, "relative_path", "")), "ok": bool(getattr(latest_prediction, "ok", False))},
@@ -173,4 +175,13 @@ def build_market_regime_source_refs_from_snapshot(snapshot: object) -> Dict[str,
         "collector_market_state": {"relpath": str(getattr(market_state, "relative_path", "")), "ok": bool(getattr(market_state, "ok", False))},
         "collector_health": {"relpath": str(getattr(health, "relative_path", "")), "ok": bool(getattr(health, "ok", False))},
         "collector_executions": {"relpath": str(getattr(executions, "relative_path", "")), "ok": bool(getattr(executions, "ok", False))},
+        "warroom_candles": {
+            "relpath": str(getattr(warroom_candles, "relative_path", "")),
+            "ok": bool(getattr(warroom_candles, "ok", False)),
+            "timeframe_sec": int(getattr(warroom_candles, "timeframe_sec", 0) or 0),
+            "closed_candle_count": int(getattr(warroom_candles, "closed_candle_count", 0) or 0),
+            "latest_closed_time_utc": str(getattr(warroom_candles, "latest_closed_time_utc", "") or ""),
+            "latest_forming_time_utc": str(getattr(warroom_candles, "latest_forming_time_utc", "") or ""),
+            "latest_time_utc": str(getattr(warroom_candles, "latest_time_utc", "") or ""),
+        },
     }

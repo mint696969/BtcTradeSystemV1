@@ -331,3 +331,70 @@ def test_mr_a1_stale_forecast_records_are_blocked_by_currentness_gate(tmp_path: 
     assert first.diagnostic_record["forecast_records_currentness_gate_applied"] is True
     assert first.diagnostic_record["selected_forecast_label"] == ""
     assert first.diagnostic_record["label_selection_reason"] == "forecast_records_stale_blocked"
+
+
+def _write_warroom_candles(root: Path, rows: list[dict]) -> None:
+    base = root / "data/derived/warroom/candles/exchange=bitflyer/symbol=FX_BTC_JPY/timeframe=60s"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "closed.jsonl").write_text("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n", encoding="utf-8")
+    forming = dict(rows[-1])
+    forming["candle_status"] = "forming"
+    (base / "forming.json").write_text(json.dumps(forming, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    (base / "meta.json").write_text(json.dumps({"ok": True, "timeframe_sec": 60, "closed_count": len(rows), "end_ts_utc": rows[-1]["time_utc"], "read_only_source": True, "broker_send_enabled": False}, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def test_mr_a2_stale_forecast_can_fallback_to_current_l4_candle_window(tmp_path: Path) -> None:
+    forecast_path = tmp_path / "prediction/runs/2026-07-01/171500/forecast_records.jsonl"
+    _write_json(tmp_path / "prediction/latest_manifest.json", {
+        "generated_at": "2026-07-01T17:15:00Z",
+        "legacy_latest_path": "prediction/latest_prediction_system_result.json",
+        "sidecars": {"forecast_records": "prediction/runs/2026-07-01/171500/forecast_records.jsonl"},
+    })
+    _write_json(tmp_path / "prediction/latest_prediction_system_result.json", {"read_only": True, "non_executing": True})
+    _write_jsonl(forecast_path, [
+        {"family": "market_regime", "generated_at": "2026-07-01T17:15:00Z", "horizon_sec": 300, "primary_label": "range_candidate", "score": 0.95, "values_snapshot": {"estimated_signal_strength_percent": 95, "estimated_reference_hit_rate_percent": 90, "volatility_state": "normal", "cross_venue_agreement": "aligned"}},
+    ])
+    _write_json(tmp_path / "state/collector_vnext/unified_market_state_status.json", {
+        "last_symbol_raw": "FX_BTC_JPY",
+        "last_best_bid": 10000000.0,
+        "last_best_ask": 10001000.0,
+        "last_spread": 1000.0,
+        "read_only": True,
+        "would_send_to_broker": False,
+    })
+    _write_json(tmp_path / "state/collector_vnext/unified_health.json", {"ok": True, "ws_state": "LIVE", "read_only": True, "would_send_to_broker": False})
+    _write_json(tmp_path / "state/collector_vnext/unified_executions_status.json", {"ws_state": "LIVE", "trade_count": 20450, "read_only": True, "would_send_to_broker": False})
+    _write_json(tmp_path / "state/collector_vnext/unified_daemon_status.json", {"read_only": True, "would_send_to_broker": False})
+    _write_warroom_candles(tmp_path, [
+        {"time": 1783539000, "time_utc": "2026-07-08T19:30:00Z", "open": 100.0, "high": 101.0, "low": 99.8, "close": 100.5, "volume": 1.0, "trade_count": 10, "timeframe_sec": 60, "candle_status": "closed"},
+        {"time": 1783539060, "time_utc": "2026-07-08T19:31:00Z", "open": 100.5, "high": 103.0, "low": 100.4, "close": 102.8, "volume": 1.0, "trade_count": 10, "timeframe_sec": 60, "candle_status": "closed"},
+        {"time": 1783539120, "time_utc": "2026-07-08T19:32:00Z", "open": 102.8, "high": 105.0, "low": 102.7, "close": 104.9, "volume": 1.0, "trade_count": 10, "timeframe_sec": 60, "candle_status": "closed"},
+    ])
+
+    snapshot = build_market_regime_source_snapshot(tmp_path)
+    bundle = build_market_regime_feature_bundle(snapshot, generated_at="2026-07-08T19:32:30Z")
+    source_quality = {signal.name: signal for signal in bundle.signals_by_group(FeatureGroup.SOURCE_QUALITY)}
+    price = {signal.name: signal for signal in bundle.signals_by_group(FeatureGroup.PRICE_STRUCTURE)}
+    assert source_quality["forecast_records_current_enough"].value is False
+    assert source_quality["current_l4_candle_window_current_enough"].value is True
+    assert price["current_l4_candle_regime_hint"].value == "UP_TREND"
+
+    packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-08T19:32:31Z")
+    first = packet.predictions[0]
+    assert first.regime_code == MarketRegimeCode.UP_TREND
+    assert first.freshness_state.value == "LIVE"
+    assert 35 < first.confidence_percent <= 65
+    assert first.evidence_quality.value == "PARTIAL"
+    assert first.diagnostic_record["selected_evidence_quality_reason"] == "current_l4_fallback_uncalibrated_partial"
+    coverage_by_group = {coverage.feature_group: coverage for coverage in bundle.coverage}
+    assert coverage_by_group[FeatureGroup.PRICE_STRUCTURE].freshness_state.value == "LIVE"
+    assert coverage_by_group[FeatureGroup.VOLATILITY].freshness_state.value == "LIVE"
+    assert source_quality["current_l4_candle_window_current_enough"].value is True
+    assert first.diagnostic_record["forecast_records_currentness_gate_applied"] is True
+    assert first.diagnostic_record["current_l4_candle_window_current_enough"] is True
+    assert first.diagnostic_record["current_l4_candle_window_fallback_used"] is True
+    assert first.diagnostic_record["label_selection_reason"] == "current_l4_candle_window_fallback"
+    assert first.diagnostic_record["selected_label"] == "UP_TREND"
+    assert first.diagnostic_record["selected_label_source"] == "current_l4_candle_window"
+    assert first.diagnostic_record["selected_forecast_label"] == ""
+    assert first.diagnostic_record["selected_l4_candle_regime_hint"] == "UP_TREND"

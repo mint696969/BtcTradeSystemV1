@@ -9,6 +9,7 @@ from .d_hot_nowcast import load_nowcast_source_snapshot
 from .forecast_records_reader import load_forecast_records_snapshot
 from .json_io import read_json_artifact, resolve_under_root
 from .snapshot_builder import build_market_regime_source_snapshot
+from .warroom_candle_source_reader import load_warroom_candle_source_snapshot, warroom_candle_timeframe_relpath
 
 __all__ = [
     "COLLECTOR_STATE_RELATIVE_PATHS",
@@ -17,9 +18,11 @@ __all__ = [
     "load_forecast_records_snapshot",
     "load_latest_manifest",
     "load_nowcast_source_snapshot",
+    "load_warroom_candle_source_snapshot",
     "read_collector_state_sources",
     "read_json_artifact",
     "resolve_forecast_records_relative_path",
     "resolve_latest_prediction_relative_path",
     "resolve_under_root",
+    "warroom_candle_timeframe_relpath",
 ]
