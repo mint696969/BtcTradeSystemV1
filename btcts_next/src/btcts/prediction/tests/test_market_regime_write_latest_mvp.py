@@ -14,6 +14,10 @@ if str(_SRC_ROOT) not in sys.path:
 from btcts.prediction.market_regime.artifact_contracts import validate_market_regime_latest_cards_artifact, validate_market_regime_status_artifact  # noqa: E402
 from btcts.prediction.market_regime.parameter_set_comparison_artifacts import PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH  # noqa: E402
 from btcts.prediction.market_regime.parameter_set_comparison_read_model import validate_market_regime_parameter_set_comparison_read_model  # noqa: E402
+from btcts.prediction.scenario_guidance import (  # noqa: E402
+    PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH,
+    validate_parent_scenario_guidance_latest_read_model_artifact,
+)
 from btcts.prediction.market_regime.tools.write_latest import (  # noqa: E402
     build_market_regime_latest_artifact_set,
     main,
@@ -126,7 +130,10 @@ def test_cp5_write_latest_artifacts_once_writes_expected_files(tmp_path: Path) -
     assert result["would_send_to_broker"] is False
     assert result["parameter_set_comparison_refresh_ok"] is True
     assert result["parameter_set_comparison_refresh_skipped"] is False
+    assert result["parent_scenario_guidance_refresh_ok"] is True
+    assert result["parent_scenario_guidance_refresh_skipped"] is False
     assert PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH in result["written"]
+    assert PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH in result["written"]
 
     latest = json.loads((tmp_path / "prediction/market_regime/latest.json").read_text(encoding="utf-8"))
     latest_cards = json.loads((tmp_path / "prediction/market_regime/latest_cards.json").read_text(encoding="utf-8"))
@@ -134,6 +141,7 @@ def test_cp5_write_latest_artifacts_once_writes_expected_files(tmp_path: Path) -
     status = json.loads((tmp_path / "prediction/market_regime/status.json").read_text(encoding="utf-8"))
     manifest = json.loads((tmp_path / "prediction/market_regime/runs/market_regime_test_run/manifest.json").read_text(encoding="utf-8"))
     parameter_set_comparison = json.loads((tmp_path / PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH).read_text(encoding="utf-8"))
+    parent_scenario_guidance = json.loads((tmp_path / PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH).read_text(encoding="utf-8"))
 
     assert latest["prediction_family_id"] == "market_regime"
     assert latest_cards["artifact_kind"] == "latest_cards"
@@ -151,6 +159,13 @@ def test_cp5_write_latest_artifacts_once_writes_expected_files(tmp_path: Path) -
     assert parameter_set_comparison["artifact_kind"] == "parameter_set_comparison_read_model"
     assert parameter_set_comparison["promotion_candidates"] == []
     assert validate_market_regime_parameter_set_comparison_read_model(parameter_set_comparison)["ok"] is True
+    assert parent_scenario_guidance["artifact_kind"] == "parent_scenario_guidance_latest_read_model"
+    assert parent_scenario_guidance["horizon_count"] == 8
+    assert parent_scenario_guidance["family_part_count"] == 8
+    assert parent_scenario_guidance["prediction_family_ids"] == ["market_regime"]
+    assert parent_scenario_guidance["safety"]["broker_private_api_allowed"] is False
+    assert parent_scenario_guidance["safety"]["autotrade_trigger_allowed"] is False
+    assert validate_parent_scenario_guidance_latest_read_model_artifact(parent_scenario_guidance)["ok"] is True
 
 
 def test_cp5_cli_requires_once_and_writes_when_acknowledged(tmp_path: Path, capsys) -> None:
@@ -166,6 +181,7 @@ def test_cp5_cli_requires_once_and_writes_when_acknowledged(tmp_path: Path, caps
     out = capsys.readouterr().out
     assert "market_regime_cli_run" in out
     assert (tmp_path / "prediction/market_regime/latest_cards.json").exists()
+    assert (tmp_path / PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH).exists()
 
 
 def test_mr_a1_write_latest_compact_summary_surfaces_stale_forecast_warning(tmp_path: Path) -> None:

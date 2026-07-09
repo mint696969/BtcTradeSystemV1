@@ -37,6 +37,12 @@ from btcts.prediction.market_regime.parameter_set_registry import (
     build_default_market_regime_parameter_set_registry,
     validate_market_regime_parameter_set_registry,
 )
+from btcts.prediction.market_regime.scenario_part import build_market_regime_scenario_part_from_latest_read_model
+from btcts.prediction.scenario_guidance import PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH
+from btcts.prediction.scenario_guidance_artifacts import (
+    preflight_parent_scenario_guidance_latest_read_model,
+    write_parent_scenario_guidance_latest_read_model,
+)
 from btcts.prediction.market_regime.parameter_set_comparison_artifacts import (
     PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH,
     write_latest_market_regime_parameter_set_comparison_read_model,
@@ -227,7 +233,75 @@ def _expected_artifact_refs(run_id: str, generated_at: str) -> dict[str, str]:
         "run_manifest_json": _run_manifest_relpath(run_id),
         "trace_part_jsonl": trace_ledger_part_relpath(generated_at),
         "parameter_set_comparison_latest_read_model_json": PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH,
+        "parent_scenario_guidance_latest_read_model_json": PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH,
     }
+
+
+def _build_parent_scenario_guidance_parts_from_market_regime_latest_read_model(latest_read_model: Mapping[str, Any]) -> list[dict[str, Any]]:
+    horizons = latest_read_model.get("horizons") if isinstance(latest_read_model, Mapping) else []
+    parts: list[dict[str, Any]] = []
+    if not isinstance(horizons, list):
+        return parts
+    for horizon in horizons:
+        if not isinstance(horizon, Mapping):
+            continue
+        horizon_key = str(horizon.get("horizon_key") or "")
+        if not horizon_key:
+            continue
+        parts.append(build_market_regime_scenario_part_from_latest_read_model(latest_read_model, horizon_key=horizon_key))
+    return parts
+
+
+def _preflight_parent_scenario_guidance_refresh(root: Path, artifacts: Mapping[str, Any]) -> dict[str, Any]:
+    latest_read_model = artifacts.get("latest_read_model") if isinstance(artifacts.get("latest_read_model"), Mapping) else {}
+    parts = _build_parent_scenario_guidance_parts_from_market_regime_latest_read_model(latest_read_model)
+    if not parts:
+        return {
+            "ok": True,
+            "skipped": True,
+            "skip_reason": "market_regime_scenario_parts_missing",
+            "parent_scenario_guidance_read_model_json": PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH,
+            "would_write": False,
+            "horizon_count": 0,
+            "family_part_count": 0,
+            "broker_private_api_allowed": False,
+            "autotrade_trigger_allowed": False,
+            "would_send_to_broker": False,
+        }
+    result = preflight_parent_scenario_guidance_latest_read_model(
+        root,
+        family_scenario_parts=parts,
+        generated_at=str(artifacts.get("generated_at") or ""),
+        source_run_id=str(artifacts.get("run_id") or ""),
+    )
+    result["skipped"] = False
+    return result
+
+
+def _write_parent_scenario_guidance_refresh(root: Path, artifacts: Mapping[str, Any]) -> dict[str, Any]:
+    latest_read_model = artifacts.get("latest_read_model") if isinstance(artifacts.get("latest_read_model"), Mapping) else {}
+    parts = _build_parent_scenario_guidance_parts_from_market_regime_latest_read_model(latest_read_model)
+    if not parts:
+        return {
+            "ok": True,
+            "skipped": True,
+            "skip_reason": "market_regime_scenario_parts_missing",
+            "parent_scenario_guidance_read_model_json": PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH,
+            "would_write": False,
+            "horizon_count": 0,
+            "family_part_count": 0,
+            "broker_private_api_allowed": False,
+            "autotrade_trigger_allowed": False,
+            "would_send_to_broker": False,
+        }
+    result = write_parent_scenario_guidance_latest_read_model(
+        root,
+        family_scenario_parts=parts,
+        generated_at=str(artifacts.get("generated_at") or ""),
+        source_run_id=str(artifacts.get("run_id") or ""),
+    )
+    result["skipped"] = False
+    return result
 
 
 def preflight_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated_at: str | None = None, run_id: str | None = None) -> dict[str, Any]:
@@ -242,6 +316,7 @@ def preflight_market_regime_latest_artifacts_once(*, hot_root: str | Path, gener
     source_snapshot_ok = bool(artifacts.get("source_snapshot_ok"))
     validation = artifacts.get("validation") if isinstance(artifacts.get("validation"), Mapping) else {}
     can_write_live_once = bool(source_snapshot_ok and validation.get("ok") and int(artifacts.get("card_count") or 0) > 0)
+    parent_scenario_guidance_preflight = _preflight_parent_scenario_guidance_refresh(root, artifacts)
     return {
         "ok": True,
         "tool_version": MARKET_REGIME_WRITE_LATEST_TOOL_VERSION,
@@ -258,6 +333,9 @@ def preflight_market_regime_latest_artifacts_once(*, hot_root: str | Path, gener
         "card_count": int(artifacts.get("card_count") or 0),
         "latest_cards_validation": dict(validation),
         "expected_artifacts": _expected_artifact_refs(effective_run_id, effective_generated_at),
+        "parent_scenario_guidance_preflight": parent_scenario_guidance_preflight,
+        "parent_scenario_guidance_preflight_ok": bool(parent_scenario_guidance_preflight.get("ok")),
+        "parent_scenario_guidance_preflight_skipped": bool(parent_scenario_guidance_preflight.get("skipped")),
         "prediction_trace_append_would_run": can_write_live_once,
         "scheduler_enabled": False,
         "producer_loop_enabled": False,
@@ -303,6 +381,21 @@ def write_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated
         }
     if parameter_set_comparison_refresh.get("ok") and not parameter_set_comparison_refresh.get("skipped"):
         written.append(str(parameter_set_comparison_refresh.get("parameter_set_comparison_read_model_json")))
+    try:
+        parent_scenario_guidance_refresh = _write_parent_scenario_guidance_refresh(root, artifacts)
+    except Exception as exc:  # pragma: no cover - defensive producer refresh path
+        parent_scenario_guidance_refresh = {
+            "ok": False,
+            "skipped": True,
+            "skip_reason": f"parent_scenario_guidance_refresh_failed:{type(exc).__name__}",
+            "error": str(exc),
+            "parent_scenario_guidance_read_model_json": PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH,
+            "broker_private_api_allowed": False,
+            "autotrade_trigger_allowed": False,
+            "would_send_to_broker": False,
+        }
+    if parent_scenario_guidance_refresh.get("ok") and not parent_scenario_guidance_refresh.get("skipped"):
+        written.append(str(parent_scenario_guidance_refresh.get("parent_scenario_guidance_read_model_json")))
     return {
         "ok": True,
         "tool_version": MARKET_REGIME_WRITE_LATEST_TOOL_VERSION,
@@ -318,6 +411,9 @@ def write_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated
         "parameter_set_comparison_refresh": parameter_set_comparison_refresh,
         "parameter_set_comparison_refresh_ok": bool(parameter_set_comparison_refresh.get("ok")),
         "parameter_set_comparison_refresh_skipped": bool(parameter_set_comparison_refresh.get("skipped")),
+        "parent_scenario_guidance_refresh": parent_scenario_guidance_refresh,
+        "parent_scenario_guidance_refresh_ok": bool(parent_scenario_guidance_refresh.get("ok")),
+        "parent_scenario_guidance_refresh_skipped": bool(parent_scenario_guidance_refresh.get("skipped")),
         "prediction_trace_append_allowed": True,
         "trade_ledger_append_allowed": False,
         "scheduler_enabled": False,
