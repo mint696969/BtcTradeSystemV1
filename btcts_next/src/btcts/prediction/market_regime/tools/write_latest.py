@@ -37,6 +37,10 @@ from btcts.prediction.market_regime.parameter_set_registry import (
     build_default_market_regime_parameter_set_registry,
     validate_market_regime_parameter_set_registry,
 )
+from btcts.prediction.market_regime.parameter_set_comparison_artifacts import (
+    PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH,
+    write_latest_market_regime_parameter_set_comparison_read_model,
+)
 from btcts.prediction.market_regime.sources import build_market_regime_source_snapshot
 from btcts.prediction.market_regime.trace_ledger import (
     append_market_regime_trace_row_once,
@@ -208,6 +212,7 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         "source_snapshot_ok": source_snapshot.ok,
         "feature_bundle_available_signal_count": feature_bundle.available_signal_count(),
         "card_count": len(cards),
+        "active_parameter_set_id": active_parameter_set.parameter_set_id,
     }
 
 
@@ -221,6 +226,7 @@ def _expected_artifact_refs(run_id: str, generated_at: str) -> dict[str, str]:
         "status_json": STATUS_JSON_RELPATH,
         "run_manifest_json": _run_manifest_relpath(run_id),
         "trace_part_jsonl": trace_ledger_part_relpath(generated_at),
+        "parameter_set_comparison_latest_read_model_json": PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH,
     }
 
 
@@ -279,6 +285,24 @@ def write_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated
     trace_append = append_market_regime_trace_row_once(root, artifacts["trace_row"])
     written.append(str(trace_append["trace_part_jsonl"]))
     written.append(str(trace_append["trace_part_meta_json"]))
+    try:
+        parameter_set_comparison_refresh = write_latest_market_regime_parameter_set_comparison_read_model(
+            root,
+            active_parameter_set_id=str(artifacts.get("active_parameter_set_id") or ""),
+        )
+    except Exception as exc:  # pragma: no cover - defensive producer refresh path
+        parameter_set_comparison_refresh = {
+            "ok": False,
+            "skipped": True,
+            "skip_reason": f"parameter_set_comparison_refresh_failed:{type(exc).__name__}",
+            "error": str(exc),
+            "parameter_set_comparison_read_model_json": PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH,
+            "broker_private_api_allowed": False,
+            "autotrade_trigger_allowed": False,
+            "would_send_to_broker": False,
+        }
+    if parameter_set_comparison_refresh.get("ok") and not parameter_set_comparison_refresh.get("skipped"):
+        written.append(str(parameter_set_comparison_refresh.get("parameter_set_comparison_read_model_json")))
     return {
         "ok": True,
         "tool_version": MARKET_REGIME_WRITE_LATEST_TOOL_VERSION,
@@ -291,6 +315,9 @@ def write_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated
         "feature_bundle_available_signal_count": int(artifacts["feature_bundle_available_signal_count"]),
         "card_count": int(artifacts["card_count"]),
         "trace_ledger_append": trace_append,
+        "parameter_set_comparison_refresh": parameter_set_comparison_refresh,
+        "parameter_set_comparison_refresh_ok": bool(parameter_set_comparison_refresh.get("ok")),
+        "parameter_set_comparison_refresh_skipped": bool(parameter_set_comparison_refresh.get("skipped")),
         "prediction_trace_append_allowed": True,
         "trade_ledger_append_allowed": False,
         "scheduler_enabled": False,

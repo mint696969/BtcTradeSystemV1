@@ -14,9 +14,12 @@ if str(_SRC_ROOT) not in sys.path:
 from btcts.prediction.market_regime.parameter_set_comparison_artifacts import (  # noqa: E402
     PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH,
     build_market_regime_parameter_set_comparison_artifact_write_plan,
+    latest_market_regime_parameter_set_comparison_outcome_date,
     parameter_set_comparison_latest_read_model_relpath,
     parameter_set_comparison_outcome_part_relpath,
+    preflight_latest_market_regime_parameter_set_comparison_read_model,
     preflight_market_regime_parameter_set_comparison_read_model,
+    write_latest_market_regime_parameter_set_comparison_read_model,
     write_market_regime_parameter_set_comparison_read_model,
 )
 from btcts.prediction.market_regime.parameter_set_comparison_read_model import validate_market_regime_parameter_set_comparison_read_model  # noqa: E402
@@ -124,6 +127,42 @@ def test_ps_parameter_set_comparison_writer_writes_only_read_model_artifact(tmp_
     assert not (tmp_path / "prediction/market_regime/latest.json").exists()
     assert not (tmp_path / "prediction/market_regime/status.json").exists()
 
+
+
+def test_ps_parameter_set_comparison_latest_outcome_date_and_latest_writer(tmp_path: Path) -> None:
+    _write_outcomes(tmp_path, [_row("old.v1", "hit")], date="2026-07-07")
+    _write_outcomes(tmp_path, [_row("active.v1", "hit"), _row("shadow.v2", "hit")], date="2026-07-08")
+
+    assert latest_market_regime_parameter_set_comparison_outcome_date(tmp_path) == "2026-07-08"
+    preflight = preflight_latest_market_regime_parameter_set_comparison_read_model(
+        tmp_path,
+        active_parameter_set_id="active.v1",
+        min_trusted_samples=1,
+    )
+    assert preflight["ok"] is True
+    assert preflight["skipped"] is False
+    assert preflight["date"] == "2026-07-08"
+    assert "read_model" not in preflight
+
+    result = write_latest_market_regime_parameter_set_comparison_read_model(
+        tmp_path,
+        active_parameter_set_id="active.v1",
+        min_trusted_samples=1,
+    )
+    assert result["ok"] is True
+    assert result["skipped"] is False
+    assert result["date"] == "2026-07-08"
+    assert (tmp_path / PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH).exists()
+
+
+def test_ps_parameter_set_comparison_latest_writer_skips_when_no_outcomes(tmp_path: Path) -> None:
+    assert latest_market_regime_parameter_set_comparison_outcome_date(tmp_path) == ""
+    result = write_latest_market_regime_parameter_set_comparison_read_model(tmp_path)
+    assert result["ok"] is True
+    assert result["skipped"] is True
+    assert result["skip_reason"] == "market_regime_outcome_rows_missing"
+    assert result["promotion_candidate_count"] == 0
+    assert not (tmp_path / PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH).exists()
 
 def test_ps_parameter_set_comparison_writer_source_keeps_runtime_boundaries() -> None:
     path = Path(__file__).resolve().parents[1] / "market_regime/parameter_set_comparison_artifacts.py"

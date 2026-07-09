@@ -12,6 +12,8 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.prediction.market_regime.artifact_contracts import validate_market_regime_latest_cards_artifact, validate_market_regime_status_artifact  # noqa: E402
+from btcts.prediction.market_regime.parameter_set_comparison_artifacts import PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH  # noqa: E402
+from btcts.prediction.market_regime.parameter_set_comparison_read_model import validate_market_regime_parameter_set_comparison_read_model  # noqa: E402
 from btcts.prediction.market_regime.tools.write_latest import (  # noqa: E402
     build_market_regime_latest_artifact_set,
     main,
@@ -28,6 +30,41 @@ def _write_jsonl(path: Path, records: list[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(json.dumps(record, ensure_ascii=False) for record in records) + "\n", encoding="utf-8")
 
+
+
+def _write_outcome_rows(root: Path) -> None:
+    path = root / "prediction/market_regime/outcomes/date=2026-07-08/part-00001.jsonl"
+    rows = [
+        {
+            "outcome_id": "market_regime_fixture:300s:market_regime_engine_parameter_set.v1:hit",
+            "run_id": "market_regime_fixture",
+            "generated_at": "2026-07-08T09:00:00Z",
+            "resolved_at": "2026-07-08T09:05:00Z",
+            "horizon_key": "300s",
+            "horizon_sec": 300,
+            "predicted_regime_code": "RANGE",
+            "observed_regime_code": "RANGE",
+            "outcome_label": "hit",
+            "observation_source": "candle_summary",
+            "confidence_percent": 70,
+            "parameter_set_id": "market_regime_engine_parameter_set.v1",
+        },
+        {
+            "outcome_id": "market_regime_fixture:900s:market_regime_engine_parameter_set.v1:miss",
+            "run_id": "market_regime_fixture",
+            "generated_at": "2026-07-08T09:00:00Z",
+            "resolved_at": "2026-07-08T09:15:00Z",
+            "horizon_key": "900s",
+            "horizon_sec": 900,
+            "predicted_regime_code": "RANGE",
+            "observed_regime_code": "DOWN_TREND",
+            "outcome_label": "miss",
+            "observation_source": "candle_summary",
+            "confidence_percent": 68,
+            "parameter_set_id": "market_regime_engine_parameter_set.v1",
+        },
+    ]
+    _write_jsonl(path, rows)
 
 def _fixture_root(root: Path) -> None:
     forecast_path = root / "prediction/runs/2026-07-08/091000/forecast_records.jsonl"
@@ -53,6 +90,7 @@ def _fixture_root(root: Path) -> None:
     _write_json(root / "state/collector_vnext/unified_health.json", {"ok": True, "ws_state": "LIVE", "read_only": True, "would_send_to_broker": False})
     _write_json(root / "state/collector_vnext/unified_executions_status.json", {"ws_state": "LIVE", "trade_count": 20450, "read_only": True, "would_send_to_broker": False})
     _write_json(root / "state/collector_vnext/unified_daemon_status.json", {"read_only": True, "would_send_to_broker": False})
+    _write_outcome_rows(root)
 
 
 def test_cp5_build_artifact_set_without_filesystem_write(tmp_path: Path) -> None:
@@ -86,12 +124,16 @@ def test_cp5_write_latest_artifacts_once_writes_expected_files(tmp_path: Path) -
     assert result["broker_private_api_allowed"] is False
     assert result["autotrade_trigger_allowed"] is False
     assert result["would_send_to_broker"] is False
+    assert result["parameter_set_comparison_refresh_ok"] is True
+    assert result["parameter_set_comparison_refresh_skipped"] is False
+    assert PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH in result["written"]
 
     latest = json.loads((tmp_path / "prediction/market_regime/latest.json").read_text(encoding="utf-8"))
     latest_cards = json.loads((tmp_path / "prediction/market_regime/latest_cards.json").read_text(encoding="utf-8"))
     read_model = json.loads((tmp_path / "prediction/market_regime/latest_read_model.json").read_text(encoding="utf-8"))
     status = json.loads((tmp_path / "prediction/market_regime/status.json").read_text(encoding="utf-8"))
     manifest = json.loads((tmp_path / "prediction/market_regime/runs/market_regime_test_run/manifest.json").read_text(encoding="utf-8"))
+    parameter_set_comparison = json.loads((tmp_path / PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH).read_text(encoding="utf-8"))
 
     assert latest["prediction_family_id"] == "market_regime"
     assert latest_cards["artifact_kind"] == "latest_cards"
@@ -106,6 +148,9 @@ def test_cp5_write_latest_artifacts_once_writes_expected_files(tmp_path: Path) -
     assert manifest["refs"]["latest_cards_json"] == "prediction/market_regime/latest_cards.json"
     assert latest_cards["safety"]["ui_render_invokes_classifier"] is False
     assert latest_cards["safety"]["broker_private_api_allowed"] is False
+    assert parameter_set_comparison["artifact_kind"] == "parameter_set_comparison_read_model"
+    assert parameter_set_comparison["promotion_candidates"] == []
+    assert validate_market_regime_parameter_set_comparison_read_model(parameter_set_comparison)["ok"] is True
 
 
 def test_cp5_cli_requires_once_and_writes_when_acknowledged(tmp_path: Path, capsys) -> None:

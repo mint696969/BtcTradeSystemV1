@@ -118,6 +118,80 @@ def preflight_market_regime_parameter_set_comparison_read_model(
     return {key: value for key, value in plan.items() if key != "read_model"}
 
 
+
+def latest_market_regime_parameter_set_comparison_outcome_date(root: str | Path) -> str:
+    base = Path(root) / "prediction" / "market_regime" / "outcomes"
+    if not base.exists():
+        return ""
+    dates: list[str] = []
+    for part in base.glob("date=*/part-00001.jsonl"):
+        date_dir = part.parent.name
+        if not date_dir.startswith("date="):
+            continue
+        date = date_dir.removeprefix("date=").strip()
+        if date and part.exists():
+            dates.append(date)
+    return sorted(set(dates))[-1] if dates else ""
+
+
+def preflight_latest_market_regime_parameter_set_comparison_read_model(
+    root: str | Path,
+    *,
+    active_parameter_set_id: str = MARKET_REGIME_DEFAULT_ACTIVE_PARAMETER_SET_ID,
+    min_trusted_samples: int = 20,
+) -> dict[str, Any]:
+    date = latest_market_regime_parameter_set_comparison_outcome_date(root)
+    if not date:
+        return {
+            "ok": True,
+            "skipped": True,
+            "skip_reason": "market_regime_outcome_rows_missing",
+            "parameter_set_comparison_artifact_writer_version": MARKET_REGIME_PARAMETER_SET_COMPARISON_ARTIFACT_WRITER_VERSION,
+            "parameter_set_comparison_read_model_json": PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH,
+            "would_write": False,
+            "comparison_ready": False,
+            "promotion_candidate_count": 0,
+            "safety": _writer_safety(),
+        }
+    plan = preflight_market_regime_parameter_set_comparison_read_model(
+        root,
+        date=date,
+        active_parameter_set_id=active_parameter_set_id,
+        min_trusted_samples=min_trusted_samples,
+    )
+    plan["skipped"] = False
+    return plan
+
+
+def write_latest_market_regime_parameter_set_comparison_read_model(
+    root: str | Path,
+    *,
+    active_parameter_set_id: str = MARKET_REGIME_DEFAULT_ACTIVE_PARAMETER_SET_ID,
+    min_trusted_samples: int = 20,
+) -> dict[str, Any]:
+    date = latest_market_regime_parameter_set_comparison_outcome_date(root)
+    if not date:
+        return {
+            "ok": True,
+            "skipped": True,
+            "skip_reason": "market_regime_outcome_rows_missing",
+            "parameter_set_comparison_artifact_writer_version": MARKET_REGIME_PARAMETER_SET_COMPARISON_ARTIFACT_WRITER_VERSION,
+            "parameter_set_comparison_read_model_json": PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH,
+            "would_write": False,
+            "comparison_ready": False,
+            "promotion_candidate_count": 0,
+            "safety": _writer_safety(),
+        }
+    result = write_market_regime_parameter_set_comparison_read_model(
+        root,
+        date=date,
+        active_parameter_set_id=active_parameter_set_id,
+        min_trusted_samples=min_trusted_samples,
+    )
+    result["skipped"] = False
+    result["would_write"] = True
+    return result
+
 def write_market_regime_parameter_set_comparison_read_model(
     root: str | Path,
     *,
