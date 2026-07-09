@@ -100,6 +100,11 @@ from .parameter_set_comparison_read_model import (
     build_market_regime_parameter_set_comparison_read_model_from_outcome_rows,
     validate_market_regime_parameter_set_comparison_read_model,
 )
+from .parameter_set_review_packet import (
+    MARKET_REGIME_PARAMETER_SET_REVIEW_PACKET_VERSION,
+    build_market_regime_parameter_set_review_packet,
+    validate_market_regime_parameter_set_review_packet,
+)
 from .parameter_set_comparison_artifacts import (
     MARKET_REGIME_PARAMETER_SET_COMPARISON_ARTIFACT_WRITER_VERSION,
     PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH,
@@ -142,6 +147,9 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "validate_market_regime_parameter_set_review_packet",
+    "build_market_regime_parameter_set_review_packet",
+    "MARKET_REGIME_PARAMETER_SET_REVIEW_PACKET_VERSION",
     "write_market_regime_parameter_set_comparison_read_model",
     "preflight_market_regime_parameter_set_comparison_read_model",
     "parameter_set_comparison_outcome_part_relpath",
