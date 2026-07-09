@@ -79,6 +79,17 @@ def _regime(value: object) -> str:
     return str(value or "UNKNOWN").strip().upper() or "UNKNOWN"
 
 
+def _identity_part(value: object, *, default: str = "unknown") -> str:
+    text = str(value or default).strip() or default
+    return text.replace(":", "_").replace("|", "_")
+
+
+def _market_regime_outcome_id(*, run_id: str, generated_at: str, horizon_key: str, parameter_set_id: str) -> str:
+    base = run_id or generated_at or "unknown_generated_at"
+    parameter = parameter_set_id or "unknown_parameter_set"
+    return f"{_identity_part(base)}:{_identity_part(horizon_key)}:{_identity_part(parameter)}:outcome"
+
+
 def _normalize_observation_source(value: object) -> str:
     source = str(value or "").strip().lower()
     if source in {"candle", "candles", "candle_summary", "derived_candles"}:
@@ -177,7 +188,12 @@ def build_market_regime_outcome_row(
     observation_evaluator_version = _observation_evaluator_version(observation)
     run_id = fields["run_id"]
     horizon_key = fields["horizon_key"]
-    outcome_id = f"{run_id}:{horizon_key}:outcome" if run_id else f"{fields['generated_at']}:{horizon_key}:outcome"
+    outcome_id = _market_regime_outcome_id(
+        run_id=run_id,
+        generated_at=fields["generated_at"],
+        horizon_key=horizon_key,
+        parameter_set_id=fields["parameter_set_id"],
+    )
     row = {
         "schema_version": MARKET_REGIME_OUTCOME_SCHEMA_VERSION,
         "outcome_resolver_version": MARKET_REGIME_OUTCOME_RESOLVER_VERSION,

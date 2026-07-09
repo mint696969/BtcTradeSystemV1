@@ -96,6 +96,51 @@ def test_cp18_trace_ledger_once_is_duplicate_safe(tmp_path: Path) -> None:
     assert second["duplicate_outcome_count"] == 2
 
 
+
+
+def test_cp18_trace_outcome_identity_keeps_parameter_sets_distinct(tmp_path: Path) -> None:
+    _write_latest_cards(tmp_path)
+    part = tmp_path / "prediction/market_regime/ledgers/date=2026-07-08/hour=12/part-00001.jsonl"
+    part.parent.mkdir(parents=True, exist_ok=True)
+
+    def row(parameter_set_id: str, regime: str) -> dict:
+        return {
+            "artifact_kind": "trace_row",
+            "prediction_family_id": "market_regime",
+            "run_id": "trace_run_compare",
+            "generated_at": "2026-07-08T12:00:00Z",
+            "trace_part_jsonl": "prediction/market_regime/ledgers/date=2026-07-08/hour=12/part-00001.jsonl",
+            "active_parameter_set_id": parameter_set_id,
+            "prediction_summary": {
+                "generated_at": "2026-07-08T12:00:00Z",
+                "horizons": [
+                    {"horizon": "現在", "horizon_key": "current", "horizon_sec": 0, "regime_code": regime, "confidence_percent": 70, "evidence_quality": "PARTIAL", "freshness_state": "LIVE", "parameter_set_id": parameter_set_id},
+                    {"horizon": "5分後", "horizon_key": "300s", "horizon_sec": 300, "regime_code": regime, "confidence_percent": 70, "evidence_quality": "PARTIAL", "freshness_state": "LIVE", "parameter_set_id": parameter_set_id},
+                ],
+            },
+            "safety": {"raw_market_data_duplicated": False, "broker_private_api_allowed": False, "autotrade_trigger_allowed": False, "would_send_to_broker": False},
+        }
+
+    rows = [
+        row("market_regime_engine_parameter_set.v1", "RANGE"),
+        row("market_regime_engine_parameter_set.shadow", "UP_TREND"),
+    ]
+    part.write_text("".join(json.dumps(item, ensure_ascii=False, sort_keys=True) + "\n" for item in rows), encoding="utf-8")
+
+    preflight = build_market_regime_trace_outcome_once_plan(hot_root=tmp_path, resolved_at="2026-07-08T12:20:00Z")
+    assert preflight["candidate_outcome_count"] == 2
+    outcome_ids = [row["outcome_id"] for row in preflight["candidate_rows"]]
+    assert len(set(outcome_ids)) == 2
+    assert all(":300s:market_regime_engine_parameter_set." in outcome_id for outcome_id in outcome_ids)
+    assert {row["parameter_set_id"] for row in preflight["candidate_rows"]} == {"market_regime_engine_parameter_set.v1", "market_regime_engine_parameter_set.shadow"}
+
+    first = resolve_market_regime_trace_outcomes_once(hot_root=tmp_path, resolved_at="2026-07-08T12:20:00Z")
+    second = resolve_market_regime_trace_outcomes_once(hot_root=tmp_path, resolved_at="2026-07-08T12:20:00Z")
+    assert first["appended_outcome_count"] == 2
+    assert second["appended_outcome_count"] == 0
+    assert second["duplicate_outcome_count"] == 2
+
+
 def test_cp18_trace_ledger_tool_source_is_artifact_only() -> None:
     path = Path(__file__).resolve().parents[1] / "market_regime/tools/resolve_outcomes.py"
     text = path.read_text(encoding="utf-8")

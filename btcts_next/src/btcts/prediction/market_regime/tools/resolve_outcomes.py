@@ -120,11 +120,46 @@ def _is_expired(prediction: Mapping[str, Any], resolved_at: str) -> bool:
     return resolved >= expiry
 
 
-def _existing_outcome_ids(root: str | Path, generated_at: str) -> set[str]:
+def _identity_part(value: object, *, default: str = "unknown") -> str:
+    text = str(value or default).strip() or default
+    return text.replace(":", "_").replace("|", "_")
+
+
+def _prediction_identity_key(prediction: Mapping[str, Any]) -> str:
+    run_id = str(prediction.get("run_id") or "")
+    generated_at = str(prediction.get("generated_at") or prediction.get("prediction_generated_at") or "")
+    horizon_sec = int(prediction.get("horizon_sec") or 0)
+    horizon_key = str(prediction.get("horizon_key") or ("current" if horizon_sec == 0 else f"{horizon_sec}s"))
+    parameter_set_id = str(prediction.get("parameter_set_id") or "")
+    base = run_id or generated_at or "unknown_generated_at"
+    return f"{_identity_part(base)}|{_identity_part(horizon_key)}|{_identity_part(parameter_set_id or 'unknown_parameter_set')}"
+
+
+def _row_identity_key(row: Mapping[str, Any]) -> str:
+    run_id = str(row.get("run_id") or "")
+    generated_at = str(row.get("generated_at") or "")
+    horizon_key = str(row.get("horizon_key") or "")
+    parameter_set_id = str(row.get("parameter_set_id") or "")
+    base = run_id or generated_at or "unknown_generated_at"
+    return f"{_identity_part(base)}|{_identity_part(horizon_key)}|{_identity_part(parameter_set_id or 'unknown_parameter_set')}"
+
+
+def _outcome_id_for_prediction(prediction: Mapping[str, Any]) -> str:
+    run_id = str(prediction.get("run_id") or "")
+    generated_at = str(prediction.get("generated_at") or prediction.get("prediction_generated_at") or "")
+    horizon_sec = int(prediction.get("horizon_sec") or 0)
+    horizon_key = str(prediction.get("horizon_key") or ("current" if horizon_sec == 0 else f"{horizon_sec}s"))
+    parameter_set_id = str(prediction.get("parameter_set_id") or "unknown_parameter_set")
+    base = run_id or generated_at or "unknown_generated_at"
+    return f"{_identity_part(base)}:{_identity_part(horizon_key)}:{_identity_part(parameter_set_id)}:outcome"
+
+
+def _existing_outcome_refs(root: str | Path, generated_at: str) -> tuple[set[str], set[str]]:
     path = Path(root) / outcome_part_relpath(generated_at)
     if not path.exists():
-        return set()
+        return set(), set()
     ids: set[str] = set()
+    identity_keys: set[str] = set()
     with path.open("r", encoding="utf-8") as handle:
         for raw in handle:
             if not raw.strip():
@@ -133,9 +168,12 @@ def _existing_outcome_ids(root: str | Path, generated_at: str) -> set[str]:
                 payload = json.loads(raw)
             except Exception:
                 continue
-            if isinstance(payload, Mapping) and payload.get("outcome_id"):
+            if not isinstance(payload, Mapping):
+                continue
+            if payload.get("outcome_id"):
                 ids.add(str(payload.get("outcome_id")))
-    return ids
+            identity_keys.add(_row_identity_key(payload))
+    return ids, identity_keys
 
 
 def build_market_regime_outcome_once_plan(*, hot_root: str | Path, resolved_at: str | None = None) -> dict[str, Any]:
@@ -159,12 +197,12 @@ def build_market_regime_outcome_once_plan(*, hot_root: str | Path, resolved_at: 
             expired_predictions.append(prediction)
         else:
             unexpired_count += 1
-    existing_ids = _existing_outcome_ids(root, str(payload.get("generated_at") or ""))
+    existing_ids, existing_identity_keys = _existing_outcome_refs(root, str(payload.get("generated_at") or ""))
     candidate_rows: list[dict[str, Any]] = []
     duplicate_count = 0
     for prediction in expired_predictions:
         row = build_market_regime_outcome_row(prediction=prediction, observation=observation, resolved_at=effective_resolved_at)
-        if str(row.get("outcome_id")) in existing_ids:
+        if str(row.get("outcome_id")) in existing_ids or _prediction_identity_key(prediction) in existing_identity_keys:
             duplicate_count += 1
             continue
         candidate_rows.append(row)
@@ -251,14 +289,6 @@ def _normalize_observation_source(value: object) -> str:
     raise ValueError(f"unsupported market-regime observation source: {value}")
 
 
-def _outcome_id_for_prediction(prediction: Mapping[str, Any]) -> str:
-    run_id = str(prediction.get("run_id") or "")
-    horizon_sec = int(prediction.get("horizon_sec") or 0)
-    horizon_key = str(prediction.get("horizon_key") or ("current" if horizon_sec == 0 else f"{horizon_sec}s"))
-    generated_at = str(prediction.get("generated_at") or prediction.get("prediction_generated_at") or "")
-    return f"{run_id}:{horizon_key}:outcome" if run_id else f"{generated_at}:{horizon_key}:outcome"
-
-
 def _observation_for_prediction(
     root: str | Path,
     *,
@@ -338,8 +368,9 @@ def _trace_predictions(root: str | Path, *, resolved_at: str, max_rows: int = 50
     return predictions, len(trace_rows), skipped_current_count
 
 
-def _existing_outcome_ids_for_predictions(root: str | Path, predictions: list[Mapping[str, Any]]) -> set[str]:
+def _existing_outcome_refs_for_predictions(root: str | Path, predictions: list[Mapping[str, Any]]) -> tuple[set[str], set[str]]:
     ids: set[str] = set()
+    identity_keys: set[str] = set()
     seen_parts: set[Path] = set()
     for prediction in predictions:
         generated_at = str(prediction.get("generated_at") or "")
@@ -357,9 +388,12 @@ def _existing_outcome_ids_for_predictions(root: str | Path, predictions: list[Ma
                     payload = json.loads(raw)
                 except Exception:
                     continue
-                if isinstance(payload, Mapping) and payload.get("outcome_id"):
+                if not isinstance(payload, Mapping):
+                    continue
+                if payload.get("outcome_id"):
                     ids.add(str(payload.get("outcome_id")))
-    return ids
+                identity_keys.add(_row_identity_key(payload))
+    return ids, identity_keys
 
 
 def build_market_regime_trace_outcome_once_plan(
@@ -384,12 +418,12 @@ def build_market_regime_trace_outcome_once_plan(
             expired_predictions.append(prediction)
         else:
             unexpired_count += 1
-    existing_ids = _existing_outcome_ids_for_predictions(root, expired_predictions)
+    existing_ids, existing_identity_keys = _existing_outcome_refs_for_predictions(root, expired_predictions)
     candidate_rows: list[dict[str, Any]] = []
     duplicate_count = 0
     observed_regime_counts: dict[str, int] = {}
     for prediction in expired_predictions:
-        if _outcome_id_for_prediction(prediction) in existing_ids:
+        if _outcome_id_for_prediction(prediction) in existing_ids or _prediction_identity_key(prediction) in existing_identity_keys:
             duplicate_count += 1
             continue
         observation = _observation_for_prediction(
