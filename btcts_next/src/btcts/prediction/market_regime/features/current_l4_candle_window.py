@@ -7,6 +7,7 @@ from math import sqrt
 from typing import Any, Mapping
 
 from ..source_snapshot import MarketRegimeSourceSnapshot
+from .current_l4_thresholds import CurrentL4CandleThresholds
 
 # MR_A2_SPLIT_CURRENT_L4_CANDLE_WINDOW_2026_07_09
 CURRENT_L4_CANDLE_WINDOW_MAX_ROWS = 60
@@ -76,16 +77,17 @@ def summarize_current_l4_candle_rows(rows: tuple[Mapping[str, Any], ...]) -> Map
     }
 
 
-def current_l4_candle_regime_hint(summary: Mapping[str, Any]) -> tuple[str, str]:
+def current_l4_candle_regime_hint(summary: Mapping[str, Any], *, thresholds: CurrentL4CandleThresholds | None = None) -> tuple[str, str]:
     if not bool(summary.get("ok")) or int(summary.get("candle_count") or 0) < 2:
         return "UNKNOWN", "insufficient_current_l4_candle_window"
+    active_thresholds = thresholds or CurrentL4CandleThresholds()
     range_bps = _as_float(summary.get("range_bps")) or 0.0
     net_bps = _as_float(summary.get("net_change_bps")) or 0.0
     abs_net = abs(net_bps)
-    if range_bps >= 180.0 and abs_net <= range_bps * 0.35:
+    if range_bps >= active_thresholds.high_vol_chop_range_bps_min and abs_net <= range_bps * active_thresholds.high_vol_chop_abs_net_range_ratio_max:
         return "HIGH_VOL_CHOP", "current_l4_wide_range_without_directional_acceptance"
-    if abs_net >= max(25.0, range_bps * 0.45):
+    if abs_net >= max(active_thresholds.directional_abs_net_bps_min, range_bps * active_thresholds.directional_abs_net_range_ratio_min):
         return ("UP_TREND", "current_l4_positive_net_change_dominates_window") if net_bps > 0 else ("DOWN_TREND", "current_l4_negative_net_change_dominates_window")
-    if range_bps <= 20.0:
+    if range_bps <= active_thresholds.low_vol_range_bps_max:
         return "LOW_VOL_COMPRESSION", "current_l4_small_range_compressed_window"
     return "RANGE", "current_l4_bounded_or_mean_reverting_window"

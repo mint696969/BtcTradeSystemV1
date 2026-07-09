@@ -331,6 +331,13 @@ def test_mr_a1_stale_forecast_records_are_blocked_by_currentness_gate(tmp_path: 
     assert first.diagnostic_record["forecast_records_currentness_gate_applied"] is True
     assert first.diagnostic_record["selected_forecast_label"] == ""
     assert first.diagnostic_record["label_selection_reason"] == "forecast_records_stale_blocked"
+    price = {signal.name: signal for signal in bundle.signals_by_group(FeatureGroup.PRICE_STRUCTURE)}
+    # MR_A4_COVERAGE_IGNORES_THRESHOLD_METADATA_2026_07_09
+    # Threshold metadata may be present without a live current-L4 candle window.
+    assert "current_l4_candle_threshold_set_id" in price
+    assert price["current_l4_candle_threshold_set_id"].available is True
+    assert price["current_l4_candle_window_available"].value is False
+    assert coverage_by_group[FeatureGroup.PRICE_STRUCTURE].freshness_state.value == "STALE"
 
 
 def _write_warroom_candles(root: Path, rows: list[dict]) -> None:

@@ -10,6 +10,7 @@ from ..contracts import FeatureGroup, FreshnessState, SourceCoverage
 from ..source_snapshot import MarketRegimeSourceSnapshot
 from .feature_bundle import FeatureSignal, MarketRegimeFeatureBundle
 from .current_l4_candle_window import current_l4_candle_regime_hint, current_l4_candle_rows, summarize_current_l4_candle_rows
+from .current_l4_thresholds import current_l4_thresholds_from_parameter_set
 
 
 # MR_A1_STALE_SOURCE_GATE_2026_07_09
@@ -265,7 +266,7 @@ def _numeric_by_horizon_sec(records: Tuple[Mapping[str, Any], ...], field: str, 
     return values_by_horizon
 
 
-def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_at: str) -> Tuple[FeatureSignal, ...]:
+def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_at: str, parameter_set: object | None = None) -> Tuple[FeatureSignal, ...]:
     records = snapshot.forecast_records.market_regime_records
     forecast_current_enough, _, _, currentness_warnings = _forecast_records_currentness(snapshot, generated_at=generated_at)
     latest = _latest_market_regime_record(snapshot) if forecast_current_enough else None
@@ -279,7 +280,8 @@ def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_
     candle_rows = current_l4_candle_rows(snapshot)
     candle_current_enough, _, _, candle_warnings = _current_l4_candle_currentness(snapshot, generated_at=generated_at)
     candle_summary = summarize_current_l4_candle_rows(candle_rows) if candle_current_enough else {"ok": False, "reason": "current_l4_candle_window_not_current"}
-    candle_regime_hint, candle_regime_reason = current_l4_candle_regime_hint(candle_summary)
+    current_l4_thresholds = current_l4_thresholds_from_parameter_set(parameter_set)
+    candle_regime_hint, candle_regime_reason = current_l4_candle_regime_hint(candle_summary, thresholds=current_l4_thresholds)
     range_high = _first_float(values, "range_high", "recent_range_high", "resistance")
     range_low = _first_float(values, "range_low", "recent_range_low", "support")
     vwap = _first_float(values, "vwap", "session_vwap")
@@ -313,6 +315,9 @@ def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_
         _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_close_position", candle_summary.get("close_position"), available=bool(candle_summary.get("ok")), source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.10),
         _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_regime_hint", candle_regime_hint, available=candle_regime_hint != "UNKNOWN", source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.18),
         _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_regime_reason", candle_regime_reason, available=True, source_refs=(snapshot.warroom_candles.relative_path,), warnings=candle_warnings, weight_hint=0.04),
+        # MR_A4_CURRENT_L4_THRESHOLD_PARAMETER_SET_2026_07_09
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_threshold_set_id", current_l4_thresholds.threshold_set_id, available=True, source_refs=("active_parameter_set",), warnings=(), weight_hint=0.02),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_thresholds", current_l4_thresholds.to_dict(), available=True, source_refs=("active_parameter_set",), warnings=(), weight_hint=0.02),
     )
 
 
@@ -358,9 +363,24 @@ def _coverage_for_group(group: FeatureGroup, signals: Tuple[FeatureSignal, ...])
     available = any(signal.available for signal in group_signals)
     used = tuple(dict.fromkeys(ref for signal in group_signals for ref in signal.source_refs if ref))
     warnings = tuple(dict.fromkeys(warn for signal in group_signals for warn in signal.warnings if warn))
+    # MR_A4_COVERAGE_IGNORES_THRESHOLD_METADATA_2026_07_09
+    current_l4_live_signal_names = {
+        "current_l4_candle_window_available",
+        "current_l4_candle_window_candle_count",
+        "current_l4_candle_window_first_ts",
+        "current_l4_candle_window_last_ts",
+        "current_l4_candle_net_change_bps",
+        "current_l4_candle_range_bps",
+        "current_l4_candle_close_position",
+        "current_l4_candle_regime_hint",
+        "current_l4_candle_regime_reason",
+        "current_l4_candle_realized_volatility_bps",
+        "current_l4_candle_average_range_bps",
+        "current_l4_candle_window_range_bps",
+    }
     has_current_l4_live = any(
         signal.available
-        and signal.name.startswith("current_l4_candle_")
+        and signal.name in current_l4_live_signal_names
         and bool(signal.value)
         and "current_l4_candle_window_not_ok" not in signal.warnings
         and "current_l4_candle_window_stale" not in signal.warnings
@@ -385,12 +405,12 @@ def _coverage_for_group(group: FeatureGroup, signals: Tuple[FeatureSignal, ...])
     )
 
 
-def build_market_regime_feature_bundle(snapshot: MarketRegimeSourceSnapshot, *, generated_at: str) -> MarketRegimeFeatureBundle:
+def build_market_regime_feature_bundle(snapshot: MarketRegimeSourceSnapshot, *, generated_at: str, parameter_set: object | None = None) -> MarketRegimeFeatureBundle:
     signals = (
         *_source_quality_signals(snapshot, generated_at=generated_at),
         *_liquidity_signals(snapshot),
         *_orderflow_signals(snapshot),
-        *_price_structure_signals(snapshot, generated_at=generated_at),
+        *_price_structure_signals(snapshot, generated_at=generated_at, parameter_set=parameter_set),
         *_volatility_signals(snapshot, generated_at=generated_at),
         *_cross_venue_signals(snapshot, generated_at=generated_at),
     )

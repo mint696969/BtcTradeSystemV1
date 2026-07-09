@@ -34,6 +34,15 @@ class MarketRegimeParameterSet:
         "debounce_required_consensus": 2,
         "debounce_window": 3,
         "minimum_tactical_confidence_percent": 65,
+        # MR_A4_CURRENT_L4_THRESHOLD_PARAMETER_SET_2026_07_09
+        "current_l4_candle_window": {
+            "threshold_set_id": "market_regime.current_l4_candle_thresholds.v1",
+            "high_vol_chop_range_bps_min": 180.0,
+            "high_vol_chop_abs_net_range_ratio_max": 0.35,
+            "directional_abs_net_bps_min": 25.0,
+            "directional_abs_net_range_ratio_min": 0.45,
+            "low_vol_range_bps_max": 20.0,
+        },
     })
     weights: Mapping[str, float] = field(default_factory=lambda: {
         "price_structure": 0.25,

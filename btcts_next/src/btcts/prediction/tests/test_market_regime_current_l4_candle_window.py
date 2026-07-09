@@ -17,6 +17,7 @@ from btcts.prediction.market_regime.features.current_l4_candle_window import (  
     current_l4_candle_rows,
     summarize_current_l4_candle_rows,
 )
+from btcts.prediction.market_regime.features.current_l4_thresholds import CurrentL4CandleThresholds  # noqa: E402
 
 
 def _row(ts: str, open_: float, high: float, low: float, close: float) -> dict:
@@ -59,3 +60,14 @@ def test_mr_a2_current_l4_regime_hint_basic_cases() -> None:
     assert current_l4_candle_regime_hint(up)[0] == "UP_TREND"
     assert current_l4_candle_regime_hint(chop)[0] == "HIGH_VOL_CHOP"
     assert current_l4_candle_regime_hint(low_vol)[0] == "LOW_VOL_COMPRESSION"
+
+
+def test_mr_a4_current_l4_regime_hint_accepts_parameterized_thresholds() -> None:
+    borderline = summarize_current_l4_candle_rows((
+        _row("2026-07-09T00:00:00Z", 100.0, 100.8, 99.9, 100.0),
+        _row("2026-07-09T00:01:00Z", 100.0, 101.0, 99.9, 100.32),
+    ))
+    strict = CurrentL4CandleThresholds(directional_abs_net_bps_min=50.0, directional_abs_net_range_ratio_min=0.9)
+    loose = CurrentL4CandleThresholds(directional_abs_net_bps_min=10.0, directional_abs_net_range_ratio_min=0.2)
+    assert current_l4_candle_regime_hint(borderline, thresholds=strict)[0] == "RANGE"
+    assert current_l4_candle_regime_hint(borderline, thresholds=loose)[0] == "UP_TREND"

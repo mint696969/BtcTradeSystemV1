@@ -43,6 +43,8 @@ def test_mr_a3_current_l4_evidence_digest_is_summary_only() -> None:
             _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_close_position", 0.82),
             _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_regime_hint", "UP_TREND"),
             _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_regime_reason", "current_l4_positive_net_change_dominates_window"),
+            _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_threshold_set_id", "market_regime.current_l4_candle_thresholds.v1"),
+            _signal(FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_thresholds", {"directional_abs_net_bps_min": 25.0}),
             _signal(FeatureGroup.VOLATILITY, "current_l4_candle_realized_volatility_bps", 4.2),
             _signal(FeatureGroup.VOLATILITY, "current_l4_candle_average_range_bps", 7.1),
             _signal(FeatureGroup.VOLATILITY, "current_l4_candle_window_range_bps", 52.0),
@@ -57,6 +59,8 @@ def test_mr_a3_current_l4_evidence_digest_is_summary_only() -> None:
     assert digest["net_change_bps"] == 31.5
     assert digest["realized_volatility_bps"] == 4.2
     assert digest["source_refs"]
+    assert digest["threshold_set_id"] == "market_regime.current_l4_candle_thresholds.v1"
+    assert digest["thresholds"]["directional_abs_net_bps_min"] == 25.0
     assert "forecast_records_stale" in digest["warnings"]
     assert "open" not in digest
     assert "high" not in digest

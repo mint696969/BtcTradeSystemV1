@@ -111,7 +111,7 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
     if not parameter_set_registry_validation.get("ok"):
         raise ValueError(f"parameter-set registry validation failed: {parameter_set_registry_validation}")
     source_snapshot = build_market_regime_source_snapshot(root)
-    feature_bundle = build_market_regime_feature_bundle(source_snapshot, generated_at=generated_at)
+    feature_bundle = build_market_regime_feature_bundle(source_snapshot, generated_at=generated_at, parameter_set=active_parameter_set)
     prediction_packet = classify_market_regime_feature_bundle(feature_bundle, generated_at=generated_at)
     signal_score_report = score_market_regime_signals(feature_bundle)
     cards = build_market_regime_cards_from_packet(prediction_packet)

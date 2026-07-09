@@ -20,6 +20,8 @@ _PRICE_KEYS = (
     "current_l4_candle_close_position",
     "current_l4_candle_regime_hint",
     "current_l4_candle_regime_reason",
+    "current_l4_candle_threshold_set_id",
+    "current_l4_candle_thresholds",
 )
 _VOL_KEYS = (
     "current_l4_candle_realized_volatility_bps",
@@ -79,6 +81,9 @@ def build_current_l4_candle_evidence_digest(bundle: MarketRegimeFeatureBundle) -
         "window_range_bps": _value(volatility, "current_l4_candle_window_range_bps"),
         "regime_hint": _value(price, "current_l4_candle_regime_hint", ""),
         "regime_reason": _value(price, "current_l4_candle_regime_reason", ""),
+        # MR_A4_CURRENT_L4_THRESHOLD_PARAMETER_SET_2026_07_09
+        "threshold_set_id": _value(price, "current_l4_candle_threshold_set_id", ""),
+        "thresholds": _value(price, "current_l4_candle_thresholds", {}),
         "source_refs": source_refs,
         "warnings": warnings,
     }
