@@ -11,7 +11,7 @@ _SRC_ROOT = Path(__file__).resolve().parents[3]
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
-from btcts.prediction.market_regime.artifact_contracts import validate_market_regime_latest_cards_artifact  # noqa: E402
+from btcts.prediction.market_regime.artifact_contracts import validate_market_regime_latest_cards_artifact, validate_market_regime_status_artifact  # noqa: E402
 from btcts.prediction.market_regime.tools.write_latest import (  # noqa: E402
     build_market_regime_latest_artifact_set,
     main,
@@ -100,6 +100,9 @@ def test_cp5_write_latest_artifacts_once_writes_expected_files(tmp_path: Path) -
     assert "not win rate" in read_model["explanation_note"]
     assert status["status"] == "latest_ready"
     assert status["latest_cards_available"] is True
+    assert status["trace_ledger_available"] is True
+    assert status["outcome_resolver_available"] is True
+    assert validate_market_regime_status_artifact(status)["ok"] is True
     assert manifest["refs"]["latest_cards_json"] == "prediction/market_regime/latest_cards.json"
     assert latest_cards["safety"]["ui_render_invokes_classifier"] is False
     assert latest_cards["safety"]["broker_private_api_allowed"] is False

@@ -31,6 +31,7 @@ from btcts.prediction.market_regime.artifact_contracts import (  # noqa: E402
     build_market_regime_run_manifest_artifact,
     build_market_regime_status_artifact,
     validate_market_regime_latest_cards_artifact,
+    validate_market_regime_status_artifact,
 )
 
 
@@ -145,4 +146,22 @@ def test_cp3_latest_and_read_model_and_status_are_non_executing() -> None:
     assert status["latest_read_model_available"] is True
     assert status["trace_ledger_available"] is True
     assert status["outcome_resolver_available"] is True
+    assert validate_market_regime_status_artifact(status)["ok"] is True
     assert manifest["refs"]["status_json"] == "prediction/market_regime/status.json"
+
+
+def test_cp3_status_defaults_expose_outcome_resolver_and_validator_rejects_latest_ready_false() -> None:
+    status = build_market_regime_status_artifact(
+        generated_at="2026-07-08T08:31:00Z",
+        status="latest_ready",
+        latest_run_id="market_regime_20260708T083100Z_test",
+        trace_ledger_available=True,
+    )
+    assert status["outcome_resolver_available"] is True
+    assert validate_market_regime_status_artifact(status)["ok"] is True
+
+    invalid = dict(status)
+    invalid["outcome_resolver_available"] = False
+    result = validate_market_regime_status_artifact(invalid)
+    assert result["ok"] is False
+    assert "latest_ready_without_outcome_resolver_available" in result["failures"]

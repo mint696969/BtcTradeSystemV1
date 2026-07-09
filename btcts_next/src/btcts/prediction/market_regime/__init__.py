@@ -23,6 +23,7 @@ from .artifact_contracts import (
     build_market_regime_run_manifest_artifact,
     build_market_regime_status_artifact,
     validate_market_regime_latest_cards_artifact,
+    validate_market_regime_status_artifact,
 )
 from .calibration_read_model import (
     CALIBRATION_LATEST_READ_MODEL_RELPATH,
@@ -189,6 +190,7 @@ __all__ = [
     "build_market_regime_read_model_horizons",
     "build_market_regime_cards_from_packet",
     "MARKET_REGIME_ARTIFACT_PROJECTION_VERSION",
+    "validate_market_regime_status_artifact",
     "validate_market_regime_latest_cards_artifact",
     "build_market_regime_status_artifact",
     "build_market_regime_run_manifest_artifact",

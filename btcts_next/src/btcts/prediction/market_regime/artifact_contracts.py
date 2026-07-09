@@ -281,7 +281,7 @@ def build_market_regime_latest_read_model_artifact(
     ).to_dict()
 
 
-def build_market_regime_status_artifact(*, generated_at: str, status: str, latest_run_id: str = "", trace_ledger_available: bool = False, outcome_resolver_available: bool = False) -> Dict[str, Any]:
+def build_market_regime_status_artifact(*, generated_at: str, status: str, latest_run_id: str = "", trace_ledger_available: bool = False, outcome_resolver_available: bool = True) -> Dict[str, Any]:
     return MarketRegimeStatusArtifact(
         generated_at=generated_at,
         status=status,
@@ -311,6 +311,54 @@ def _has_forbidden_raw_keys(value: Any) -> bool:
     elif isinstance(value, list):
         return any(_has_forbidden_raw_keys(item) for item in value)
     return False
+
+
+def validate_market_regime_status_artifact(payload: Mapping[str, Any]) -> Dict[str, Any]:
+    failures: list[str] = []
+    if payload.get("schema_version") != MARKET_REGIME_STATUS_SCHEMA_VERSION:
+        failures.append("schema_version_mismatch")
+    if payload.get("artifact_family") != MARKET_REGIME_ARTIFACT_FAMILY:
+        failures.append("artifact_family_mismatch")
+    if payload.get("artifact_kind") != "status":
+        failures.append("artifact_kind_mismatch")
+    if payload.get("prediction_family_id") != "market_regime":
+        failures.append("prediction_family_id_mismatch")
+    latest_run_id = str(payload.get("latest_run_id") or "")
+    is_latest_ready = str(payload.get("status") or "") == "latest_ready"
+    if is_latest_ready and not latest_run_id:
+        failures.append("latest_ready_without_latest_run_id")
+    if latest_run_id and payload.get("latest_cards_available") is not True:
+        failures.append("latest_run_without_latest_cards_available")
+    if latest_run_id and payload.get("latest_read_model_available") is not True:
+        failures.append("latest_run_without_latest_read_model_available")
+    if is_latest_ready and payload.get("trace_ledger_available") is not True:
+        failures.append("latest_ready_without_trace_ledger_available")
+    if is_latest_ready and payload.get("outcome_resolver_available") is not True:
+        failures.append("latest_ready_without_outcome_resolver_available")
+    safety = payload.get("safety") if isinstance(payload.get("safety"), Mapping) else {}
+    for key in (
+        "ui_render_invokes_classifier",
+        "ui_render_reads_raw_market_source",
+        "autotrade_trigger_allowed",
+        "broker_private_api_allowed",
+        "order_intent_submitted",
+        "ledger_append_allowed",
+        "would_send_to_broker",
+    ):
+        if safety.get(key) is not False:
+            failures.append(f"safety_{key}_not_false")
+    if _has_forbidden_raw_keys(payload):
+        failures.append("forbidden_raw_payload_key_present")
+    return {
+        "ok": not failures,
+        "validator_version": MARKET_REGIME_ARTIFACT_CONTRACT_VERSION,
+        "failure_count": len(failures),
+        "failures": failures,
+        "status": str(payload.get("status") or ""),
+        "latest_run_id": latest_run_id,
+        "trace_ledger_available": bool(payload.get("trace_ledger_available")),
+        "outcome_resolver_available": bool(payload.get("outcome_resolver_available")),
+    }
 
 
 def validate_market_regime_latest_cards_artifact(payload: Mapping[str, Any]) -> Dict[str, Any]:

@@ -131,4 +131,5 @@ def test_cp9_write_latest_once_appends_trace_and_updates_status_manifest(tmp_pat
     status = json.loads((tmp_path / "prediction/market_regime/status.json").read_text(encoding="utf-8"))
     manifest = json.loads((tmp_path / "prediction/market_regime/runs/market_regime_cp9_write_test/manifest.json").read_text(encoding="utf-8"))
     assert status["trace_ledger_available"] is True
+    assert status["outcome_resolver_available"] is True
     assert manifest["refs"]["trace_part_jsonl"] == "prediction/market_regime/ledgers/date=2026-07-08/hour=11/part-00001.jsonl"
