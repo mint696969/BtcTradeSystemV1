@@ -406,10 +406,16 @@ def build_market_regime_trace_outcome_once_plan(
     root = Path(hot_root)
     effective_resolved_at = resolved_at or _utc_now_iso()
     effective_observation_source = _normalize_observation_source(observation_source)
-    payload = _load_latest_cards(root)
-    current = _current_card(_cards(payload))
-    if current is None:
-        raise ValueError("latest_cards has no current/observable card")
+    payload: dict[str, Any] = {}
+    current: dict[str, Any] | None = None
+    if effective_observation_source == "latest_cards_current":
+        payload = _load_latest_cards(root)
+        current = _current_card(_cards(payload))
+        if current is None:
+            raise ValueError("latest_cards has no current/observable card")
+    elif (root / LATEST_CARDS_RELPATH).exists():
+        payload = _load_latest_cards(root)
+        current = _current_card(_cards(payload))
     predictions, trace_row_count, skipped_current_count = _trace_predictions(root, resolved_at=effective_resolved_at, max_rows=max_trace_rows)
     expired_predictions: list[dict[str, Any]] = []
     unexpired_count = 0
@@ -429,7 +435,7 @@ def build_market_regime_trace_outcome_once_plan(
         observation = _observation_for_prediction(
             root,
             payload=payload,
-            current_card=current,
+            current_card=current or {},
             prediction=prediction,
             resolved_at=effective_resolved_at,
             observation_source=effective_observation_source,
@@ -444,7 +450,7 @@ def build_market_regime_trace_outcome_once_plan(
     elif observed_regime_counts:
         observed_regime_code = "MIXED"
     else:
-        observed_regime_code = str(current.get("regime_code") or "UNKNOWN") if effective_observation_source == "latest_cards_current" else "UNKNOWN"
+        observed_regime_code = str(current.get("regime_code") or "UNKNOWN") if effective_observation_source == "latest_cards_current" and current is not None else "UNKNOWN"
     return {
         "ok": True,
         "tool_version": MARKET_REGIME_RESOLVE_OUTCOMES_TOOL_VERSION,

@@ -85,6 +85,11 @@ def _fixture(root: Path) -> None:
     _write_candles(root)
 
 
+def _fixture_without_latest_cards(root: Path) -> None:
+    _write_trace(root)
+    _write_candles(root)
+
+
 def test_cp20_default_trace_outcomes_keep_latest_current_observation(tmp_path: Path) -> None:
     _fixture(tmp_path)
     result = build_market_regime_trace_outcome_once_plan(hot_root=tmp_path, resolved_at="2026-07-08T12:20:00Z")
@@ -111,6 +116,28 @@ def test_cp20_trace_outcomes_can_use_candle_summary_observation(tmp_path: Path) 
     assert rows["900s"]["outcome_label"] == "hit"
     assert rows["300s"]["observation_summary"]["source_refs"][0].endswith("timeframe=60s/closed.jsonl")
     assert rows["900s"]["observation_summary"]["source_refs"][0].endswith("timeframe=300s/closed.jsonl")
+
+
+
+
+def test_cp20_candle_summary_trace_outcomes_do_not_require_latest_cards(tmp_path: Path) -> None:
+    _fixture_without_latest_cards(tmp_path)
+    assert not (tmp_path / "prediction/market_regime/latest_cards.json").exists()
+
+    result = build_market_regime_trace_outcome_once_plan(
+        hot_root=tmp_path,
+        resolved_at="2026-07-08T12:20:00Z",
+        observation_source="candle_summary",
+    )
+
+    assert result["latest_run_id"] == ""
+    assert result["observation_source"] == "candle_summary"
+    assert result["trace_row_count"] == 1
+    assert result["candidate_outcome_count"] == 2
+    assert result["safety"]["reads_derived_warroom_candles_only"] is True
+    rows = {row["horizon_key"]: row for row in result["candidate_rows"]}
+    assert rows["300s"]["observation_source"] == "candle_summary"
+    assert rows["900s"]["observation_source"] == "candle_summary"
 
 
 def test_cp20_trace_once_with_candle_summary_appends_and_calibrates(tmp_path: Path) -> None:
@@ -170,6 +197,7 @@ def test_cp20_resolve_outcomes_cli_exposes_observation_source_and_is_safe() -> N
         "latest_cards_current",
         "candle_summary",
         "build_market_regime_candle_observation",
+        "payload: dict[str, Any] = {}",
         "observation_source=",
     ]
     assert [token for token in required if token not in text] == []
