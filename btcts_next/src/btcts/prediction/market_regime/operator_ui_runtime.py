@@ -111,10 +111,13 @@ def _windows_creationflags() -> int:
 def _child_env(hot_root: Path) -> dict[str, str]:
     repo_root = _repo_root()
     env = dict(os.environ)
-    env.setdefault("PYTHONPATH", str(repo_root / "btcts_next" / "src"))
+    repo_src = str(repo_root / "btcts_next" / "src")
+    inherited_pythonpath = str(env.get("PYTHONPATH") or "")
+    inherited_parts = [part for part in inherited_pythonpath.split(os.pathsep) if part and part != repo_src]
+    env["PYTHONPATH"] = os.pathsep.join([repo_src, *inherited_parts])
     env["BTCTS_HOT_ROOT"] = str(hot_root)
-    env.setdefault("BTCTS_DATA_ROOT", str(hot_root / "data"))
-    env.setdefault("BTC_TS_DATA_DIR", str(hot_root / "data"))
+    env["BTCTS_DATA_ROOT"] = str(hot_root / "data")
+    env["BTC_TS_DATA_DIR"] = str(hot_root / "data")
     return env
 
 

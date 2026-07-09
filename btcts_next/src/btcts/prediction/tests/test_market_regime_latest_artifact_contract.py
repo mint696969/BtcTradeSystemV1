@@ -29,6 +29,7 @@ from btcts.prediction.market_regime.artifact_contracts import (  # noqa: E402
     build_market_regime_latest_cards_artifact,
     build_market_regime_latest_read_model_artifact,
     build_market_regime_run_manifest_artifact,
+    MarketRegimeStatusArtifact,
     build_market_regime_status_artifact,
     validate_market_regime_latest_cards_artifact,
     validate_market_regime_status_artifact,
@@ -165,3 +166,15 @@ def test_cp3_status_defaults_expose_outcome_resolver_and_validator_rejects_lates
     result = validate_market_regime_status_artifact(invalid)
     assert result["ok"] is False
     assert "latest_ready_without_outcome_resolver_available" in result["failures"]
+
+def test_cp3_status_dataclass_default_is_contract_safe_for_latest_ready() -> None:
+    status = MarketRegimeStatusArtifact(
+        generated_at="2026-07-08T08:32:00Z",
+        status="latest_ready",
+        latest_run_id="market_regime_20260708T083200Z_test",
+        latest_cards_available=True,
+        latest_read_model_available=True,
+        trace_ledger_available=True,
+    ).to_dict()
+    assert status["outcome_resolver_available"] is True
+    assert validate_market_regime_status_artifact(status)["ok"] is True

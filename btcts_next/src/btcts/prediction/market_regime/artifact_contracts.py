@@ -179,7 +179,7 @@ class MarketRegimeStatusArtifact:
     latest_cards_available: bool = False
     latest_read_model_available: bool = False
     trace_ledger_available: bool = False
-    outcome_resolver_available: bool = False
+    outcome_resolver_available: bool = True
     schema_version: str = MARKET_REGIME_STATUS_SCHEMA_VERSION
     artifact_family: str = MARKET_REGIME_ARTIFACT_FAMILY
     artifact_kind: str = "status"
