@@ -539,6 +539,44 @@ outcome/calibration status
 review links
 ```
 
+
+## 12.1 Family scenario parts and parent scenario guidance
+<!-- PS_FAMILY_SCENARIO_PART_CONTRACT_V1_ROADMAP_2026_07_10 -->
+
+WarRoom section `3. Inference scenario guidance` must ultimately show a parent-composed scenario guidance read model, not a single-family caption and not UI-generated logic.
+
+Each prediction family must produce a scenario part:
+
+```text
+market_regime scenario part
+trend_bias scenario part
+reversal_zone scenario part
+breakout_false_break scenario part
+volatility_risk scenario part
+liquidity_execution_quality scenario part
+macro_cross_context scenario part
+trigger_candidate scenario part, deferred and non-executing
+```
+
+The parent inference engine owns the composition step:
+
+```text
+family scenario parts -> parent scenario guidance read model -> WarRoom display
+```
+
+Rules:
+
+```text
+A family may describe its own scenario contribution.
+A family must not decide the whole scenario alone.
+The parent engine resolves dominant/supporting/conflicting parts.
+The UI displays the parent read model only.
+The UI must not run family classifiers or combine evidence itself.
+No scenario part grants trade permission.
+```
+
+This is required for every prediction family and for every future extension of the inference engine.
+
 ## 13. Current MarketRegime status and audit stance
 
 Current MarketRegime artifacts exist in D-hot and are visible in WarRoom. However, they must not be treated as complete without audit.

@@ -618,6 +618,69 @@ flat / range / no_change / status_quo
 unknown / no_edge / data_insufficient / too_noisy / conflicting_evidence / wait_for_confirmation
 ```
 
+
+## 10.1 Family scenario part contract
+<!-- PS_FAMILY_SCENARIO_PART_CONTRACT_V1_FORMAL_2026_07_10 -->
+
+Scenario Core must not be implemented as one monolithic family output. Each prediction family contributes a family scenario part, and the parent Scenario Core combines those parts into the final scenario guidance.
+
+Required family scenario part fields:
+
+```text
+artifact_kind=family_scenario_part
+prediction_family_id
+horizon_key
+horizon_group
+scenario_state
+scenario_label
+scenario_summary
+confidence_percent
+estimated_signal_strength_percent
+part_role
+drivers
+blockers
+warnings
+evidence_refs
+source_quality_notes
+trace_refs
+parameter_set_id
+parent_merge
+safety
+```
+
+Required parent scenario guidance fields:
+
+```text
+artifact_kind=parent_scenario_guidance_read_model
+horizon_key
+horizon_group
+scenario_state
+scenario_label
+scenario_summary
+supporting_parts
+conflicting_parts
+rejected_parts
+dominant_family_id
+operator_guidance
+read_only=true
+safety
+```
+
+Hard rules:
+
+```text
+family_decides_overall_scenario=false
+same_run_recursive_dependency_allowed=false
+warroom_displays_parent_guidance_only=true
+warroom_does_not_run_family_classifiers=true
+broker_send_enabled=false
+autotrade_trigger_allowed=false
+order_intent_submitted=false
+parameter_auto_promotion_allowed=false
+```
+
+This makes `3. Inference scenario guidance` a true parent-engine read model built from scenario parts rather than a UI caption or a single market-regime card.
+
 ## 11. Invalidation, rewrite, and revision tracking
 
 Every prediction must include lifetime and revision state.

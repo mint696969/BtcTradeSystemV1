@@ -35,6 +35,14 @@ from .parameter_sets import (
 from .prearmed_readiness import PredictionPreArmedReadinessSnapshot, build_prediction_prearmed_readiness_snapshot
 from .replay_validation import ReplayValidationResult, ReplayValidationScenario, build_replay_validation_result
 from .rule_based_v0 import build_rule_based_v0_outputs
+from .scenario_parts import (
+    PREDICTION_FAMILY_SCENARIO_PART_CONTRACT_VERSION,
+    PREDICTION_PARENT_SCENARIO_GUIDANCE_CONTRACT_VERSION,
+    build_parent_scenario_guidance_read_model,
+    build_prediction_family_scenario_part,
+    validate_parent_scenario_guidance_read_model,
+    validate_prediction_family_scenario_part,
+)
 from .shadow_adapter import AutoTradeInferenceSnapshot, AutoTradeShadowSignalPreview, build_autotrade_shadow_signal_preview
 from .source_artifact_coverage import (
     ContextEvidenceProfile,
@@ -152,6 +160,8 @@ __all__ = [
     "PredictionOutput",
     "PredictionParameterSetBase",
     "PredictionParameterSetStatus",
+    "PREDICTION_FAMILY_SCENARIO_PART_CONTRACT_VERSION",
+    "PREDICTION_PARENT_SCENARIO_GUIDANCE_CONTRACT_VERSION",
     "PredictionPreArmedReadinessSnapshot",
     "PredictionWarRoomDisplayPacket",
     "build_provider_reliability_registry",
@@ -196,6 +206,10 @@ __all__ = [
     "build_prediction_warroom_display_packet",
     "build_replay_validation_result",
     "build_rule_based_v0_outputs",
+    "build_prediction_family_scenario_part",
+    "build_parent_scenario_guidance_read_model",
+    "validate_prediction_family_scenario_part",
+    "validate_parent_scenario_guidance_read_model",
     "default_prediction_parameter_set_for_family",
     "feature_registry_by_id",
     "horizon_by_seconds",

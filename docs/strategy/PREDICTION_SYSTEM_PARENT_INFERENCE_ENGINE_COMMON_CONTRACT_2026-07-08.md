@@ -298,6 +298,90 @@ schema changes are additive or versioned
 UI labels are not canonical IDs
 ```
 
+
+## 15. Family scenario part contract
+<!-- PS_FAMILY_SCENARIO_PART_CONTRACT_V1_SPEC_2026_07_10 -->
+
+Each prediction family must emit a family scenario part before the parent engine creates the WarRoom-level scenario guidance.
+
+A family scenario part is not the overall scenario. It is one typed contribution from one prediction family for one horizon/horizon group.
+
+Required semantics:
+
+```text
+family_scenario_part_required=true
+parent_scenario_guidance_required=true
+family_decides_overall_scenario=false
+same_run_recursive_dependency_allowed=false
+warroom_section_3_reads_parent_guidance_only=true
+ui_displays_read_models_only=true
+non_executing=true
+broker_send_enabled=false
+autotrade_trigger_allowed=false
+parameter_auto_promotion_allowed=false
+```
+
+Minimum family scenario part fields:
+
+```text
+artifact_kind=family_scenario_part
+prediction_family_id
+horizon_key
+horizon_group
+scenario_state
+scenario_label
+scenario_summary
+confidence_percent
+estimated_signal_strength_percent
+part_role
+  primary_context | directional_bias | reversal_warning | breakout_warning | risk_cap |
+  liquidity_context | macro_context | trigger_candidate_context | context_only
+drivers
+blockers
+warnings
+evidence_refs
+source_quality_notes
+trace_refs
+parameter_set_id
+generated_at
+parent_merge
+safety
+```
+
+The parent engine combines family parts into:
+
+```text
+artifact_kind=parent_scenario_guidance_read_model
+horizon_key
+horizon_group
+scenario_state
+scenario_label
+scenario_summary
+supporting_parts
+conflicting_parts
+rejected_parts
+dominant_family_id
+operator_guidance
+safety
+```
+
+WarRoom section 3 must display the parent scenario guidance read model. It must not recalculate family meaning or call family classifiers during render.
+
+Family examples:
+
+```text
+market_regime -> primary_context / tactical market state
+trend_bias -> directional_bias
+reversal_zone -> reversal_warning
+breakout_false_break -> breakout_warning
+volatility_risk -> risk_cap
+liquidity_execution_quality -> liquidity_context
+macro_cross_context -> macro_context
+trigger_candidate -> trigger_candidate_context, deferred and non-executing
+```
+
+This contract is required for all current and future prediction families.
+
 ## 15. Implementation order
 
 After this parent contract is locked, return to market-regime design in this order:
