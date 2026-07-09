@@ -100,6 +100,15 @@ from .parameter_set_comparison_read_model import (
     build_market_regime_parameter_set_comparison_read_model_from_outcome_rows,
     validate_market_regime_parameter_set_comparison_read_model,
 )
+from .parameter_set_comparison_artifacts import (
+    MARKET_REGIME_PARAMETER_SET_COMPARISON_ARTIFACT_WRITER_VERSION,
+    PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH,
+    build_market_regime_parameter_set_comparison_artifact_write_plan,
+    parameter_set_comparison_latest_read_model_relpath,
+    parameter_set_comparison_outcome_part_relpath,
+    preflight_market_regime_parameter_set_comparison_read_model,
+    write_market_regime_parameter_set_comparison_read_model,
+)
 from .parameter_set import MarketRegimeParameterSet, build_default_market_regime_parameter_set
 from .parameter_set_registry import (
     MARKET_REGIME_DEFAULT_ACTIVE_PARAMETER_SET_ID,
@@ -133,6 +142,13 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "write_market_regime_parameter_set_comparison_read_model",
+    "preflight_market_regime_parameter_set_comparison_read_model",
+    "parameter_set_comparison_outcome_part_relpath",
+    "parameter_set_comparison_latest_read_model_relpath",
+    "build_market_regime_parameter_set_comparison_artifact_write_plan",
+    "PARAMETER_SET_COMPARISON_LATEST_READ_MODEL_RELPATH",
+    "MARKET_REGIME_PARAMETER_SET_COMPARISON_ARTIFACT_WRITER_VERSION",
     "validate_market_regime_parameter_set_comparison_read_model",
     "build_market_regime_parameter_set_comparison_read_model_from_outcome_rows",
     "build_market_regime_parameter_set_comparison_read_model_from_calibration_summary",
