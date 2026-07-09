@@ -92,6 +92,13 @@ from .producer_loop import (
     run_market_regime_producer_loop,
     write_market_regime_producer_control_request,
 )
+from .parameter_set_comparison_read_model import (
+    MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_VERSION,
+    TRUSTED_OBSERVATION_SOURCE as PARAMETER_SET_COMPARISON_TRUSTED_OBSERVATION_SOURCE,
+    build_market_regime_parameter_set_comparison_read_model_from_calibration_summary,
+    build_market_regime_parameter_set_comparison_read_model_from_outcome_rows,
+    validate_market_regime_parameter_set_comparison_read_model,
+)
 from .parameter_set import MarketRegimeParameterSet, build_default_market_regime_parameter_set
 from .parameter_set_registry import (
     MARKET_REGIME_DEFAULT_ACTIVE_PARAMETER_SET_ID,
@@ -125,6 +132,11 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "validate_market_regime_parameter_set_comparison_read_model",
+    "build_market_regime_parameter_set_comparison_read_model_from_outcome_rows",
+    "build_market_regime_parameter_set_comparison_read_model_from_calibration_summary",
+    "PARAMETER_SET_COMPARISON_TRUSTED_OBSERVATION_SOURCE",
+    "MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_VERSION",
     "write_market_regime_calibration_read_model",
     "calibration_latest_read_model_relpath",
     "build_market_regime_calibration_read_model",
