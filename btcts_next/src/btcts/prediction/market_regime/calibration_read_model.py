@@ -98,6 +98,19 @@ def build_market_regime_calibration_read_model(
     primary_bucket = dict(source_buckets.get(primary, {}))
     fallback_bucket = dict(source_buckets.get(FALLBACK_OBSERVATION_SOURCE, {}))
     source_rows = [dict(item) for item in table.get("observation_source_rows", []) if isinstance(item, Mapping)]
+    calibration_trust = daily.get("calibration_trust") if isinstance(daily.get("calibration_trust"), Mapping) else {}
+    trust_view = {
+        "primary_observation_source": str(calibration_trust.get("primary_observation_source") or primary),
+        "trusted_observation_source": str(calibration_trust.get("trusted_observation_source") or PRIMARY_OBSERVATION_SOURCE),
+        "reference_only_observation_source": str(calibration_trust.get("reference_only_observation_source") or FALLBACK_OBSERVATION_SOURCE),
+        "latest_cards_current_is_reference_only": bool(calibration_trust.get("latest_cards_current_is_reference_only", True)),
+        "promotion_candidates_use_observation_source": str(calibration_trust.get("promotion_candidates_use_observation_source") or PRIMARY_OBSERVATION_SOURCE),
+        "promotion_candidates_require_parameter_set_comparison": bool(calibration_trust.get("promotion_candidates_require_parameter_set_comparison", True)),
+        "trusted_parameter_set_count": _safe_int(calibration_trust.get("trusted_parameter_set_count")),
+        "trusted_row_count": _safe_int(calibration_trust.get("trusted_row_count")),
+        "reference_only_row_count": _safe_int(calibration_trust.get("reference_only_row_count")),
+        "overall_includes_reference_rows_for_compatibility": bool(calibration_trust.get("overall_includes_reference_rows_for_compatibility", True)),
+    }
     return {
         "schema_version": "market_regime_calibration_read_model.2026_07_08.v1",
         "calibration_read_model_version": MARKET_REGIME_CALIBRATION_READ_MODEL_VERSION,
@@ -108,6 +121,7 @@ def build_market_regime_calibration_read_model(
         "month": str(table.get("month") or _month_from_date(str(daily.get("date") or ""))),
         "primary_observation_source": primary,
         "primary_observation_note": "candle_summary is the preferred calibration view when available; latest_cards_current is kept as compatibility/reference evidence.",
+        "calibration_trust": trust_view,
         "primary": primary_bucket,
         "latest_cards_current_reference": fallback_bucket,
         "by_observation_source": [source_buckets[key] for key in sorted(source_buckets)],

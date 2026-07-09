@@ -51,6 +51,18 @@ def _daily() -> dict:
             _bucket("candle_summary|300s", total=80, hit=41, partial=20, miss=19, score=0.6375),
             _bucket("latest_cards_current|300s", total=246, hit=246, partial=0, miss=0, score=1.0),
         ],
+        "calibration_trust": {
+            "primary_observation_source": "candle_summary",
+            "trusted_observation_source": "candle_summary",
+            "reference_only_observation_source": "latest_cards_current",
+            "latest_cards_current_is_reference_only": True,
+            "promotion_candidates_use_observation_source": "candle_summary",
+            "promotion_candidates_require_parameter_set_comparison": True,
+            "trusted_parameter_set_count": 1,
+            "trusted_row_count": 341,
+            "reference_only_row_count": 804,
+            "overall_includes_reference_rows_for_compatibility": True,
+        },
     }
 
 
@@ -73,6 +85,11 @@ def test_cp22_build_calibration_read_model_prefers_candle_summary() -> None:
     assert model["artifact_kind"] == "calibration_read_model"
     assert model["primary_observation_source"] == "candle_summary"
     assert model["primary"]["calibration_score"] == 0.6584
+    assert model["calibration_trust"]["latest_cards_current_is_reference_only"] is True
+    assert model["calibration_trust"]["promotion_candidates_use_observation_source"] == "candle_summary"
+    assert model["calibration_trust"]["promotion_candidates_require_parameter_set_comparison"] is True
+    assert model["calibration_trust"]["trusted_parameter_set_count"] == 1
+    assert model["calibration_trust"]["trusted_row_count"] == 341
     assert model["latest_cards_current_reference"]["calibration_score"] == 1.0
     assert model["table_observation_source_row_count"] == 2
     assert model["source_refs"]["daily_summary_json"] == calibration_daily_summary_relpath("2026-07-08")
@@ -102,4 +119,5 @@ def test_cp22_write_calibration_read_model_artifact(tmp_path: Path) -> None:
     assert result["calibration_read_model_json"] == CALIBRATION_LATEST_READ_MODEL_RELPATH == calibration_latest_read_model_relpath()
     payload = json.loads((tmp_path / result["calibration_read_model_json"]).read_text(encoding="utf-8"))
     assert payload["primary"]["counts"]["miss"] == 81
+    assert payload["calibration_trust"]["reference_only_observation_source"] == "latest_cards_current"
     assert payload["safety"]["broker_private_api_allowed"] is False

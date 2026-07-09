@@ -11,6 +11,8 @@ from typing import Any, Dict, Iterable, Mapping
 MARKET_REGIME_CALIBRATION_SUMMARY_VERSION = "prediction.market_regime.calibration_summary.2026_07_08.v1"
 MARKET_REGIME_CALIBRATION_TABLE_VERSION = "prediction.market_regime.calibration_table.2026_07_08.v1"
 _ALLOWED_OUTCOME_LABELS = ("hit", "partial", "miss", "invalidated", "unknown")
+PRIMARY_TRUSTED_OBSERVATION_SOURCE = "candle_summary"
+REFERENCE_ONLY_OBSERVATION_SOURCE = "latest_cards_current"
 _SCORE = {"hit": 1.0, "partial": 0.5, "miss": 0.0, "invalidated": 0.0, "unknown": 0.0}
 _FORBIDDEN_RAW_KEYS = {
     "raw_candles",
@@ -121,6 +123,56 @@ def _bucket() -> dict[str, Any]:
     return {"total": 0, "counts": _empty_counts(), "score_sum": 0.0, "confidence_sum": 0.0, "confidence_count": 0, "sample_trace_refs": []}
 
 
+def _known_total(bucket: Mapping[str, Any]) -> int:
+    counts = bucket.get("counts") if isinstance(bucket.get("counts"), Mapping) else {}
+    total = int(bucket.get("total") or 0)
+    return total - int(counts.get("unknown") or 0)
+
+
+def _select_primary_observation_source(by_observation_source: Mapping[str, Mapping[str, Any]]) -> str:
+    trusted = by_observation_source.get(PRIMARY_TRUSTED_OBSERVATION_SOURCE)
+    if isinstance(trusted, Mapping) and _known_total(trusted) > 0:
+        return PRIMARY_TRUSTED_OBSERVATION_SOURCE
+    reference = by_observation_source.get(REFERENCE_ONLY_OBSERVATION_SOURCE)
+    if isinstance(reference, Mapping) and _known_total(reference) > 0:
+        return REFERENCE_ONLY_OBSERVATION_SOURCE
+    candidates = sorted(key for key, bucket in by_observation_source.items() if _known_total(bucket) > 0)
+    return candidates[0] if candidates else "none"
+
+
+def _rows_for_observation_source(rows: Iterable[Mapping[str, Any]], observation_source: str) -> list[Mapping[str, Any]]:
+    return [row for row in rows if str(row.get("observation_source") or "") == observation_source]
+
+
+def _buckets_by_parameter(rows: Iterable[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    buckets: dict[str, dict[str, Any]] = defaultdict(_bucket)
+    for row in rows:
+        parameter_key = str(row.get("parameter_set_id") or "unknown_parameter_set")
+        _update_bucket(buckets[parameter_key], row)
+    return buckets
+
+
+def _trust_summary(
+    *,
+    primary_observation_source: str,
+    trusted_row_count: int,
+    reference_row_count: int,
+    trusted_parameter_set_count: int,
+) -> dict[str, Any]:
+    return {
+        "primary_observation_source": primary_observation_source,
+        "trusted_observation_source": PRIMARY_TRUSTED_OBSERVATION_SOURCE,
+        "reference_only_observation_source": REFERENCE_ONLY_OBSERVATION_SOURCE,
+        "latest_cards_current_is_reference_only": True,
+        "promotion_candidates_use_observation_source": PRIMARY_TRUSTED_OBSERVATION_SOURCE,
+        "promotion_candidates_require_parameter_set_comparison": True,
+        "trusted_parameter_set_count": int(trusted_parameter_set_count),
+        "trusted_row_count": int(trusted_row_count),
+        "reference_only_row_count": int(reference_row_count),
+        "overall_includes_reference_rows_for_compatibility": True,
+    }
+
+
 def _safe_row(row: Mapping[str, Any]) -> dict[str, Any]:
     return {
         "outcome_id": str(row.get("outcome_id") or ""),
@@ -171,6 +223,11 @@ def build_market_regime_calibration_summary(*, rows: Iterable[Mapping[str, Any]]
         _update_bucket(by_observation_source[observation_source_key], safe)
         _update_bucket(by_observation_source_horizon[f"{observation_source_key}|{horizon_key}"], safe)
     effective_date = date or (_date_from_ts(safe_rows[0]["generated_at"]) if safe_rows else "unknown-date")
+    primary_observation_source = _select_primary_observation_source(by_observation_source)
+    primary_rows = _rows_for_observation_source(safe_rows, primary_observation_source) if primary_observation_source != "none" else []
+    trusted_rows = _rows_for_observation_source(safe_rows, PRIMARY_TRUSTED_OBSERVATION_SOURCE)
+    reference_rows = _rows_for_observation_source(safe_rows, REFERENCE_ONLY_OBSERVATION_SOURCE)
+    trusted_by_parameter = _buckets_by_parameter(trusted_rows)
     summary = {
         "schema_version": "market_regime_calibration_daily_summary.2026_07_08.v1",
         "calibration_summary_version": MARKET_REGIME_CALIBRATION_SUMMARY_VERSION,
@@ -182,13 +239,23 @@ def build_market_regime_calibration_summary(*, rows: Iterable[Mapping[str, Any]]
         "input_failure_count": len(failures),
         "input_failures": failures,
         "overall": _finalize_bucket("overall", _aggregate_all(safe_rows)),
+        "primary_observation_source": primary_observation_source,
+        "primary_observation_overall": _finalize_bucket(primary_observation_source, _aggregate_all(primary_rows)) if primary_rows else _finalize_bucket(primary_observation_source, _bucket()),
+        "trusted_observation_source": PRIMARY_TRUSTED_OBSERVATION_SOURCE,
+        "trusted_observation_overall": _finalize_bucket(PRIMARY_TRUSTED_OBSERVATION_SOURCE, _aggregate_all(trusted_rows)) if trusted_rows else _finalize_bucket(PRIMARY_TRUSTED_OBSERVATION_SOURCE, _bucket()),
+        "calibration_trust": _trust_summary(
+            primary_observation_source=primary_observation_source,
+            trusted_row_count=len(trusted_rows),
+            reference_row_count=len(reference_rows),
+            trusted_parameter_set_count=sum(1 for bucket in trusted_by_parameter.values() if _known_total(bucket) > 0),
+        ),
         "by_horizon": [_finalize_bucket(key, by_horizon[key]) for key in sorted(by_horizon)],
         "by_predicted_regime": [_finalize_bucket(key, by_regime[key]) for key in sorted(by_regime)],
         "by_parameter_set": [_finalize_bucket(key, by_parameter[key]) for key in sorted(by_parameter)],
         "by_parameter_set_horizon": [_finalize_bucket(key, by_parameter_horizon[key]) for key in sorted(by_parameter_horizon)],
         "by_observation_source": [_finalize_bucket(key, by_observation_source[key]) for key in sorted(by_observation_source)],
         "by_observation_source_horizon": [_finalize_bucket(key, by_observation_source_horizon[key]) for key in sorted(by_observation_source_horizon)],
-        "promotion_candidates": _promotion_candidates(by_parameter),
+        "promotion_candidates": _promotion_candidates(trusted_by_parameter),
         "safety": _safety(),
     }
     validation = validate_market_regime_calibration_summary(summary)
@@ -205,6 +272,14 @@ def _aggregate_all(rows: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
 
 
 def _promotion_candidates(by_parameter: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    comparable_parameter_sets = [
+        parameter_set_id
+        for parameter_set_id, bucket in by_parameter.items()
+        if _known_total(bucket) > 0
+    ]
+    if len(comparable_parameter_sets) < 2:
+        return []
+
     candidates: list[dict[str, Any]] = []
     for parameter_set_id, bucket in by_parameter.items():
         finalized = _finalize_bucket(parameter_set_id, bucket)
