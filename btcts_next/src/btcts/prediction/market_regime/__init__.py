@@ -123,6 +123,12 @@ from .parameter_set_registry import (
     build_default_market_regime_parameter_set_registry,
     validate_market_regime_parameter_set_registry,
 )
+from .scenario_part import (
+    MARKET_REGIME_SCENARIO_PART_VERSION,
+    build_market_regime_scenario_part_from_latest_cards,
+    build_market_regime_scenario_part_from_latest_read_model,
+    validate_market_regime_scenario_part,
+)
 from .source_priority_policy import HorizonSourcePriority, SourcePriorityPolicy, build_default_source_priority_policy
 from .signal_scoring import (
     MARKET_REGIME_SIGNAL_SCORING_VERSION,
@@ -150,6 +156,10 @@ __all__ = [
     "validate_market_regime_parameter_set_review_packet",
     "build_market_regime_parameter_set_review_packet",
     "MARKET_REGIME_PARAMETER_SET_REVIEW_PACKET_VERSION",
+    "validate_market_regime_scenario_part",
+    "build_market_regime_scenario_part_from_latest_read_model",
+    "build_market_regime_scenario_part_from_latest_cards",
+    "MARKET_REGIME_SCENARIO_PART_VERSION",
     "write_market_regime_parameter_set_comparison_read_model",
     "preflight_market_regime_parameter_set_comparison_read_model",
     "parameter_set_comparison_outcome_part_relpath",
