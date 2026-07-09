@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import sys
+
+import pytest
 from pathlib import Path
 
 _SRC_ROOT = Path(__file__).resolve().parents[3]
@@ -14,6 +16,7 @@ if str(_SRC_ROOT) not in sys.path:
 from btcts.prediction.market_regime.observation_evaluator import warroom_closed_candle_relpath  # noqa: E402
 from btcts.prediction.market_regime.tools.resolve_outcomes import (  # noqa: E402
     build_market_regime_trace_outcome_once_plan,
+    main,
     resolve_market_regime_trace_outcomes_once,
 )
 
@@ -128,11 +131,42 @@ def test_cp20_trace_once_with_candle_summary_appends_and_calibrates(tmp_path: Pa
     assert result["calibration_results"][0]["ok"] is True
 
 
+
+
+def test_cp20_trace_ledger_cli_requires_explicit_observation_source(tmp_path: Path) -> None:
+    _fixture(tmp_path)
+    with pytest.raises(SystemExit) as raised:
+        main([
+            "--hot-root",
+            str(tmp_path),
+            "--source",
+            "trace_ledger",
+            "--preflight",
+            "--resolved-at",
+            "2026-07-08T12:20:00Z",
+        ])
+    assert raised.value.code == 2
+
+    ok = main([
+        "--hot-root",
+        str(tmp_path),
+        "--source",
+        "trace_ledger",
+        "--preflight",
+        "--observation-source",
+        "candle_summary",
+        "--resolved-at",
+        "2026-07-08T12:20:00Z",
+    ])
+    assert ok == 0
+
+
 def test_cp20_resolve_outcomes_cli_exposes_observation_source_and_is_safe() -> None:
     path = Path(__file__).resolve().parents[1] / "market_regime/tools/resolve_outcomes.py"
     text = path.read_text(encoding="utf-8")
     required = [
         "--observation-source",
+        "Required when --source trace_ledger",
         "latest_cards_current",
         "candle_summary",
         "build_market_regime_candle_observation",

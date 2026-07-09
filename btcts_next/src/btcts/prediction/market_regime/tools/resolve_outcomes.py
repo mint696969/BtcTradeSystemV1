@@ -529,7 +529,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resolved-at", default=None, help="UTC resolution timestamp. Defaults to current UTC.")
     parser.add_argument("--source", choices=("latest_cards", "trace_ledger"), default="latest_cards", help="Prediction source to evaluate. latest_cards keeps CP17 behavior; trace_ledger evaluates historical trace rows.")
     parser.add_argument("--max-trace-rows", type=int, default=5000, help="Maximum trace rows to scan when --source trace_ledger is used.")
-    parser.add_argument("--observation-source", choices=("latest_cards_current", "candle_summary"), default="latest_cards_current", help="Observation source used for trace-ledger outcomes. Default keeps CP18 latest-current behavior; candle_summary uses derived WarRoom closed candles.")
+    parser.add_argument("--observation-source", choices=("latest_cards_current", "candle_summary"), default=None, help="Observation source used for trace-ledger outcomes. Required when --source trace_ledger is used. latest_cards_current is reference-only; candle_summary uses derived WarRoom closed candles.")
     parser.add_argument("--preflight", action="store_true", help="Build outcome plan without writing outcome/calibration artifacts.")
     parser.add_argument("--once", action="store_true", help="Required acknowledgement for outcome/calibration writes.")
     parser.add_argument("--no-calibration", action="store_true", help="Append outcomes but skip calibration artifact refresh.")
@@ -540,9 +540,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     source = str(args.source or "latest_cards")
+    observation_source = args.observation_source
+    if source == "trace_ledger" and not observation_source:
+        parser.error("--observation-source is required when --source trace_ledger is used; choose candle_summary for trusted calibration outcomes or latest_cards_current for explicit reference-only outcomes")
     if args.preflight:
         if source == "trace_ledger":
-            result = build_market_regime_trace_outcome_once_plan(hot_root=args.hot_root, resolved_at=args.resolved_at, max_trace_rows=args.max_trace_rows, observation_source=args.observation_source)
+            result = build_market_regime_trace_outcome_once_plan(hot_root=args.hot_root, resolved_at=args.resolved_at, max_trace_rows=args.max_trace_rows, observation_source=observation_source)
         else:
             result = build_market_regime_outcome_once_plan(hot_root=args.hot_root, resolved_at=args.resolved_at)
         print(_json_for_print(result))
@@ -555,7 +558,7 @@ def main(argv: list[str] | None = None) -> int:
             resolved_at=args.resolved_at,
             update_calibration=not args.no_calibration,
             max_trace_rows=args.max_trace_rows,
-            observation_source=args.observation_source,
+            observation_source=observation_source,
         )
     else:
         result = resolve_market_regime_outcomes_once(hot_root=args.hot_root, resolved_at=args.resolved_at, update_calibration=not args.no_calibration)
