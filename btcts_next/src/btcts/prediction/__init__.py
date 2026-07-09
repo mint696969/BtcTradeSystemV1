@@ -42,6 +42,12 @@ from .scenario_guidance import (
     parent_scenario_guidance_latest_read_model_relpath,
     validate_parent_scenario_guidance_latest_read_model_artifact,
 )
+from .scenario_guidance_artifacts import (
+    PREDICTION_PARENT_SCENARIO_GUIDANCE_ARTIFACT_WRITER_VERSION,
+    build_parent_scenario_guidance_artifact_write_plan,
+    preflight_parent_scenario_guidance_latest_read_model,
+    write_parent_scenario_guidance_latest_read_model,
+)
 from .scenario_parts import (
     PREDICTION_FAMILY_SCENARIO_PART_CONTRACT_VERSION,
     PREDICTION_PARENT_SCENARIO_GUIDANCE_CONTRACT_VERSION,
@@ -169,6 +175,7 @@ __all__ = [
     "PredictionParameterSetStatus",
     "PARENT_SCENARIO_GUIDANCE_LATEST_READ_MODEL_RELPATH",
     "PREDICTION_PARENT_SCENARIO_GUIDANCE_ARTIFACT_VERSION",
+    "PREDICTION_PARENT_SCENARIO_GUIDANCE_ARTIFACT_WRITER_VERSION",
     "PREDICTION_FAMILY_SCENARIO_PART_CONTRACT_VERSION",
     "PREDICTION_PARENT_SCENARIO_GUIDANCE_CONTRACT_VERSION",
     "PredictionPreArmedReadinessSnapshot",
@@ -218,6 +225,9 @@ __all__ = [
     "build_parent_scenario_guidance_latest_read_model_artifact",
     "validate_parent_scenario_guidance_latest_read_model_artifact",
     "parent_scenario_guidance_latest_read_model_relpath",
+    "build_parent_scenario_guidance_artifact_write_plan",
+    "preflight_parent_scenario_guidance_latest_read_model",
+    "write_parent_scenario_guidance_latest_read_model",
     "build_prediction_family_scenario_part",
     "build_parent_scenario_guidance_read_model",
     "validate_prediction_family_scenario_part",
