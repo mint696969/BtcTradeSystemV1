@@ -103,6 +103,58 @@ def test_cp19_missing_candles_returns_unknown_observation(tmp_path: Path) -> Non
     assert observation["safety"]["autotrade_trigger_allowed"] is False
 
 
+def test_cp19_candle_read_permission_error_returns_unknown_observation(tmp_path: Path, monkeypatch) -> None:
+    path = tmp_path / warroom_closed_candle_relpath(timeframe_sec=60)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(_row("2026-07-08T12:00:00Z", 100, 101, 99, 100), ensure_ascii=False) + "\n", encoding="utf-8")
+    original_open = Path.open
+
+    def fake_open(self, *args, **kwargs):
+        if self == path:
+            raise PermissionError("simulated candle read lock")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", fake_open)
+    observation = build_market_regime_candle_observation(tmp_path, prediction=_prediction(), resolved_at="2026-07-08T12:05:00Z", timeframe_sec=60)
+    assert observation["observation_available"] is False
+    assert observation["observed_regime_code"] == "UNKNOWN"
+    assert observation["observation_evaluator_version"] == MARKET_REGIME_CANDLE_OBSERVATION_EVALUATOR_VERSION
+    assert observation["source_refs"][0].endswith("timeframe=60s/closed.jsonl")
+    assert observation["observation_reason"] == "candle_read_error:PermissionError"
+    assert observation["safety"]["broker_private_api_allowed"] is False
+
+
+def test_cp19_candle_read_transient_permission_error_retries_and_returns_observation(tmp_path: Path, monkeypatch) -> None:
+    path = tmp_path / warroom_closed_candle_relpath(timeframe_sec=60)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "".join(
+            json.dumps(row, ensure_ascii=False) + "\n"
+            for row in [
+                _row("2026-07-08T12:00:00Z", 100, 101, 99, 100),
+                _row("2026-07-08T12:01:00Z", 100, 104, 99, 103),
+            ]
+        ),
+        encoding="utf-8",
+    )
+    original_open = Path.open
+    attempts = {"count": 0}
+
+    def fake_open(self, *args, **kwargs):
+        if self == path and attempts["count"] == 0:
+            attempts["count"] += 1
+            raise PermissionError("simulated transient candle read lock")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", fake_open)
+    observation = build_market_regime_candle_observation(tmp_path, prediction=_prediction(), resolved_at="2026-07-08T12:05:00Z", timeframe_sec=60)
+    assert attempts["count"] == 1
+    assert observation["observation_available"] is True
+    assert observation["observed_regime_code"] == "UP_TREND"
+    assert observation["observation_reason"] == "positive_net_change_dominates_window"
+    assert observation["safety"]["broker_private_api_allowed"] is False
+
+
 def test_cp19_module_has_no_execution_or_classifier_side_effects() -> None:
     path = Path(__file__).resolve().parents[1] / "market_regime/observation_evaluator.py"
     text = path.read_text(encoding="utf-8")

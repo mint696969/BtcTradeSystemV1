@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -169,15 +170,31 @@ def build_market_regime_candle_observation(
     effective_resolved_at = resolved_at or _iso(expiry)
     tf = int(timeframe_sec or select_observation_candle_timeframe_sec(horizon_sec))
     relpath = warroom_closed_candle_relpath(timeframe_sec=tf, exchange=exchange, symbol=symbol)
-    candles = read_warroom_closed_candles_for_window(
-        root,
-        start_utc=generated_at,
-        end_utc=_iso(expiry),
-        timeframe_sec=tf,
-        exchange=exchange,
-        symbol=symbol,
-        max_candles=max_candles,
-    )
+    candles: list[dict[str, Any]] = []
+    last_read_error: OSError | None = None
+    for attempt in range(1, 4):
+        try:
+            candles = read_warroom_closed_candles_for_window(
+                root,
+                start_utc=generated_at,
+                end_utc=_iso(expiry),
+                timeframe_sec=tf,
+                exchange=exchange,
+                symbol=symbol,
+                max_candles=max_candles,
+            )
+            last_read_error = None
+            break
+        except OSError as exc:
+            last_read_error = exc
+            if attempt < 3:
+                time.sleep(min(0.25, 0.05 * (2 ** (attempt - 1))))
+    if last_read_error is not None:
+        return _unavailable_observation(
+            reason=f"candle_read_error:{type(last_read_error).__name__}",
+            resolved_at=effective_resolved_at,
+            source_refs=[relpath],
+        )
     summary = summarize_candle_window(candles)
     observed, reason = classify_candle_window_regime(summary)
     available = bool(summary.get("ok")) and observed != "UNKNOWN"
@@ -201,13 +218,13 @@ def build_market_regime_candle_observation(
     }
 
 
-def _unavailable_observation(*, reason: str, resolved_at: str) -> dict[str, Any]:
+def _unavailable_observation(*, reason: str, resolved_at: str, source_refs: list[str] | None = None) -> dict[str, Any]:
     return {
         "observation_at": str(resolved_at or ""),
         "observation_available": False,
         "observed_regime_code": "UNKNOWN",
         "observation_source": "candle_summary",
-        "source_refs": [],
+        "source_refs": list(source_refs or []),
         "summary": reason,
         "invalidated": False,
         "partial_match": False,
