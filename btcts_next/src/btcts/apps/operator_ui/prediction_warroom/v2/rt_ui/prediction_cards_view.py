@@ -18,8 +18,10 @@ ENTRY_GATE_VERSION = "warroom_v2_rt_entry_gate.2026_07_05.v1"
 RT_MARKET_REGIME_CARD_BRIDGE_VERSION = "warroom_v2_rt_market_regime_card_bridge.2026_07_08.v2_artifact_read_model_only"
 RT_MARKET_REGIME_CARDS_ARTIFACT_RELATIVE_PATH = "prediction/market_regime/latest_cards.json"
 RT_MARKET_REGIME_CALIBRATION_READ_MODEL_RELATIVE_PATH = "prediction/market_regime/calibration/latest_read_model.json"
+RT_MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_RELATIVE_PATH = "prediction/market_regime/parameter_set_comparison/latest_read_model.json"
 RT_MARKET_REGIME_CARDS_ARTIFACT_MAX_BYTES = 2_000_000
 RT_MARKET_REGIME_CALIBRATION_READ_MODEL_MAX_BYTES = 1_000_000
+RT_MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_MAX_BYTES = 1_000_000
 FUTURE_PREDICTION_CARD_ROWS = ("方向感", "反転候補", "ボラ警戒", "流動性 / 約定品質")
 
 
@@ -91,6 +93,10 @@ def _market_regime_cards_artifact_path() -> Path:
 
 def _market_regime_calibration_read_model_path() -> Path:
     return _market_regime_cards_artifact_root() / RT_MARKET_REGIME_CALIBRATION_READ_MODEL_RELATIVE_PATH
+
+
+def _market_regime_parameter_set_comparison_read_model_path() -> Path:
+    return _market_regime_cards_artifact_root() / RT_MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_RELATIVE_PATH
 
 
 def _extract_market_regime_cards(payload: Any) -> list[dict[str, Any]]:
@@ -208,6 +214,64 @@ def _read_market_regime_calibration_read_model_artifact() -> dict[str, Any]:
         return base
 
 
+def _read_market_regime_parameter_set_comparison_read_model_artifact() -> dict[str, Any]:
+    path = _market_regime_parameter_set_comparison_read_model_path()
+    base: dict[str, Any] = {
+        "read_attempted": True,
+        "artifact_relative_path": RT_MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_RELATIVE_PATH,
+        "artifact_path": str(path),
+        "artifact_present": False,
+        "artifact_used": False,
+        "artifact_read_error": "",
+        "active_parameter_set_id": "",
+        "comparison_ready": False,
+        "comparison_blockers": [],
+        "trusted_row_count": 0,
+        "reference_only_row_count": 0,
+        "trusted_parameter_set_count": 0,
+        "comparable_parameter_set_count": 0,
+        "promotion_candidate_count": 0,
+        "recommendation_count": 0,
+        "raw_market_source_read_performed": False,
+        "preview_inference_invoked": False,
+        "classifier_invoked": False,
+    }
+    try:
+        if not path.exists():
+            base["artifact_read_error"] = "parameter_set_comparison_read_model_missing"
+            return base
+        size = path.stat().st_size
+        if size > RT_MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_MAX_BYTES:
+            base["artifact_present"] = True
+            base["artifact_read_error"] = f"parameter_set_comparison_read_model_too_large:{size}"
+            return base
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, Mapping):
+            base["artifact_present"] = True
+            base["artifact_read_error"] = "parameter_set_comparison_read_model_not_object"
+            return base
+        trust = payload.get("calibration_trust") if isinstance(payload.get("calibration_trust"), Mapping) else {}
+        blockers = payload.get("comparison_blockers") if isinstance(payload.get("comparison_blockers"), list) else []
+        base.update({
+            "artifact_present": True,
+            "artifact_used": True,
+            "artifact_read_error": "",
+            "active_parameter_set_id": str(payload.get("active_parameter_set_id") or ""),
+            "comparison_ready": bool(payload.get("comparison_ready")),
+            "comparison_blockers": [str(item) for item in blockers if str(item)],
+            "trusted_row_count": int(trust.get("trusted_row_count") or 0),
+            "reference_only_row_count": int(trust.get("reference_only_row_count") or 0),
+            "trusted_parameter_set_count": int(trust.get("trusted_parameter_set_count") or 0),
+            "comparable_parameter_set_count": int(trust.get("comparable_parameter_set_count") or 0),
+            "promotion_candidate_count": len(payload.get("promotion_candidates") or []),
+            "recommendation_count": len(payload.get("recommendations") or []),
+        })
+        return base
+    except Exception as exc:  # pragma: no cover - defensive UI read path
+        base["artifact_read_error"] = f"parameter_set_comparison_read_model_read_failed:{type(exc).__name__}"
+        return base
+
+
 def _market_regime_calibration_detail_line(calibration_packet: Mapping[str, Any]) -> str:
     if not calibration_packet.get("artifact_used"):
         return ""
@@ -262,6 +326,25 @@ def _render_market_regime_calibration_status(calibration_packet: Mapping[str, An
         f"calibration_path={calibration_packet.get('artifact_path') or '-'} / display_only=true"
     )
     return dict(calibration_packet)
+
+def _render_market_regime_parameter_set_comparison_status(comparison_packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
+    if not comparison_packet.get("artifact_used"):
+        st_api.caption(f"パラメータ比較: {comparison_packet.get('artifact_read_error') or 'parameter_set_comparison_read_model_unavailable'} / display_only=true")
+        return dict(comparison_packet)
+    blockers = _as_text_list(comparison_packet.get("comparison_blockers"))
+    st_api.caption(
+        "パラメータ比較: "
+        f"ready={comparison_packet.get('comparison_ready')} / "
+        f"trusted_rows={comparison_packet.get('trusted_row_count')} / "
+        f"reference_rows={comparison_packet.get('reference_only_row_count')} / "
+        f"sets={comparison_packet.get('trusted_parameter_set_count')}/{comparison_packet.get('comparable_parameter_set_count')} / "
+        f"promotions={comparison_packet.get('promotion_candidate_count')} / "
+        f"recommendations={comparison_packet.get('recommendation_count')} / "
+        f"blockers={_short_list(blockers, limit=3) or '-'} / "
+        f"comparison_path={comparison_packet.get('artifact_path') or '-'} / display_only=true"
+    )
+    return dict(comparison_packet)
+
 
 def _market_regime_render_summary(renderer_packet: Mapping[str, Any] | None) -> dict[str, Any]:
     if not isinstance(renderer_packet, Mapping):
@@ -359,6 +442,7 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
     _render_prediction_boundary(packet, st_api)
     artifact_packet = _read_market_regime_latest_cards_artifact()
     calibration_packet = _read_market_regime_calibration_read_model_artifact()
+    parameter_set_comparison_packet = _read_market_regime_parameter_set_comparison_read_model_artifact()
     artifact_cards = artifact_packet.get("cards") if artifact_packet.get("artifact_cards_used") else None
     artifact_cards, calibration_detail_enriched = _enrich_market_regime_cards_with_calibration_detail(
         artifact_cards if isinstance(artifact_cards, list) else None,
@@ -393,6 +477,7 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
     })
     market_regime_summary = _render_market_regime_render_status(market_regime_packet, st_api)
     calibration_packet = _render_market_regime_calibration_status(calibration_packet, st_api)
+    parameter_set_comparison_packet = _render_market_regime_parameter_set_comparison_status(parameter_set_comparison_packet, st_api)
     _render_future_row_reservation(st_api)
     _render_context_packets(packet, st_api)
     return {
@@ -427,6 +512,18 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         "market_regime_calibration_primary_counts": dict(calibration_packet.get("primary_counts") or {}),
         "market_regime_calibration_reference_score": calibration_packet.get("reference_score"),
         "market_regime_calibration_detail_enriched": bool(calibration_detail_enriched),
+        "market_regime_parameter_set_comparison_read_model_used": bool(parameter_set_comparison_packet.get("artifact_used")),
+        "market_regime_parameter_set_comparison_artifact_path": str(parameter_set_comparison_packet.get("artifact_path") or ""),
+        "market_regime_parameter_set_comparison_read_error": str(parameter_set_comparison_packet.get("artifact_read_error") or ""),
+        "market_regime_parameter_set_comparison_active_parameter_set_id": str(parameter_set_comparison_packet.get("active_parameter_set_id") or ""),
+        "market_regime_parameter_set_comparison_ready": bool(parameter_set_comparison_packet.get("comparison_ready")),
+        "market_regime_parameter_set_comparison_blockers": list(parameter_set_comparison_packet.get("comparison_blockers") or []),
+        "market_regime_parameter_set_comparison_trusted_row_count": int(parameter_set_comparison_packet.get("trusted_row_count") or 0),
+        "market_regime_parameter_set_comparison_reference_only_row_count": int(parameter_set_comparison_packet.get("reference_only_row_count") or 0),
+        "market_regime_parameter_set_comparison_trusted_parameter_set_count": int(parameter_set_comparison_packet.get("trusted_parameter_set_count") or 0),
+        "market_regime_parameter_set_comparison_comparable_parameter_set_count": int(parameter_set_comparison_packet.get("comparable_parameter_set_count") or 0),
+        "market_regime_parameter_set_comparison_promotion_candidate_count": int(parameter_set_comparison_packet.get("promotion_candidate_count") or 0),
+        "market_regime_parameter_set_comparison_recommendation_count": int(parameter_set_comparison_packet.get("recommendation_count") or 0),
         "market_regime_first": True,
         "future_prediction_rows_reserved": True,
         "future_prediction_card_rows": list(FUTURE_PREDICTION_CARD_ROWS),
