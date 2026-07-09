@@ -398,3 +398,12 @@ def test_mr_a2_stale_forecast_can_fallback_to_current_l4_candle_window(tmp_path:
     assert first.diagnostic_record["selected_label_source"] == "current_l4_candle_window"
     assert first.diagnostic_record["selected_forecast_label"] == ""
     assert first.diagnostic_record["selected_l4_candle_regime_hint"] == "UP_TREND"
+    evidence = first.diagnostic_record["current_l4_candle_evidence"]
+    assert evidence["raw_candle_payload_included"] is False
+    assert evidence["window_current_enough"] is True
+    assert evidence["window_available"] is True
+    assert evidence["regime_hint"] == "UP_TREND"
+    assert evidence["net_change_bps"] > 0
+    assert evidence["range_bps"] > 0
+    assert evidence["realized_volatility_bps"] is not None
+    assert evidence["source_refs"]

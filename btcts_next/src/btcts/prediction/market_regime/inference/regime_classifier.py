@@ -8,6 +8,7 @@ from typing import Any, Mapping, Tuple
 from ..contracts import EvidenceQuality, FeatureGroup, FreshnessState, MarketRegimeCode, MarketRegimePrediction, MarketRegimePredictionPacket, TacticalHint
 from ..features import FeatureSignal, MarketRegimeFeatureBundle
 from ..horizon_policy import build_default_horizon_policy
+from .current_l4_diagnostic import build_current_l4_candle_evidence_digest
 
 MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27z.v1"
 # MR_A1_STALE_SOURCE_GATE_2026_07_09
@@ -342,6 +343,8 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
                     "forecast_records_currentness_gate_applied": not forecast_current_enough,
                     "current_l4_candle_window_current_enough": current_l4_candle_current_enough,
                     "current_l4_candle_window_fallback_used": label_selection_reason == "current_l4_candle_window_fallback",
+                    # MR_A3_CURRENT_L4_EVIDENCE_DIAGNOSTIC_2026_07_09
+                    "current_l4_candle_evidence": build_current_l4_candle_evidence_digest(bundle),
                     "selected_forecast_score": forecast_score,
                     "selected_signal_strength_percent": signal_strength_percent,
                     "selected_reference_hit_rate_percent": reference_hit_rate_percent,
