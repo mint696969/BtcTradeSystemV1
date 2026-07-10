@@ -743,6 +743,400 @@ Checkpoint:
 No new family is added until the previous family satisfies trace/outcome/calibration/read-model requirements.
 ```
 
+
+## 14.1 Roadmap refinement: MarketRegime vertical-slice development policy
+
+<!-- PS_MARKET_REGIME_VERTICAL_SLICE_ROADMAP_REFINEMENT_2026_07_10 -->
+
+Updated: 2026-07-10 JST
+Mode: roadmap refinement / doc-only / no runtime behavior change / no UI behavior change
+
+This section refines how Phase 2 through Phase 7 should be executed after the evidence-source confidence contract and parent scenario guidance work.
+
+The project must **not** try to complete a giant all-family prediction design matrix before implementation. That would be over-designed and detached from real D-hot evidence, real cards, real outcomes, and real calibration behavior.
+
+Instead, treat MarketRegime as the first/reference vertical slice:
+
+```text
+market_regime = reference family / first vertical slice
+```
+
+Build the real MarketRegime evidence profile, display confidence, source reliability, outcome, calibration, and WarRoom explanation path first. While doing this, classify every discovered component into one of four layers:
+
+```text
+1. Parent inference / all-family common
+   - display confidence estimator
+   - confidence calibration
+   - source reliability
+   - source scorecards
+   - horizon confidence caps
+   - source agreement
+   - outcome/calibration scoring contracts
+   - WarRoom confidence semantics
+
+2. Many-family common
+   - evidence source weight profiles
+   - source priority policy
+   - blocker/veto semantics
+   - freshness gates
+   - quality gates
+   - read-only review packets
+
+3. Some-family common
+   - trend/reversal/breakout shared structure logic
+   - volatility/liquidity shared risk caps
+   - macro/session/context helpers
+
+4. Family-specific
+   - MarketRegime state definitions
+   - MarketRegime source interpretation
+   - MarketRegime-specific blockers
+   - MarketRegime-specific card labels and traces
+```
+
+MarketRegime is central because it influences all other prediction families, but it must not become the parent inference engine or a god object.
+
+During every MarketRegime implementation slice, ask:
+
+```text
+Is this truly MarketRegime-specific,
+or should it move to parent/common prediction logic?
+```
+
+### 14.1.1 Current completed parent/common foundation
+
+As of 2026-07-10, the following parent/common confidence foundation exists:
+
+```text
+commit=fc64d1d8 prediction: add evidence source confidence contract
+module=btcts_next/src/btcts/prediction/evidence_sources.py
+contract=prediction.evidence_source_weight_profile.2026_07_10.v1
+confidence_model_owner=parent_common_prediction_layer
+```
+
+The contract includes:
+
+```text
+evidence source descriptors
+family/horizon/parameter_set scoped weight profiles
+source reliability percent
+signal strength percent
+freshness/quality percent
+source agreement
+display confidence estimator
+horizon confidence caps
+card interval calibration policy
+no raw payload duplication guard
+no broker/AutoTrade/order/parameter auto-apply safety flags
+```
+
+Displayed confidence is common/parent-owned, not family-specific.
+
+Family-specific logic owns:
+
+```text
+source selection
+source direction
+signal strength
+family-specific blockers
+family scenario state
+```
+
+Parent/common prediction logic owns:
+
+```text
+source weight contract
+source reliability percent
+source agreement
+freshness/quality adjustment
+horizon confidence cap
+display confidence percent
+calibration to the next same-family same-horizon card
+```
+
+Reason:
+
+```text
+MarketRegime 80%, TrendBias 80%, Reversal 80%, etc. must have the same meaning in WarRoom.
+Family results differ, but displayed confidence scale must be comparable across families.
+```
+
+### 14.1.2 Confidence semantics
+
+Displayed confidence is not prophecy.
+
+For a family/horizon card, confidence means:
+
+```text
+How much the current evidence supports this card result
+until the next same-family same-horizon card is produced.
+```
+
+Calibration target:
+
+```text
+current card -> next same-family same-horizon card interval
+```
+
+Predictions may change before a larger horizon resolves. Source invalidation, stale evidence, spread/quality deterioration, regime shift, or fresh contradictory evidence may reduce confidence or change the card before the broader horizon completes.
+
+Default confidence caps should be higher near now and lower farther out:
+
+```text
+nowcast:       99
+short_horizon: 92
+mid_horizon:   82
+long_horizon:  68
+context:       60
+```
+
+Do not use raw hit rate directly as confidence. Source reliability must eventually consider:
+
+```text
+sample count / shrinkage
+recency
+regime-specific performance
+horizon-specific performance
+Brier score
+log loss
+calibration error
+payoff/risk impact where applicable
+unknown/abstain behavior
+```
+
+### 14.1.3 Revised interpretation of phases
+
+Phase 2 is no longer just abstract contract skeleton work. It now includes already-started parent/common confidence contracts:
+
+```text
+completed:
+  evidence source confidence contract
+  parent-owned display confidence semantics
+  card interval calibration policy
+  source reliability/weight profile foundation
+```
+
+Phase 3 should be executed as a MarketRegime vertical slice, not merely a one-off correction:
+
+```text
+MarketRegime default evidence profile
+MarketRegime currentness/staleness gates
+MarketRegime card confidence via parent/common estimator
+MarketRegime source scorecard/read model
+MarketRegime outcome/calibration loop
+WarRoom read-only confidence decomposition
+```
+
+Phase 7 must remain blocked until MarketRegime has exercised the core pattern:
+
+```text
+evidence source profile
+display confidence estimator
+source reliability / scorecard
+outcome and calibration loop
+WarRoom confidence explanation
+```
+
+Do not implement TrendBias/Reversal/Breakout/etc. before the MarketRegime vertical slice proves the common confidence/calibration pattern.
+
+### 14.1.4 Immediate roadmap insertion
+
+The next roadmap steps should be:
+
+```text
+MR-VS1: MarketRegime default evidence profile
+  - pure/read-only module
+  - uses btcts.prediction.evidence_sources
+  - no D-hot write
+  - no producer restart
+  - no WarRoom change initially
+  - no classifier/prediction invocation
+  - no broker/AutoTrade/order/parameter mutation
+
+MR-VS2: MarketRegime currentness and stale-source gates
+  - prevent stale forecast_records from being treated as live truth
+  - expose stale-source confidence caps/blockers
+  - allow UNKNOWN/risk-off instead of plausible but unsupported cards
+
+MR-VS3: MarketRegime card confidence integration
+  - use parent/common display confidence estimator
+  - keep family logic responsible for direction/signal/blockers only
+  - attach confidence decomposition to read model/trace
+
+MR-VS4: MarketRegime source scorecard and calibration read model
+  - score source reliability by family/horizon/parameter_set/source
+  - include sample count, recency, calibration quality, and regime-specific performance
+  - no auto-promotion or live parameter apply
+
+MR-VS5: WarRoom read-only confidence explanation
+  - show display confidence and decomposition
+  - show applied caps, blockers, freshness, source agreement
+  - UI remains display-only
+```
+
+This refinement supersedes any interpretation that Phase 2 requires completing all parent contracts before MarketRegime implementation continues. The correct approach is planned vertical-slice development: implement MarketRegime first, extract common parts only when the slice proves they are useful, and preserve safety/read-only boundaries throughout.
+
+
+### 14.1.5 Decision guardrails before continuing MarketRegime implementation
+
+<!-- PS_MARKET_REGIME_VERTICAL_SLICE_DECISION_GUARDRAILS_2026_07_10 -->
+
+The project should not decide every family-specific prediction method before implementation. However, the following guardrails must be fixed before continuing the MarketRegime vertical slice so future GPT/developer work does not drift.
+
+#### Outcome semantics
+
+Outcome scoring must distinguish:
+
+```text
+correct
+incorrect
+partial
+unknown / abstain
+risk_off / blocked
+stale / invalidated
+```
+
+`unknown`, `risk_off`, or blocked states must not be automatically treated as failures. Avoiding low-quality predictions is part of prediction quality. The exact scoring formula can evolve, but the outcome read model must preserve enough labels to analyze abstain/unknown behavior separately from wrong directional calls.
+
+
+#### Unknown / abstain discipline
+
+<!-- PS_MARKET_REGIME_VERTICAL_SLICE_UNKNOWN_ABSTAIN_DISCIPLINE_2026_07_10 -->
+
+`unknown`, `no_edge`, `risk_off`, and blocked states are allowed because avoiding low-quality predictions is part of prediction quality. However, they must not become a way to hide weak logic or inflate apparent accuracy.
+
+Core rule:
+
+```text
+unknown is not a safe-looking trash bucket.
+unknown must be earned by explicit evidence failure, contradiction, invalidation, or quality/risk gate.
+```
+
+Every non-directional or blocked card must carry enough metadata for later audit:
+
+```text
+state
+reason_code
+blocking_source_ids
+missing_required_source_ids
+stale_source_ids
+conflicting_source_ids
+quality_failure_ids
+confidence_before_block
+applied_confidence_cap
+recovery_condition
+```
+
+Allowed reasons include:
+
+```text
+required_source_missing
+required_source_stale
+source_quality_failed
+source_freshness_invalid
+high_weight_source_conflict
+confidence_below_minimum_after_calibration
+risk_off_gate_active
+blocker_or_veto_source_active
+insufficient_sample_for_reliability
+```
+
+Disallowed reasons:
+
+```text
+unknown_without_reason
+unknown_to_avoid_accountability
+unknown_because_model_has_no_logic_yet
+unknown_when_required_sources_are_fresh_and_aligned
+```
+
+Outcome/scorecard must track both prediction quality and coverage:
+
+```text
+coverage_rate
+unknown_rate
+blocked_rate
+avoidable_unknown_count
+valid_unknown_count
+missed_opportunity_after_unknown
+```
+
+A valid unknown should not be punished like a wrong directional call. But excessive or avoidable unknowns are a quality failure. If a family/horizon produces too many unknown cards, the system must treat it as an implementation/calibration problem, not as success.
+
+When reviewing reliability, separate:
+
+```text
+directional correctness
+calibration quality
+coverage quality
+abstain/unknown quality
+```
+
+This preserves the intended behavior: only truly judgment-impossible states become unknown, while the system is still pressured to make useful, well-calibrated predictions when evidence is good enough.
+
+#### Scorecard granularity
+
+Source reliability must be tracked at least by:
+
+```text
+prediction_family_id
+horizon_key
+horizon_group
+parameter_set_id
+source_id
+```
+
+Do not collapse reliability into a single global score. A source can be strong for one family/horizon/regime and weak for another.
+
+#### Confidence semantics
+
+Displayed confidence remains parent/common-owned and means:
+
+```text
+confidence in the current card result until the next same-family same-horizon card
+```
+
+It is not prophecy and not a claim that the broader market will move in a straight line for the whole horizon.
+
+#### Parameter-set mutation policy
+
+Even if outcome/calibration analysis suggests better source weights or reliability defaults:
+
+```text
+no auto-promotion
+no live parameter apply
+no producer-side mutation without explicit human gate
+```
+
+Preferred flow:
+
+```text
+analysis -> shadow parameter_set -> comparison/read model -> human review -> explicit commit/apply slice
+```
+
+#### Confidence is not action permission
+
+Display confidence must not be used as direct order permission, position size, or AutoTrade trigger.
+
+```text
+99% confidence != enter trade
+```
+
+Action, if ever added in the future, must be separately gated by expected value, liquidity, risk, drawdown, execution quality, and explicit human-approved trading policy.
+
+#### MarketRegime must not become a god object
+
+MarketRegime is the reference family and first vertical slice. It is allowed to reveal new common requirements. But whenever MarketRegime implementation adds a new mechanism, classify it as:
+
+```text
+parent/all-family common
+many-family common
+some-family common
+market_regime-specific
+```
+
+Promote common confidence, scorecard, calibration, source reliability, and display semantics to parent/common modules rather than leaving them hidden under `prediction/market_regime`.
+
 ## 15. Explicit non-goals
 
 ```text
