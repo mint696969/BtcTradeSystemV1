@@ -154,6 +154,10 @@ from .source_attribution_adapter import (
     MARKET_REGIME_SOURCE_ATTRIBUTION_ADAPTER_VERSION,
     expand_market_regime_trace_source_attribution_rows,
 )
+from .source_scorecard_pipeline import (
+    MARKET_REGIME_SOURCE_SCORECARD_PIPELINE_VERSION,
+    build_market_regime_source_scorecard_pipeline,
+)
 from .source_scorecard_read_model import (
     MARKET_REGIME_SOURCE_SCORECARD_READ_MODEL_VERSION,
     build_market_regime_source_scorecard_read_model,
@@ -182,6 +186,8 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "MARKET_REGIME_SOURCE_SCORECARD_PIPELINE_VERSION",
+    "build_market_regime_source_scorecard_pipeline",
     "MARKET_REGIME_SOURCE_ATTRIBUTION_ADAPTER_VERSION",
     "expand_market_regime_trace_source_attribution_rows",
     "MARKET_REGIME_SOURCE_SCORECARD_READ_MODEL_VERSION",
