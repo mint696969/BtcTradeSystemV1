@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping, Sequence, Tuple
 
 from .bundle_assembly import build_inference_bundle_from_outputs
-from .contracts import PredictionConfidence, PredictionOutput
+from .contracts import PredictionConfidence, PredictionFamily, PredictionOutput, SourceIdentity
 from .cross_venue import CrossVenueReferenceSummary, build_cross_venue_reference_summary
 from .feature_depth import FeatureDepthSnapshot
 from .forecast_ledger import ForecastLedgerBatch, build_forecast_ledger_records_from_bundle
@@ -34,6 +34,7 @@ from .system_contract import (
 from .technical import HumanTechnicalSummary, build_human_technical_summary
 
 LOGIC_VERSION = "prediction_system.ps_g_lite.v1"
+MARKET_REGIME_MIN_EXACT_HORIZON_CANDLES = 5
 
 
 _STALE_AFTER_SEC_BY_GROUP: Mapping[HorizonGroup, int] = {
@@ -513,6 +514,114 @@ def _build_cross_venue(
     return build_cross_venue_reference_summary(venue_snapshots, source_quality_by_id=source_quality_by_id, now=now_dt)
 
 
+def _attach_market_regime_technical_source_attribution(
+    outputs: Tuple[PredictionOutput, ...],
+    *,
+    technical: HumanTechnicalSummary | None,
+    horizon_sec: int,
+) -> Tuple[PredictionOutput, ...]:
+    if technical is None or technical.timeframe_sec is None:
+        return outputs
+    source_id = _ohlcv_contract_id(int(technical.timeframe_sec))
+    if source_id is None:
+        return outputs
+
+    out: list[PredictionOutput] = []
+    for output in outputs:
+        if output.family != PredictionFamily.MARKET_REGIME:
+            out.append(output)
+            continue
+
+        technical_source = SourceIdentity(
+            source_id=source_id,
+            source_family="ohlcv_technical_evidence",
+            venue=None,
+            symbol=None,
+            market_role="exact_horizon_technical_evidence",
+            public_data_only=True,
+            execution_enabled=False,
+        )
+        sources = tuple(output.sources)
+        if source_id not in {source.source_id for source in sources}:
+            sources = sources + (technical_source,)
+
+        values = dict(output.values)
+        ledger = (
+            list(values.get("source_contribution_ledger", []))
+            if isinstance(values.get("source_contribution_ledger", []), list)
+            else []
+        )
+        ledger_entry = {
+            "ledger_version": "prediction_source_contribution_ledger.market_regime_technical.v1",
+            "source_id": source_id,
+            "source_family": "ohlcv_technical_evidence",
+            "evidence_role": "exact_horizon_technical_evidence",
+            "horizon_sec": int(horizon_sec),
+            "technical_timeframe_sec": int(technical.timeframe_sec),
+            "technical_candle_count": int(technical.candle_count),
+            "technical_summary_usable": bool(technical.usable),
+            "technical_warnings": list(technical.warnings),
+            "technical_blockers": list(technical.blockers),
+            "read_only": True,
+            "non_executing": True,
+            "would_send_to_broker": False,
+        }
+        if not any(
+            isinstance(item, Mapping)
+            and item.get("ledger_version") == ledger_entry["ledger_version"]
+            and item.get("source_id") == source_id
+            for item in ledger
+        ):
+            ledger.insert(0, ledger_entry)
+
+        exact_horizon_history_sufficient = (
+            bool(technical.usable)
+            and int(technical.candle_count) >= MARKET_REGIME_MIN_EXACT_HORIZON_CANDLES
+        )
+        values["source_contribution_ledger"] = ledger
+        values["technical_timeframe_sec"] = int(technical.timeframe_sec)
+        values["technical_source_id"] = source_id
+        values["technical_candle_count"] = int(technical.candle_count)
+        values["technical_minimum_required_candle_count"] = MARKET_REGIME_MIN_EXACT_HORIZON_CANDLES
+        values["technical_summary_usable"] = exact_horizon_history_sufficient
+        values["technical_evidence_state"] = (
+            "exact_horizon_history_sufficient"
+            if exact_horizon_history_sufficient
+            else "insufficient_exact_horizon_history"
+        )
+        values["technical_summary_warnings"] = list(technical.warnings)
+        values["technical_summary_blockers"] = list(technical.blockers)
+
+        if exact_horizon_history_sufficient:
+            out.append(replace(output, sources=sources, values=values))
+            continue
+
+        blocker = "insufficient_exact_horizon_candles"
+        values["candidate_primary_label_before_history_gate"] = output.primary_label
+        values["candidate_score_before_history_gate"] = output.score
+        warnings = tuple(
+            dict.fromkeys(
+                tuple(output.warnings)
+                + tuple(technical.warnings)
+                + (blocker,)
+            )
+        )
+        blockers = tuple(dict.fromkeys(tuple(output.blockers) + (blocker,)))
+        out.append(
+            replace(
+                output,
+                sources=sources,
+                primary_label="unknown",
+                confidence=PredictionConfidence.UNKNOWN,
+                score=None,
+                blockers=blockers,
+                warnings=warnings,
+                values=values,
+            )
+        )
+    return tuple(out)
+
+
 def _build_outputs(
     *,
     candles: Tuple[OHLCVCandle, ...],
@@ -526,13 +635,18 @@ def _build_outputs(
     for horizon_sec in horizons_sec:
         technical = _technical_for_horizon(candles, horizon_sec)
         technical_by_horizon[int(horizon_sec)] = technical
+        horizon_outputs = build_rule_based_v0_outputs(
+            technical_summary=technical,
+            cross_venue_summary=cross_venue_summary,
+            horizon_sec=int(horizon_sec),
+            now=now_dt,
+            feature_depth_snapshot=feature_depth_snapshot,
+        )
         outputs.extend(
-            build_rule_based_v0_outputs(
-                technical_summary=technical,
-                cross_venue_summary=cross_venue_summary,
+            _attach_market_regime_technical_source_attribution(
+                horizon_outputs,
+                technical=technical,
                 horizon_sec=int(horizon_sec),
-                now=now_dt,
-                feature_depth_snapshot=feature_depth_snapshot,
             )
         )
     return tuple(outputs), technical_by_horizon

@@ -113,7 +113,7 @@ def _as_int(value: Any) -> int | None:
 
 
 def _latest_market_regime_record(snapshot: MarketRegimeSourceSnapshot, horizon_sec: int | None = None) -> Mapping[str, Any] | None:
-    records = snapshot.forecast_records.market_regime_records
+    records = _usable_market_regime_records(snapshot)
     if horizon_sec is not None:
         for record in records:
             if _as_int(record.get("horizon_sec")) == int(horizon_sec):
@@ -121,6 +121,23 @@ def _latest_market_regime_record(snapshot: MarketRegimeSourceSnapshot, horizon_s
     return records[-1] if records else None
 
 
+
+
+def _forecast_record_usable(record: Mapping[str, Any]) -> bool:
+    blockers = record.get("blockers")
+    if isinstance(blockers, (list, tuple)) and blockers:
+        return False
+    if record.get("usable") is False:
+        return False
+    return True
+
+
+def _usable_market_regime_records(snapshot: MarketRegimeSourceSnapshot) -> Tuple[Mapping[str, Any], ...]:
+    return tuple(
+        record
+        for record in snapshot.forecast_records.market_regime_records
+        if _forecast_record_usable(record)
+    )
 
 
 def _record_values(record: Mapping[str, Any] | None) -> Mapping[str, Any]:
@@ -267,7 +284,8 @@ def _numeric_by_horizon_sec(records: Tuple[Mapping[str, Any], ...], field: str, 
 
 
 def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_at: str, parameter_set: object | None = None) -> Tuple[FeatureSignal, ...]:
-    records = snapshot.forecast_records.market_regime_records
+    all_records = snapshot.forecast_records.market_regime_records
+    records = _usable_market_regime_records(snapshot)
     forecast_current_enough, _, _, currentness_warnings = _forecast_records_currentness(snapshot, generated_at=generated_at)
     latest = _latest_market_regime_record(snapshot) if forecast_current_enough else None
     label = latest.get("primary_label") if latest else None
@@ -291,7 +309,8 @@ def _price_structure_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_
     false_break_count = _as_int(values.get("false_break_count") or values.get("failed_break_count"))
     technical_available = any(value is not None for value in (range_high, range_low, vwap, ma_slope, price_position, break_hold_count, false_break_count))
     return (
-        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_record_count", len(records), available=True, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.12),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_record_count", len(all_records), available=True, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.06),
+        _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_usable_record_count", len(records), available=True, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.06),
         _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_horizons_sec", list(horizons), available=bool(horizons), source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.12),
         _signal(FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label", label, available=label is not None, source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.12),
         _signal(FeatureGroup.PRICE_STRUCTURE, "market_regime_labels_by_horizon_sec", labels_by_horizon, available=bool(labels_by_horizon), source_refs=(snapshot.forecast_records.relative_path,), warnings=currentness_warnings, weight_hint=0.12),

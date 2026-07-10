@@ -550,3 +550,54 @@ def test_mr_vs4_missing_exact_forecast_horizon_fails_closed_without_cross_horizo
         assert row.diagnostic_record["selected_label"] == ""
         assert row.diagnostic_record["selected_label_source"] == "none"
         assert row.diagnostic_record["label_selection_reason"] == "forecast_horizon_label_missing"
+
+def test_mr_vs4_blocked_forecast_record_is_not_accepted_as_horizon_label(tmp_path: Path) -> None:
+    forecast_path = tmp_path / "prediction/runs/2026-07-10/120000/forecast_records.jsonl"
+    _write_json(tmp_path / "prediction/latest_manifest.json", {
+        "generated_at": "2026-07-10T12:00:00Z",
+        "legacy_latest_path": "prediction/latest_prediction_system_result.json",
+        "sidecars": {"forecast_records": str(forecast_path.relative_to(tmp_path)).replace("\\", "/")},
+    })
+    _write_json(tmp_path / "prediction/latest_prediction_system_result.json", {"read_only": True, "non_executing": True})
+    _write_jsonl(forecast_path, [
+        {
+            "family": "market_regime",
+            "generated_at": "2026-07-10T12:00:00Z",
+            "horizon_sec": 21600,
+            "primary_label": "range_candidate",
+            "confidence": "unknown",
+            "score": None,
+            "usable": False,
+            "blockers": ["insufficient_exact_horizon_candles"],
+            "values_snapshot": {
+                "technical_candle_count": 1,
+                "technical_source_id": "ohlcv_6h",
+            },
+        },
+    ])
+    _write_json(tmp_path / "state/collector_vnext/unified_market_state_status.json", {
+        "last_symbol_raw": "FX_BTC_JPY",
+        "last_best_bid": 10000000.0,
+        "last_best_ask": 10001000.0,
+        "last_spread": 1000.0,
+        "read_only": True,
+        "would_send_to_broker": False,
+    })
+    _write_json(tmp_path / "state/collector_vnext/unified_health.json", {"ok": True, "ws_state": "LIVE"})
+    _write_json(tmp_path / "state/collector_vnext/unified_executions_status.json", {"ws_state": "LIVE", "trade_count": 10})
+    _write_json(tmp_path / "state/collector_vnext/unified_daemon_status.json", {"read_only": True})
+
+    snapshot = build_market_regime_source_snapshot(tmp_path)
+    bundle = build_market_regime_feature_bundle(snapshot, generated_at="2026-07-10T12:00:30Z")
+    price_signals = {signal.name: signal for signal in bundle.signals_by_group(FeatureGroup.PRICE_STRUCTURE)}
+    assert price_signals["market_regime_record_count"].value == 1
+    assert price_signals["market_regime_usable_record_count"].value == 0
+    assert price_signals["market_regime_labels_by_horizon_sec"].value == {}
+
+    packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-10T12:00:31Z")
+    row = {prediction.horizon_sec: prediction for prediction in packet.predictions}[21600]
+    assert row.regime_code == MarketRegimeCode.UNKNOWN
+    assert row.confidence_percent == 15
+    assert row.freshness_state.value == "STALE"
+    assert row.evidence_quality.value == "MISSING"
+    assert row.diagnostic_record["label_selection_reason"] == "forecast_horizon_label_missing"
