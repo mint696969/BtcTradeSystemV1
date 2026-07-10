@@ -43,6 +43,11 @@ def _daily() -> dict:
         "date": "2026-07-08",
         "row_count": 1145,
         "overall": _bucket("overall", total=1145, hit=993, partial=71, miss=81, score=0.8983),
+        "compatibility_overall": _bucket("compatibility_overall", total=1145, hit=993, partial=71, miss=81, score=0.8983),
+        "primary_current": _bucket("primary_current", total=56, hit=6, partial=50, miss=0, score=0.5536),
+        "trusted_legacy_reference": _bucket("trusted_legacy_reference", total=285, hit=183, partial=21, miss=81, score=0.6789),
+        "compatibility_reference": _bucket("compatibility_reference", total=804, hit=804, partial=0, miss=0, score=1.0),
+        "current_primary_cohort_started_at": "2026-07-10T15:27:22Z",
         "by_observation_source": [
             _bucket("candle_summary", total=341, hit=189, partial=71, miss=81, score=0.6584),
             _bucket("latest_cards_current", total=804, hit=804, partial=0, miss=0, score=1.0),
@@ -59,9 +64,15 @@ def _daily() -> dict:
             "promotion_candidates_use_observation_source": "candle_summary",
             "promotion_candidates_require_parameter_set_comparison": True,
             "trusted_parameter_set_count": 1,
+            "current_primary_parameter_set_count": 1,
             "trusted_row_count": 341,
             "reference_only_row_count": 804,
             "overall_includes_reference_rows_for_compatibility": True,
+            "current_primary_cohort_started_at": "2026-07-10T15:27:22Z",
+            "current_primary_row_count": 56,
+            "trusted_legacy_reference_row_count": 285,
+            "compatibility_reference_row_count": 804,
+            "promotion_candidates_use_current_primary_cohort_only": True,
         },
     }
 
@@ -85,11 +96,21 @@ def test_cp22_build_calibration_read_model_prefers_candle_summary() -> None:
     assert model["artifact_kind"] == "calibration_read_model"
     assert model["primary_observation_source"] == "candle_summary"
     assert model["primary"]["calibration_score"] == 0.6584
+    assert model["primary_current"]["known_total"] == 56
+    assert model["primary_current"]["calibration_score"] == 0.5536
+    assert model["trusted_legacy_reference"]["known_total"] == 285
+    assert model["compatibility_reference"]["known_total"] == 804
+    assert model["compatibility_overall"]["known_total"] == 1145
     assert model["calibration_trust"]["latest_cards_current_is_reference_only"] is True
     assert model["calibration_trust"]["promotion_candidates_use_observation_source"] == "candle_summary"
     assert model["calibration_trust"]["promotion_candidates_require_parameter_set_comparison"] is True
     assert model["calibration_trust"]["trusted_parameter_set_count"] == 1
+    assert model["calibration_trust"]["current_primary_parameter_set_count"] == 1
     assert model["calibration_trust"]["trusted_row_count"] == 341
+    assert model["calibration_trust"]["current_primary_row_count"] == 56
+    assert model["calibration_trust"]["trusted_legacy_reference_row_count"] == 285
+    assert model["calibration_trust"]["compatibility_reference_row_count"] == 804
+    assert model["calibration_trust"]["promotion_candidates_use_current_primary_cohort_only"] is True
     assert model["latest_cards_current_reference"]["calibration_score"] == 1.0
     assert model["table_observation_source_row_count"] == 2
     assert model["source_refs"]["daily_summary_json"] == calibration_daily_summary_relpath("2026-07-08")

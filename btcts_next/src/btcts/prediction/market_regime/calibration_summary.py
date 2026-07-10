@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Mapping
 
@@ -13,6 +14,7 @@ MARKET_REGIME_CALIBRATION_TABLE_VERSION = "prediction.market_regime.calibration_
 _ALLOWED_OUTCOME_LABELS = ("hit", "partial", "miss", "invalidated", "unknown")
 PRIMARY_TRUSTED_OBSERVATION_SOURCE = "candle_summary"
 REFERENCE_ONLY_OBSERVATION_SOURCE = "latest_cards_current"
+CURRENT_PRIMARY_COHORT_STARTED_AT = "2026-07-10T15:27:22Z"
 _SCORE = {"hit": 1.0, "partial": 0.5, "miss": 0.0, "invalidated": 0.0, "unknown": 0.0}
 _FORBIDDEN_RAW_KEYS = {
     "raw_candles",
@@ -77,6 +79,25 @@ def _row_observation_source(row: Mapping[str, Any]) -> str:
     if row.get("observation_evaluator_version") or observation_summary.get("observation_evaluator_version"):
         return "candle_summary"
     return "latest_cards_current"
+
+
+def _parse_utc_timestamp(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _is_current_primary_cohort(row: Mapping[str, Any]) -> bool:
+    generated_at = _parse_utc_timestamp(row.get("generated_at"))
+    cutoff = _parse_utc_timestamp(CURRENT_PRIMARY_COHORT_STARTED_AT)
+    return generated_at is not None and cutoff is not None and generated_at >= cutoff
 
 def _empty_counts() -> dict[str, int]:
     return {label: 0 for label in _ALLOWED_OUTCOME_LABELS}
@@ -226,8 +247,11 @@ def build_market_regime_calibration_summary(*, rows: Iterable[Mapping[str, Any]]
     primary_observation_source = _select_primary_observation_source(by_observation_source)
     primary_rows = _rows_for_observation_source(safe_rows, primary_observation_source) if primary_observation_source != "none" else []
     trusted_rows = _rows_for_observation_source(safe_rows, PRIMARY_TRUSTED_OBSERVATION_SOURCE)
+    current_trusted_rows = [row for row in trusted_rows if _is_current_primary_cohort(row)]
+    legacy_trusted_rows = [row for row in trusted_rows if not _is_current_primary_cohort(row)]
     reference_rows = _rows_for_observation_source(safe_rows, REFERENCE_ONLY_OBSERVATION_SOURCE)
     trusted_by_parameter = _buckets_by_parameter(trusted_rows)
+    current_trusted_by_parameter = _buckets_by_parameter(current_trusted_rows)
     summary = {
         "schema_version": "market_regime_calibration_daily_summary.2026_07_08.v1",
         "calibration_summary_version": MARKET_REGIME_CALIBRATION_SUMMARY_VERSION,
@@ -239,6 +263,11 @@ def build_market_regime_calibration_summary(*, rows: Iterable[Mapping[str, Any]]
         "input_failure_count": len(failures),
         "input_failures": failures,
         "overall": _finalize_bucket("overall", _aggregate_all(safe_rows)),
+        "compatibility_overall": _finalize_bucket("compatibility_overall", _aggregate_all(safe_rows)),
+        "primary_current": _finalize_bucket("primary_current", _aggregate_all(current_trusted_rows)),
+        "trusted_legacy_reference": _finalize_bucket("trusted_legacy_reference", _aggregate_all(legacy_trusted_rows)),
+        "compatibility_reference": _finalize_bucket("compatibility_reference", _aggregate_all(reference_rows)),
+        "current_primary_cohort_started_at": CURRENT_PRIMARY_COHORT_STARTED_AT,
         "primary_observation_source": primary_observation_source,
         "primary_observation_overall": _finalize_bucket(primary_observation_source, _aggregate_all(primary_rows)) if primary_rows else _finalize_bucket(primary_observation_source, _bucket()),
         "trusted_observation_source": PRIMARY_TRUSTED_OBSERVATION_SOURCE,
@@ -248,14 +277,23 @@ def build_market_regime_calibration_summary(*, rows: Iterable[Mapping[str, Any]]
             trusted_row_count=len(trusted_rows),
             reference_row_count=len(reference_rows),
             trusted_parameter_set_count=sum(1 for bucket in trusted_by_parameter.values() if _known_total(bucket) > 0),
-        ),
+        ) | {
+            "current_primary_parameter_set_count": sum(
+                1 for bucket in current_trusted_by_parameter.values() if _known_total(bucket) > 0
+            ),
+            "current_primary_cohort_started_at": CURRENT_PRIMARY_COHORT_STARTED_AT,
+            "current_primary_row_count": len(current_trusted_rows),
+            "trusted_legacy_reference_row_count": len(legacy_trusted_rows),
+            "compatibility_reference_row_count": len(reference_rows),
+            "promotion_candidates_use_current_primary_cohort_only": True,
+        },
         "by_horizon": [_finalize_bucket(key, by_horizon[key]) for key in sorted(by_horizon)],
         "by_predicted_regime": [_finalize_bucket(key, by_regime[key]) for key in sorted(by_regime)],
         "by_parameter_set": [_finalize_bucket(key, by_parameter[key]) for key in sorted(by_parameter)],
         "by_parameter_set_horizon": [_finalize_bucket(key, by_parameter_horizon[key]) for key in sorted(by_parameter_horizon)],
         "by_observation_source": [_finalize_bucket(key, by_observation_source[key]) for key in sorted(by_observation_source)],
         "by_observation_source_horizon": [_finalize_bucket(key, by_observation_source_horizon[key]) for key in sorted(by_observation_source_horizon)],
-        "promotion_candidates": _promotion_candidates(trusted_by_parameter),
+        "promotion_candidates": _promotion_candidates(current_trusted_by_parameter),
         "safety": _safety(),
     }
     validation = validate_market_regime_calibration_summary(summary)
