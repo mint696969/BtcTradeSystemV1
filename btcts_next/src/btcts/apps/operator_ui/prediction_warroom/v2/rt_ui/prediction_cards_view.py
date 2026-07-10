@@ -19,9 +19,11 @@ RT_MARKET_REGIME_CARD_BRIDGE_VERSION = "warroom_v2_rt_market_regime_card_bridge.
 RT_MARKET_REGIME_CARDS_ARTIFACT_RELATIVE_PATH = "prediction/market_regime/latest_cards.json"
 RT_MARKET_REGIME_CALIBRATION_READ_MODEL_RELATIVE_PATH = "prediction/market_regime/calibration/latest_read_model.json"
 RT_MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_RELATIVE_PATH = "prediction/market_regime/parameter_set_comparison/latest_read_model.json"
+RT_PARENT_SCENARIO_GUIDANCE_READ_MODEL_RELATIVE_PATH = "prediction/scenario_guidance/latest_read_model.json"
 RT_MARKET_REGIME_CARDS_ARTIFACT_MAX_BYTES = 2_000_000
 RT_MARKET_REGIME_CALIBRATION_READ_MODEL_MAX_BYTES = 1_000_000
 RT_MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_MAX_BYTES = 1_000_000
+RT_PARENT_SCENARIO_GUIDANCE_READ_MODEL_MAX_BYTES = 1_000_000
 FUTURE_PREDICTION_CARD_ROWS = ("方向感", "反転候補", "ボラ警戒", "流動性 / 約定品質")
 
 
@@ -97,6 +99,10 @@ def _market_regime_calibration_read_model_path() -> Path:
 
 def _market_regime_parameter_set_comparison_read_model_path() -> Path:
     return _market_regime_cards_artifact_root() / RT_MARKET_REGIME_PARAMETER_SET_COMPARISON_READ_MODEL_RELATIVE_PATH
+
+
+def _parent_scenario_guidance_read_model_path() -> Path:
+    return _market_regime_cards_artifact_root() / RT_PARENT_SCENARIO_GUIDANCE_READ_MODEL_RELATIVE_PATH
 
 
 def _extract_market_regime_cards(payload: Any) -> list[dict[str, Any]]:
@@ -272,6 +278,77 @@ def _read_market_regime_parameter_set_comparison_read_model_artifact() -> dict[s
         return base
 
 
+def _read_parent_scenario_guidance_read_model_artifact() -> dict[str, Any]:
+    path = _parent_scenario_guidance_read_model_path()
+    base: dict[str, Any] = {
+        "read_attempted": True,
+        "artifact_relative_path": RT_PARENT_SCENARIO_GUIDANCE_READ_MODEL_RELATIVE_PATH,
+        "artifact_path": str(path),
+        "artifact_present": False,
+        "artifact_used": False,
+        "artifact_read_error": "",
+        "generated_at": "",
+        "source_run_id": "",
+        "horizon_count": 0,
+        "family_part_count": 0,
+        "rejected_part_count": 0,
+        "prediction_family_ids": [],
+        "scenario_states": [],
+        "dominant_family_ids": [],
+        "horizons": [],
+        "broker_private_api_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "order_intent_submitted": False,
+        "parameter_auto_promotion_allowed": False,
+        "live_parameter_apply_allowed": False,
+        "would_send_to_broker": False,
+        "raw_market_source_read_performed": False,
+        "preview_inference_invoked": False,
+        "classifier_invoked": False,
+    }
+    try:
+        if not path.exists():
+            base["artifact_read_error"] = "parent_scenario_guidance_read_model_missing"
+            return base
+        size = path.stat().st_size
+        if size > RT_PARENT_SCENARIO_GUIDANCE_READ_MODEL_MAX_BYTES:
+            base["artifact_present"] = True
+            base["artifact_read_error"] = f"parent_scenario_guidance_read_model_too_large:{size}"
+            return base
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, Mapping):
+            base["artifact_present"] = True
+            base["artifact_read_error"] = "parent_scenario_guidance_read_model_not_object"
+            return base
+        horizons = [dict(item) for item in payload.get("horizons", []) if isinstance(item, Mapping)]
+        summary = payload.get("summary") if isinstance(payload.get("summary"), Mapping) else {}
+        safety = payload.get("safety") if isinstance(payload.get("safety"), Mapping) else {}
+        base.update({
+            "artifact_present": True,
+            "artifact_used": bool(horizons),
+            "artifact_read_error": "" if horizons else "parent_scenario_guidance_read_model_has_no_horizons",
+            "generated_at": str(payload.get("generated_at") or ""),
+            "source_run_id": str(payload.get("source_run_id") or ""),
+            "horizon_count": int(payload.get("horizon_count") or len(horizons)),
+            "family_part_count": int(payload.get("family_part_count") or 0),
+            "rejected_part_count": int(payload.get("rejected_part_count") or 0),
+            "prediction_family_ids": _as_text_list(payload.get("prediction_family_ids")),
+            "scenario_states": _as_text_list(summary.get("scenario_states")),
+            "dominant_family_ids": _as_text_list(summary.get("dominant_family_ids")),
+            "horizons": horizons,
+            "broker_private_api_allowed": bool(safety.get("broker_private_api_allowed", False)),
+            "autotrade_trigger_allowed": bool(safety.get("autotrade_trigger_allowed", False)),
+            "order_intent_submitted": bool(safety.get("order_intent_submitted", False)),
+            "parameter_auto_promotion_allowed": bool(safety.get("parameter_auto_promotion_allowed", False)),
+            "live_parameter_apply_allowed": bool(safety.get("live_parameter_apply_allowed", False)),
+            "would_send_to_broker": bool(safety.get("would_send_to_broker", False)),
+        })
+        return base
+    except Exception as exc:  # pragma: no cover - defensive UI read path
+        base["artifact_read_error"] = f"parent_scenario_guidance_read_model_read_failed:{type(exc).__name__}"
+        return base
+
+
 def _market_regime_calibration_detail_line(calibration_packet: Mapping[str, Any]) -> str:
     if not calibration_packet.get("artifact_used"):
         return ""
@@ -326,6 +403,61 @@ def _render_market_regime_calibration_status(calibration_packet: Mapping[str, An
         f"calibration_path={calibration_packet.get('artifact_path') or '-'} / display_only=true"
     )
     return dict(calibration_packet)
+
+def _parent_guidance_horizon_row(horizon: Mapping[str, Any]) -> dict[str, Any]:
+    guidance = horizon.get("operator_guidance") if isinstance(horizon.get("operator_guidance"), Mapping) else {}
+    blockers = _as_text_list(guidance.get("blockers"))
+    warnings = _as_text_list(guidance.get("warnings"))
+    if not blockers:
+        for part_key in ("conflicting_parts", "supporting_parts"):
+            parts = horizon.get(part_key) if isinstance(horizon.get(part_key), list) else []
+            for part in parts:
+                if isinstance(part, Mapping):
+                    blockers.extend(_as_text_list(part.get("blockers")))
+                    warnings.extend(_as_text_list(part.get("warnings")))
+    return {
+        "horizon": str(horizon.get("horizon_key") or ""),
+        "group": str(horizon.get("horizon_group") or ""),
+        "state": str(horizon.get("scenario_state") or ""),
+        "label": str(horizon.get("scenario_label") or ""),
+        "dominant": str(horizon.get("dominant_family_id") or ""),
+        "parts": int(horizon.get("family_part_count") or 0),
+        "supporting": len(horizon.get("supporting_parts") or []),
+        "conflicting": len(horizon.get("conflicting_parts") or []),
+        "blockers": _short_list(list(dict.fromkeys(blockers)), limit=3) or "-",
+        "warnings": _short_list(list(dict.fromkeys(warnings)), limit=3) or "-",
+        "read_only": bool(horizon.get("read_only", True)),
+    }
+
+
+def _render_parent_scenario_guidance_detail_table(parent_packet: Mapping[str, Any], st_api: Any) -> None:
+    horizons = [item for item in parent_packet.get("horizons", []) if isinstance(item, Mapping)]
+    rows = [_parent_guidance_horizon_row(horizon) for horizon in horizons]
+    with st_api.expander("親シナリオ guidance の詳細 / read-only", expanded=False):
+        st_api.dataframe(rows, width="stretch")
+
+
+def _render_parent_scenario_guidance_status(parent_packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
+    if not parent_packet.get("artifact_used"):
+        st_api.caption(f"親シナリオ: {parent_packet.get('artifact_read_error') or 'parent_scenario_guidance_read_model_unavailable'} / display_only=true")
+        return dict(parent_packet)
+    states = _as_text_list(parent_packet.get("scenario_states"))
+    families = _as_text_list(parent_packet.get("prediction_family_ids"))
+    dominant = _as_text_list(parent_packet.get("dominant_family_ids"))
+    st_api.caption(
+        "親シナリオ: "
+        f"horizons={parent_packet.get('horizon_count')} / "
+        f"parts={parent_packet.get('family_part_count')} / "
+        f"rejected={parent_packet.get('rejected_part_count')} / "
+        f"families={_short_list(families, limit=4) or '-'} / "
+        f"dominant={_short_list(dominant, limit=4) or '-'} / "
+        f"states={_short_list(states, limit=4) or '-'} / "
+        f"source_run={parent_packet.get('source_run_id') or '-'} / "
+        f"path={parent_packet.get('artifact_path') or '-'} / display_only=true"
+    )
+    _render_parent_scenario_guidance_detail_table(parent_packet, st_api)
+    return dict(parent_packet)
+
 
 def _parameter_set_comparison_display_state(comparison_packet: Mapping[str, Any]) -> str:
     if comparison_packet.get("comparison_ready"):
@@ -497,6 +629,8 @@ def _render_context_packets(packet: Mapping[str, Any], st_api: Any) -> None:
 
 def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
     _render_prediction_boundary(packet, st_api)
+    parent_scenario_guidance_packet = _read_parent_scenario_guidance_read_model_artifact()
+    parent_scenario_guidance_packet = _render_parent_scenario_guidance_status(parent_scenario_guidance_packet, st_api)
     artifact_packet = _read_market_regime_latest_cards_artifact()
     calibration_packet = _read_market_regime_calibration_read_model_artifact()
     parameter_set_comparison_packet = _read_market_regime_parameter_set_comparison_read_model_artifact()
@@ -505,9 +639,10 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         artifact_cards if isinstance(artifact_cards, list) else None,
         calibration_packet,
     )
-    market_regime_packet = render_warroom_market_regime_card_shell(
+    market_regime_packet_raw = render_warroom_market_regime_card_shell(
         cards=artifact_cards if isinstance(artifact_cards, list) else None,
     )
+    market_regime_packet = dict(market_regime_packet_raw) if isinstance(market_regime_packet_raw, Mapping) else {}
     market_regime_packet.update({
         "artifact_read_model_only": True,
         "artifact_read_attempted": bool(artifact_packet.get("read_attempted")),
@@ -557,6 +692,23 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         "market_regime_prediction_warnings": list(market_regime_summary["prediction_warnings"]),
         "market_regime_feature_bundle_available_signal_count": int(market_regime_summary["feature_bundle_available_signal_count"]),
         "market_regime_card_count": int(market_regime_summary["card_count"]),
+        "parent_scenario_guidance_read_model_used": bool(parent_scenario_guidance_packet.get("artifact_used")),
+        "parent_scenario_guidance_artifact_path": str(parent_scenario_guidance_packet.get("artifact_path") or ""),
+        "parent_scenario_guidance_read_error": str(parent_scenario_guidance_packet.get("artifact_read_error") or ""),
+        "parent_scenario_guidance_generated_at": str(parent_scenario_guidance_packet.get("generated_at") or ""),
+        "parent_scenario_guidance_source_run_id": str(parent_scenario_guidance_packet.get("source_run_id") or ""),
+        "parent_scenario_guidance_horizon_count": int(parent_scenario_guidance_packet.get("horizon_count") or 0),
+        "parent_scenario_guidance_family_part_count": int(parent_scenario_guidance_packet.get("family_part_count") or 0),
+        "parent_scenario_guidance_rejected_part_count": int(parent_scenario_guidance_packet.get("rejected_part_count") or 0),
+        "parent_scenario_guidance_prediction_family_ids": list(parent_scenario_guidance_packet.get("prediction_family_ids") or []),
+        "parent_scenario_guidance_scenario_states": list(parent_scenario_guidance_packet.get("scenario_states") or []),
+        "parent_scenario_guidance_dominant_family_ids": list(parent_scenario_guidance_packet.get("dominant_family_ids") or []),
+        "parent_scenario_guidance_broker_private_api_allowed": bool(parent_scenario_guidance_packet.get("broker_private_api_allowed")),
+        "parent_scenario_guidance_autotrade_trigger_allowed": bool(parent_scenario_guidance_packet.get("autotrade_trigger_allowed")),
+        "parent_scenario_guidance_order_intent_submitted": bool(parent_scenario_guidance_packet.get("order_intent_submitted")),
+        "parent_scenario_guidance_parameter_auto_promotion_allowed": bool(parent_scenario_guidance_packet.get("parameter_auto_promotion_allowed")),
+        "parent_scenario_guidance_live_parameter_apply_allowed": bool(parent_scenario_guidance_packet.get("live_parameter_apply_allowed")),
+        "parent_scenario_guidance_would_send_to_broker": bool(parent_scenario_guidance_packet.get("would_send_to_broker")),
         "market_regime_first_card_label": str(market_regime_summary["first_card_label"]),
         "market_regime_first_card_confidence": market_regime_summary["first_card_confidence"],
         "market_regime_first_card_freshness": str(market_regime_summary["first_card_freshness"]),

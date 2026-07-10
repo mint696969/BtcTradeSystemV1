@@ -48,7 +48,8 @@ def test_original_market_regime_shell_returns_renderer_packet_for_rt_status() ->
     assert ") -> dict[str, Any]:" in panel
     assert "return dict(packet)" in panel
 
-    assert "market_regime_packet = render_warroom_market_regime_card_shell" in cards_view
+    assert "market_regime_packet_raw = render_warroom_market_regime_card_shell" in cards_view
+    assert "market_regime_packet = dict(market_regime_packet_raw)" in cards_view
     assert "_render_market_regime_render_status" in cards_view
     assert "market_regime_preview_cards_used" in cards_view
     assert "market_regime_source_snapshot_missing_sources" in cards_view
@@ -57,48 +58,42 @@ def test_original_market_regime_shell_returns_renderer_packet_for_rt_status() ->
     assert "market_regime_first_card_label" in cards_view
 
 
-def test_market_regime_render_status_reports_live_preview_card_summary(monkeypatch) -> None:
+def test_market_regime_render_status_reports_artifact_read_model_summary(monkeypatch, tmp_path: Path) -> None:
     shell_calls: list[dict[str, object]] = []
 
     def fake_shell(**kwargs: object) -> dict[str, object]:
         shell_calls.append(dict(kwargs))
+        cards = kwargs.get("cards") if isinstance(kwargs.get("cards"), list) else []
         return {
-            "preview_cards_used": True,
-            "source_snapshot_ok": True,
-            "source_snapshot_missing_sources": [],
-            "source_snapshot_warnings": [],
-            "prediction_warnings": [],
-            "feature_bundle_available_signal_count": 19,
-            "card_count": 8,
-            "preview_disabled_reason": "",
-            "cards": [
-                {
-                    "horizon": "現在",
-                    "regime_label": "レンジ",
-                    "confidence_percent": 70,
-                    "freshness_badge": "LIVE",
-                }
-            ],
+            "cards": cards,
+            "card_count": len(cards),
+            "artifact_cards_used": bool(cards),
+            "artifact_path": "",
+            "artifact_read_error": "",
         }
 
+    monkeypatch.setenv("BTCTS_HOT_ROOT", str(tmp_path))
     monkeypatch.setattr(view, "render_warroom_market_regime_card_shell", fake_shell)
     fake_st = FakeStreamlit()
     result = view.render_rt_prediction_cards({"generated_at": "2026-07-08T00:00:00Z", "cards": []}, fake_st)
 
-    assert shell_calls == [{"preview_enabled": True, "hot_root": view.RT_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT, "generated_at": "2026-07-08T00:00:00Z"}]
+    assert shell_calls == [{"cards": None}]
     assert result["market_regime_renderer_packet_available"] is True
-    assert result["market_regime_preview_cards_used"] is True
-    assert result["market_regime_source_snapshot_ok"] is True
+    assert result["market_regime_preview_cards_used"] is False
+    assert result["market_regime_artifact_read_model_only"] is True
+    assert result["market_regime_preview_inference_invoked"] is False
+    assert result["market_regime_raw_market_source_read_performed"] is False
+    assert result["market_regime_source_snapshot_ok"] is None
     assert result["market_regime_source_snapshot_missing_sources"] == []
     assert result["market_regime_source_snapshot_warnings"] == []
     assert result["market_regime_prediction_warnings"] == []
-    assert result["market_regime_feature_bundle_available_signal_count"] == 19
-    assert result["market_regime_card_count"] == 8
-    assert result["market_regime_first_card_label"] == "レンジ"
-    assert result["market_regime_first_card_confidence"] == 70
-    assert result["market_regime_first_card_freshness"] == "LIVE"
-    assert any("地合いカード: D-hot preview" in caption for caption in fake_st.captions)
-    assert any("first=レンジ/70%/LIVE" in caption for caption in fake_st.captions)
+    assert result["market_regime_feature_bundle_available_signal_count"] == 0
+    assert result["market_regime_card_count"] == 0
+    assert result["market_regime_first_card_label"] == ""
+    assert result["market_regime_first_card_confidence"] is None
+    assert result["market_regime_first_card_freshness"] == ""
+    assert any("地合いカード: sample/fallback" in caption for caption in fake_st.captions)
+    assert any("preview_inference=False" in caption for caption in fake_st.captions)
 
 
 def test_market_regime_render_status_reports_sample_fallback_when_packet_missing() -> None:

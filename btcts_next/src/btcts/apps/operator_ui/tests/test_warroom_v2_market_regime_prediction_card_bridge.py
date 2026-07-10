@@ -46,8 +46,10 @@ def test_bridge_source_uses_original_market_regime_panel_not_v2_placeholder_matr
 
     assert "warroom_market_regime_card_panel" in source
     assert "render_warroom_market_regime_card_shell" in source
-    assert "preview_enabled=True" in source
-    assert "hot_root=RT_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT" in source
+    assert "artifact_read_model_only" in source
+    assert "RT_MARKET_REGIME_CARDS_ARTIFACT_RELATIVE_PATH" in source
+    assert "ui_market_regime_preview_inference=false" in source
+    assert "preview_inference_invoked" in source
     assert "D:/btc_ts_hot" in source
     assert "panels.warroom_v2.prediction_cards" not in source
     assert "warroom_v2_prediction_matrix_html" not in source
@@ -58,12 +60,15 @@ def test_bridge_source_uses_original_market_regime_panel_not_v2_placeholder_matr
     assert "地合いカード詳細" in original
 
 
-def test_bridge_returns_market_regime_first_and_future_rows_reserved(monkeypatch) -> None:
+def test_bridge_returns_market_regime_first_and_future_rows_reserved(monkeypatch, tmp_path: Path) -> None:
     calls: list[dict[str, object]] = []
 
-    def fake_shell(**kwargs: object) -> None:
+    def fake_shell(**kwargs: object) -> dict[str, object]:
         calls.append(dict(kwargs))
+        cards = kwargs.get("cards") if isinstance(kwargs.get("cards"), list) else []
+        return {"cards": cards, "card_count": len(cards), "artifact_cards_used": bool(cards), "artifact_path": "", "artifact_read_error": ""}
 
+    monkeypatch.setenv("BTCTS_HOT_ROOT", str(tmp_path))
     monkeypatch.setattr(view, "render_warroom_market_regime_card_shell", fake_shell)
     fake_st = FakeStreamlit()
     result = view.render_rt_prediction_cards(
@@ -82,7 +87,7 @@ def test_bridge_returns_market_regime_first_and_future_rows_reserved(monkeypatch
         fake_st,
     )
 
-    assert calls == [{"preview_enabled": True, "hot_root": view.RT_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT, "generated_at": "2026-07-08T00:00:00Z"}]
+    assert calls == [{"cards": None}]
     assert result["market_regime_card_shell_rendered"] is True
     assert result["market_regime_first"] is True
     assert result["future_prediction_rows_reserved"] is True
