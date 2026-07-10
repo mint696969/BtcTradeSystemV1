@@ -56,6 +56,7 @@ def test_aligned_live_sources_build_shadow_report_without_replacing_classifier()
     )
     assert report.logic_version == MARKET_REGIME_CONFIDENCE_INTEGRATION_VERSION
     assert report.horizon_key == "300s"
+    assert report.parameter_set_id == gate.parameter_set_id
     assert report.shadow_display_confidence_percent > 0
     assert report.confidence_delta_percent == report.shadow_display_confidence_percent - 70
     assert report.safety.shadow_only is True
@@ -184,3 +185,21 @@ def test_parameter_set_mismatch_fails_closed() -> None:
             coverage=coverage,
             currentness_gate=gate,
         )
+
+def test_shadow_report_serializes_parameter_set_id() -> None:
+    coverage = _all_live()
+    gate = build_market_regime_currentness_gate_report(
+        horizon_sec=300,
+        coverage=coverage,
+        parameter_set_id="market_regime.shadow.fixture.v1",
+    )
+    report = build_market_regime_shadow_confidence_report(
+        horizon_sec=300,
+        predicted_regime="RANGE",
+        signal_score_report=_signal_report(),
+        coverage=coverage,
+        currentness_gate=gate,
+        parameter_set_id="market_regime.shadow.fixture.v1",
+    )
+    assert report.parameter_set_id == "market_regime.shadow.fixture.v1"
+    assert report.to_dict()["parameter_set_id"] == "market_regime.shadow.fixture.v1"

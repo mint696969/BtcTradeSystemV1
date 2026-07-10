@@ -37,6 +37,7 @@ class MarketRegimeShadowConfidenceSafety:
 class MarketRegimeShadowConfidenceReport:
     horizon_sec: int
     horizon_key: str
+    parameter_set_id: str
     predicted_regime: str
     legacy_confidence_percent: int | None
     shadow_display_confidence_percent: int
@@ -173,6 +174,7 @@ def build_market_regime_shadow_confidence_report(
     return MarketRegimeShadowConfidenceReport(
         horizon_sec=int(horizon_sec),
         horizon_key=horizon_key,
+        parameter_set_id=str(profile["parameter_set_id"]),
         predicted_regime=regime.value,
         legacy_confidence_percent=legacy,
         shadow_display_confidence_percent=shadow,

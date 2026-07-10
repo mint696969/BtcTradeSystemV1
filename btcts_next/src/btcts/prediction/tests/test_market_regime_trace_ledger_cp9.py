@@ -133,3 +133,30 @@ def test_cp9_write_latest_once_appends_trace_and_updates_status_manifest(tmp_pat
     assert status["trace_ledger_available"] is True
     assert status["outcome_resolver_available"] is True
     assert manifest["refs"]["trace_part_jsonl"] == "prediction/market_regime/ledgers/date=2026-07-08/hour=11/part-00001.jsonl"
+
+def test_mr_vs4_trace_row_contains_compact_source_attribution_for_future_scorecards(tmp_path: Path) -> None:
+    _fixture_root(tmp_path)
+    artifacts = build_market_regime_latest_artifact_set(
+        hot_root=tmp_path,
+        generated_at="2026-07-08T11:04:00Z",
+        run_id="market_regime_mr_vs4_attribution_test",
+    )
+    trace_row = artifacts["trace_row"]
+    attribution = trace_row["source_attribution_by_horizon"]
+    assert set(attribution) == {"current", "300s", "900s", "1800s", "3600s", "21600s", "43200s", "86400s"}
+    sample = attribution["300s"]
+    assert sample["horizon_key"] == "300s"
+    assert sample["predicted_regime"]
+    assert sample["parameter_set_id"] == artifacts["active_parameter_set_id"]
+    assert sample["source_signals"]
+    for signal in sample["source_signals"].values():
+        assert set(signal) == {
+            "direction",
+            "signal_strength_percent",
+            "freshness_percent",
+            "quality_percent",
+            "blocked",
+        }
+    encoded = json.dumps(trace_row, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    assert len(encoded) < 128 * 1024
+    assert _contains_forbidden_key(trace_row) is False

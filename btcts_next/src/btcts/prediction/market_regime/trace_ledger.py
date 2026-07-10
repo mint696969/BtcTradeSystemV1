@@ -147,6 +147,35 @@ def _signal_summary(signal_score_report: Mapping[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _compact_source_attribution(
+    source_attribution_by_horizon: Mapping[str, Mapping[str, Any]] | None,
+) -> Dict[str, Any]:
+    rows: dict[str, Any] = {}
+    for horizon_key, report in sorted((source_attribution_by_horizon or {}).items()):
+        if not isinstance(report, Mapping):
+            continue
+        signals = report.get("source_signals") if isinstance(report.get("source_signals"), Mapping) else {}
+        compact_signals: dict[str, Any] = {}
+        for source_id, signal in sorted(signals.items()):
+            if not isinstance(signal, Mapping):
+                continue
+            compact_signals[str(source_id)] = {
+                "direction": str(signal.get("direction") or "unknown"),
+                "signal_strength_percent": int(signal.get("signal_strength_percent") or 0),
+                "freshness_percent": int(signal.get("freshness_percent") or 0),
+                "quality_percent": int(signal.get("quality_percent") or 0),
+                "blocked": bool(signal.get("blocked")),
+            }
+        rows[str(horizon_key)] = {
+            "horizon_key": str(report.get("horizon_key") or horizon_key),
+            "predicted_regime": str(report.get("predicted_regime") or "UNKNOWN"),
+            "parameter_set_id": str(report.get("parameter_set_id") or ""),
+            "source_signals": compact_signals,
+            "logic_version": str(report.get("logic_version") or ""),
+        }
+    return rows
+
+
 def build_market_regime_trace_row(
     *,
     generated_at: str,
@@ -157,6 +186,7 @@ def build_market_regime_trace_row(
     signal_score_report: Mapping[str, Any],
     active_parameter_set_id: str,
     parameter_set_registry_validation: Mapping[str, Any],
+    source_attribution_by_horizon: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> Dict[str, Any]:
     relpath = trace_ledger_part_relpath(generated_at)
     row = {
@@ -176,6 +206,7 @@ def build_market_regime_trace_row(
         "prediction_summary": _prediction_summary(prediction_packet),
         "active_parameter_set_id": active_parameter_set_id,
         "parameter_set_registry_validation": dict(parameter_set_registry_validation),
+        "source_attribution_by_horizon": _compact_source_attribution(source_attribution_by_horizon),
         "safety": {
             "read_only_sources": True,
             "trace_ledger_append_only": True,
@@ -219,6 +250,8 @@ def validate_market_regime_trace_row(row: Mapping[str, Any]) -> Dict[str, Any]:
         failures.append("signal_summary_missing")
     if not isinstance(row.get("prediction_summary"), Mapping):
         failures.append("prediction_summary_missing")
+    if not isinstance(row.get("source_attribution_by_horizon"), Mapping):
+        failures.append("source_attribution_by_horizon_missing")
     if _has_forbidden_raw_keys(row):
         failures.append("forbidden_raw_payload_key_present")
     safety = row.get("safety") if isinstance(row.get("safety"), Mapping) else {}

@@ -256,6 +256,7 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         signal_score_report=signal_score_report,
         active_parameter_set_id=active_parameter_set.parameter_set_id,
         parameter_set_registry_validation=parameter_set_registry_validation,
+        source_attribution_by_horizon=shadow_confidence_by_horizon,
     )
     latest_read_model = build_market_regime_latest_read_model_artifact(
         generated_at=generated_at,
