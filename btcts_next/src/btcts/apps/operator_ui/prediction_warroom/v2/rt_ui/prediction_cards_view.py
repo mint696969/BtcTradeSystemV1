@@ -404,6 +404,22 @@ def _render_market_regime_calibration_status(calibration_packet: Mapping[str, An
     )
     return dict(calibration_packet)
 
+def _parent_guidance_state_label(state: Any) -> str:
+    labels = {
+        "bullish": "上昇",
+        "bearish": "下落",
+        "range": "レンジ",
+        "wait": "待機",
+        "unknown": "不明",
+        "no_edge": "優位性なし",
+        "conflicting": "矛盾あり",
+        "risk_off": "リスクオフ",
+        "context_only": "参考情報",
+    }
+    key = str(state or "").strip()
+    return labels.get(key, key or "-")
+
+
 def _parent_guidance_horizon_row(horizon: Mapping[str, Any]) -> dict[str, Any]:
     guidance = horizon.get("operator_guidance") if isinstance(horizon.get("operator_guidance"), Mapping) else {}
     blockers = _as_text_list(guidance.get("blockers"))
@@ -419,6 +435,7 @@ def _parent_guidance_horizon_row(horizon: Mapping[str, Any]) -> dict[str, Any]:
         "horizon": str(horizon.get("horizon_key") or ""),
         "group": str(horizon.get("horizon_group") or ""),
         "state": str(horizon.get("scenario_state") or ""),
+        "state_label": _parent_guidance_state_label(horizon.get("scenario_state")),
         "label": str(horizon.get("scenario_label") or ""),
         "dominant": str(horizon.get("dominant_family_id") or ""),
         "parts": int(horizon.get("family_part_count") or 0),
@@ -428,6 +445,26 @@ def _parent_guidance_horizon_row(horizon: Mapping[str, Any]) -> dict[str, Any]:
         "warnings": _short_list(list(dict.fromkeys(warnings)), limit=3) or "-",
         "read_only": bool(horizon.get("read_only", True)),
     }
+
+
+def _parent_guidance_compact_row(horizon: Mapping[str, Any]) -> dict[str, Any]:
+    row = _parent_guidance_horizon_row(horizon)
+    return {
+        "時間軸": row.get("horizon") or "-",
+        "状態": row.get("state_label") or row.get("state") or "-",
+        "ラベル": row.get("label") or "-",
+        "family": row.get("dominant") or "-",
+        "blockers": row.get("blockers") or "-",
+        "warnings": row.get("warnings") or "-",
+        "read_only": bool(row.get("read_only", True)),
+    }
+
+
+def _render_parent_scenario_guidance_compact_table(parent_packet: Mapping[str, Any], st_api: Any) -> None:
+    horizons = [item for item in parent_packet.get("horizons", []) if isinstance(item, Mapping)]
+    rows = [_parent_guidance_compact_row(horizon) for horizon in horizons]
+    if rows:
+        st_api.dataframe(rows, width="stretch")
 
 
 def _render_parent_scenario_guidance_detail_table(parent_packet: Mapping[str, Any], st_api: Any) -> None:
@@ -442,6 +479,7 @@ def _render_parent_scenario_guidance_status(parent_packet: Mapping[str, Any], st
         st_api.caption(f"親シナリオ: {parent_packet.get('artifact_read_error') or 'parent_scenario_guidance_read_model_unavailable'} / display_only=true")
         return dict(parent_packet)
     states = _as_text_list(parent_packet.get("scenario_states"))
+    state_labels = [_parent_guidance_state_label(state) for state in states]
     families = _as_text_list(parent_packet.get("prediction_family_ids"))
     dominant = _as_text_list(parent_packet.get("dominant_family_ids"))
     st_api.caption(
@@ -451,10 +489,11 @@ def _render_parent_scenario_guidance_status(parent_packet: Mapping[str, Any], st
         f"rejected={parent_packet.get('rejected_part_count')} / "
         f"families={_short_list(families, limit=4) or '-'} / "
         f"dominant={_short_list(dominant, limit=4) or '-'} / "
-        f"states={_short_list(states, limit=4) or '-'} / "
+        f"states={_short_list(state_labels, limit=4) or '-'} / "
         f"source_run={parent_packet.get('source_run_id') or '-'} / "
         f"path={parent_packet.get('artifact_path') or '-'} / display_only=true"
     )
+    _render_parent_scenario_guidance_compact_table(parent_packet, st_api)
     _render_parent_scenario_guidance_detail_table(parent_packet, st_api)
     return dict(parent_packet)
 

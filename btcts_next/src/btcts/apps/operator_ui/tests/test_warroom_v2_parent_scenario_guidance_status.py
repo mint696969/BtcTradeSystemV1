@@ -251,9 +251,13 @@ def test_parent_scenario_guidance_status_caption_table_and_result_are_read_only(
     assert result["prediction_invoked"] is False
     assert result["classifier_invoked"] is False
     assert result["broker_action_allowed"] is False
-    assert any("親シナリオ" in caption and "horizons=2" in caption and "states=bullish,unknown" in caption for caption in fake_st.captions)
-    assert fake_st.tables
-    detail_rows = fake_st.tables[0]
+    assert any("親シナリオ" in caption and "horizons=2" in caption and "states=上昇,不明" in caption for caption in fake_st.captions)
+    assert len(fake_st.tables) >= 2
+    compact_rows = fake_st.tables[0]
+    assert {str(row.get("時間軸")) for row in compact_rows} == {"current", "300s"}
+    assert any(row.get("状態") == "不明" and "market_regime_unknown" in str(row.get("blockers")) for row in compact_rows)
+    assert any(row.get("状態") == "上昇" and row.get("family") == "market_regime" for row in compact_rows)
+    detail_rows = fake_st.tables[1]
     assert {str(row.get("horizon")) for row in detail_rows} == {"current", "300s"}
     assert any(row.get("state") == "unknown" and "market_regime_unknown" in str(row.get("blockers")) for row in detail_rows)
     assert any(row.get("state") == "bullish" and row.get("dominant") == "market_regime" for row in detail_rows)
@@ -280,7 +284,9 @@ def test_parent_scenario_guidance_status_source_has_no_execution_write_or_produc
         "RT_PARENT_SCENARIO_GUIDANCE_READ_MODEL_RELATIVE_PATH",
         "_read_parent_scenario_guidance_read_model_artifact",
         "_render_parent_scenario_guidance_status",
+        "_render_parent_scenario_guidance_compact_table",
         "_render_parent_scenario_guidance_detail_table",
+        "_parent_guidance_state_label",
         "parent_scenario_guidance_horizon_count",
         "parent_scenario_guidance_prediction_family_ids",
     ]
