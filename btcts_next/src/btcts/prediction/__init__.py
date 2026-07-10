@@ -9,6 +9,13 @@ from .calibration_review import PredictionCalibrationReview, build_prediction_ca
 from .contracts import InferenceBundle, ParameterSetIdentity, PredictionConfidence, PredictionFamily, PredictionOutput, SourceIdentity
 from .cross_venue import CrossVenueReferenceSummary, LeadLagSkeleton, SpotFxBasisSummary, VenueReferencePrice, build_cross_venue_reference_summary
 from .evaluation import PredictionEvaluationRecord, PredictionEvaluationReport, build_prediction_evaluation_records, build_prediction_evaluation_report
+from .evidence_sources import (
+    PREDICTION_EVIDENCE_SOURCE_WEIGHT_PROFILE_VERSION,
+    build_prediction_evidence_source_descriptor,
+    build_prediction_evidence_source_weight_profile,
+    estimate_prediction_display_confidence_from_evidence_profile,
+    validate_prediction_evidence_source_weight_profile,
+)
 from .feature_depth import FeatureDepthInputKind, FeatureDepthInputRef, FeatureDepthSnapshot, FeatureDepthState, OrderBookFeatureSummary, TradeFlowFeatureSummary, build_feature_depth_snapshot
 from .feature_registry import FeatureFamily, FeatureRegistryEntry, FeatureSpec, build_default_feature_registry, feature_registry_by_id
 from .forecast_ledger import ForecastLedgerBatch, ForecastLedgerRecord, build_forecast_ledger_records_from_bundle
@@ -170,6 +177,7 @@ __all__ = [
     "PredictionEvidenceRef",
     "PredictionEvaluationRecord",
     "PredictionEvaluationReport",
+    "PREDICTION_EVIDENCE_SOURCE_WEIGHT_PROFILE_VERSION",
     "PredictionOutput",
     "PredictionParameterSetBase",
     "PredictionParameterSetStatus",
@@ -217,6 +225,10 @@ __all__ = [
     "build_prediction_calibration_review",
     "build_prediction_evaluation_records",
     "build_prediction_evaluation_report",
+    "build_prediction_evidence_source_descriptor",
+    "build_prediction_evidence_source_weight_profile",
+    "estimate_prediction_display_confidence_from_evidence_profile",
+    "validate_prediction_evidence_source_weight_profile",
     "build_prediction_prearmed_readiness_snapshot",
     "build_prediction_system_result",
     "build_prediction_warroom_display_packet",
