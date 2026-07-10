@@ -209,3 +209,51 @@ def test_mr_a2_latest_cards_source_refs_include_warroom_candles(tmp_path: Path) 
     assert "warroom_candles" in refs
     assert refs["warroom_candles"]["relpath"].endswith("timeframe=60s/closed.jsonl")
     assert refs["warroom_candles"]["ok"] is False
+
+def test_mr_vs3_shadow_confidence_is_diagnostic_only(tmp_path: Path) -> None:
+    _fixture_root(tmp_path)
+    artifacts = build_market_regime_latest_artifact_set(
+        hot_root=tmp_path,
+        generated_at="2026-07-08T09:12:00Z",
+        run_id="market_regime_shadow_confidence_test",
+    )
+
+    shadow_by_horizon = artifacts["shadow_confidence_by_horizon"]
+    assert len(shadow_by_horizon) == 8
+    assert artifacts["latest_cards"]["compact_summary"]["shadow_confidence_available"] is True
+    assert artifacts["latest_cards"]["compact_summary"]["shadow_confidence_only"] is True
+    assert artifacts["latest_cards"]["compact_summary"]["display_confidence_replaced"] is False
+
+    for card, horizon in zip(
+        artifacts["latest_cards"]["cards"],
+        artifacts["latest_read_model"]["horizons"],
+        strict=True,
+    ):
+        card_shadow = card["detail"]["shadow_confidence"]
+        read_shadow = horizon["diagnostic_record"]["shadow_confidence"]
+        assert card_shadow["horizon_key"] == read_shadow["horizon_key"] == card["horizon_key"]
+        assert card_shadow["legacy_confidence_percent"] == read_shadow["legacy_confidence_percent"] == card["confidence_percent"]
+        assert card_shadow["shadow_display_confidence_percent"] == read_shadow["shadow_display_confidence_percent"]
+        assert "source_signals" not in card_shadow
+        assert "estimator" not in card_shadow
+        assert "source_signals" in read_shadow
+        assert "estimator" in read_shadow
+        assert card["detail"]["shadow_confidence_only"] is True
+        assert card["detail"]["display_confidence_replaced"] is False
+        assert horizon["diagnostic_record"]["shadow_confidence_only"] is True
+        assert horizon["diagnostic_record"]["display_confidence_replaced"] is False
+        assert horizon["confidence_percent"] == card["confidence_percent"]
+
+def test_mr_vs3_card_shadow_projection_is_smaller_than_full_read_model_diagnostic(tmp_path: Path) -> None:
+    _fixture_root(tmp_path)
+    artifacts = build_market_regime_latest_artifact_set(
+        hot_root=tmp_path,
+        generated_at="2026-07-08T09:12:00Z",
+        run_id="market_regime_shadow_size_test",
+    )
+    card_shadow = artifacts["latest_cards"]["cards"][0]["detail"]["shadow_confidence"]
+    read_shadow = artifacts["latest_read_model"]["horizons"][0]["diagnostic_record"]["shadow_confidence"]
+    card_bytes = len(json.dumps(card_shadow, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+    read_bytes = len(json.dumps(read_shadow, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+    assert card_bytes < read_bytes
+    assert card_bytes < 2048

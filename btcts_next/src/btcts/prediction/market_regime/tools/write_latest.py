@@ -29,6 +29,8 @@ from btcts.prediction.market_regime.artifact_projection import (
     build_market_regime_read_model_summaries,
     build_market_regime_source_refs_from_snapshot,
 )
+from btcts.prediction.market_regime.confidence_integration import build_market_regime_shadow_confidence_report
+from btcts.prediction.market_regime.currentness_gate import build_market_regime_currentness_gate_report
 from btcts.prediction.market_regime.features import build_market_regime_feature_bundle
 from btcts.prediction.market_regime.signal_scoring import MARKET_REGIME_SIGNAL_SCORING_VERSION, score_market_regime_signals
 from btcts.prediction.market_regime.inference import MARKET_REGIME_CLASSIFIER_VERSION, classify_market_regime_feature_bundle
@@ -59,10 +61,30 @@ MARKET_REGIME_WRITE_LATEST_TOOL_VERSION = "prediction.market_regime.tools.write_
 MARKET_REGIME_CARD_DETAIL_ENRICHMENT_VERSION = "prediction_warroom.market_regime_card_detail_enrichment.2026_07_08.v1"
 
 
+def _compact_shadow_confidence_for_card(shadow: Mapping[str, Any]) -> dict[str, Any]:
+    estimator = shadow.get("estimator") if isinstance(shadow.get("estimator"), Mapping) else {}
+    return {
+        "horizon_key": str(shadow.get("horizon_key") or ""),
+        "predicted_regime": str(shadow.get("predicted_regime") or ""),
+        "legacy_confidence_percent": shadow.get("legacy_confidence_percent"),
+        "shadow_display_confidence_percent": shadow.get("shadow_display_confidence_percent"),
+        "confidence_delta_percent": shadow.get("confidence_delta_percent"),
+        "currentness_gate_state": str(shadow.get("currentness_gate_state") or ""),
+        "currentness_gate_blockers": list(shadow.get("currentness_gate_blockers") or []),
+        "base_weighted_quality_percent": estimator.get("base_weighted_quality_percent"),
+        "source_agreement_percent": estimator.get("source_agreement_percent"),
+        "agreement_multiplier_percent": estimator.get("agreement_multiplier_percent"),
+        "horizon_confidence_cap_percent": estimator.get("horizon_confidence_cap_percent"),
+        "applied_confidence_cap_percent": estimator.get("applied_confidence_cap_percent"),
+        "logic_version": str(shadow.get("logic_version") or ""),
+    }
+
+
 def _enrich_cards_for_warroom_detail(
     cards: list[dict[str, Any]],
     *,
     signal_score_report: Mapping[str, Any],
+    shadow_confidence_by_horizon: Mapping[str, Mapping[str, Any]],
     trace_part_jsonl: str,
     active_parameter_set_id: str,
 ) -> list[dict[str, Any]]:
@@ -77,12 +99,43 @@ def _enrich_cards_for_warroom_detail(
         detail["source_family_scores"] = dict(signal_row.get("source_family_scores", {}))
         detail["source_family_weights_used"] = dict(signal_row.get("source_family_weights_used", {}))
         detail["regime_scores"] = dict(signal_row.get("regime_scores", {}))
+        shadow = shadow_confidence_by_horizon.get(str(row.get("horizon_key") or ""), {})
+        detail["shadow_confidence"] = _compact_shadow_confidence_for_card(shadow)
+        detail["shadow_confidence_only"] = True
+        detail["display_confidence_replaced"] = False
         detail["trace_part_jsonl"] = trace_part_jsonl
         detail["active_parameter_set_id"] = active_parameter_set_id
         detail["card_detail_enrichment_version"] = MARKET_REGIME_CARD_DETAIL_ENRICHMENT_VERSION
         row["detail"] = detail
         enriched.append(row)
     return enriched
+
+
+def _build_shadow_confidence_by_horizon(
+    *,
+    prediction_packet: Any,
+    signal_score_report: Mapping[str, Any],
+    coverage: Any,
+    active_parameter_set_id: str,
+) -> dict[str, dict[str, Any]]:
+    reports: dict[str, dict[str, Any]] = {}
+    for prediction in prediction_packet.predictions:
+        gate = build_market_regime_currentness_gate_report(
+            horizon_sec=int(prediction.horizon_sec),
+            coverage=coverage,
+            parameter_set_id=active_parameter_set_id,
+        )
+        shadow = build_market_regime_shadow_confidence_report(
+            horizon_sec=int(prediction.horizon_sec),
+            predicted_regime=prediction.regime_code,
+            signal_score_report=signal_score_report,
+            coverage=coverage,
+            currentness_gate=gate,
+            legacy_confidence_percent=int(prediction.confidence_percent),
+            parameter_set_id=active_parameter_set_id,
+        )
+        reports[prediction.horizon_key] = shadow.to_dict()
+    return reports
 
 
 def _utc_now_iso() -> str:
@@ -124,11 +177,18 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
     feature_bundle = build_market_regime_feature_bundle(source_snapshot, generated_at=generated_at, parameter_set=active_parameter_set)
     prediction_packet = classify_market_regime_feature_bundle(feature_bundle, generated_at=generated_at)
     signal_score_report = score_market_regime_signals(feature_bundle)
+    shadow_confidence_by_horizon = _build_shadow_confidence_by_horizon(
+        prediction_packet=prediction_packet,
+        signal_score_report=signal_score_report,
+        coverage=feature_bundle.coverage,
+        active_parameter_set_id=active_parameter_set.parameter_set_id,
+    )
     cards = build_market_regime_cards_from_packet(prediction_packet)
     trace_part_jsonl = trace_ledger_part_relpath(generated_at)
     cards = _enrich_cards_for_warroom_detail(
         cards,
         signal_score_report=signal_score_report,
+        shadow_confidence_by_horizon=shadow_confidence_by_horizon,
         trace_part_jsonl=trace_part_jsonl,
         active_parameter_set_id=active_parameter_set.parameter_set_id,
     )
@@ -152,6 +212,9 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
             "active_parameter_set_id": active_parameter_set.parameter_set_id,
             "parameter_set_registry_ok": bool(parameter_set_registry_validation.get("ok")),
             "card_detail_enrichment_version": MARKET_REGIME_CARD_DETAIL_ENRICHMENT_VERSION,
+            "shadow_confidence_available": len(shadow_confidence_by_horizon) == len(prediction_packet.predictions),
+            "shadow_confidence_only": True,
+            "display_confidence_replaced": False,
             "source_snapshot_ok": source_snapshot.ok,
             "feature_bundle_available_signal_count": feature_bundle.available_signal_count(),
             "missing_sources": list(source_snapshot.missing_sources),
@@ -171,6 +234,12 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         horizon_row["source_family_scores"] = dict(signal_row.get("source_family_scores", {}))
         horizon_row["source_family_weights_used"] = dict(signal_row.get("source_family_weights_used", {}))
         horizon_row["regime_scores"] = dict(signal_row.get("regime_scores", {}))
+        shadow = shadow_confidence_by_horizon.get(str(horizon_row.get("horizon_key") or ""), {})
+        diagnostic = dict(horizon_row.get("diagnostic_record") if isinstance(horizon_row.get("diagnostic_record"), Mapping) else {})
+        diagnostic["shadow_confidence"] = dict(shadow)
+        diagnostic["shadow_confidence_only"] = True
+        diagnostic["display_confidence_replaced"] = False
+        horizon_row["diagnostic_record"] = diagnostic
         horizon_row["active_parameter_set_id"] = active_parameter_set.parameter_set_id
         horizon_row["parameter_set_registry_version"] = MARKET_REGIME_PARAMETER_SET_REGISTRY_VERSION
     source_summary = dict(summaries["source_contribution_summary"])
@@ -219,6 +288,7 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         "feature_bundle_available_signal_count": feature_bundle.available_signal_count(),
         "card_count": len(cards),
         "active_parameter_set_id": active_parameter_set.parameter_set_id,
+        "shadow_confidence_by_horizon": shadow_confidence_by_horizon,
     }
 
 
