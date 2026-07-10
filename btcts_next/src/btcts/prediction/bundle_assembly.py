@@ -10,6 +10,12 @@ from .contracts import InferenceBundle, PredictionOutput
 
 LOGIC_VERSION = "prediction_inference_bundle.s129.v1"
 
+OUTPUT_LOCAL_BLOCKERS = frozenset(
+    {
+        "insufficient_exact_horizon_candles",
+    }
+)
+
 
 def _generated_at(now: datetime | None) -> str:
     dt = now.astimezone(timezone.utc) if now else datetime.now(timezone.utc)
@@ -100,6 +106,28 @@ def _risk_context(outputs: Tuple[PredictionOutput, ...]) -> dict[str, Any]:
     }
 
 
+def _partition_output_blockers(
+    outputs: Tuple[PredictionOutput, ...],
+) -> tuple[Tuple[str, ...], Tuple[dict[str, Any], ...]]:
+    bundle_blockers: list[str] = []
+    local_blockers: list[dict[str, Any]] = []
+    for output in outputs:
+        for blocker in output.blockers:
+            blocker_text = str(blocker)
+            if blocker_text in OUTPUT_LOCAL_BLOCKERS:
+                local_blockers.append(
+                    {
+                        "family": output.family.value,
+                        "horizon_sec": int(output.horizon.horizon_sec),
+                        "blocker": blocker_text,
+                        "scope": "output_local",
+                    }
+                )
+            else:
+                bundle_blockers.append(blocker_text)
+    return tuple(dict.fromkeys(bundle_blockers)), tuple(local_blockers)
+
+
 def _operator_explanation(outputs: Tuple[PredictionOutput, ...]) -> Tuple[str, ...]:
     if not outputs:
         return ("no prediction outputs supplied",)
@@ -125,8 +153,9 @@ def build_inference_bundle_from_outputs(
     warnings: list[str] = []
     if not normalized:
         blockers.append("prediction_outputs_missing")
+    output_bundle_blockers, output_local_blockers = _partition_output_blockers(normalized)
+    blockers.extend(output_bundle_blockers)
     for output in normalized:
-        blockers.extend(output.blockers)
         warnings.extend(output.warnings)
     risk_context = _risk_context(normalized)
     if extra_risk_context:
@@ -135,6 +164,9 @@ def build_inference_bundle_from_outputs(
     quality_summary["family_coverage"] = _family_coverage(normalized)
     quality_summary["horizon_coverage"] = _horizon_coverage(normalized)
     quality_summary["score_summary"] = _score_summary(normalized)
+    quality_summary["output_local_blockers"] = [dict(item) for item in output_local_blockers]
+    quality_summary["output_local_blocker_count"] = len(output_local_blockers)
+    quality_summary["bundle_fatal_output_blockers"] = list(output_bundle_blockers)
     return InferenceBundle(
         bundle_id=_bundle_id(generated_at, normalized),
         generated_at=generated_at,
