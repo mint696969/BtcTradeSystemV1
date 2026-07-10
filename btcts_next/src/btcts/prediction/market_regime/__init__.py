@@ -55,6 +55,13 @@ from .contracts import (
     TacticalHint,
     build_empty_market_regime_packet,
 )
+from .evidence_profile import (
+    MARKET_REGIME_EVIDENCE_PROFILE_VERSION,
+    build_all_market_regime_default_evidence_profiles,
+    build_market_regime_default_evidence_profile,
+    market_regime_common_horizon_group,
+    market_regime_evidence_source_id,
+)
 from .freshness_policy import FreshnessThreshold, MarketRegimeFreshnessPolicy, build_default_freshness_policy
 from .features import FeatureBundleSafetyFlags, FeatureSignal, MarketRegimeFeatureBundle, build_market_regime_feature_bundle
 from .horizon_policy import MarketRegimeHorizon, MarketRegimeHorizonGroup, MarketRegimeHorizonPolicy, build_default_horizon_policy
@@ -153,6 +160,11 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "MARKET_REGIME_EVIDENCE_PROFILE_VERSION",
+    "build_all_market_regime_default_evidence_profiles",
+    "build_market_regime_default_evidence_profile",
+    "market_regime_common_horizon_group",
+    "market_regime_evidence_source_id",
     "validate_market_regime_parameter_set_review_packet",
     "build_market_regime_parameter_set_review_packet",
     "MARKET_REGIME_PARAMETER_SET_REVIEW_PACKET_VERSION",
