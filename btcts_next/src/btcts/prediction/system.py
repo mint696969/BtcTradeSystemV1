@@ -35,6 +35,7 @@ from .technical import HumanTechnicalSummary, build_human_technical_summary
 
 LOGIC_VERSION = "prediction_system.ps_g_lite.v1"
 MARKET_REGIME_MIN_EXACT_HORIZON_CANDLES = 5
+MARKET_REGIME_HISTORY_GATED_HORIZONS_SEC = frozenset({21600, 43200})
 
 
 _STALE_AFTER_SEC_BY_GROUP: Mapping[HorizonGroup, int] = {
@@ -574,20 +575,29 @@ def _attach_market_regime_technical_source_attribution(
         ):
             ledger.insert(0, ledger_entry)
 
+        history_gate_applies = int(horizon_sec) in MARKET_REGIME_HISTORY_GATED_HORIZONS_SEC
         exact_horizon_history_sufficient = (
             bool(technical.usable)
-            and int(technical.candle_count) >= MARKET_REGIME_MIN_EXACT_HORIZON_CANDLES
+            and (
+                not history_gate_applies
+                or int(technical.candle_count) >= MARKET_REGIME_MIN_EXACT_HORIZON_CANDLES
+            )
         )
         values["source_contribution_ledger"] = ledger
         values["technical_timeframe_sec"] = int(technical.timeframe_sec)
         values["technical_source_id"] = source_id
         values["technical_candle_count"] = int(technical.candle_count)
-        values["technical_minimum_required_candle_count"] = MARKET_REGIME_MIN_EXACT_HORIZON_CANDLES
+        values["technical_history_gate_applies"] = history_gate_applies
+        values["technical_minimum_required_candle_count"] = (
+            MARKET_REGIME_MIN_EXACT_HORIZON_CANDLES if history_gate_applies else None
+        )
         values["technical_summary_usable"] = exact_horizon_history_sufficient
         values["technical_evidence_state"] = (
             "exact_horizon_history_sufficient"
-            if exact_horizon_history_sufficient
+            if history_gate_applies and exact_horizon_history_sufficient
             else "insufficient_exact_horizon_history"
+            if history_gate_applies
+            else "technical_summary_usable"
         )
         values["technical_summary_warnings"] = list(technical.warnings)
         values["technical_summary_blockers"] = list(technical.blockers)

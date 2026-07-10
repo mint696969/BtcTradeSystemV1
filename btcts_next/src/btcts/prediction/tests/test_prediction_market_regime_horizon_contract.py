@@ -25,6 +25,7 @@ from btcts.prediction.source_artifact_coverage import (
     build_default_reference_source_registry,
 )
 from btcts.prediction.system import (
+    MARKET_REGIME_HISTORY_GATED_HORIZONS_SEC,
     MARKET_REGIME_MIN_EXACT_HORIZON_CANDLES,
     _TECHNICAL_TIMEFRAME_BY_HORIZON_SEC,
     _attach_market_regime_technical_source_attribution,
@@ -248,3 +249,57 @@ def test_market_regime_exact_horizon_history_gate_fails_closed_below_minimum() -
     assert gated.values["technical_evidence_state"] == "insufficient_exact_horizon_history"
     assert gated.values["candidate_primary_label_before_history_gate"] == "range_candidate"
     assert gated.values["candidate_score_before_history_gate"] == 0.52
+
+def test_market_regime_history_gate_is_scoped_to_six_and_twelve_hour_horizons() -> None:
+    assert MARKET_REGIME_HISTORY_GATED_HORIZONS_SEC == frozenset({21600, 43200})
+
+
+def test_market_regime_short_horizon_with_one_candle_is_not_failed_closed_by_long_history_gate() -> None:
+    rows = [
+        {"event_ts": "2026-07-10T12:00:00Z", "price": 106.0, "size": 1.0},
+    ]
+    candles, diagnostics = aggregate_ohlcv_from_rows(
+        rows,
+        timeframes_sec=(60,),
+        now=datetime(2026, 7, 10, 12, 1, tzinfo=timezone.utc),
+    )
+    assert diagnostics.blocked_by == ()
+    technical = build_human_technical_summary(candles, timeframe_sec=60)
+    assert technical.candle_count == 1
+    assert technical.usable is True
+
+    output = PredictionOutput(
+        prediction_id="test:60:single-candle",
+        generated_at="2026-07-10T12:01:00Z",
+        family=PredictionFamily.MARKET_REGIME,
+        horizon=horizon_by_seconds(60),
+        parameter_set=ParameterSetIdentity(
+            parameter_set_id="test-market-regime",
+            parameter_family="market_regime",
+            version="test",
+        ),
+        sources=(
+            SourceIdentity(
+                source_id="rule_based_v0_market_regime",
+                source_family="derived_prediction_summary",
+            ),
+        ),
+        confidence=PredictionConfidence.MEDIUM,
+        primary_label="range_candidate",
+        score=0.52,
+    )
+
+    gated = _attach_market_regime_technical_source_attribution(
+        (output,),
+        technical=technical,
+        horizon_sec=60,
+    )[0]
+
+    assert gated.primary_label == "range_candidate"
+    assert gated.confidence == PredictionConfidence.MEDIUM
+    assert gated.score == 0.52
+    assert gated.blockers == ()
+    assert gated.values["technical_history_gate_applies"] is False
+    assert gated.values["technical_minimum_required_candle_count"] is None
+    assert gated.values["technical_summary_usable"] is True
+    assert gated.values["technical_evidence_state"] == "technical_summary_usable"
