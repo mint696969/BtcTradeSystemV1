@@ -55,6 +55,13 @@ from .contracts import (
     TacticalHint,
     build_empty_market_regime_packet,
 )
+from .currentness_gate import (
+    DEFAULT_SOURCE_QUALITY_FAILURE_THRESHOLD_PERCENT,
+    MARKET_REGIME_CURRENTNESS_GATE_VERSION,
+    MarketRegimeCurrentnessGateReport,
+    MarketRegimeCurrentnessGateSafetyFlags,
+    build_market_regime_currentness_gate_report,
+)
 from .evidence_profile import (
     MARKET_REGIME_EVIDENCE_PROFILE_VERSION,
     build_all_market_regime_default_evidence_profiles,
@@ -160,6 +167,11 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "DEFAULT_SOURCE_QUALITY_FAILURE_THRESHOLD_PERCENT",
+    "MARKET_REGIME_CURRENTNESS_GATE_VERSION",
+    "MarketRegimeCurrentnessGateReport",
+    "MarketRegimeCurrentnessGateSafetyFlags",
+    "build_market_regime_currentness_gate_report",
     "MARKET_REGIME_EVIDENCE_PROFILE_VERSION",
     "build_all_market_regime_default_evidence_profiles",
     "build_market_regime_default_evidence_profile",
