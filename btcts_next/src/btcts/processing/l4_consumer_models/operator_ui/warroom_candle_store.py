@@ -13,8 +13,8 @@ from typing import Any, Mapping, Sequence
 
 import pandas as pd
 
-from btcts.prediction.warroom_plain_candle_refresh import _date_dirs_desc
-from btcts.prediction.warroom_plain_candles import (
+from btcts.processing.l4_consumer_models.market_trade_candle_core import (
+    _date_dirs_desc,
     DEFAULT_DHOT_ROOT,
     DEFAULT_EXCHANGE,
     DEFAULT_SYMBOL,

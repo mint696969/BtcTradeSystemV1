@@ -465,3 +465,98 @@ def test_live_append_fails_closed_when_state_part_is_outside_scan(tmp_path: Path
     assert result["state_source_part_file"] == str(missing_part)
     assert result["recovery"] == "run_explicit_history_rebuild_or_expand_max_days"
     assert not (store_root / "data" / "derived" / "warroom" / "candles" / "exchange=bitflyer" / "symbol=FX_BTC_JPY" / "timeframe=60s" / "meta.json").exists()
+
+def test_l4_candle_runtime_has_no_prediction_package_imports() -> None:
+    import ast
+
+    package_root = Path(__file__).resolve().parents[1]
+    targets = (
+        package_root / "operator_ui" / "warroom_candle_store.py",
+        package_root / "operator_ui" / "warroom_chart_data_server.py",
+        package_root / "market_trade_candle_core.py",
+    )
+    for path in targets:
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                assert all(
+                    not alias.name.startswith("btcts.prediction")
+                    and alias.name != "streamlit"
+                    for alias in node.names
+                ), path
+            elif isinstance(node, ast.ImportFrom):
+                module = node.module or ""
+                assert not module.startswith("btcts.prediction"), path
+                assert module != "streamlit", path
+            elif isinstance(node, ast.Call):
+                name = ""
+                if isinstance(node.func, ast.Name):
+                    name = node.func.id
+                elif isinstance(node.func, ast.Attribute):
+                    name = node.func.attr
+                assert name not in {"send_to_broker", "submit_order_intent"}, path
+
+
+def test_l4_candle_core_parses_trade_and_builds_ohlc_without_prediction_import() -> None:
+    from btcts.processing.l4_consumer_models.market_trade_candle_core import (
+        build_trade_ohlc,
+        market_trade_record_to_trade_row,
+    )
+
+    first = market_trade_record_to_trade_row({
+        "event_ts": "2026-07-10T00:00:01Z",
+        "payload": {"price": 100.0, "size": 1.5, "side": "BUY", "trade_id": "a"},
+    })
+    second = market_trade_record_to_trade_row({
+        "event_ts": "2026-07-10T00:00:31Z",
+        "payload": {"price": 102.0, "size": 2.0, "side": "SELL", "trade_id": "b"},
+    })
+    assert first is not None and second is not None
+    frame = candle_store_module.pd.DataFrame([first, second])
+    candles = build_trade_ohlc(frame, timeframe_sec=60)
+    assert len(candles) == 1
+    row = candles.iloc[0]
+    assert row["open"] == 100.0
+    assert row["high"] == 102.0
+    assert row["low"] == 100.0
+    assert row["close"] == 102.0
+    assert row["volume"] == 3.5
+    assert row["trade_count"] == 2
+
+def test_l4_legacy_cache_reader_round_trip(tmp_path: Path) -> None:
+    import json as _json
+    from btcts.processing.l4_consumer_models.market_trade_candle_core import (
+        read_legacy_plain_candle_cache,
+    )
+
+    directory = (
+        tmp_path / "data" / "derived" / "warroom" / "plain_candles"
+        / "exchange=bitflyer" / "symbol=FX_BTC_JPY" / "timeframe=60s"
+    )
+    directory.mkdir(parents=True)
+    rows = [
+        {
+            "time": 1, "time_utc": "2026-07-10T00:00:00Z",
+            "candle_index": 0, "open": 100, "high": 102, "low": 99,
+            "close": 101, "volume": 1.5, "trade_count": 2,
+            "timeframe_sec": 60, "source_family": "fixture",
+        },
+        {
+            "time": 2, "time_utc": "2026-07-10T00:01:00Z",
+            "candle_index": 1, "open": 101, "high": 103, "low": 100,
+            "close": 102, "volume": 2.5, "trade_count": 3,
+            "timeframe_sec": 60, "source_family": "fixture",
+        },
+    ]
+    (directory / "latest.jsonl").write_text(
+        "\n".join(_json.dumps(row) for row in rows) + "\n", encoding="utf-8"
+    )
+    (directory / "latest_meta.json").write_text(
+        _json.dumps({"ok": True}), encoding="utf-8"
+    )
+
+    frame, meta = read_legacy_plain_candle_cache(tmp_path, max_candles=1)
+    assert len(frame) == 1
+    assert frame.iloc[0]["close"] == 102
+    assert meta["read_ok"] is True
+    assert meta["rows_returned"] == 1

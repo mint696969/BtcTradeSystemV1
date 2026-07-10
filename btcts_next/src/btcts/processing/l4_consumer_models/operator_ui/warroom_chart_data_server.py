@@ -16,8 +16,12 @@ from btcts.processing.l4_consumer_models.operator_ui.warroom_candle_store import
     WARROOM_CANDLE_STORE_VERSION,
     read_candle_store_chart_payload,
 )
-from btcts.prediction.warroom_plain_candle_cache import read_plain_candle_cache
-from btcts.prediction.warroom_plain_candles import DEFAULT_EXCHANGE, DEFAULT_SYMBOL, DEFAULT_TIMEFRAME_SECONDS
+from btcts.processing.l4_consumer_models.market_trade_candle_core import (
+    DEFAULT_EXCHANGE,
+    DEFAULT_SYMBOL,
+    DEFAULT_TIMEFRAME_SECONDS,
+    read_legacy_plain_candle_cache,
+)
 
 WARROOM_CHART_DATA_SERVER_VERSION = "warroom_chart_data_server.2026_07_07.v3_l4_operator_ui_runtime"
 WARROOM_CHART_DATA_SERVER_LAYER = "L4_CONSUMER_MODEL_OPERATOR_UI_RUNTIME"
@@ -102,7 +106,7 @@ def cache_frame_to_chart_candles(frame: pd.DataFrame, *, max_candles: int = DEFA
 
 
 def _legacy_cache_payload(*, cache_root: Path | None, exchange: str, symbol: str, timeframe_sec: int, max_candles: int) -> dict[str, Any]:
-    frame, meta = read_plain_candle_cache(cache_root, exchange=exchange, symbol=symbol, timeframe_sec=timeframe_sec, max_candles=max_candles)
+    frame, meta = read_legacy_plain_candle_cache(cache_root, exchange=exchange, symbol=symbol, timeframe_sec=timeframe_sec, max_candles=max_candles)
     candles = cache_frame_to_chart_candles(frame, max_candles=max_candles)
     return {
         "ok": bool(candles),
