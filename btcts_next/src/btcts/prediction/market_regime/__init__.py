@@ -150,6 +150,10 @@ from .scenario_part import (
     validate_market_regime_scenario_part,
 )
 from .source_priority_policy import HorizonSourcePriority, SourcePriorityPolicy, build_default_source_priority_policy
+from .source_attribution_adapter import (
+    MARKET_REGIME_SOURCE_ATTRIBUTION_ADAPTER_VERSION,
+    expand_market_regime_trace_source_attribution_rows,
+)
 from .source_scorecard_read_model import (
     MARKET_REGIME_SOURCE_SCORECARD_READ_MODEL_VERSION,
     build_market_regime_source_scorecard_read_model,
@@ -178,6 +182,8 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "MARKET_REGIME_SOURCE_ATTRIBUTION_ADAPTER_VERSION",
+    "expand_market_regime_trace_source_attribution_rows",
     "MARKET_REGIME_SOURCE_SCORECARD_READ_MODEL_VERSION",
     "build_market_regime_source_scorecard_read_model",
     "validate_market_regime_source_scorecard_read_model",
