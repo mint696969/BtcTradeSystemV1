@@ -355,3 +355,113 @@ def test_atomic_write_text_retries_windows_permission_error(tmp_path: Path, monk
     assert attempts["count"] == 2
     assert not list(tmp_path.glob("closed.jsonl.tmp.*"))
 
+
+def test_live_append_processes_every_intermediate_part_across_date_rollover(tmp_path: Path, monkeypatch) -> None:
+    raw_root = tmp_path / "raw"
+    first_dir = raw_root / "data" / "market_data" / "exchange=bitflyer" / "symbol=FX_BTC_JPY" / "type=market.trade" / "date=2026-07-09"
+    next_dir = raw_root / "data" / "market_data" / "exchange=bitflyer" / "symbol=FX_BTC_JPY" / "type=market.trade" / "date=2026-07-10"
+    first_dir.mkdir(parents=True)
+    next_dir.mkdir(parents=True)
+    first_part = first_dir / "part-00001.jsonl"
+    first_part.write_text('{"ts":"2026-07-09T23:59:01Z","price":100,"size":1,"trade_id":"a"}\n', encoding="utf-8")
+
+    import json as _json
+    import pandas as _pd
+
+    monkeypatch.setattr(candle_store_module, "_json_record_from_line", lambda line: _json.loads(line.decode("utf-8") if isinstance(line, bytes) else line))
+    monkeypatch.setattr(candle_store_module, "_record_event_ts", lambda record: _pd.Timestamp(record["ts"]).tz_convert("UTC"))
+    monkeypatch.setattr(
+        candle_store_module,
+        "market_trade_record_to_trade_row",
+        lambda record, source_file: {
+            "ts": _pd.Timestamp(record["ts"]).tz_convert("UTC"),
+            "price": float(record["price"]),
+            "size": float(record["size"]),
+            "side": "",
+            "trade_id": str(record.get("trade_id") or ""),
+            "source_file": source_file,
+        },
+    )
+
+    store_root = tmp_path / "store"
+    rebuilt = rebuild_candle_store_from_trade_history(
+        raw_root=raw_root,
+        store_root=store_root,
+        timeframes_sec=(60,),
+        retention_days=92,
+        max_days=92,
+        chunk_rows=1,
+    )
+    assert rebuilt["ok"] is True
+
+    intermediate_part = first_dir / "part-00002.jsonl"
+    intermediate_part.write_text('{"ts":"2026-07-09T23:59:31Z","price":101,"size":2,"trade_id":"b"}\n', encoding="utf-8")
+    next_part = next_dir / "part-00001.jsonl"
+    next_part.write_text('{"ts":"2026-07-10T00:00:31Z","price":102,"size":3,"trade_id":"c"}\n', encoding="utf-8")
+
+    appended = update_candle_store_from_latest_part(
+        raw_root=raw_root,
+        store_root=store_root,
+        timeframes_sec=(60,),
+        retention_days=92,
+        max_days=7,
+    )
+
+    assert appended["ok"] is True
+    assert appended["update_meta"]["contiguous_part_rollover"] is True
+    assert appended["update_meta"]["processed_part_count"] == 3
+    assert appended["update_meta"]["part_rollover_count"] == 2
+    assert appended["update_meta"]["processed_part_first_file"] == str(first_part)
+    assert appended["update_meta"]["processed_part_latest_file"] == str(next_part)
+    assert appended["update_meta"]["trade_rows_read"] == 2
+
+    state = _json.loads((store_root / "data" / "derived" / "warroom" / "candles" / "exchange=bitflyer" / "symbol=FX_BTC_JPY" / "update_state.json").read_text(encoding="utf-8-sig"))
+    assert state["source_part_file"] == str(next_part)
+    assert state["byte_offset"] == next_part.stat().st_size
+    assert state["processed_part_count"] == 3
+    assert state["contiguous_part_rollover"] is True
+
+    chart = read_candle_store_chart_payload(
+        store_root=store_root,
+        timeframe_sec=60,
+        max_candles=10,
+    )
+    assert chart["ok"] is True
+    assert chart["candle_count"] == 2
+    assert chart["candles"][0]["open"] == 100.0
+    assert chart["candles"][0]["close"] == 101.0
+    assert chart["candles"][0]["trade_count"] == 2
+    assert chart["candles"][1]["close"] == 102.0
+    assert chart["candles"][1]["trade_count"] == 1
+
+
+def test_live_append_fails_closed_when_state_part_is_outside_scan(tmp_path: Path) -> None:
+    import json as _json
+
+    raw_root = tmp_path / "raw"
+    trade_dir = raw_root / "data" / "market_data" / "exchange=bitflyer" / "symbol=FX_BTC_JPY" / "type=market.trade" / "date=2026-07-10"
+    trade_dir.mkdir(parents=True)
+    current_part = trade_dir / "part-00001.jsonl"
+    current_part.write_text('{"ts":"2026-07-10T00:00:01Z","price":100,"size":1}\n', encoding="utf-8")
+
+    store_root = tmp_path / "store"
+    state_path = store_root / "data" / "derived" / "warroom" / "candles" / "exchange=bitflyer" / "symbol=FX_BTC_JPY" / "update_state.json"
+    state_path.parent.mkdir(parents=True)
+    missing_part = raw_root / "data" / "market_data" / "exchange=bitflyer" / "symbol=FX_BTC_JPY" / "type=market.trade" / "date=2026-06-01" / "part-00099.jsonl"
+    state_path.write_text(
+        _json.dumps({"source_part_file": str(missing_part), "byte_offset": 123}),
+        encoding="utf-8",
+    )
+
+    result = update_candle_store_from_latest_part(
+        raw_root=raw_root,
+        store_root=store_root,
+        timeframes_sec=(60,),
+        max_days=7,
+    )
+
+    assert result["ok"] is False
+    assert result["error"] == "state_source_part_not_found_in_scan"
+    assert result["state_source_part_file"] == str(missing_part)
+    assert result["recovery"] == "run_explicit_history_rebuild_or_expand_max_days"
+    assert not (store_root / "data" / "derived" / "warroom" / "candles" / "exchange=bitflyer" / "symbol=FX_BTC_JPY" / "timeframe=60s" / "meta.json").exists()

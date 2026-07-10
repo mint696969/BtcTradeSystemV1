@@ -20,6 +20,7 @@ param(
   [int]$MaxBootstrapBytes = 335544320,
   [int]$IntervalSec = 5,
   [int]$MaxCycles = 0,
+  [int]$MaxConsecutiveRefreshFailures = 12,
   [switch]$Once,
   [switch]$DryRun
 )
@@ -195,6 +196,9 @@ if ($DryRun) {
 $ServerJob = $null
 $StartedServer = $false
 $StopRequested = $false
+$RuntimeFailed = $false
+$LastRuntimeError = ""
+$ConsecutiveRefreshFailures = 0
 $LastEndpointPayload = $null
 
 function Test-ChartEngineHealth {
@@ -300,7 +304,21 @@ try {
 
     $cycle += 1
     Write-Host "[warroom-chart-engine] refresh cycle=$cycle start=$(Get-Date -Format o)"
-    Invoke-RefreshOnce
+    try {
+      Invoke-RefreshOnce
+      $script:ConsecutiveRefreshFailures = 0
+    } catch {
+      $script:ConsecutiveRefreshFailures += 1
+      $message = $_.Exception.Message
+      Write-Host "[warroom-chart-engine] refresh failed consecutive=$($script:ConsecutiveRefreshFailures)/$MaxConsecutiveRefreshFailures error=$message" -ForegroundColor Yellow
+      Write-ChartEngineStatus -Mode "DEGRADED" -LastAction "refresh_cycle_failed" -Extra $script:LastEndpointPayload
+      Write-ChartEngineHealth -Ok $false -Reason "refresh_cycle_failed consecutive=$($script:ConsecutiveRefreshFailures)/$MaxConsecutiveRefreshFailures error=$message" -Extra $script:LastEndpointPayload
+      if ($script:ConsecutiveRefreshFailures -ge $MaxConsecutiveRefreshFailures) {
+        throw "warroom candle store refresh failure threshold reached consecutive=$($script:ConsecutiveRefreshFailures) last_error=$message"
+      }
+      Start-Sleep -Seconds $IntervalSec
+      continue
+    }
     try {
       $payload = Invoke-RestMethod -Uri "${Endpoint}?max_candles=$MaxCandles&timeframe_sec=$TimeframeSec" -TimeoutSec 5 -UseBasicParsing
       Write-Host "[warroom-chart-engine] endpoint ok=$($payload.ok) candles=$($payload.candle_count) end=$($payload.meta.end_ts_utc)"
@@ -317,12 +335,17 @@ try {
     Start-Sleep -Seconds $IntervalSec
   }
 } catch {
-  Write-ChartEngineStatus -Mode "ERROR" -LastAction "runtime_error" -Extra @{ error = $_.Exception.Message }
-  Write-ChartEngineHealth -Ok $false -Reason $_.Exception.Message
+  $script:RuntimeFailed = $true
+  $script:LastRuntimeError = $_.Exception.Message
+  Write-ChartEngineStatus -Mode "ERROR" -LastAction "runtime_error" -Extra $script:LastEndpointPayload
+  Write-ChartEngineHealth -Ok $false -Reason $script:LastRuntimeError -Extra $script:LastEndpointPayload
   throw
 } finally {
   Stop-ChartDataServer
-  if ($StopRequested) {
+  if ($script:RuntimeFailed) {
+    Write-ChartEngineStatus -Mode "ERROR" -LastAction "runtime_error_preserved" -Extra $script:LastEndpointPayload
+    Write-ChartEngineHealth -Ok $false -Reason $script:LastRuntimeError -Extra $script:LastEndpointPayload
+  } elseif ($StopRequested) {
     Write-ChartEngineStatus -Mode "STOPPED" -LastAction "safe_stop_completed" -Extra $script:LastEndpointPayload
     Write-ChartEngineHealth -Ok $true -Reason "safe_stop_completed" -Extra $script:LastEndpointPayload
   } else {

@@ -126,3 +126,14 @@ def test_chart_engine_start_clears_stale_request_marker() -> None:
     assert "clearing stale startup request" in tool
     assert "Clear-RequestFile" in tool
 
+def test_run_tool_retries_transient_refresh_failures_and_preserves_terminal_error() -> None:
+    repo_root = Path(__file__).resolve().parents[6]
+    text = (repo_root / "tools" / "run_warroom_chart_engine.ps1").read_text(encoding="utf-8-sig")
+    assert "[int]$MaxConsecutiveRefreshFailures = 12" in text
+    assert "$ConsecutiveRefreshFailures = 0" in text
+    assert 'Write-ChartEngineStatus -Mode "DEGRADED" -LastAction "refresh_cycle_failed"' in text
+    assert "refresh failure threshold reached" in text
+    assert "$RuntimeFailed = $false" in text
+    assert '$script:RuntimeFailed = $true' in text
+    assert 'Write-ChartEngineStatus -Mode "ERROR" -LastAction "runtime_error_preserved"' in text
+    assert 'if ($script:RuntimeFailed)' in text

@@ -967,6 +967,72 @@ def _history_lineage_from_state(state: Mapping[str, Any], *, progress: Mapping[s
         )
     return lineage
 
+# WARROOM_CANDLE_ROLLOVER_CONTIGUOUS_PARTS_2026_07_10
+def _path_identity(value: Path | str) -> str:
+    return os.path.normcase(os.path.normpath(str(value)))
+
+
+def _pending_live_trade_parts(
+    raw_root: Path | None,
+    *,
+    exchange: str,
+    symbol: str,
+    max_days: int,
+    state: Mapping[str, Any],
+) -> tuple[list[Path], dict[str, Any], int, dict[str, Any] | None]:
+    """Select every trade part from the stored part/offset through the latest part.
+
+    A live state without a source part keeps the legacy tail-bootstrap behavior
+    and starts from only the latest part.  Once a source part is recorded, that
+    exact part must still be present in the bounded scan; otherwise fail closed
+    rather than silently skipping intermediate parts.
+    """
+
+    parts, source_meta = _trade_parts_asc(
+        raw_root,
+        exchange=exchange,
+        symbol=symbol,
+        max_days=max_days,
+    )
+    if not parts:
+        return [], source_meta, 0, {
+            "error": source_meta.get("error") or "trade_parts_missing",
+            "source_meta": source_meta,
+        }
+
+    previous_part = str(state.get("source_part_file") or "")
+    if not previous_part:
+        return [parts[-1]], source_meta, 0, None
+
+    by_identity = {_path_identity(part): index for index, part in enumerate(parts)}
+    previous_identity = _path_identity(previous_part)
+    previous_index = by_identity.get(previous_identity)
+    if previous_index is None:
+        return [], source_meta, 0, {
+            "error": "state_source_part_not_found_in_scan",
+            "state_source_part_file": previous_part,
+            "scan_first_part_file": str(parts[0]),
+            "scan_latest_part_file": str(parts[-1]),
+            "max_days": int(max_days),
+            "recovery": "run_explicit_history_rebuild_or_expand_max_days",
+            "source_meta": source_meta,
+        }
+
+    previous_offset = int(state.get("byte_offset") or 0)
+    previous_size = parts[previous_index].stat().st_size
+    if previous_offset < 0 or previous_offset > previous_size:
+        return [], source_meta, 0, {
+            "error": "state_byte_offset_out_of_range",
+            "state_source_part_file": previous_part,
+            "state_byte_offset": previous_offset,
+            "source_part_size": previous_size,
+            "recovery": "run_explicit_history_rebuild",
+            "source_meta": source_meta,
+        }
+
+    return parts[previous_index:], source_meta, previous_offset, None
+
+
 def update_candle_store_from_latest_part(
     *,
     raw_root: Path | None = None,
@@ -978,46 +1044,109 @@ def update_candle_store_from_latest_part(
     max_days: int = 7,
     max_bootstrap_bytes: int = DEFAULT_BOOTSTRAP_MAX_BYTES,
 ) -> dict[str, Any]:
-    part, source_meta = _latest_trade_part(raw_root, exchange=exchange, symbol=symbol, max_days=max_days)
     state_path = candle_symbol_store_dir(store_root, exchange=exchange, symbol=symbol) / STATE_NAME
     state = _read_json(state_path)
-    if part is None:
-        return {"ok": False, "version": WARROOM_CANDLE_STORE_VERSION, "error": source_meta.get("error") or "latest_part_missing", "source_meta": source_meta, "read_only_source": True, "broker_send_enabled": False, "order_intent_submitted": False, "prediction_invoked": False, "classifier_invoked": False}
+    pending_parts, source_meta, first_offset, selection_error = _pending_live_trade_parts(
+        raw_root,
+        exchange=exchange,
+        symbol=symbol,
+        max_days=max_days,
+        state=state,
+    )
+    if selection_error is not None:
+        return {
+            "ok": False,
+            "version": WARROOM_CANDLE_STORE_VERSION,
+            **selection_error,
+            "read_only_source": True,
+            "broker_send_enabled": False,
+            "order_intent_submitted": False,
+            "prediction_invoked": False,
+            "classifier_invoked": False,
+        }
+
     previous_part = str(state.get("source_part_file") or "")
-    previous_offset = int(state.get("byte_offset") or 0) if previous_part == str(part) else 0
-    rows, new_offset, lines_read, tail_bootstrap = _read_trade_rows_from_offset(part, offset=previous_offset, max_bootstrap_bytes=max_bootstrap_bytes)
     selected_timeframes = tuple(int(item) for item in timeframes_sec)
     lineage_first_timeframe = selected_timeframes[0] if selected_timeframes else DEFAULT_TIMEFRAME_SECONDS
-    lineage_meta_path = candle_store_paths(store_root, exchange=exchange, symbol=symbol, timeframe_sec=lineage_first_timeframe)["meta"]
+    lineage_meta_path = candle_store_paths(
+        store_root,
+        exchange=exchange,
+        symbol=symbol,
+        timeframe_sec=lineage_first_timeframe,
+    )["meta"]
     lineage_timeframe_meta = _read_json(lineage_meta_path)
     lineage_meta = _history_lineage_from_state(
         state,
         progress=_read_json(_rebuild_progress_path(store_root)),
         first_candle_ts_utc=str(lineage_timeframe_meta.get("start_ts_utc") or ""),
     )
+
+    records_by_timeframe: dict[int, dict[int, dict[str, Any]]] = {}
+    for timeframe in selected_timeframes:
+        closed, forming, _meta = _load_store_timeframe(
+            store_root,
+            exchange=exchange,
+            symbol=symbol,
+            timeframe_sec=timeframe,
+        )
+        records_by_time = {int(row["time"]): row for row in closed}
+        if forming is not None:
+            records_by_time[int(forming["time"])] = forming
+        records_by_timeframe[timeframe] = records_by_time
+
+    total_lines_read = 0
+    total_trade_rows = 0
+    tail_bootstrap_any = False
+    final_offset = first_offset
+    first_processed_part = str(pending_parts[0])
+    latest_processed_part = str(pending_parts[-1])
+
+    for part_index, part in enumerate(pending_parts):
+        offset = first_offset if part_index == 0 else 0
+        rows, new_offset, lines_read, tail_bootstrap = _read_trade_rows_from_offset(
+            part,
+            offset=offset,
+            max_bootstrap_bytes=max_bootstrap_bytes,
+        )
+        total_lines_read += lines_read
+        total_trade_rows += len(rows)
+        tail_bootstrap_any = tail_bootstrap_any or tail_bootstrap
+        final_offset = new_offset
+
+        for timeframe in selected_timeframes:
+            records_by_time = records_by_timeframe[timeframe]
+            for record in _aggregate_trade_rows(rows, timeframe_sec=timeframe):
+                key = int(record["time"])
+                merged = _merge_record(
+                    records_by_time.get(key),
+                    record,
+                    timeframe_sec=timeframe,
+                    status="forming",
+                )
+                if merged is not None:
+                    records_by_time[key] = merged
+
     update_meta = {
-        "source_part_file": str(part),
+        "source_part_file": latest_processed_part,
         "previous_part_file": previous_part,
-        "previous_offset": previous_offset,
-        "new_offset": new_offset,
-        "lines_read": lines_read,
-        "trade_rows_read": len(rows),
-        "tail_bootstrap": tail_bootstrap,
+        "previous_offset": first_offset,
+        "new_offset": final_offset,
+        "lines_read": total_lines_read,
+        "trade_rows_read": total_trade_rows,
+        "tail_bootstrap": tail_bootstrap_any,
+        "processed_part_count": len(pending_parts),
+        "processed_part_first_file": first_processed_part,
+        "processed_part_latest_file": latest_processed_part,
+        "part_rollover_count": max(len(pending_parts) - 1, 0),
+        "contiguous_part_rollover": True,
         "retention_days": int(retention_days),
         "gap_policy": "absent_candles_no_synthetic_null",
         **lineage_meta,
     }
+
     timeframe_metas: dict[str, Any] = {}
     for timeframe in selected_timeframes:
-        closed, forming, _meta = _load_store_timeframe(store_root, exchange=exchange, symbol=symbol, timeframe_sec=timeframe)
-        records_by_time: dict[int, dict[str, Any]] = {int(row["time"]): row for row in closed}
-        if forming is not None:
-            records_by_time[int(forming["time"])] = forming
-        for record in _aggregate_trade_rows(rows, timeframe_sec=timeframe):
-            key = int(record["time"])
-            merged = _merge_record(records_by_time.get(key), record, timeframe_sec=timeframe, status="forming")
-            if merged is not None:
-                records_by_time[key] = merged
+        records_by_time = records_by_timeframe[timeframe]
         ordered_keys = sorted(records_by_time)
         latest_key = ordered_keys[-1] if ordered_keys else None
         next_closed: list[dict[str, Any]] = []
@@ -1025,9 +1154,17 @@ def update_candle_store_from_latest_part(
         for key in ordered_keys:
             row = records_by_time[key]
             if latest_key is not None and key == latest_key:
-                next_forming = _normalize_candle_record(row, timeframe_sec=timeframe, status="forming")
+                next_forming = _normalize_candle_record(
+                    row,
+                    timeframe_sec=timeframe,
+                    status="forming",
+                )
             else:
-                closed_row = _normalize_candle_record(row, timeframe_sec=timeframe, status="closed")
+                closed_row = _normalize_candle_record(
+                    row,
+                    timeframe_sec=timeframe,
+                    status="closed",
+                )
                 if closed_row is not None:
                     next_closed.append(closed_row)
         timeframe_metas[str(timeframe)] = _write_store_timeframe(
@@ -1041,16 +1178,20 @@ def update_candle_store_from_latest_part(
             source_meta=source_meta,
             update_meta=update_meta,
         )
+
     state_payload = {
         "ok": True,
         "version": WARROOM_CANDLE_STORE_VERSION,
-        "source_part_file": str(part),
-        "byte_offset": new_offset,
+        "source_part_file": latest_processed_part,
+        "byte_offset": final_offset,
         "latest_source_ts_utc": source_meta.get("latest_ts_utc"),
-        "timeframes_sec": [int(item) for item in timeframes_sec],
+        "timeframes_sec": [int(item) for item in selected_timeframes],
         "retention_days": int(retention_days),
         "gap_policy": "absent_candles_no_synthetic_null",
-        "updated_rows": len(rows),
+        "updated_rows": total_trade_rows,
+        "processed_part_count": len(pending_parts),
+        "part_rollover_count": max(len(pending_parts) - 1, 0),
+        "contiguous_part_rollover": True,
         **lineage_meta,
         "read_only_source": True,
         "broker_send_enabled": False,
