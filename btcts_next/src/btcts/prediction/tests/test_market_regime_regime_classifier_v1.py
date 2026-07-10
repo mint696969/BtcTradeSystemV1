@@ -62,7 +62,7 @@ def _packet(root: Path, *, label: str = "range_candidate", spread: float = -1479
 def test_q27j_classifier_emits_all_canonical_horizons(tmp_path: Path) -> None:
     packet = _packet(tmp_path)
     data = packet.to_dict()
-    assert data["logic_version"] == "prediction.market_regime.regime_classifier.ps_q27z.v1"
+    assert data["logic_version"] == "prediction.market_regime.regime_classifier.ps_q27z.v2"
     assert data["horizons_present_sec"] == [0, 300, 900, 1800, 3600, 21600, 43200, 86400]
     assert [item["horizon_label"] for item in data["predictions"]] == ["現在", "5分後", "15分後", "30分後", "60分後", "6時間後", "12時間後", "24時間後"]
     assert data["safety"]["read_only"] is True
@@ -104,7 +104,7 @@ def test_q27j_packet_preserves_feature_coverage_and_diagnostics(tmp_path: Path) 
     packet = _packet(tmp_path, label="range_candidate", spread=1200.0)
     assert {coverage.feature_group for coverage in packet.source_coverage} >= {FeatureGroup.PRICE_STRUCTURE, FeatureGroup.LIQUIDITY, FeatureGroup.SOURCE_QUALITY}
     first = packet.predictions[0]
-    assert first.diagnostic_record["classifier_version"] == "prediction.market_regime.regime_classifier.ps_q27z.v1"
+    assert first.diagnostic_record["classifier_version"] == "prediction.market_regime.regime_classifier.ps_q27z.v2"
     assert first.diagnostic_record["source_snapshot_input_only"] is True
     assert first.diagnostic_record["execution_enabled"] is False
     assert first.diagnostic_record["runtime_write_requested"] is False
@@ -209,7 +209,7 @@ def test_q27y_classifier_calibrates_confidence_from_selected_forecast_metrics(tm
     assert by_horizon[900].diagnostic_record["selected_signal_strength_percent"] == 85.0
     assert by_horizon[900].diagnostic_record["selected_reference_hit_rate_percent"] == 80.0
     assert by_horizon[300].diagnostic_record["confidence_calibrated_from_forecast_metric"] is True
-    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v1"
+    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v2"
 
 
 def test_q27z_classifier_calibrates_evidence_quality_from_selected_forecast_metrics(tmp_path: Path) -> None:
@@ -257,7 +257,7 @@ def test_q27z_classifier_calibrates_evidence_quality_from_selected_forecast_metr
     assert by_horizon[300].diagnostic_record["selected_evidence_quality_reason"] == "forecast_metric_weak"
     assert by_horizon[900].diagnostic_record["selected_evidence_quality_reason"] == "forecast_metric_strong"
     assert by_horizon[900].diagnostic_record["evidence_quality_calibrated_from_forecast_metric"] is True
-    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v1"
+    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v2"
 
 
 def test_q27j_classifier_safety_flags_remain_false(tmp_path: Path) -> None:
@@ -414,3 +414,37 @@ def test_mr_a2_stale_forecast_can_fallback_to_current_l4_candle_window(tmp_path:
     assert evidence["range_bps"] > 0
     assert evidence["realized_volatility_bps"] is not None
     assert evidence["source_refs"]
+
+def test_mr_vs4_stale_forecast_and_stale_l4_ignore_negative_spread_for_regime(tmp_path: Path) -> None:
+    _build_fixture(tmp_path, label="trend_candidate", spread=-1479.0)
+    snapshot = build_market_regime_source_snapshot(tmp_path)
+    bundle = build_market_regime_feature_bundle(
+        snapshot, generated_at="2026-07-10T09:15:00Z"
+    )
+
+    packet = classify_market_regime_feature_bundle(
+        bundle, generated_at="2026-07-10T09:15:01Z"
+    )
+
+    assert {prediction.regime_code for prediction in packet.predictions} == {
+        MarketRegimeCode.UNKNOWN
+    }
+    assert {prediction.confidence_percent for prediction in packet.predictions} == {15}
+    assert {prediction.freshness_state.value for prediction in packet.predictions} == {
+        "STALE"
+    }
+    assert {prediction.tactical_hint for prediction in packet.predictions} == {
+        TacticalHint.NO_NEW_ENTRY
+    }
+    for prediction in packet.predictions:
+        assert "negative_spread_seen" in prediction.warnings
+        assert prediction.diagnostic_record["selected_label"] == ""
+        assert (
+            prediction.diagnostic_record["label_selection_reason"]
+            == "forecast_records_stale_blocked"
+        )
+        assert prediction.diagnostic_record["forecast_records_current_enough"] is False
+        assert (
+            prediction.diagnostic_record["current_l4_candle_window_current_enough"]
+            is False
+        )

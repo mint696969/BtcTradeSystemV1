@@ -10,7 +10,7 @@ from ..features import FeatureSignal, MarketRegimeFeatureBundle
 from ..horizon_policy import build_default_horizon_policy
 from .current_l4_diagnostic import build_current_l4_candle_evidence_digest
 
-MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27z.v1"
+MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27z.v2"
 # MR_A1_STALE_SOURCE_GATE_2026_07_09
 # MR_A2_CURRENT_L4_CANDLE_FEATURES_2026_07_09
 
@@ -83,7 +83,7 @@ def _selected_label_for_horizon(bundle: MarketRegimeFeatureBundle, horizon_sec: 
     return fallback, None, "latest_label_fallback"
 
 
-def _label_to_regime(label: Any, *, crossed_or_negative_spread: bool, source_snapshot_ok: bool) -> MarketRegimeCode:
+def _label_to_regime(label: Any, *, source_snapshot_ok: bool) -> MarketRegimeCode:
     if not source_snapshot_ok:
         return MarketRegimeCode.UNKNOWN
     normalized = str(label or "").lower()
@@ -101,8 +101,6 @@ def _label_to_regime(label: Any, *, crossed_or_negative_spread: bool, source_sna
         return MarketRegimeCode.BREAKOUT
     if normalized in ("reversal_watch", "reaction_zone_watch"):
         return MarketRegimeCode.REVERSAL_WATCH
-    if crossed_or_negative_spread:
-        return MarketRegimeCode.HIGH_VOL_CHOP
     return MarketRegimeCode.UNKNOWN
 
 
@@ -281,7 +279,6 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
         selected_label, selected_horizon_sec, label_selection_reason = _selected_label_for_horizon(bundle, horizon.horizon_sec)
         regime = _label_to_regime(
             selected_label,
-            crossed_or_negative_spread=crossed_or_negative_spread,
             source_snapshot_ok=bundle.source_snapshot_ok,
         )
         forecast_score = _selected_forecast_metric(bundle, "market_regime_scores_by_horizon_sec", selected_horizon_sec)
