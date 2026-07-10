@@ -62,7 +62,7 @@ def _packet(root: Path, *, label: str = "range_candidate", spread: float = -1479
 def test_q27j_classifier_emits_all_canonical_horizons(tmp_path: Path) -> None:
     packet = _packet(tmp_path)
     data = packet.to_dict()
-    assert data["logic_version"] == "prediction.market_regime.regime_classifier.ps_q27z.v2"
+    assert data["logic_version"] == "prediction.market_regime.regime_classifier.ps_q27z.v3"
     assert data["horizons_present_sec"] == [0, 300, 900, 1800, 3600, 21600, 43200, 86400]
     assert [item["horizon_label"] for item in data["predictions"]] == ["現在", "5分後", "15分後", "30分後", "60分後", "6時間後", "12時間後", "24時間後"]
     assert data["safety"]["read_only"] is True
@@ -104,7 +104,7 @@ def test_q27j_packet_preserves_feature_coverage_and_diagnostics(tmp_path: Path) 
     packet = _packet(tmp_path, label="range_candidate", spread=1200.0)
     assert {coverage.feature_group for coverage in packet.source_coverage} >= {FeatureGroup.PRICE_STRUCTURE, FeatureGroup.LIQUIDITY, FeatureGroup.SOURCE_QUALITY}
     first = packet.predictions[0]
-    assert first.diagnostic_record["classifier_version"] == "prediction.market_regime.regime_classifier.ps_q27z.v2"
+    assert first.diagnostic_record["classifier_version"] == "prediction.market_regime.regime_classifier.ps_q27z.v3"
     assert first.diagnostic_record["source_snapshot_input_only"] is True
     assert first.diagnostic_record["execution_enabled"] is False
     assert first.diagnostic_record["runtime_write_requested"] is False
@@ -154,7 +154,14 @@ def test_q27w_classifier_uses_horizon_specific_forecast_labels(tmp_path: Path) -
     assert by_horizon[900].diagnostic_record["selected_forecast_horizon_sec"] == 900
     assert by_horizon[21600].regime_code == MarketRegimeCode.BREAKOUT
     assert by_horizon[21600].diagnostic_record["selected_forecast_label"] == "breakout_candidate"
-    assert by_horizon[1800].diagnostic_record["label_selection_reason"] == "latest_label_fallback"
+    missing_horizon = by_horizon[1800]
+    assert missing_horizon.regime_code == MarketRegimeCode.UNKNOWN
+    assert missing_horizon.confidence_percent == 15
+    assert missing_horizon.freshness_state.value == "STALE"
+    assert missing_horizon.evidence_quality.value == "MISSING"
+    assert missing_horizon.diagnostic_record["selected_label"] == ""
+    assert missing_horizon.diagnostic_record["selected_label_source"] == "none"
+    assert missing_horizon.diagnostic_record["label_selection_reason"] == "forecast_horizon_label_missing"
     assert all(prediction.diagnostic_record["horizon_specific_classifier"] is True for prediction in packet.predictions)
 
 
@@ -209,7 +216,7 @@ def test_q27y_classifier_calibrates_confidence_from_selected_forecast_metrics(tm
     assert by_horizon[900].diagnostic_record["selected_signal_strength_percent"] == 85.0
     assert by_horizon[900].diagnostic_record["selected_reference_hit_rate_percent"] == 80.0
     assert by_horizon[300].diagnostic_record["confidence_calibrated_from_forecast_metric"] is True
-    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v2"
+    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v3"
 
 
 def test_q27z_classifier_calibrates_evidence_quality_from_selected_forecast_metrics(tmp_path: Path) -> None:
@@ -257,7 +264,7 @@ def test_q27z_classifier_calibrates_evidence_quality_from_selected_forecast_metr
     assert by_horizon[300].diagnostic_record["selected_evidence_quality_reason"] == "forecast_metric_weak"
     assert by_horizon[900].diagnostic_record["selected_evidence_quality_reason"] == "forecast_metric_strong"
     assert by_horizon[900].diagnostic_record["evidence_quality_calibrated_from_forecast_metric"] is True
-    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v2"
+    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v3"
 
 
 def test_q27j_classifier_safety_flags_remain_false(tmp_path: Path) -> None:
@@ -448,3 +455,98 @@ def test_mr_vs4_stale_forecast_and_stale_l4_ignore_negative_spread_for_regime(tm
             prediction.diagnostic_record["current_l4_candle_window_current_enough"]
             is False
         )
+
+def test_mr_vs4_fresh_l4_is_live_only_for_applicable_short_horizons(tmp_path: Path) -> None:
+    forecast_path = tmp_path / "prediction/runs/2026-07-01/171500/forecast_records.jsonl"
+    _write_json(tmp_path / "prediction/latest_manifest.json", {
+        "generated_at": "2026-07-01T17:15:00Z",
+        "legacy_latest_path": "prediction/latest_prediction_system_result.json",
+        "sidecars": {"forecast_records": str(forecast_path.relative_to(tmp_path)).replace("\\", "/")},
+    })
+    _write_json(tmp_path / "prediction/latest_prediction_system_result.json", {"read_only": True, "non_executing": True})
+    _write_jsonl(forecast_path, [
+        {"family": "market_regime", "generated_at": "2026-07-01T17:15:00Z", "horizon_sec": 300, "primary_label": "range_candidate"},
+    ])
+    _write_json(tmp_path / "state/collector_vnext/unified_market_state_status.json", {
+        "last_symbol_raw": "FX_BTC_JPY", "last_best_bid": 10000000.0,
+        "last_best_ask": 10001000.0, "last_spread": 1000.0,
+        "read_only": True, "would_send_to_broker": False,
+    })
+    _write_json(tmp_path / "state/collector_vnext/unified_health.json", {"ok": True, "ws_state": "LIVE"})
+    _write_json(tmp_path / "state/collector_vnext/unified_executions_status.json", {"ws_state": "LIVE", "trade_count": 10})
+    _write_json(tmp_path / "state/collector_vnext/unified_daemon_status.json", {"read_only": True})
+    _write_warroom_candles(tmp_path, [
+        {"time": 1783539000, "time_utc": "2026-07-08T19:30:00Z", "open": 100.0, "high": 101.0, "low": 99.8, "close": 100.5, "volume": 1.0, "trade_count": 10, "timeframe_sec": 60, "candle_status": "closed"},
+        {"time": 1783539060, "time_utc": "2026-07-08T19:31:00Z", "open": 100.5, "high": 103.0, "low": 100.4, "close": 102.8, "volume": 1.0, "trade_count": 10, "timeframe_sec": 60, "candle_status": "closed"},
+        {"time": 1783539120, "time_utc": "2026-07-08T19:32:00Z", "open": 102.8, "high": 105.0, "low": 102.7, "close": 104.9, "volume": 1.0, "trade_count": 10, "timeframe_sec": 60, "candle_status": "closed"},
+    ])
+
+    snapshot = build_market_regime_source_snapshot(tmp_path)
+    bundle = build_market_regime_feature_bundle(snapshot, generated_at="2026-07-08T19:32:30Z")
+    packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-08T19:32:31Z")
+    by_horizon = {row.horizon_sec: row for row in packet.predictions}
+
+    for horizon_sec in (0, 300, 900, 1800, 3600):
+        row = by_horizon[horizon_sec]
+        assert row.freshness_state.value == "LIVE"
+        assert row.regime_code != MarketRegimeCode.UNKNOWN
+        assert row.evidence_quality.value in {"PARTIAL", "WEAK"}
+        assert "current_l4_candle_window_fallback_used" in row.warnings
+
+    for horizon_sec in (21600, 43200, 86400):
+        row = by_horizon[horizon_sec]
+        assert row.regime_code == MarketRegimeCode.UNKNOWN
+        assert row.confidence_percent == 15
+        assert row.freshness_state.value == "STALE"
+        assert row.evidence_quality.value == "MISSING"
+        assert row.diagnostic_record["selected_evidence_quality_reason"] == "no_current_evidence_for_horizon"
+        assert "current_l4_candle_window_fallback_used" not in row.warnings
+        assert "current_l4_candle_window_not_applicable_to_horizon" in row.warnings
+
+def test_mr_vs4_missing_exact_forecast_horizon_fails_closed_without_cross_horizon_label_reuse(tmp_path: Path) -> None:
+    forecast_path = tmp_path / "prediction/runs/2026-07-10/120000/forecast_records.jsonl"
+    _write_json(tmp_path / "prediction/latest_manifest.json", {
+        "generated_at": "2026-07-10T12:00:00Z",
+        "legacy_latest_path": "prediction/latest_prediction_system_result.json",
+        "sidecars": {"forecast_records": str(forecast_path.relative_to(tmp_path)).replace("\\", "/")},
+    })
+    _write_json(tmp_path / "prediction/latest_prediction_system_result.json", {"read_only": True, "non_executing": True})
+    _write_jsonl(forecast_path, [
+        {
+            "family": "market_regime",
+            "generated_at": "2026-07-10T12:00:00Z",
+            "horizon_sec": 300,
+            "primary_label": "range_candidate",
+        },
+    ])
+    _write_json(tmp_path / "state/collector_vnext/unified_market_state_status.json", {
+        "last_symbol_raw": "FX_BTC_JPY",
+        "last_best_bid": 10000000.0,
+        "last_best_ask": 10001000.0,
+        "last_spread": 1000.0,
+        "read_only": True,
+        "would_send_to_broker": False,
+    })
+    _write_json(tmp_path / "state/collector_vnext/unified_health.json", {"ok": True, "ws_state": "LIVE"})
+    _write_json(tmp_path / "state/collector_vnext/unified_executions_status.json", {"ws_state": "LIVE", "trade_count": 10})
+    _write_json(tmp_path / "state/collector_vnext/unified_daemon_status.json", {"read_only": True})
+
+    snapshot = build_market_regime_source_snapshot(tmp_path)
+    bundle = build_market_regime_feature_bundle(snapshot, generated_at="2026-07-10T12:00:30Z")
+    packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-10T12:00:31Z")
+    by_horizon = {row.horizon_sec: row for row in packet.predictions}
+
+    assert by_horizon[0].regime_code == MarketRegimeCode.RANGE
+    assert by_horizon[0].freshness_state.value == "LIVE"
+    assert by_horizon[300].regime_code == MarketRegimeCode.RANGE
+    assert by_horizon[300].freshness_state.value == "LIVE"
+
+    for horizon_sec in (900, 1800, 3600, 21600, 43200, 86400):
+        row = by_horizon[horizon_sec]
+        assert row.regime_code == MarketRegimeCode.UNKNOWN
+        assert row.confidence_percent == 15
+        assert row.freshness_state.value == "STALE"
+        assert row.evidence_quality.value == "MISSING"
+        assert row.diagnostic_record["selected_label"] == ""
+        assert row.diagnostic_record["selected_label_source"] == "none"
+        assert row.diagnostic_record["label_selection_reason"] == "forecast_horizon_label_missing"

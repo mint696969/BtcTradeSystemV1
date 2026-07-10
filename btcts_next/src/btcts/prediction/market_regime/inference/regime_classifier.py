@@ -10,7 +10,7 @@ from ..features import FeatureSignal, MarketRegimeFeatureBundle
 from ..horizon_policy import build_default_horizon_policy
 from .current_l4_diagnostic import build_current_l4_candle_evidence_digest
 
-MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27z.v2"
+MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27z.v3"
 # MR_A1_STALE_SOURCE_GATE_2026_07_09
 # MR_A2_CURRENT_L4_CANDLE_FEATURES_2026_07_09
 
@@ -73,14 +73,17 @@ def _selected_label_for_horizon(bundle: MarketRegimeFeatureBundle, horizon_sec: 
             return candle_hint, None, "current_l4_candle_window_fallback"
         return None, None, "forecast_records_stale_blocked"
     labels = _labels_by_horizon(bundle)
-    fallback = _value(bundle, FeatureGroup.PRICE_STRUCTURE, "latest_market_regime_label")
-    if labels:
-        if int(horizon_sec) == 0:
-            shortest = min(int(key) for key in labels.keys() if str(key).lstrip('-').isdigit())
-            return labels.get(str(shortest), fallback), shortest, "shortest_forecast_for_current"
-        if str(int(horizon_sec)) in labels:
-            return labels[str(int(horizon_sec))], int(horizon_sec), "exact_forecast_horizon"
-    return fallback, None, "latest_label_fallback"
+    numeric_horizons = sorted(
+        int(key) for key in labels.keys() if str(key).lstrip("-").isdigit()
+    )
+    if int(horizon_sec) == 0 and numeric_horizons:
+        shortest = numeric_horizons[0]
+        selected = labels.get(str(shortest))
+        if selected:
+            return selected, shortest, "shortest_forecast_for_current"
+    if str(int(horizon_sec)) in labels:
+        return labels[str(int(horizon_sec))], int(horizon_sec), "exact_forecast_horizon"
+    return None, None, "forecast_horizon_label_missing"
 
 
 def _label_to_regime(label: Any, *, source_snapshot_ok: bool) -> MarketRegimeCode:
@@ -125,6 +128,8 @@ def _tactical_hint(regime: MarketRegimeCode, *, crossed_or_negative_spread: bool
 def _evidence_quality(
     bundle: MarketRegimeFeatureBundle,
     *,
+    regime: MarketRegimeCode,
+    label_selection_reason: str,
     crossed_or_negative_spread: bool,
     forecast_score: float | None = None,
     signal_strength_percent: float | None = None,
@@ -132,11 +137,9 @@ def _evidence_quality(
 ) -> tuple[EvidenceQuality, str]:
     if not bundle.source_snapshot_ok:
         return EvidenceQuality.MISSING, "source_snapshot_missing"
-    forecast_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "forecast_records_current_enough", True))
-    current_l4_candle_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "current_l4_candle_window_current_enough", False))
-    if not forecast_current_enough and not current_l4_candle_current_enough:
-        return EvidenceQuality.WEAK, "forecast_records_stale_currentness_gate"
-    if not forecast_current_enough and current_l4_candle_current_enough:
+    if regime == MarketRegimeCode.UNKNOWN:
+        return EvidenceQuality.MISSING, "no_current_evidence_for_horizon"
+    if label_selection_reason == "current_l4_candle_window_fallback":
         if crossed_or_negative_spread:
             return EvidenceQuality.WEAK, "current_l4_fallback_uncalibrated_with_crossed_or_negative_spread"
         return EvidenceQuality.PARTIAL, "current_l4_fallback_uncalibrated_partial"
@@ -246,7 +249,13 @@ def _drivers(
     return tuple(dict.fromkeys(drivers))
 
 
-def _warnings(bundle: MarketRegimeFeatureBundle, *, crossed_or_negative_spread: bool) -> Tuple[str, ...]:
+def _warnings(
+    bundle: MarketRegimeFeatureBundle,
+    *,
+    horizon_sec: int,
+    label_selection_reason: str,
+    crossed_or_negative_spread: bool,
+) -> Tuple[str, ...]:
     warnings = list(bundle.warnings)
     if crossed_or_negative_spread:
         warnings.append("negative_spread_seen")
@@ -256,11 +265,32 @@ def _warnings(bundle: MarketRegimeFeatureBundle, *, crossed_or_negative_spread: 
     if not forecast_current_enough:
         warnings.append("forecast_records_stale")
         warnings.append("forecast_label_blocked_by_currentness_gate")
-        if current_l4_candle_current_enough:
+        if label_selection_reason == "current_l4_candle_window_fallback":
             warnings.append("current_l4_candle_window_fallback_used")
+        elif current_l4_candle_current_enough and int(horizon_sec) > 3600:
+            warnings.append("current_l4_candle_window_not_applicable_to_horizon")
     if not bundle.source_snapshot_ok:
         warnings.append("source_snapshot_not_ok")
     return tuple(dict.fromkeys(warnings))
+
+
+def _freshness_state_for_horizon(
+    bundle: MarketRegimeFeatureBundle,
+    *,
+    regime: MarketRegimeCode,
+    label_selection_reason: str,
+) -> FreshnessState:
+    if not bundle.source_snapshot_ok:
+        return FreshnessState.MISSING
+    if regime == MarketRegimeCode.UNKNOWN:
+        return FreshnessState.STALE
+    if label_selection_reason in {
+        "shortest_forecast_for_current",
+        "exact_forecast_horizon",
+        "current_l4_candle_window_fallback",
+    }:
+        return FreshnessState.LIVE
+    return FreshnessState.STALE
 
 
 def _missing_sources(bundle: MarketRegimeFeatureBundle) -> Tuple[str, ...]:
@@ -271,8 +301,8 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
     crossed_or_negative_spread = _bool(bundle, FeatureGroup.LIQUIDITY, "crossed_or_negative_spread")
     forecast_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "forecast_records_current_enough", True))
     current_l4_candle_current_enough = bool(_value(bundle, FeatureGroup.SOURCE_QUALITY, "current_l4_candle_window_current_enough", False))
-    warnings = _warnings(bundle, crossed_or_negative_spread=crossed_or_negative_spread)
     missing_sources = _missing_sources(bundle)
+    packet_warnings: list[str] = []
 
     prediction_rows: list[MarketRegimePrediction] = []
     for horizon in build_default_horizon_policy().horizons:
@@ -294,10 +324,24 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
         )
         evidence, evidence_quality_reason = _evidence_quality(
             bundle,
+            regime=regime,
+            label_selection_reason=label_selection_reason,
             crossed_or_negative_spread=crossed_or_negative_spread,
             forecast_score=forecast_score,
             signal_strength_percent=signal_strength_percent,
             reference_hit_rate_percent=reference_hit_rate_percent,
+        )
+        horizon_warnings = _warnings(
+            bundle,
+            horizon_sec=horizon.horizon_sec,
+            label_selection_reason=label_selection_reason,
+            crossed_or_negative_spread=crossed_or_negative_spread,
+        )
+        packet_warnings.extend(horizon_warnings)
+        freshness_state = _freshness_state_for_horizon(
+            bundle,
+            regime=regime,
+            label_selection_reason=label_selection_reason,
         )
         tactical_hint = _tactical_hint(
             regime,
@@ -318,10 +362,10 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
                 regime_code=regime,
                 confidence_percent=confidence,
                 evidence_quality=evidence,
-                freshness_state=FreshnessState.LIVE if bundle.source_snapshot_ok and (forecast_current_enough or current_l4_candle_current_enough) else (FreshnessState.STALE if bundle.source_snapshot_ok else FreshnessState.MISSING),
+                freshness_state=freshness_state,
                 tactical_hint=tactical_hint,
                 drivers=drivers,
-                warnings=warnings,
+                warnings=horizon_warnings,
                 missing_sources=missing_sources,
                 invalidation_hints=("source_quality_drops", "spread_widens_or_crosses", "forecast_label_changes"),
                 parameter_set_id="market_regime_engine_parameter_set.v1",
@@ -363,6 +407,6 @@ def classify_market_regime_feature_bundle(bundle: MarketRegimeFeatureBundle, *, 
         predictions=predictions,
         source_coverage=bundle.coverage,
         missing_sources=missing_sources,
-        warnings=warnings,
+        warnings=tuple(dict.fromkeys(packet_warnings)),
         logic_version=MARKET_REGIME_CLASSIFIER_VERSION,
     )
