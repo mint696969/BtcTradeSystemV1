@@ -154,6 +154,15 @@ from .source_attribution_adapter import (
     MARKET_REGIME_SOURCE_ATTRIBUTION_ADAPTER_VERSION,
     expand_market_regime_trace_source_attribution_rows,
 )
+from .source_scorecard_artifacts import (
+    CURRENT_PRIMARY_COHORT_STARTED_AT as SOURCE_SCORECARD_CURRENT_PRIMARY_COHORT_STARTED_AT,
+    MARKET_REGIME_SOURCE_SCORECARD_ARTIFACT_WRITER_VERSION,
+    SOURCE_SCORECARD_CURRENT_PRIMARY_RELPATH,
+    build_market_regime_current_primary_source_scorecard_artifact_write_plan,
+    preflight_market_regime_current_primary_source_scorecard,
+    source_scorecard_current_primary_relpath,
+    write_market_regime_current_primary_source_scorecard,
+)
 from .source_scorecard_pipeline import (
     MARKET_REGIME_SOURCE_SCORECARD_PIPELINE_VERSION,
     build_market_regime_source_scorecard_pipeline,
@@ -186,6 +195,13 @@ from .source_snapshot import (
 from .sources import build_market_regime_source_snapshot
 
 __all__ = [
+    "SOURCE_SCORECARD_CURRENT_PRIMARY_COHORT_STARTED_AT",
+    "MARKET_REGIME_SOURCE_SCORECARD_ARTIFACT_WRITER_VERSION",
+    "SOURCE_SCORECARD_CURRENT_PRIMARY_RELPATH",
+    "build_market_regime_current_primary_source_scorecard_artifact_write_plan",
+    "preflight_market_regime_current_primary_source_scorecard",
+    "source_scorecard_current_primary_relpath",
+    "write_market_regime_current_primary_source_scorecard",
     "MARKET_REGIME_SOURCE_SCORECARD_PIPELINE_VERSION",
     "build_market_regime_source_scorecard_pipeline",
     "MARKET_REGIME_SOURCE_ATTRIBUTION_ADAPTER_VERSION",
