@@ -6,7 +6,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from collections import defaultdict
+from typing import Any, Dict, Iterable, Mapping
 
 from .artifact_contracts import MARKET_REGIME_OUTCOME_SCHEMA_VERSION
 
@@ -296,6 +297,136 @@ def validate_market_regime_outcome_row(row: Mapping[str, Any]) -> Dict[str, Any]
     }
 
 
+def _scan_outcome_part(path: Path) -> tuple[int, str, str]:
+    row_count = 0
+    first_ts = ""
+    last_ts = ""
+    if not path.exists():
+        return row_count, first_ts, last_ts
+    with path.open("r", encoding="utf-8") as handle:
+        for raw in handle:
+            if not raw.strip():
+                continue
+            row_count += 1
+            try:
+                payload = json.loads(raw)
+                ts = str(payload.get("resolved_at") or payload.get("generated_at") or "")
+            except Exception:
+                ts = ""
+            if ts and not first_ts:
+                first_ts = ts
+            if ts:
+                last_ts = ts
+    return row_count, first_ts, last_ts
+
+
+def _write_outcome_part_meta(
+    *,
+    base: Path,
+    relpath: str,
+    meta_relpath: str,
+) -> dict[str, Any]:
+    path = base / relpath
+    row_count, first_ts, last_ts = _scan_outcome_part(path)
+    meta = {
+        "schema_version": "market_regime_outcome_part_meta.2026_07_08.v1",
+        "outcome_resolver_version": MARKET_REGIME_OUTCOME_RESOLVER_VERSION,
+        "part_jsonl": relpath,
+        "row_count": row_count,
+        "bytes": path.stat().st_size if path.exists() else 0,
+        "first_ts": first_ts,
+        "last_ts": last_ts,
+        "max_outcome_row_bytes": _MAX_OUTCOME_ROW_BYTES,
+        "closed": False,
+        "raw_market_data_duplicated": False,
+        "broker_private_api_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "would_send_to_broker": False,
+    }
+    meta_path = base / meta_relpath
+    meta_path.parent.mkdir(parents=True, exist_ok=True)
+    meta_path.write_text(
+        json.dumps(meta, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return meta
+
+
+def append_market_regime_outcome_rows_once(
+    root: str | Path,
+    rows: Iterable[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    """Append validated outcome rows in one write per date partition.
+
+    Input outcome IDs must be unique. Existing-ledger duplicate filtering remains the
+    caller's responsibility so the trace planner can preserve its current identity
+    contract while avoiding per-row full-part rescans.
+    """
+
+    base = Path(root)
+    grouped: dict[str, list[str]] = defaultdict(list)
+    outcome_ids: set[str] = set()
+    row_count = 0
+    bytes_appended = 0
+
+    for index, row in enumerate(rows):
+        if not isinstance(row, Mapping):
+            raise ValueError(f"outcome row {index} is not a mapping")
+        validation = validate_market_regime_outcome_row(row)
+        if not validation.get("ok"):
+            raise ValueError(f"market-regime outcome row validation failed: {validation}")
+        outcome_id = str(row.get("outcome_id") or "")
+        if not outcome_id:
+            raise ValueError(f"outcome row {index} has no outcome_id")
+        if outcome_id in outcome_ids:
+            raise ValueError(f"duplicate outcome_id in bulk append input: {outcome_id}")
+        outcome_ids.add(outcome_id)
+        generated_at = str(row.get("generated_at") or "")
+        relpath = outcome_part_relpath(generated_at)
+        line = json.dumps(dict(row), ensure_ascii=False, sort_keys=True) + "\n"
+        line_bytes = len(line.encode("utf-8"))
+        if line_bytes > _MAX_OUTCOME_ROW_BYTES:
+            raise ValueError(f"outcome row too large: {line_bytes} bytes")
+        grouped[relpath].append(line)
+        row_count += 1
+        bytes_appended += line_bytes
+
+    parts: list[dict[str, Any]] = []
+    for relpath in sorted(grouped):
+        path = base / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        lines = grouped[relpath]
+        with path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.writelines(lines)
+        generated_at = json.loads(lines[0]).get("generated_at")
+        meta_relpath = outcome_meta_relpath(str(generated_at or ""))
+        meta = _write_outcome_part_meta(
+            base=base,
+            relpath=relpath,
+            meta_relpath=meta_relpath,
+        )
+        parts.append({
+            "outcome_part_jsonl": relpath,
+            "outcome_part_meta_json": meta_relpath,
+            "rows_appended": len(lines),
+            "row_count": int(meta["row_count"]),
+            "bytes": int(meta["bytes"]),
+        })
+
+    return {
+        "ok": True,
+        "outcome_resolver_version": MARKET_REGIME_OUTCOME_RESOLVER_VERSION,
+        "appended_outcome_count": row_count,
+        "part_count": len(parts),
+        "bytes_appended": bytes_appended,
+        "parts": parts,
+        "raw_market_data_duplicated": False,
+        "broker_private_api_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "would_send_to_broker": False,
+    }
+
+
 def append_market_regime_outcome_row_once(root: str | Path, row: Mapping[str, Any]) -> Dict[str, Any]:
     validation = validate_market_regime_outcome_row(row)
     if not validation.get("ok"):
@@ -311,41 +442,13 @@ def append_market_regime_outcome_row_once(root: str | Path, row: Mapping[str, An
         raise ValueError(f"outcome row too large: {line_bytes} bytes")
     with path.open("a", encoding="utf-8", newline="\n") as handle:
         handle.write(line)
-    row_count = 0
-    first_ts = ""
-    last_ts = ""
-    with path.open("r", encoding="utf-8") as handle:
-        for raw in handle:
-            if not raw.strip():
-                continue
-            row_count += 1
-            try:
-                payload = json.loads(raw)
-                ts = str(payload.get("resolved_at") or payload.get("generated_at") or "")
-            except Exception:
-                ts = ""
-            if ts and not first_ts:
-                first_ts = ts
-            if ts:
-                last_ts = ts
     meta_relpath = outcome_meta_relpath(generated_at)
-    meta = {
-        "schema_version": "market_regime_outcome_part_meta.2026_07_08.v1",
-        "outcome_resolver_version": MARKET_REGIME_OUTCOME_RESOLVER_VERSION,
-        "part_jsonl": relpath,
-        "row_count": row_count,
-        "bytes": path.stat().st_size,
-        "first_ts": first_ts,
-        "last_ts": last_ts,
-        "max_outcome_row_bytes": _MAX_OUTCOME_ROW_BYTES,
-        "closed": False,
-        "raw_market_data_duplicated": False,
-        "broker_private_api_allowed": False,
-        "autotrade_trigger_allowed": False,
-        "would_send_to_broker": False,
-    }
-    meta_path = base / meta_relpath
-    meta_path.write_text(json.dumps(meta, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    meta = _write_outcome_part_meta(
+        base=base,
+        relpath=relpath,
+        meta_relpath=meta_relpath,
+    )
+    row_count = int(meta["row_count"])
     return {
         "ok": True,
         "outcome_resolver_version": MARKET_REGIME_OUTCOME_RESOLVER_VERSION,

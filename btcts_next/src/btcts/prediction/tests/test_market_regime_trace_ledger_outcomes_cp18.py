@@ -79,6 +79,8 @@ def test_cp18_trace_ledger_once_appends_outcomes_and_calibration(tmp_path: Path)
     assert result["ok"] is True
     assert result["source"] == "trace_ledger"
     assert result["appended_outcome_count"] == 2
+    assert result["append_result"]["part_count"] == 1
+    assert result["append_result"]["parts"][0]["rows_appended"] == 2
     part = tmp_path / "prediction/market_regime/outcomes/date=2026-07-08/part-00001.jsonl"
     rows = [json.loads(line) for line in part.read_text(encoding="utf-8").splitlines() if line.strip()]
     by_horizon = {row["horizon_key"]: row for row in rows}

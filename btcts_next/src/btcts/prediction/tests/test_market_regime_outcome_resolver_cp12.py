@@ -14,6 +14,7 @@ if str(_SRC_ROOT) not in sys.path:
 from btcts.prediction.market_regime.outcome_resolver import (  # noqa: E402
     MARKET_REGIME_OUTCOME_RESOLVER_VERSION,
     append_market_regime_outcome_row_once,
+    append_market_regime_outcome_rows_once,
     build_market_regime_outcome_row,
     outcome_meta_relpath,
     outcome_part_relpath,
@@ -110,3 +111,51 @@ def test_cp12_outcome_validation_rejects_raw_payload_and_unsafe_flags() -> None:
     assert result["ok"] is False
     assert "forbidden_raw_payload_key_present" in result["failures"]
     assert "safety_broker_private_api_allowed_not_false" in result["failures"]
+
+
+def test_cp12_bulk_append_groups_by_date_and_updates_meta_once(tmp_path: Path) -> None:
+    rows = []
+    for index, generated_at in enumerate((
+        "2026-07-08T12:00:00Z",
+        "2026-07-08T13:00:00Z",
+        "2026-07-09T12:00:00Z",
+    )):
+        rows.append(build_market_regime_outcome_row(
+            prediction=_prediction(
+                run_id=f"bulk_run_{index}",
+                prediction_id=f"bulk_run_{index}:900s",
+                generated_at=generated_at,
+            ),
+            observation={
+                "observation_at": "2026-07-10T12:15:00Z",
+                "observed_regime_code": "RANGE",
+            },
+            resolved_at="2026-07-10T12:16:00Z",
+        ))
+
+    result = append_market_regime_outcome_rows_once(tmp_path, rows)
+
+    assert result["ok"] is True
+    assert result["appended_outcome_count"] == 3
+    assert result["part_count"] == 2
+    parts = {row["outcome_part_jsonl"]: row for row in result["parts"]}
+    assert parts["prediction/market_regime/outcomes/date=2026-07-08/part-00001.jsonl"]["rows_appended"] == 2
+    assert parts["prediction/market_regime/outcomes/date=2026-07-09/part-00001.jsonl"]["rows_appended"] == 1
+    for part in parts.values():
+        meta = json.loads((tmp_path / part["outcome_part_meta_json"]).read_text(encoding="utf-8"))
+        assert meta["row_count"] == part["row_count"]
+        assert meta["would_send_to_broker"] is False
+
+
+def test_cp12_bulk_append_rejects_duplicate_input_outcome_ids(tmp_path: Path) -> None:
+    row = build_market_regime_outcome_row(
+        prediction=_prediction(),
+        observation={"observation_at": "2026-07-08T12:15:00Z", "observed_regime_code": "RANGE"},
+        resolved_at="2026-07-08T12:16:00Z",
+    )
+    try:
+        append_market_regime_outcome_rows_once(tmp_path, [row, row])
+    except ValueError as exc:
+        assert "duplicate outcome_id" in str(exc)
+    else:
+        raise AssertionError("duplicate bulk input was not rejected")

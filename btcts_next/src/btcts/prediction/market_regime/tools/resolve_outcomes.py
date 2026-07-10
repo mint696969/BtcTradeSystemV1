@@ -14,6 +14,7 @@ from btcts.prediction.market_regime.calibration_read_model import write_market_r
 from btcts.prediction.market_regime.observation_evaluator import build_market_regime_candle_observation
 from btcts.prediction.market_regime.outcome_resolver import (
     append_market_regime_outcome_row_once,
+    append_market_regime_outcome_rows_once,
     build_market_regime_outcome_row,
     outcome_part_relpath,
 )
@@ -494,14 +495,12 @@ def resolve_market_regime_trace_outcomes_once(
         max_trace_rows=max_trace_rows,
         observation_source=observation_source,
     )
-    appended: list[dict[str, Any]] = []
-    affected_dates: set[str] = set()
-    for row in plan["candidate_rows"]:
-        appended.append(append_market_regime_outcome_row_once(root, row))
-        affected_dates.add(_date(row.get("generated_at")))
+    candidate_rows = [row for row in plan["candidate_rows"] if isinstance(row, Mapping)]
+    affected_dates = {_date(row.get("generated_at")) for row in candidate_rows}
+    append_result = append_market_regime_outcome_rows_once(root, candidate_rows)
     calibration_results: list[dict[str, Any]] = []
     calibration_read_model_results: list[dict[str, Any]] = []
-    if update_calibration and appended:
+    if update_calibration and append_result["appended_outcome_count"]:
         for date in sorted(affected_dates):
             calibration_results.append(write_market_regime_calibration_artifacts(root, date=date))
             calibration_read_model_results.append(write_market_regime_calibration_read_model(root, date=date))
@@ -519,8 +518,9 @@ def resolve_market_regime_trace_outcomes_once(
         "candidate_outcome_count": plan["candidate_outcome_count"],
         "duplicate_outcome_count": plan["duplicate_outcome_count"],
         "observed_regime_counts": plan["observed_regime_counts"],
-        "appended_outcome_count": len(appended),
-        "appended": appended,
+        "appended_outcome_count": int(append_result["appended_outcome_count"]),
+        "append_result": append_result,
+        "appended": list(append_result["parts"]),
         "calibration_results": calibration_results,
         "calibration_read_model_results": calibration_read_model_results,
         "safety": _safety(plan["observation_source"]),
