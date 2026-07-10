@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, Mapping, Tuple
 
-TIMEFRAME_SECONDS: Tuple[int, ...] = (60, 300, 600, 900, 1800, 3600, 14400, 86400)
+TIMEFRAME_SECONDS: Tuple[int, ...] = (60, 300, 600, 900, 1800, 3600, 14400, 21600, 43200, 86400)
 LOGIC_VERSION = "prediction_ohlcv.s124.v1"
 
 

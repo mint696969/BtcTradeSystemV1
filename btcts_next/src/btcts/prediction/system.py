@@ -55,6 +55,8 @@ _TECHNICAL_TIMEFRAME_BY_HORIZON_SEC: Mapping[int, int] = {
     1800: 1800,
     3600: 3600,
     14400: 14400,
+    21600: 21600,
+    43200: 43200,
     86400: 86400,
 }
 
@@ -160,6 +162,8 @@ def _ohlcv_contract_id(timeframe_sec: int) -> str | None:
         1800: "ohlcv_30m",
         3600: "ohlcv_1h",
         14400: "ohlcv_4h",
+        21600: "ohlcv_6h",
+        43200: "ohlcv_12h",
         86400: "ohlcv_1d",
     }
     return mapping.get(int(timeframe_sec))

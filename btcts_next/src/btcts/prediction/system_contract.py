@@ -31,7 +31,7 @@ DEFAULT_HORIZONS_BY_GROUP: Mapping[HorizonGroup, Tuple[int, ...]] = {
     HorizonGroup.NOWCAST: (15, 30, 60),
     HorizonGroup.SHORT_HORIZON: (300, 600, 900),
     HorizonGroup.MID_HORIZON: (1800, 3600),
-    HorizonGroup.LONG_HORIZON: (14400, 86400),
+    HorizonGroup.LONG_HORIZON: (14400, 21600, 43200, 86400),
 }
 
 DISPLAY_LABEL_JA_BY_GROUP: Mapping[HorizonGroup, str] = {

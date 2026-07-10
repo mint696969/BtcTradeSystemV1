@@ -27,6 +27,8 @@ OHLCV_SOURCE_QUALITY_IDS: Tuple[str, ...] = (
     "ohlcv_30m",
     "ohlcv_1h",
     "ohlcv_4h",
+    "ohlcv_6h",
+    "ohlcv_12h",
     "ohlcv_1d",
 )
 

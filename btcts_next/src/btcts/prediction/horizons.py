@@ -16,7 +16,7 @@ class HorizonLayer(str, Enum):
 
 EXECUTION_MICRO_HORIZONS_SEC: Tuple[int, ...] = (15, 30, 60, 180)
 PRIMARY_TRADE_HORIZONS_SEC: Tuple[int, ...] = (300, 600, 900, 1800)
-CONTEXT_HORIZONS_SEC: Tuple[int, ...] = (3600, 14400, 86400)
+CONTEXT_HORIZONS_SEC: Tuple[int, ...] = (3600, 14400, 21600, 43200, 86400)
 
 
 @dataclass(frozen=True)
