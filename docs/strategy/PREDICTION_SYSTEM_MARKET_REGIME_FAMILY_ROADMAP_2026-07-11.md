@@ -555,10 +555,10 @@ MarketRegime provides prediction context, not execution authorization.
 ## 8. Current start point
 
 ```text
-current_gate=MR_VS6_IMPLEMENTATION_READINESS_ACCEPTED
-next_gate=MR_VS6_1_COMMON_FAMILY_READ_MODEL_IMPLEMENTATION
+current_gate=MR_VS6_1_COMMON_FAMILY_READ_MODEL_IMPLEMENTATION_ACCEPTED
+next_gate=MR_VS6_2_MARKET_REGIME_PROJECTION_IMPLEMENTATION
 current_phase=MR-F0
-implementation_started=false
+implementation_started=true
 ```
 
 ## 9. Acceptance decision
@@ -575,4 +575,13 @@ shadow_comparison_required=true
 stable_context_contract_required=true
 next_family_completion_gate_defined=true
 market_regime_family_roadmap_accepted=true
+```
+
+## MR-VS6.1 closeout
+
+```text
+status=accepted
+closeout=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_VS6_1_CLOSEOUT_2026-07-11.md
+prediction_full_suite=277_passed
+next_gate=MR_VS6_2_MARKET_REGIME_PROJECTION_IMPLEMENTATION
 ```

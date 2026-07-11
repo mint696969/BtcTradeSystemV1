@@ -5,11 +5,12 @@
 
 Updated: 2026-07-11 JST
 Checkpoint: MR_VS6_IMPLEMENTATION_READINESS_ACCEPTED
+Accepted implementation gate: MR_VS6_1_COMMON_FAMILY_READ_MODEL_IMPLEMENTATION_ACCEPTED
 
 <!-- PS_MARKET_REGIME_MR_VS6_IMPLEMENTATION_READINESS_2026_07_11 -->
 
 ```text
-implementation_started=false
+implementation_started=true
 market_regime_priority=true
 canonical_family_read_model_required=true
 canonical_receive_only_push_required=true
@@ -437,6 +438,17 @@ primary_fallback_policy_fixed=true
 exact_file_boundary_fixed=true
 test_boundary_fixed=true
 implementation_ready=true
-implementation_started=false
-next_checkpoint=MR_VS6_1_COMMON_FAMILY_READ_MODEL_IMPLEMENTATION
+implementation_started=true
+next_checkpoint=MR_VS6_2_MARKET_REGIME_PROJECTION_IMPLEMENTATION
+```
+
+## Implementation follow-through
+
+MR-VS6.1 has been implemented and accepted.
+
+```text
+accepted_gate=MR_VS6_1_COMMON_FAMILY_READ_MODEL_IMPLEMENTATION_ACCEPTED
+closeout=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_VS6_1_CLOSEOUT_2026-07-11.md
+prediction_full_suite=277_passed
+next_gate=MR_VS6_2_MARKET_REGIME_PROJECTION_IMPLEMENTATION
 ```
