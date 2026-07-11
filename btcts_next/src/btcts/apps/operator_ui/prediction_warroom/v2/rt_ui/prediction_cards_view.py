@@ -13,6 +13,10 @@ from btcts.apps.operator_ui.prediction_warroom.panels.warroom_market_regime_card
     WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION,
     render_warroom_market_regime_card_shell,
 )
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_regime_explanation_adapter import (
+    MARKET_REGIME_EXPLANATION_ADAPTER_VERSION,
+    build_market_regime_explanation_packet,
+)
 
 ENTRY_GATE_VERSION = "warroom_v2_rt_entry_gate.2026_07_05.v1"
 RT_MARKET_REGIME_CARD_BRIDGE_VERSION = "warroom_v2_rt_market_regime_card_bridge.2026_07_08.v2_artifact_read_model_only"
@@ -36,29 +40,14 @@ def _generated_at(packet: Mapping[str, Any]) -> str:
 
 
 def _render_prediction_boundary(packet: Mapping[str, Any], st_api: Any) -> None:
-    generated_at = packet.get("generated_at") or packet.get("forecast_generated_at") or packet.get("source_generated_at")
-    parts = [
-        f"entry_gate={ENTRY_GATE_VERSION}",
-        f"bridge={RT_MARKET_REGIME_CARD_BRIDGE_VERSION}",
-        "prediction_cards_scope=market_regime_first",
-        "original_warroom_market_regime_shell=true",
-        "market_regime_read_model_artifact_only=true",
-        "ui_market_regime_preview_inference=false",
-        "prediction_invoked=false",
-        "classifier_invoked=false",
-        "broker_action_allowed=false",
-    ]
-    if generated_at:
-        parts.append(f"source_generated_at={generated_at}")
-    st_api.caption(" / ".join(parts))
+    # Runtime boundary remains available in the returned packet and tests.
+    # Do not render internal diagnostics in the normal WarRoom field.
+    _ = packet, st_api
 
 
 def _render_future_row_reservation(st_api: Any) -> None:
-    st_api.caption(
-        "次の予測カード行 追加枠: "
-        + " / ".join(FUTURE_PREDICTION_CARD_ROWS)
-        + "（未接続・今後追加）"
-    )
+    # Future-family reservation is an internal roadmap concern, not a live field.
+    _ = st_api
 
 
 def _as_text_list(value: Any) -> list[str]:
@@ -193,18 +182,23 @@ def _read_market_regime_calibration_read_model_artifact() -> dict[str, Any]:
             base["artifact_present"] = True
             base["artifact_read_error"] = "calibration_read_model_not_object"
             return base
-        primary = payload.get("primary") if isinstance(payload.get("primary"), Mapping) else {}
-        counts = primary.get("counts") if isinstance(primary.get("counts"), Mapping) else {}
+        current = payload.get("primary_current") if isinstance(payload.get("primary_current"), Mapping) else {}
+        compatibility = payload.get("primary") if isinstance(payload.get("primary"), Mapping) else {}
+        has_current_schema = isinstance(payload.get("calibration_trust"), Mapping) or "primary_current" in payload
+        selected = current if current else (compatibility if not has_current_schema else {})
+        counts = selected.get("counts") if isinstance(selected.get("counts"), Mapping) else {}
         reference = payload.get("latest_cards_current_reference") if isinstance(payload.get("latest_cards_current_reference"), Mapping) else {}
-        score = primary.get("calibration_score")
+        score = selected.get("calibration_score")
         reference_score = reference.get("calibration_score")
+        selected_source = "primary_current" if current else (str(payload.get("primary_observation_source") or selected.get("key") or "primary") if selected else "")
+        read_error = "" if selected else "calibration_read_model_has_no_primary_current"
         base.update({
             "artifact_present": True,
-            "artifact_used": bool(primary),
-            "artifact_read_error": "" if primary else "calibration_read_model_has_no_primary",
-            "primary_observation_source": str(payload.get("primary_observation_source") or ""),
+            "artifact_used": bool(selected),
+            "artifact_read_error": read_error,
+            "primary_observation_source": selected_source,
             "primary_score": round(float(score), 4) if score is not None else None,
-            "primary_known_total": int(primary.get("known_total") or 0),
+            "primary_known_total": int(selected.get("known_total") or 0),
             "primary_counts": {
                 "hit": int(counts.get("hit") or 0),
                 "partial": int(counts.get("partial") or 0),
@@ -213,6 +207,7 @@ def _read_market_regime_calibration_read_model_artifact() -> dict[str, Any]:
                 "invalidated": int(counts.get("invalidated") or 0),
             },
             "reference_score": round(float(reference_score), 4) if reference_score is not None else None,
+            "schema_mode": "current_primary" if current else ("legacy_compatibility" if selected else "current_schema_invalid"),
         })
         return base
     except Exception as exc:  # pragma: no cover - defensive UI read path
@@ -666,6 +661,102 @@ def _render_context_packets(packet: Mapping[str, Any], st_api: Any) -> None:
         ], width="stretch")
 
 
+def _display_value(value: Any, *, suffix: str = "") -> str:
+    if value is None or value == "":
+        return "-"
+    return f"{value}{suffix}"
+
+
+def _market_regime_explanation_overview_rows(explanation_packet: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for horizon in explanation_packet.get("horizons", []):
+        if not isinstance(horizon, Mapping):
+            continue
+        card = horizon.get("card") if isinstance(horizon.get("card"), Mapping) else {}
+        confidence = horizon.get("confidence") if isinstance(horizon.get("confidence"), Mapping) else {}
+        evidence = horizon.get("evidence") if isinstance(horizon.get("evidence"), Mapping) else {}
+        calibration = horizon.get("calibration") if isinstance(horizon.get("calibration"), Mapping) else {}
+        parameter_set = horizon.get("parameter_set") if isinstance(horizon.get("parameter_set"), Mapping) else {}
+        rows.append({
+            "時間軸": str(horizon.get("horizon_key") or "-"),
+            "地合い": str(card.get("label_ja") or card.get("label") or "-"),
+            "表示confidence": _display_value(confidence.get("display_confidence_percent"), suffix="%"),
+            "shadow": _display_value(confidence.get("shadow_confidence_percent"), suffix="%"),
+            "shadow only": bool(confidence.get("shadow_only", True)),
+            "cap": _display_value(confidence.get("cap_percent"), suffix="%"),
+            "support": int(evidence.get("supporting_source_count") or 0),
+            "conflict": int(evidence.get("contradicting_source_count") or 0),
+            "blockers": _short_list(_as_text_list(horizon.get("blockers")), limit=3) or "-",
+            "warnings": _short_list(_as_text_list(horizon.get("warnings")), limit=3) or "-",
+            "current sample": int(calibration.get("sample_count") or 0),
+            "calibration": calibration.get("score"),
+            "parameter set": str(parameter_set.get("active_parameter_set_id") or "-"),
+            "比較可能": bool(parameter_set.get("comparison_ready", False)),
+        })
+    return rows
+
+
+def _market_regime_source_rows(horizon: Mapping[str, Any]) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for source in horizon.get("sources", []):
+        if not isinstance(source, Mapping):
+            continue
+        rows.append({
+            "source": str(source.get("source_id") or "-"),
+            "方向": str(source.get("direction") or "-"),
+            "設定weight": _display_value(source.get("configured_weight_percent"), suffix="%"),
+            "今回signal": _display_value(source.get("current_signal_strength_percent"), suffix="%"),
+            "quality score": _display_value(source.get("current_quality_score_percent"), suffix="%"),
+            "weighted numerator": _display_value(source.get("current_weighted_numerator")),
+            "quality": _display_value(source.get("current_quality_percent"), suffix="%"),
+            "freshness": _display_value(source.get("current_freshness_percent"), suffix="%"),
+            "過去reliability": _display_value(source.get("historical_reliability_percent"), suffix="%"),
+            "trusted": int(source.get("trusted_sample_count") or 0),
+            "minimum": int(source.get("minimum_trusted_sample_count") or 0),
+            "remaining": int(source.get("remaining_trusted_samples") or 0),
+            "ready": bool(source.get("ready", False)),
+            "not-ready reason": str(source.get("not_ready_reason") or "-"),
+        })
+    return rows
+
+
+def _render_market_regime_explanation(explanation_packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
+    errors = [
+        f"{name}:{status.get('error')}"
+        for name, status in (explanation_packet.get("artifact_status") or {}).items()
+        if isinstance(status, Mapping) and status.get("error")
+    ]
+    violations = _as_text_list(explanation_packet.get("safety_violations"))
+
+    with st_api.expander("地合い詳細", expanded=False):
+        if not explanation_packet.get("ok"):
+            st_api.caption(
+                "unavailable / "
+                f"errors={_short_list(errors, limit=4) or '-'} / "
+                f"safety={_short_list(violations, limit=4) or '-'}"
+            )
+            return dict(explanation_packet)
+
+        horizons = [item for item in explanation_packet.get("horizons", []) if isinstance(item, Mapping)]
+        current = next((item for item in horizons if str(item.get("horizon_key")) == "current"), horizons[0] if horizons else {})
+        calibration = current.get("calibration") if isinstance(current.get("calibration"), Mapping) else {}
+        parameter_set = current.get("parameter_set") if isinstance(current.get("parameter_set"), Mapping) else {}
+        sources = _market_regime_source_rows(current)
+        not_ready = [row for row in sources if not bool(row.get("ready"))]
+
+        st_api.caption(
+            f"current sample={calibration.get('sample_count')} / "
+            f"calibration={calibration.get('score')} / "
+            "not win rate / "
+            f"parameter comparison={parameter_set.get('comparison_ready')} / "
+            f"not-ready source={len(not_ready)}"
+        )
+        st_api.dataframe(_market_regime_explanation_overview_rows(explanation_packet), width="stretch")
+        st_api.dataframe(sources, width="stretch")
+
+    return dict(explanation_packet)
+
+
 def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
     _render_prediction_boundary(packet, st_api)
     parent_scenario_guidance_packet = _read_parent_scenario_guidance_read_model_artifact()
@@ -673,6 +764,7 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
     artifact_packet = _read_market_regime_latest_cards_artifact()
     calibration_packet = _read_market_regime_calibration_read_model_artifact()
     parameter_set_comparison_packet = _read_market_regime_parameter_set_comparison_read_model_artifact()
+    explanation_packet = build_market_regime_explanation_packet(_market_regime_cards_artifact_root())
     artifact_cards = artifact_packet.get("cards") if artifact_packet.get("artifact_cards_used") else None
     artifact_cards, calibration_detail_enriched = _enrich_market_regime_cards_with_calibration_detail(
         artifact_cards if isinstance(artifact_cards, list) else None,
@@ -709,6 +801,7 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
     market_regime_summary = _render_market_regime_render_status(market_regime_packet, st_api)
     calibration_packet = _render_market_regime_calibration_status(calibration_packet, st_api)
     parameter_set_comparison_packet = _render_market_regime_parameter_set_comparison_status(parameter_set_comparison_packet, st_api)
+    explanation_packet = _render_market_regime_explanation(explanation_packet, st_api)
     _render_future_row_reservation(st_api)
     _render_context_packets(packet, st_api)
     return {
@@ -772,6 +865,14 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         "market_regime_parameter_set_comparison_comparable_parameter_set_count": int(parameter_set_comparison_packet.get("comparable_parameter_set_count") or 0),
         "market_regime_parameter_set_comparison_promotion_candidate_count": int(parameter_set_comparison_packet.get("promotion_candidate_count") or 0),
         "market_regime_parameter_set_comparison_recommendation_count": int(parameter_set_comparison_packet.get("recommendation_count") or 0),
+        "market_regime_explanation_adapter_version": str(explanation_packet.get("adapter_version") or MARKET_REGIME_EXPLANATION_ADAPTER_VERSION),
+        "market_regime_explanation_packet_ok": bool(explanation_packet.get("ok")),
+        "market_regime_explanation_horizon_count": int(explanation_packet.get("horizon_count") or 0),
+        "market_regime_explanation_safety_violations": list(explanation_packet.get("safety_violations") or []),
+        "market_regime_explanation_read_only": bool((explanation_packet.get("safety") or {}).get("read_only", True)),
+        "market_regime_explanation_prediction_invoked": bool((explanation_packet.get("safety") or {}).get("prediction_invoked", False)),
+        "market_regime_explanation_classifier_invoked": bool((explanation_packet.get("safety") or {}).get("classifier_invoked", False)),
+        "market_regime_explanation_confidence_recalculated": bool((explanation_packet.get("safety") or {}).get("confidence_recalculated", False)),
         "market_regime_first": True,
         "future_prediction_rows_reserved": True,
         "future_prediction_card_rows": list(FUTURE_PREDICTION_CARD_ROWS),

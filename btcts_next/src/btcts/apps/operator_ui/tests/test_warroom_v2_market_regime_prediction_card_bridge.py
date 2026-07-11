@@ -48,8 +48,12 @@ def test_bridge_source_uses_original_market_regime_panel_not_v2_placeholder_matr
     assert "render_warroom_market_regime_card_shell" in source
     assert "artifact_read_model_only" in source
     assert "RT_MARKET_REGIME_CARDS_ARTIFACT_RELATIVE_PATH" in source
-    assert "ui_market_regime_preview_inference=false" in source
     assert "preview_inference_invoked" in source
+    assert '"preview_inference_invoked": False' in source
+    assert '"prediction_invoked": False' in source
+    assert '"classifier_invoked": False' in source
+    assert '"broker_action_allowed": False' in source
+    assert "ui_market_regime_preview_inference=false" not in source
     assert "D:/btc_ts_hot" in source
     assert "panels.warroom_v2.prediction_cards" not in source
     assert "warroom_v2_prediction_matrix_html" not in source
@@ -60,7 +64,7 @@ def test_bridge_source_uses_original_market_regime_panel_not_v2_placeholder_matr
     assert "地合いカード詳細" in original
 
 
-def test_bridge_returns_market_regime_first_and_future_rows_reserved(monkeypatch, tmp_path: Path) -> None:
+def test_bridge_keeps_machine_boundary_and_future_rows_without_normal_field_noise(monkeypatch, tmp_path: Path) -> None:
     calls: list[dict[str, object]] = []
 
     def fake_shell(**kwargs: object) -> dict[str, object]:
@@ -95,6 +99,10 @@ def test_bridge_returns_market_regime_first_and_future_rows_reserved(monkeypatch
     assert result["prediction_invoked"] is False
     assert result["classifier_invoked"] is False
     assert result["broker_action_allowed"] is False
-    assert any("prediction_cards_scope=market_regime_first" in caption for caption in fake_st.captions)
-    assert any("次の予測カード行 追加枠" in caption for caption in fake_st.captions)
+    assert result["market_regime_explanation_prediction_invoked"] is False
+    assert result["market_regime_explanation_classifier_invoked"] is False
+    assert result["market_regime_explanation_confidence_recalculated"] is False
+    assert not any("prediction_cards_scope=market_regime_first" in caption for caption in fake_st.captions)
+    assert not any("ui_market_regime_preview_inference=false" in caption for caption in fake_st.captions)
+    assert not any("次の予測カード行 追加枠" in caption for caption in fake_st.captions)
     assert fake_st.tables
