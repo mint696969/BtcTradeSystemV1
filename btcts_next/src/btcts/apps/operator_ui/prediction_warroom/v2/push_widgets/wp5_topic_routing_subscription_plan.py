@@ -60,6 +60,8 @@ def _group_for(topic_key: str) -> str:
         return "receiver"
     if topic_key.startswith("warroom."):
         return "warroom"
+    if topic_key.startswith("prediction.family."):
+        return "prediction"
     return "unknown"
 
 

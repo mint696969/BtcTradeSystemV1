@@ -26,8 +26,8 @@ def test_wp5_packet_marks_topic_plan_ready_and_safe() -> None:
     assert packet["subscription_plan_ready"] is True
     assert packet["receive_only_subscription_intent_ready"] is True
     assert packet["future_topic_addition_ready"] is True
-    assert packet["route_count"] == 7
-    assert set(packet["channel_groups"]) == {"market", "receiver", "warroom"}
+    assert packet["route_count"] == 8
+    assert set(packet["channel_groups"]) == {"market", "prediction", "receiver", "warroom"}
     assert packet["plan"]["subscribe_invoked"] is False
     assert packet["websocket_opened"] is False
     assert packet["websocket_subscribe_invoked"] is False
@@ -38,7 +38,7 @@ def test_wp5_packet_marks_topic_plan_ready_and_safe() -> None:
 
 def test_wp5_routes_are_receive_only_and_intent_only() -> None:
     routes = build_topic_route_plans()
-    assert len(routes) == 7
+    assert len(routes) == 8
     assert all(route.receive_only for route in routes)
     assert all(route.subscribe_intent_only for route in routes)
     assert not any(route.subscribe_invoked for route in routes)

@@ -26,8 +26,8 @@ def test_wp2_registry_manifest_default_catalog_is_stable_and_read_only() -> None
     assert packet["manifest_driven_widgets_ready"] is True
     assert packet["topic_bindings_ready"] is True
     assert packet["future_widget_extension_metadata_ready"] is True
-    assert packet["validation"]["widget_count"] == 5
-    assert packet["validation"]["topic_binding_count"] == 7
+    assert packet["validation"]["widget_count"] == 6
+    assert packet["validation"]["topic_binding_count"] == 8
     assert set(packet["routes_by_topic"]) >= {"market.depth", "market.trades", "market.spread", "market.liquidity"}
     assert packet["websocket_send_enabled"] is False
     assert packet["broker_send_enabled"] is False

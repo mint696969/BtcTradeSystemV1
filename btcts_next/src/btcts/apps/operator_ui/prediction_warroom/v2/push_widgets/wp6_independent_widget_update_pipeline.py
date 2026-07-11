@@ -58,6 +58,8 @@ def build_render_packets_from_store(store: Mapping[str, Any]) -> dict[str, dict[
     packets: dict[str, dict[str, Any]] = {}
     for widget_id, widget in dict(store.get("widgets", {})).items():
         manifest = manifests[widget_id]
+        if not bool(manifest.mount_enabled):
+            continue
         packet = WidgetRenderPacket(
             widget_id=widget_id,
             title=manifest.display_name,

@@ -24,6 +24,7 @@ class PushWidgetManifest:
     stale_after_ms: int = 5000
     heartbeat_required: bool = True
     read_only: bool = True
+    mount_enabled: bool = True
     extension_tags: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -52,6 +53,7 @@ DEFAULT_MANIFESTS: tuple[PushWidgetManifest, ...] = (
     PushWidgetManifest("spread_liquidity_widget", "Spread / liquidity", "liquidity", ("market.spread", "market.liquidity"), "spread_liquidity_reducer", "spread_liquidity_render_packet", "core_grid", 30, extension_tags=("spread", "liquidity")),
     PushWidgetManifest("receiver_lifecycle_widget", "Receiver health", "receiver_lifecycle", ("receiver.lifecycle",), "receiver_lifecycle_reducer", "receiver_lifecycle_render_packet", "status_grid", 40, extension_tags=("health", "lifecycle")),
     PushWidgetManifest("summary_alerts_widget", "Summary / alerts", "summary_alerts", ("warroom.summary", "warroom.alerts"), "summary_alerts_reducer", "summary_alerts_render_packet", "status_grid", 50, extension_tags=("summary", "alerts")),
+    PushWidgetManifest("market_regime_prediction_widget", "Market regime prediction", "prediction_family", ("prediction.family.market_regime",), "prediction_family_read_model_reducer", "market_regime_prediction_render_packet", "prediction_grid", 60, stale_after_ms=15000, mount_enabled=False, extension_tags=("prediction", "market_regime", "read_only", "unmounted")),
 )
 
 DEFAULT_BINDINGS: tuple[PushWidgetTopicBinding, ...] = (
@@ -62,6 +64,7 @@ DEFAULT_BINDINGS: tuple[PushWidgetTopicBinding, ...] = (
     PushWidgetTopicBinding("receiver_lifecycle_widget", "receiver.lifecycle", "receiver.lifecycle"),
     PushWidgetTopicBinding("summary_alerts_widget", "warroom.summary", "warroom.summary"),
     PushWidgetTopicBinding("summary_alerts_widget", "warroom.alerts", "warroom.alerts"),
+    PushWidgetTopicBinding("market_regime_prediction_widget", "prediction.family.market_regime", "prediction.family.market_regime", message_kind="prediction_family_read_model"),
 )
 
 

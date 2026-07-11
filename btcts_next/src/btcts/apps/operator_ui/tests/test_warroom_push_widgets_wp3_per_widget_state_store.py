@@ -25,7 +25,7 @@ def test_wp3_packet_marks_state_store_ready_and_safe() -> None:
     assert packet["independent_widget_state_ready"] is True
     assert packet["bounded_buffers_ready"] is True
     assert packet["raw_payload_drop_ready"] is True
-    assert packet["widget_count"] == 5
+    assert packet["widget_count"] == 6
     assert packet["websocket_send_enabled"] is False
     assert packet["broker_send_enabled"] is False
     assert packet["order_intent_submitted"] is False
