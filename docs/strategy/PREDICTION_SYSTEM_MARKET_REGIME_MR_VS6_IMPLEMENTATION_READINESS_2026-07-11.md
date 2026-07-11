@@ -418,6 +418,14 @@ remove existing card UI
 expose internal diagnostic captions in the normal field
 ```
 
+## 11.1 Canonical family roadmap
+
+MR-VS6 is phase `MR-F0` of the current authoritative family roadmap:
+
+`docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_FAMILY_ROADMAP_2026-07-11.md`
+
+MR-VS6 completion does not complete the MarketRegime family. After MR-VS6.6, continue with forecast-label provenance, current-state estimator separation, explainable scoring, transition modeling, horizon-specific future forecasting, baseline comparison, calibration, shadow comparison, and stable context publication before another family starts.
+
 ## 12. Implementation-start decision
 
 ```text

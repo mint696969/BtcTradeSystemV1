@@ -604,6 +604,16 @@ Are outcome/calibration scores self-referential or genuinely future-horizon base
 Can the family be converted to the parent contract without broad UI changes?
 ```
 
+## 13.1 Canonical MarketRegime family roadmap
+
+The current authoritative MarketRegime family roadmap is:
+
+`docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_FAMILY_ROADMAP_2026-07-11.md`
+
+It defines the separation of current-state estimation and future-regime forecasting, forecast-label provenance audit, explainable feature scoring, transition modeling, simple-baseline comparison, confidence calibration, shadow comparison, and the completion gate immediately before `trend_bias` begins.
+
+The detailed MarketRegime phases in this document remain historical alignment context where they differ. The dedicated family roadmap is authoritative for current MarketRegime execution order and completion criteria.
+
 ## 14. Roadmap and checkpoints
 
 ### Phase 0: Alignment spec and roadmap lock
