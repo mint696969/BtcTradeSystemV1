@@ -140,6 +140,14 @@ historical version constants
 arbitrary source-line limits
 ```
 
+## 5.1 Reusable policy
+
+The reusable repository-wide policy extracted from this repair is:
+
+`docs/strategy/PREDICTION_SYSTEM_CONTRACT_CHANGE_AND_TEST_GUARD_POLICY_2026-07-11.md`
+
+This closeout remains the incident evidence; the policy document is the current reusable rule for future contract changes.
+
 ## 6. Verification evidence
 
 ```text

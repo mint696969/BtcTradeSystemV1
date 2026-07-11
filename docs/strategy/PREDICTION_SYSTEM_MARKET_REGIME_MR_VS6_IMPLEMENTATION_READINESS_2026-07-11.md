@@ -392,6 +392,14 @@ git diff --check
 
 No test exclusion, skip, xfail, or historical-contract rewriting is allowed to obtain a pass.
 
+## 10.1 Contract-change policy
+
+MR-VS6 implementation must follow:
+
+`docs/strategy/PREDICTION_SYSTEM_CONTRACT_CHANGE_AND_TEST_GUARD_POLICY_2026-07-11.md`
+
+Any change to schema, ownership, topic, fallback behavior, or safety behavior must update implementation, current specification, current guard, affected full suites, and handoff state in the same slice.
+
 ## 11. Non-goals
 
 MR-VS6 must not:
