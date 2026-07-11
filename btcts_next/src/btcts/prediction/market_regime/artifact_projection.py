@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Iterable, Mapping
+
+from ..family_read_model import build_prediction_family_read_model
 
 from .contracts import EvidenceQuality, FreshnessState, MarketRegimeCode, MarketRegimePrediction, MarketRegimePredictionPacket
 
@@ -152,6 +154,79 @@ def build_market_regime_read_model_summaries(packet: MarketRegimePredictionPacke
         },
     }
 
+
+
+def _horizon_group(horizon_sec: int) -> str:
+    seconds = max(0, int(horizon_sec))
+    if seconds == 0:
+        return "current"
+    if seconds <= 3600:
+        return "short_horizon"
+    return "long_horizon"
+
+
+def _bounded_refs(refs: Iterable[Mapping[str, Any]] | None) -> list[dict[str, Any]]:
+    return [dict(item) for item in list(refs or []) if isinstance(item, Mapping)]
+
+
+def build_market_regime_family_read_model(
+    *,
+    packet: MarketRegimePredictionPacket,
+    run_id: str,
+    prediction_id: str,
+    model_id: str = "market_regime",
+    feature_set_version: str = "",
+    target_definition_version: str = "",
+    training_window_ref: str = "",
+    evaluation_window_ref: str = "",
+    source_refs: Iterable[Mapping[str, Any]] | None = None,
+    trace_refs: Iterable[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Project one MarketRegime packet into the family-neutral read-model contract."""
+    shared_source_refs = _bounded_refs(source_refs)
+    shared_trace_refs = _bounded_refs(trace_refs)
+    rows: list[dict[str, Any]] = []
+
+    for prediction in packet.predictions:
+        rows.append({
+            "horizon_key": prediction.horizon_key,
+            "horizon_sec": int(prediction.horizon_sec),
+            "horizon_group": _horizon_group(prediction.horizon_sec),
+            "primary_label": _enum_value(prediction.regime_code),
+            "primary_label_display": _regime_label(prediction.regime_code),
+            "confidence_percent": int(prediction.confidence_percent),
+            "confidence_kind": "heuristic_support",
+            "freshness_state": _enum_value(prediction.freshness_state),
+            "evidence_quality": _enum_value(prediction.evidence_quality),
+            "drivers": list(prediction.drivers),
+            "blockers": list(prediction.missing_sources),
+            "warnings": list(prediction.warnings),
+            "invalidation_hints": list(prediction.invalidation_hints),
+            "source_refs": shared_source_refs,
+            "trace_refs": shared_trace_refs,
+            "family_payload": {
+                "regime_code": _enum_value(prediction.regime_code),
+                "regime_label": _regime_label(prediction.regime_code),
+                "tactical_hint": _enum_value(prediction.tactical_hint),
+                "source_priority_policy_id": prediction.source_priority_policy_id,
+                "signal_summary_ref": prediction.feature_bundle_hash or "",
+            },
+        })
+
+    return build_prediction_family_read_model(
+        prediction_family_id="market_regime",
+        generated_at=packet.generated_at,
+        run_id=run_id,
+        prediction_id=prediction_id,
+        model_id=model_id,
+        logic_version=packet.logic_version,
+        parameter_set_id=packet.parameter_set_id,
+        feature_set_version=feature_set_version,
+        target_definition_version=target_definition_version,
+        training_window_ref=training_window_ref,
+        evaluation_window_ref=evaluation_window_ref,
+        horizon_rows=rows,
+    )
 
 def build_market_regime_source_refs_from_snapshot(snapshot: object) -> Dict[str, Any]:
     latest_manifest = getattr(snapshot, "latest_manifest", None)

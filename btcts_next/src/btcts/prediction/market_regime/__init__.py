@@ -6,6 +6,7 @@ from __future__ import annotations
 from .artifact_projection import (
     MARKET_REGIME_ARTIFACT_PROJECTION_VERSION,
     build_market_regime_cards_from_packet,
+    build_market_regime_family_read_model,
     build_market_regime_read_model_horizons,
     build_market_regime_read_model_summaries,
 )
@@ -293,6 +294,7 @@ __all__ = [
     "build_market_regime_read_model_summaries",
     "build_market_regime_read_model_horizons",
     "build_market_regime_cards_from_packet",
+    "build_market_regime_family_read_model",
     "MARKET_REGIME_ARTIFACT_PROJECTION_VERSION",
     "validate_market_regime_status_artifact",
     "validate_market_regime_latest_cards_artifact",
