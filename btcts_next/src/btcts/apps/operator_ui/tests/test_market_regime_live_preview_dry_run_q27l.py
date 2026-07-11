@@ -75,7 +75,7 @@ def test_q27l_stage_versions_and_flags_show_dry_run_only(tmp_path: Path) -> None
     packet = build_market_regime_live_preview_dry_run_packet(tmp_path, generated_at="2026-07-01T17:35:03Z")
     assert packet["stage_versions"]["source_snapshot"] == "prediction.market_regime.source_snapshot.ps_q27h.v1"
     assert packet["stage_versions"]["feature_bundle"] == "prediction.market_regime.feature_bundle.ps_q27i.v1"
-    assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27z.v1"
+    assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27z.v3"
     assert packet["stage_versions"]["card_adapter"] == "prediction_warroom.market_regime_card_adapter.ps_q27k.v1"
     assert packet["market_regime_only"] is True
     assert packet["live_preview_dry_run"] is True

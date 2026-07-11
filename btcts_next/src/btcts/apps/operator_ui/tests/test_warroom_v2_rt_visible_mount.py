@@ -24,9 +24,12 @@ def test_warroom_v2_page_is_rt_visible_mount_not_preview_shell() -> None:
     assert "render_warroom_v2_shell_preview_panel" not in text
     assert "ensure_warroom_push_widget_live_observation_runtime" in text
     assert "apply_warroom_push_widget_rt_live_receiver_bridge_to_session_state" in text
-    assert "render_wp9_push_widget_mount" in text
-    assert "render_wp12_bottom_chart_layout" in text
-    assert "render_wp13_prediction_card_connection" in text
+    assert "render_rt_top_layout_and_widgets" in text
+    assert "render_rt_bottom_chart_graph" in text
+    assert "render_rt_prediction_cards" in text
+    assert "render_wp9_push_widget_mount" not in text
+    assert "render_wp12_bottom_chart_layout" not in text
+    assert "render_wp13_prediction_card_connection" not in text
 
 
 def test_warroom_v2_page_mount_packet_reports_runtime_connected_when_started() -> None:
@@ -49,9 +52,14 @@ def test_warroom_v2_page_mount_packet_reports_runtime_connected_when_started() -
 
 def test_runtime_uses_env_runtime_config_defaults_and_doc_markers() -> None:
     rt = RT.read_text(encoding="utf-8-sig")
-    assert "WARROOM_PUSH_WIDGET_SOURCE" in PAGE.read_text(encoding="utf-8-sig")
-    assert "BTCTS_WS_CA_FILE" in PAGE.read_text(encoding="utf-8-sig")
-    assert "BTCTS_WS_SSL_VERIFY" in PAGE.read_text(encoding="utf-8-sig")
+    page = PAGE.read_text(encoding="utf-8-sig")
+    runtime_env = (REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/prediction_warroom/v2/rt_ui/runtime_env.py").read_text(encoding="utf-8-sig")
+    assert "endpoint_from_env" in page
+    assert "runtime_config_from_env" in page
+    assert "WARROOM_PUSH_WIDGET_SOURCE" in runtime_env
+    assert "BTCTS_WS_CA_FILE" in runtime_env
+    assert "BTCTS_WS_SSL_VERIFY" in runtime_env
+    assert "D_HOT_ENDPOINT" in runtime_env
     assert "bitflyer_collector_provider" in rt
     doc = DOC.read_text(encoding="utf-8-sig")
     assert "warroom_v2_rt_visible_mount_ready=true" in doc

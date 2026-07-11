@@ -34,13 +34,16 @@ def test_prediction_card_renderer_reuses_original_market_regime_shell_and_safe_b
     assert "def render_rt_prediction_cards" in cards
     assert "render_warroom_market_regime_card_shell" in cards
     assert "WARROOM_MARKET_REGIME_CARD_RENDERER_VERSION" in cards
-    assert "RT_MARKET_REGIME_CARD_PREVIEW_HOT_ROOT" in cards
+    assert "_market_regime_cards_artifact_root" in cards
+    assert 'os.environ.get("BTCTS_HOT_ROOT")' in cards
+    assert 'Path("D:/btc_ts_hot")' in cards
+    assert "RT_MARKET_REGIME_CARDS_ARTIFACT_RELATIVE_PATH" in cards
     assert "FUTURE_PREDICTION_CARD_ROWS" in cards
-    assert "prediction_cards_scope=market_regime_first" in cards
-    assert "original_warroom_market_regime_shell=true" in cards
-    assert "prediction_invoked=false" in cards
-    assert "classifier_invoked=false" in cards
-    assert "broker_action_allowed=false" in cards
+    assert '"prediction_invoked": False' in cards
+    assert '"classifier_invoked": False' in cards
+    assert '"broker_action_allowed": False' in cards
+    assert "prediction_cards_scope=market_regime_first" not in cards
+    assert "original_warroom_market_regime_shell=true" not in cards
     assert "st_api.columns(len(cards))" not in cards
     assert 'column.metric("state"' not in cards
 

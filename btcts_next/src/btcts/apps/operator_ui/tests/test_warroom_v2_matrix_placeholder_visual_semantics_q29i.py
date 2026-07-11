@@ -83,9 +83,18 @@ def test_q29i_matrix_html_keeps_placeholder_unknown_missing_classes() -> None:
 def test_q29i_no_route_legacy_or_runtime_ownership_changed() -> None:
     app_text = APP.read_text(encoding="utf-8-sig")
     legacy_text = LEGACY_WARROOM.read_text(encoding="utf-8-sig")
-    assert '("warroom_v2", "WarRoom v2", warroom_v2_page)' in app_text
+    assert '("warroom_v2", get_text(lang, "page_warroom"), warroom_v2_page)' in app_text
+    assert 'LEGACY_PAGE_KEY_REDIRECTS = {' in app_text
+    assert '"warroom": "warroom_v2"' in app_text
     assert "card_visual_semantics" not in legacy_text
-    assert "prediction_warroom.v2" not in legacy_text
+    assert "prediction_warroom.v2.push_widgets" in legacy_text
+    assert "ensure_warroom_push_widget_live_observation_runtime" in legacy_text
+    assert "apply_warroom_push_widget_rt_live_receiver_bridge_to_session_state" in legacy_text
+    assert "warroom_v2_page" not in legacy_text
+    assert "build_warroom_v2_shell_preview_packet" not in legacy_text
+    assert "classify_market_regime_feature_bundle(" not in legacy_text
+    assert "send_to_broker(" not in legacy_text
+    assert "autotrade_trigger_allowed = True" not in legacy_text
     for path in (PREDICTION_CARDS, SEMANTICS):
         text = path.read_text(encoding="utf-8-sig")
         for token in ("build_market_regime_source_snapshot(", "classify_market_regime_feature_bundle(", "send_to_broker(", "append_ledger(", "write_runtime_artifact("):

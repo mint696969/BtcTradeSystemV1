@@ -57,11 +57,11 @@ def test_inference_guidance_is_observational_and_read_only() -> None:
 
 def test_page_order_and_mount_packet_markers() -> None:
     page = PAGE.read_text(encoding="utf-8-sig")
-    assert "1. Market strip" in page
-    assert "2. Trade strip" in page
-    assert "3. Inference scenario guidance" in page
-    assert "4. Prediction cards" in page
-    assert "5. Bottom chart" in page
+    assert 'render_compact_section_label(st, index=1, title="Market strip"' in page
+    assert 'render_compact_section_label(st, index=2, title="Trade strip"' in page
+    assert 'render_compact_section_label(st, index=3, title="Inference scenario guidance"' in page
+    assert 'render_compact_section_label(st, index=4, title="Prediction cards"' in page
+    assert 'render_compact_section_label(st, index=5, title="Bottom chart"' in page
     assert "build_wp12_bottom_chart_layout_packet" not in page
     packet = build_warroom_v2_page_mount_packet(runtime_status={"receiver_runtime_started": True}, bridge_packet={"messages_applied": 0}, display_source="waiting")
     assert packet["rt_polish2_live_retention_ready"] is True

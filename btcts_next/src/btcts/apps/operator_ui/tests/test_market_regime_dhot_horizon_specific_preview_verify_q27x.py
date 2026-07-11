@@ -107,14 +107,21 @@ def test_q27x_classifier_uses_dhot_like_horizon_specific_labels(tmp_path: Path) 
     bundle = build_market_regime_feature_bundle(snapshot, generated_at="2026-07-02T01:20:23Z")
     packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-02T01:20:24Z")
     by_horizon = {prediction.horizon_sec: prediction for prediction in packet.predictions}
-    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v1"
+    assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v3"
     assert by_horizon[0].diagnostic_record["selected_forecast_horizon_sec"] == 15
     assert by_horizon[0].regime_code == MarketRegimeCode.RANGE
     assert by_horizon[300].regime_code == MarketRegimeCode.UP_TREND
     assert by_horizon[1800].regime_code == MarketRegimeCode.BREAKOUT
     assert by_horizon[3600].regime_code == MarketRegimeCode.REVERSAL_WATCH
     assert by_horizon[86400].regime_code == MarketRegimeCode.BREAKOUT
-    assert by_horizon[43200].diagnostic_record["label_selection_reason"] == "latest_label_fallback"
+    missing_horizon = by_horizon[43200]
+    assert missing_horizon.diagnostic_record["label_selection_reason"] == "forecast_horizon_label_missing"
+    assert missing_horizon.diagnostic_record["selected_label"] == ""
+    assert missing_horizon.diagnostic_record["selected_label_source"] == "none"
+    assert missing_horizon.regime_code == MarketRegimeCode.UNKNOWN
+    assert missing_horizon.confidence_percent == 15
+    assert missing_horizon.freshness_state.value == "STALE"
+    assert missing_horizon.evidence_quality.value == "MISSING"
     assert all(prediction.diagnostic_record["horizon_specific_classifier"] is True for prediction in packet.predictions)
     assert packet.safety.would_send_to_broker is False
 
@@ -126,7 +133,7 @@ def test_q27x_warroom_preview_binding_uses_ps_q27z_stage_version_without_ui_chan
     assert packet["dry_run_invoked"] is True
     assert packet["explicit_source_root_read_performed"] is True
     assert packet["source_snapshot_ok"] is True
-    assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27z.v1"
+    assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27z.v3"
     assert packet["card_count"] == 8
     by_horizon = {card["horizon"]: card for card in packet["cards"]}
     assert by_horizon["現在"]["regime_code"] == "RANGE"

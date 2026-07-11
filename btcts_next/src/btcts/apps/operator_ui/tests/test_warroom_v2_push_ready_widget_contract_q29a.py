@@ -149,7 +149,13 @@ def test_q29a_v2_files_are_small_and_side_effect_free() -> None:
 
 def test_q29a_legacy_warroom_page_is_not_touched_by_v2_contract() -> None:
     text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
-    assert "prediction_warroom.v2" not in text
+    assert "prediction_warroom.v2.push_widgets" in text
+    assert "ensure_warroom_push_widget_live_observation_runtime" in text
+    assert "apply_warroom_push_widget_rt_live_receiver_bridge_to_session_state" in text
+    assert "warroom_v2_page" not in text
+    assert "build_warroom_v2_shell_preview_packet" not in text
+    assert "classify_market_regime_feature_bundle(" not in text
+    assert "send_to_broker(" not in text
     assert "build_warroom_v2_layout_policy" not in text
     assert "build_warroom_v2_widget_topic_catalog" not in text
     assert "WidgetUpdateEvent" not in text

@@ -60,9 +60,10 @@ def test_q29s_chart_review_packet_embeds_range_summary_and_keeps_safety() -> Non
 def test_q29s_market_state_service_exposes_bounded_recent_rows_public_api() -> None:
     text = SERVICE.read_text(encoding="utf-8-sig")
     assert "def load_recent_market_states(" in text
-    assert "_read_jsonl_recent_rows(latest_part" in text
+    assert "read_jsonl_tail_from_parts(latest_part.parent" in text
     assert "max_lines=max_lines" in text
     assert "max_bytes=max_bytes" in text
+    assert "from btcts.core.sharded_jsonl import latest_part_path, read_jsonl_tail_from_parts" in text
 
 
 def test_q29s_chart_panel_renders_line_chart_from_read_only_series() -> None:

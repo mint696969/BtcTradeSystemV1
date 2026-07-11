@@ -63,7 +63,7 @@ def test_q26g_q18aj_visible_text_localized_but_legacy_searchable_preserved() -> 
     joined = "\n".join(str(row) for row in rows)
     assert "確認項目" in joined
     assert "見るポイント" in joined
-    assert "AutoTrade trigger と broker/private API は無効" in joined
+    assert "AutoTrade triggerとbroker/private API（売買接続）は無効です。" in joined
     loc = build_latest_prediction_summary_widget_q18aj_japanese_localization_packet()
     assert loc["localization_version"] == LATEST_PREDICTION_SUMMARY_WIDGET_Q18AJ_JAPANESE_LOCALIZATION_VERSION
     assert loc["legacy_searchable_plain_text_preserved"] is True

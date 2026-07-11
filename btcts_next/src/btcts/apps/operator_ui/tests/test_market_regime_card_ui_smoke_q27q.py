@@ -133,8 +133,14 @@ def test_q27q_preview_on_smoke_uses_explicit_tmp_root_read_only(tmp_path: Path) 
     assert packet["dry_run_invoked"] is True
     assert packet["source_snapshot_ok"] is True
     _assert_card_spec_shape(packet)
-    assert {card["regime_code"] for card in packet["cards"]} == {"RANGE"}
-    assert {card["short_tag"] for card in packet["cards"]} == {"NO_DIRECTION"}
+    range_cards = [card for card in packet["cards"] if card["regime_code"] == "RANGE"]
+    unknown_cards = [card for card in packet["cards"] if card["regime_code"] == "UNKNOWN"]
+    assert len(range_cards) == 2
+    assert len(unknown_cards) == 6
+    assert {card["short_tag"] for card in range_cards} == {"NO_DIRECTION"}
+    assert all(card["confidence_percent"] == 15 for card in unknown_cards)
+    assert all(card["freshness_badge"] in {"STALE", "MISSING"} for card in unknown_cards)
+    assert all(card["short_tag"] in {"STALE_INPUT", "DATA_MISSING"} for card in unknown_cards)
     assert all(card["extra"].get("sample_only") is not True for card in packet["cards"])
     assert packet["runtime_artifact_write_allowed"] is False
     assert packet["would_send_to_broker"] is False

@@ -85,7 +85,13 @@ def test_q29b_shell_contract_does_not_mount_legacy_warroom_to_v2() -> None:
     # or import v2 contracts, runtime, or shell-preview rendering.
     warroom_text = WARROOM_PAGE.read_text(encoding="utf-8-sig")
     assert "warroom_v2_page" not in warroom_text
-    assert "prediction_warroom.v2" not in warroom_text
+    assert "prediction_warroom.v2.push_widgets" in warroom_text
+    assert "ensure_warroom_push_widget_live_observation_runtime" in warroom_text
+    assert "apply_warroom_push_widget_rt_live_receiver_bridge_to_session_state" in warroom_text
+    assert "warroom_v2_page" not in warroom_text
+    assert "build_warroom_v2_shell_preview_packet" not in warroom_text
+    assert "classify_market_regime_feature_bundle(" not in warroom_text
+    assert "send_to_broker(" not in warroom_text
     assert "build_warroom_v2_shell_preview_packet" not in warroom_text
     assert "warroom_v2_shell_preview_panel" not in warroom_text
 

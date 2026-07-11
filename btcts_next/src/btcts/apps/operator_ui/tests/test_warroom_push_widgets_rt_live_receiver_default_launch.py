@@ -53,11 +53,14 @@ def test_bitflyer_provider_connection_maps_board_and_execution_messages(monkeypa
 def test_default_launch_script_sets_warroom_push_widget_endpoint() -> None:
     launch = LAUNCH.read_text(encoding="utf-8-sig")
     assert "WARROOM_PUSH_WIDGET_WS_URL" in launch
-    assert "bitflyer://FX_BTC_JPY" in launch
-    assert "WARROOM_PUSH_WIDGET_SOURCE" in launch
+    assert 'WARROOM_PUSH_WIDGET_WS_URL = "dhot://unified_market_state"' in launch
+    assert 'WARROOM_PUSH_WIDGET_SOURCE = "dhot_unified_market_state_provider"' in launch
     rt_text = RT.read_text(encoding="utf-8-sig")
     assert "class _BitflyerCollectorConnection" in rt_text
     assert "connect_and_stream_board" in rt_text
     assert "connect_and_stream_executions" in rt_text
     doc = DOC.read_text(encoding="utf-8-sig")
     assert "warroom_push_widget_realtime_observation_default=true" in doc
+    assert "warroom_push_widget_endpoint_default=dhot://unified_market_state" in doc
+    assert "warroom_push_widget_source_default=dhot_unified_market_state_provider" in doc
+    assert "extra_exchange_websocket_opened_by_default=false" in doc

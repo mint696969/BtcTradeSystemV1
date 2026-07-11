@@ -21,7 +21,8 @@ from btcts.apps.operator_ui.views.warroom_v2_page import build_warroom_v2_page_m
 
 def test_auto_refresh_packet_uses_fragment_not_page_reload() -> None:
     packet = build_cockpit_auto_refresh_packet({"ui_auto_refresh": True, "ui_refresh_interval": 3})
-    assert packet["transport_kind"] == "streamlit_fragment_refresh"
+    assert packet["transport_kind"] == "streamlit_section_fragment_refresh"
+    assert packet["section_fragment_refresh_enabled"] is True
     assert packet["fragment_refresh_enabled"] is True
     assert packet["page_reload_enabled"] is False
     assert "browser_timer_reload_enabled" not in packet
@@ -30,9 +31,12 @@ def test_auto_refresh_packet_uses_fragment_not_page_reload() -> None:
 
 def test_page_mounts_fragment_body_and_has_no_browser_reload() -> None:
     page = PAGE.read_text(encoding="utf-8-sig")
-    assert "_render_warroom_v2_cockpit_fragment" in page
+    assert "def _render_section_fragment(" in page
     assert "getattr(st, \"fragment\", None)" in page
     assert "@fragment(run_every=run_every)" in page
+    assert page.count("_render_section_fragment(") >= 8
+    assert "_render_chart_and_gpt_copy(_build_cockpit_snapshot())" in page
+    assert "Do not fragment-refresh this section" in page
     assert "window.parent.location.reload" not in page
     auto = AUTO.read_text(encoding="utf-8-sig")
     assert "window.parent.location.reload" not in auto

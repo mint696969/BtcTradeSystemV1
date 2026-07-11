@@ -118,7 +118,7 @@ def test_q28b_render_function_stores_real_preview_packet_and_outputs_cards(monke
     packet = fake_st.session_state["warroom_market_regime_card_renderer"]
     assert packet["preview_cards_used"] is True
     assert packet["sample_data_only"] is False
-    assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27z.v1"
+    assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27z.v3"
     assert packet["dry_run_version"] is not None
     assert packet["card_count"] == 8
     by_horizon = {card["horizon"]: card for card in packet["cards"]}

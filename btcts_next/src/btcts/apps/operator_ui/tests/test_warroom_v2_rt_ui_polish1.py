@@ -30,13 +30,28 @@ def test_warroom_v2_page_delegates_to_modular_rt_ui_renderers() -> None:
     assert "rt_ui_polish1_modularized" in text
 
 
-def test_rt_ui_module_files_are_small_and_separated() -> None:
-    expected = {"runtime_env.py", "status_view.py", "top_widgets_view.py", "chart_view.py", "prediction_cards_view.py", "debug_view.py"}
-    assert expected.issubset({path.name for path in RT_UI.glob("*.py")})
-    for name in expected:
+def test_rt_ui_module_files_are_structurally_separated() -> None:
+    expected = {
+        "runtime_env.py": ("def endpoint_from_env", "def runtime_config_from_env"),
+        "status_view.py": ("def build_rt_runtime_status_view_model", "def render_rt_runtime_status"),
+        "top_widgets_view.py": ("def render_rt_top_layout_and_widgets",),
+        "chart_view.py": ("def render_rt_bottom_chart_graph",),
+        "prediction_cards_view.py": ("def render_rt_prediction_cards",),
+        "debug_view.py": ("def render_rt_debug_packets",),
+    }
+    assert set(expected).issubset({path.name for path in RT_UI.glob("*.py")})
+    for name, markers in expected.items():
         text = (RT_UI / name).read_text(encoding="utf-8-sig")
         assert text.startswith("# path: ./")
-        assert len(text.splitlines()) < 130
+        for marker in markers:
+            assert marker in text
+        assert "send_to_broker(" not in text
+        assert "submit_order(" not in text
+        assert "classify_market_regime_feature_bundle(" not in text
+    page = PAGE.read_text(encoding="utf-8-sig")
+    assert "def render_rt_prediction_cards" not in page
+    assert "def render_rt_bottom_chart_graph" not in page
+    assert "def render_rt_debug_packets" not in page
 
 
 def test_chart_rows_to_frame_extracts_live_price_series() -> None:

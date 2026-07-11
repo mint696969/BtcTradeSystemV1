@@ -38,5 +38,5 @@ def test_unified_stop_remains_available_when_only_chart_engine_is_active() -> No
     assert "disabled=(not stop_restart_target_active) or safe_stop_pending" in panel_text
     assert "disabled=(not stop_restart_target_active) or restart_pending or safe_stop_pending" in panel_text
     assert "chart_engine_snapshot = chart_engine_runtime_snapshot()" in page_text
-    assert 'linked_runtime_active=bool(chart_engine_snapshot.get("active"))' in page_text
-    assert 'linked_runtime_label="Chart Engine"' in page_text
+    assert 'linked_runtime_active=bool(chart_engine_snapshot.get("active") or market_regime_loop_snapshot.get("active"))' in page_text
+    assert 'linked_runtime_label="Chart Engine / MarketRegime"' in page_text
