@@ -194,8 +194,11 @@ def build_market_regime_future_shadow_execution_boundary(
         "decision": "approved_shadow_write_boundary_satisfied" if write_allowed else "no_write",
         "execution_performed": False,
         "approval_id": operator_approval.approval_id if operator_approval else "",
+        "approval_requested_at": operator_approval.requested_at if operator_approval else "",
+        "approval_expires_at": operator_approval.expires_at if operator_approval else "",
         "evaluated_at": evaluated_at,
         "writer_id": writer_design.writer_id if writer_design else "",
+        "writer_contract_version": writer_design.writer_contract_version if writer_design else "",
         "safety": MappingProxyType({
             "pure_boundary_check": True,
             "runtime_reader_invoked": False,
