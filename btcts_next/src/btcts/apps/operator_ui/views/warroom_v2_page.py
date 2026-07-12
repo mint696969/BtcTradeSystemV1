@@ -12,6 +12,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.push_widgets.rt_live_receiver_
     WARROOM_RT_LIVE_ENDPOINT_STATE_KEY,
     WARROOM_RT_LIVE_RECEIVER_BRIDGE_SESSION_STATE_KEY,
     WARROOM_RT_LIVE_RUNTIME_STATUS_STATE_KEY,
+    WARROOM_RT_LIVE_WIDGET_STORE_STATE_KEY,
     apply_warroom_push_widget_rt_live_receiver_bridge_to_session_state,
     ensure_warroom_push_widget_live_observation_runtime,
 )
@@ -28,6 +29,7 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.debug_view import render
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.inference_guidance_view import build_inference_guidance_packet, render_inference_guidance
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.live_packets import select_or_build_rt_display_packets
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_strip_view import build_market_strip_packet, render_market_strip
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_regime_read_model_source import select_market_regime_read_model_source
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.prediction_cards_view import render_rt_prediction_cards
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.runtime_env import endpoint_from_env, runtime_config_from_env
 from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.status_view import build_rt_runtime_status_view_model, render_rt_runtime_diagnostics, render_rt_runtime_status
@@ -69,9 +71,32 @@ def _refresh_warroom_v2_rt_live_observation() -> tuple[dict[str, Any], dict[str,
     return runtime_status, bridge_packet
 
 
+def _attach_market_regime_selected_source(
+    display_packets: Mapping[str, Mapping[str, Any]],
+    widget_store: Mapping[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    packets = {key: dict(value) for key, value in display_packets.items()}
+    source_packet = select_market_regime_read_model_source(push_state=widget_store)
+    if source_packet.get("selected_source") != "push":
+        return packets
+    cards = dict(packets.get("cards") or {})
+    cards["market_regime_source_packet"] = source_packet
+    cards["market_regime_source_attached"] = True
+    cards["market_regime_selected_source"] = "push"
+    cards["market_regime_prediction_generated_at"] = str(source_packet.get("prediction_generated_at") or "")
+    cards["market_regime_transport_received_at_ms"] = int(source_packet.get("transport_received_at_ms") or 0)
+    packets["cards"] = cards
+    return packets
+
+
 def _build_cockpit_snapshot() -> dict[str, Any]:
     runtime_status, bridge_packet = _refresh_warroom_v2_rt_live_observation()
     display_packets = select_or_build_rt_display_packets(st.session_state, bridge_packet)
+    widget_store = st.session_state.get(WARROOM_RT_LIVE_WIDGET_STORE_STATE_KEY)
+    display_packets = _attach_market_regime_selected_source(
+        display_packets,
+        widget_store if isinstance(widget_store, Mapping) else None,
+    )
     display_source = str(display_packets["source"]["display_source"])
     page_packet = build_warroom_v2_page_mount_packet(runtime_status=runtime_status, bridge_packet=bridge_packet, display_source=display_source)
     market_packet = build_market_strip_packet(display_packets["widgets"])

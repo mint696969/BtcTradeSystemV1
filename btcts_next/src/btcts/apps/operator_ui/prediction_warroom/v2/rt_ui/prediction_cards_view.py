@@ -17,6 +17,9 @@ from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_regime_explanatio
     MARKET_REGIME_EXPLANATION_ADAPTER_VERSION,
     build_market_regime_explanation_packet,
 )
+from btcts.apps.operator_ui.prediction_warroom.v2.rt_ui.market_regime_selected_read_model_bridge import (
+    build_market_regime_selected_read_model_bridge,
+)
 
 ENTRY_GATE_VERSION = "warroom_v2_rt_entry_gate.2026_07_05.v1"
 RT_MARKET_REGIME_CARD_BRIDGE_VERSION = "warroom_v2_rt_market_regime_card_bridge.2026_07_08.v2_artifact_read_model_only"
@@ -759,13 +762,24 @@ def _render_market_regime_explanation(explanation_packet: Mapping[str, Any], st_
 
 def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[str, Any]:
     _render_prediction_boundary(packet, st_api)
+    source_packet = packet.get("market_regime_source_packet") if isinstance(packet.get("market_regime_source_packet"), Mapping) else {}
+    selected_bridge_packet = build_market_regime_selected_read_model_bridge(source_packet)
+    selected_read_model_used = bool(selected_bridge_packet.get("ok"))
     parent_scenario_guidance_packet = _read_parent_scenario_guidance_read_model_artifact()
     parent_scenario_guidance_packet = _render_parent_scenario_guidance_status(parent_scenario_guidance_packet, st_api)
     artifact_packet = _read_market_regime_latest_cards_artifact()
     calibration_packet = _read_market_regime_calibration_read_model_artifact()
     parameter_set_comparison_packet = _read_market_regime_parameter_set_comparison_read_model_artifact()
-    explanation_packet = build_market_regime_explanation_packet(_market_regime_cards_artifact_root())
-    artifact_cards = artifact_packet.get("cards") if artifact_packet.get("artifact_cards_used") else None
+    explanation_packet = (
+        dict(selected_bridge_packet.get("explanation_packet") or {})
+        if selected_read_model_used
+        else build_market_regime_explanation_packet(_market_regime_cards_artifact_root())
+    )
+    artifact_cards = (
+        list(selected_bridge_packet.get("cards") or [])
+        if selected_read_model_used
+        else (artifact_packet.get("cards") if artifact_packet.get("artifact_cards_used") else None)
+    )
     artifact_cards, calibration_detail_enriched = _enrich_market_regime_cards_with_calibration_detail(
         artifact_cards if isinstance(artifact_cards, list) else None,
         calibration_packet,
@@ -775,7 +789,11 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
     )
     market_regime_packet = dict(market_regime_packet_raw) if isinstance(market_regime_packet_raw, Mapping) else {}
     market_regime_packet.update({
-        "artifact_read_model_only": True,
+        "artifact_read_model_only": not selected_read_model_used,
+        "selected_read_model_used": selected_read_model_used,
+        "selected_source": str(selected_bridge_packet.get("selected_source") or "unavailable"),
+        "selected_prediction_generated_at": str(selected_bridge_packet.get("prediction_generated_at") or ""),
+        "selected_transport_received_at_ms": int(selected_bridge_packet.get("transport_received_at_ms") or 0),
         "artifact_read_attempted": bool(artifact_packet.get("read_attempted")),
         "artifact_relative_path": str(artifact_packet.get("artifact_relative_path") or ""),
         "artifact_path": str(artifact_packet.get("artifact_path") or ""),
@@ -812,7 +830,11 @@ def render_rt_prediction_cards(packet: Mapping[str, Any], st_api: Any) -> dict[s
         "market_regime_card_shell_rendered": True,
         "market_regime_renderer_packet_available": bool(market_regime_summary["packet_available"]),
         "market_regime_preview_cards_used": False,
-        "market_regime_artifact_read_model_only": True,
+        "market_regime_artifact_read_model_only": not selected_read_model_used,
+        "market_regime_selected_read_model_used": selected_read_model_used,
+        "market_regime_selected_source": str(selected_bridge_packet.get("selected_source") or "unavailable"),
+        "market_regime_selected_prediction_generated_at": str(selected_bridge_packet.get("prediction_generated_at") or ""),
+        "market_regime_selected_transport_received_at_ms": int(selected_bridge_packet.get("transport_received_at_ms") or 0),
         "market_regime_artifact_cards_used": bool(market_regime_summary["artifact_cards_used"]),
         "market_regime_artifact_path": str(market_regime_summary["artifact_path"]),
         "market_regime_artifact_read_error": str(market_regime_summary["artifact_read_error"]),
