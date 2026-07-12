@@ -15,6 +15,7 @@ from btcts.prediction.market_regime.feature_scoring import (  # noqa: E402
     CANDIDATE_NAMES,
     score_market_regime_candidates,
     summarize_market_regime_candidate_scores,
+    build_market_regime_shadow_label_recommendation,
 )
 from btcts.prediction.market_regime.features import FeatureSignal, MarketRegimeFeatureBundle  # noqa: E402
 from btcts.prediction.market_regime.parameter_set import build_default_market_regime_parameter_set  # noqa: E402
@@ -174,3 +175,120 @@ def test_mr_f3_observed_top_survives_when_no_candidate_is_label_eligible() -> No
     assert summary["eligible_top_candidate_score"] is None
     assert summary["eligible_score_margin"] is None
     assert summary["scoring_ready_for_label_selection"] is False
+
+
+def test_mr_f3_shadow_recommendation_maps_range_and_never_applies() -> None:
+    bundle = _bundle()
+    packet = score_market_regime_candidates(bundle)
+    summary = summarize_market_regime_candidate_scores(packet)
+    recommendation = build_market_regime_shadow_label_recommendation(
+        bundle, summary, selected_label="RANGE"
+    )
+    assert recommendation["shadow_recommended_regime_code"] in {
+        "RANGE", "UP_TREND", "DOWN_TREND", "LOW_VOL_COMPRESSION",
+        "HIGH_VOL_CHOP", "BREAKOUT", "REVERSAL_WATCH", "PANIC_SPIKE", "UNKNOWN",
+    }
+    assert recommendation["shadow_recommendation_enabled"] is False
+    assert recommendation["shadow_recommendation_applied_to_selected_label"] is False
+    assert recommendation["would_send_to_broker"] is False
+
+
+def test_mr_f3_trend_shadow_recommendation_uses_net_change_sign() -> None:
+    bundle = _bundle()
+    summary = {
+        "eligible_top_candidate": "trend_score",
+        "eligible_top_candidate_score": 0.8,
+        "scoring_ready_for_label_selection": True,
+    }
+    recommendation = build_market_regime_shadow_label_recommendation(
+        bundle, summary, selected_label="RANGE"
+    )
+    assert recommendation["shadow_recommended_regime_code"] == "UP_TREND"
+    assert recommendation["shadow_recommendation_direction_basis"] == "current_l4_candle_net_change_sign"
+    assert recommendation["shadow_recommendation_agrees_with_selected_label"] is False
+
+def test_mr_f3_observed_top_ineligible_blocks_shadow_readiness() -> None:
+    bundle = _bundle(include_orderflow=False)
+    signals = tuple(
+        signal for signal in bundle.signals
+        if signal.feature_group is not FeatureGroup.CROSS_VENUE
+        and signal.name != "liquidity_replenishment_score"
+    )
+    packet = score_market_regime_candidates(
+        MarketRegimeFeatureBundle(
+            generated_at=bundle.generated_at,
+            signals=signals,
+            coverage=bundle.coverage,
+            source_snapshot_ok=True,
+        )
+    )
+    forced_scores = {
+        "compression_score": 0.90,
+        "range_score": 0.80,
+        "trend_score": 0.60,
+        "high_vol_chop_score": 0.50,
+        "breakout_score": 0.40,
+        "reversal_score": 0.30,
+        "panic_score": 0.20,
+    }
+    for candidate, score in forced_scores.items():
+        packet["candidate_scores"][candidate]["score"] = score
+    summary = summarize_market_regime_candidate_scores(packet)
+    assert summary["top_candidate"] == "compression_score"
+    assert summary["eligible_top_candidate"] == "range_score"
+    assert summary["observed_top_candidate_is_label_selection_eligible"] is False
+    assert summary["scoring_ready_for_label_selection"] is False
+    assert (
+        "observed_top_candidate_not_label_selection_eligible"
+        in summary["label_selection_readiness_blockers"]
+    )
+    recommendation = build_market_regime_shadow_label_recommendation(
+        bundle, summary, selected_label="LOW_VOL_COMPRESSION"
+    )
+    assert recommendation["shadow_recommended_regime_code"] == "UNKNOWN"
+    assert recommendation["shadow_recommendation_ready"] is False
+    assert recommendation["shadow_recommendation_applied_to_selected_label"] is False
+
+def test_mr_f3_narrow_observed_margin_blocks_shadow_readiness() -> None:
+    bundle = _bundle(include_orderflow=False)
+    signals = tuple(
+        signal for signal in bundle.signals
+        if signal.feature_group is not FeatureGroup.CROSS_VENUE
+        and signal.name != "liquidity_replenishment_score"
+    )
+    packet = score_market_regime_candidates(
+        MarketRegimeFeatureBundle(
+            generated_at=bundle.generated_at,
+            signals=signals,
+            coverage=bundle.coverage,
+            source_snapshot_ok=True,
+        )
+    )
+    forced_scores = {
+        "range_score": 0.80,
+        "compression_score": 0.79,
+        "trend_score": 0.60,
+        "high_vol_chop_score": 0.50,
+        "breakout_score": 0.40,
+        "reversal_score": 0.30,
+        "panic_score": 0.20,
+    }
+    for candidate, score in forced_scores.items():
+        packet["candidate_scores"][candidate]["score"] = score
+    summary = summarize_market_regime_candidate_scores(packet)
+    assert summary["top_candidate"] == "range_score"
+    assert summary["eligible_top_candidate"] == "range_score"
+    assert summary["score_margin"] == 0.01
+    assert summary["eligible_score_margin"] >= 0.08
+    assert summary["observed_top_candidate_is_label_selection_eligible"] is True
+    assert summary["scoring_ready_for_label_selection"] is False
+    assert (
+        "observed_score_margin_below_minimum"
+        in summary["label_selection_readiness_blockers"]
+    )
+    recommendation = build_market_regime_shadow_label_recommendation(
+        bundle, summary, selected_label="LOW_VOL_COMPRESSION"
+    )
+    assert recommendation["shadow_recommended_regime_code"] == "UNKNOWN"
+    assert recommendation["shadow_recommendation_ready"] is False
+    assert recommendation["shadow_recommendation_applied_to_selected_label"] is False

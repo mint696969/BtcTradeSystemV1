@@ -156,6 +156,9 @@ def test_current_estimator_uses_current_l4_and_never_future_forecast_label() -> 
     assert isinstance(packet["label_selection_ineligible_candidates"], dict)
     assert isinstance(packet["label_selection_readiness_blockers"], list)
     assert packet["scoring_label_selection_enabled"] is False
+    assert "shadow_recommended_regime_code" in packet
+    assert packet["shadow_recommendation_enabled"] is False
+    assert packet["shadow_recommendation_applied_to_selected_label"] is False
     assert packet["scoring_label_selection_deferred_reason"] == "mr_f3_observe_before_cutover"
     assert isinstance(packet["scoring_readiness_thresholds"]["required_feature_groups"], list)
     assert packet["would_send_to_broker"] is False

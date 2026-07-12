@@ -10,6 +10,7 @@ from .contracts import FeatureGroup
 from .features import MarketRegimeFeatureBundle
 from .current_state_persistence import build_persisted_current_state
 from .feature_scoring import (
+    build_market_regime_shadow_label_recommendation,
     score_market_regime_candidates,
     summarize_market_regime_candidate_scores,
 )
@@ -157,6 +158,11 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
     }
     candidate_scoring = score_market_regime_candidates(bundle)
     candidate_summary = summarize_market_regime_candidate_scores(candidate_scoring)
+    shadow_recommendation = build_market_regime_shadow_label_recommendation(
+        bundle,
+        candidate_summary,
+        selected_label=label if usable else "UNKNOWN",
+    )
     persistence = build_persisted_current_state(
         previous=previous_state,
         regime_code=label if usable else "UNKNOWN",
@@ -212,6 +218,15 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
         "scoring_label_selection_enabled": candidate_summary.get("label_selection_enabled", False),
         "scoring_label_selection_deferred_reason": candidate_summary.get("label_selection_deferred_reason", ""),
         "scoring_readiness_thresholds": candidate_summary.get("readiness_thresholds", {}),
+        "shadow_recommended_regime_code": shadow_recommendation.get("shadow_recommended_regime_code", "UNKNOWN"),
+        "shadow_recommendation_candidate": shadow_recommendation.get("shadow_recommendation_candidate", ""),
+        "shadow_recommendation_candidate_score": shadow_recommendation.get("shadow_recommendation_candidate_score"),
+        "shadow_recommendation_ready": shadow_recommendation.get("shadow_recommendation_ready", False),
+        "shadow_recommendation_direction_basis": shadow_recommendation.get("shadow_recommendation_direction_basis", ""),
+        "shadow_recommendation_agrees_with_selected_label": shadow_recommendation.get("shadow_recommendation_agrees_with_selected_label", False),
+        "shadow_recommendation_mismatch_reason": shadow_recommendation.get("shadow_recommendation_mismatch_reason", ""),
+        "shadow_recommendation_enabled": shadow_recommendation.get("shadow_recommendation_enabled", False),
+        "shadow_recommendation_applied_to_selected_label": shadow_recommendation.get("shadow_recommendation_applied_to_selected_label", False),
         "current_state_outcome_rule_version": "market_regime_current_state_outcome_rule.mr_f2.v1",
         "current_state_outcome_rule_defined": True,
         "current_state_outcome_rule_gap": "",

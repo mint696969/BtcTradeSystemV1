@@ -169,6 +169,57 @@ def _group_supports(bundle: MarketRegimeFeatureBundle, thresholds: Mapping[str, 
     }
 
 
+def build_market_regime_shadow_label_recommendation(
+    bundle: MarketRegimeFeatureBundle,
+    summary: Mapping[str, Any],
+    *,
+    selected_label: str | None = None,
+) -> dict[str, Any]:
+    candidate = str(summary.get("eligible_top_candidate") or "")
+    candidate_score = summary.get("eligible_top_candidate_score")
+    ready = bool(summary.get("scoring_ready_for_label_selection"))
+    net_change = _number(bundle, FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_net_change_bps")
+    mapping = {
+        "range_score": "RANGE",
+        "compression_score": "LOW_VOL_COMPRESSION",
+        "high_vol_chop_score": "HIGH_VOL_CHOP",
+        "breakout_score": "BREAKOUT",
+        "reversal_score": "REVERSAL_WATCH",
+        "panic_score": "PANIC_SPIKE",
+    }
+    recommendation = mapping.get(candidate, "UNKNOWN")
+    direction_basis = "candidate_mapping"
+    if candidate == "trend_score":
+        if net_change is None or net_change == 0:
+            recommendation = "UNKNOWN"
+            direction_basis = "trend_direction_missing"
+        else:
+            recommendation = "UP_TREND" if net_change > 0 else "DOWN_TREND"
+            direction_basis = "current_l4_candle_net_change_sign"
+    if not ready:
+        recommendation = "UNKNOWN"
+    selected = str(selected_label or "UNKNOWN").upper()
+    agreement = recommendation != "UNKNOWN" and selected == recommendation
+    mismatch_reason = ""
+    if recommendation == "UNKNOWN":
+        mismatch_reason = "shadow_recommendation_unavailable"
+    elif not agreement:
+        mismatch_reason = "shadow_recommendation_differs_from_selected_label"
+    return {
+        "shadow_recommended_regime_code": recommendation,
+        "shadow_recommendation_candidate": candidate,
+        "shadow_recommendation_candidate_score": candidate_score,
+        "shadow_recommendation_ready": ready,
+        "shadow_recommendation_direction_basis": direction_basis,
+        "shadow_recommendation_selected_label": selected,
+        "shadow_recommendation_agrees_with_selected_label": agreement,
+        "shadow_recommendation_mismatch_reason": mismatch_reason,
+        "shadow_recommendation_enabled": False,
+        "shadow_recommendation_applied_to_selected_label": False,
+        "would_send_to_broker": False,
+    }
+
+
 def summarize_market_regime_candidate_scores(
     packet: Mapping[str, Any],
     *,
@@ -226,6 +277,12 @@ def summarize_market_regime_candidate_scores(
     readiness_blockers = list(blockers)
     if not eligible_ranked:
         readiness_blockers.append("no_label_selection_eligible_candidate")
+    if top_name and eligible_top_name and top_name != eligible_top_name:
+        readiness_blockers.append("observed_top_candidate_not_label_selection_eligible")
+    if margin is None:
+        readiness_blockers.append("observed_runner_up_missing")
+    elif margin < min_margin:
+        readiness_blockers.append("observed_score_margin_below_minimum")
     if eligible_top_score is not None and eligible_top_score < min_score:
         readiness_blockers.append("top_score_below_minimum")
     if eligible_margin is None:
@@ -255,6 +312,9 @@ def summarize_market_regime_candidate_scores(
         "label_selection_readiness_blockers": readiness_blockers,
         "label_selection_ineligible_candidates": ineligible_candidates,
         "label_selection_eligible_candidates": [name for name, _, _ in eligible_ranked],
+        "observed_top_candidate_is_label_selection_eligible": bool(
+            top_name and eligible_top_name and top_name == eligible_top_name
+        ),
         "scoring_ready_for_label_selection": ready,
         "label_selection_enabled": False,
         "label_selection_deferred_reason": "mr_f3_observe_before_cutover",
@@ -262,6 +322,8 @@ def summarize_market_regime_candidate_scores(
             "min_available_weight": min_weight,
             "min_top_score": min_score,
             "min_margin": min_margin,
+            "observed_min_margin": min_margin,
+            "eligible_min_margin": min_margin,
             "required_feature_groups": list(required_groups),
         },
     }
