@@ -640,4 +640,9 @@ def test_mr_f3_current_diagnostic_surfaces_observed_and_eligible_rankings(tmp_pa
     assert "current_state_shadow_recommended_regime_code" in diagnostic
     assert diagnostic["current_state_shadow_recommendation_enabled"] is False
     assert diagnostic["current_state_shadow_recommendation_applied_to_selected_label"] is False
+    assert "current_state_shadow_transition_policy_version" in diagnostic
+    assert "current_state_shadow_transition_decision" in diagnostic
+    assert isinstance(diagnostic["current_state_shadow_transition_blockers"], list)
+    assert diagnostic["current_state_shadow_transition_observation_only"] is True
+    assert diagnostic["current_state_shadow_transition_applied_to_selected_label"] is False
     assert diagnostic["future_forecast_label_used_for_current"] is False

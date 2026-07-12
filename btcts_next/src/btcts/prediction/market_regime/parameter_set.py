@@ -43,6 +43,28 @@ class MarketRegimeParameterSet:
             "directional_abs_net_range_ratio_min": 0.45,
             "low_vol_range_bps_max": 20.0,
         },
+        # MR-F4_TRANSITION_AND_PERSISTENCE_POLICY_2026_07_12
+        "transition_and_persistence": {
+            "minimum_dwell_sec": 300,
+            "hysteresis_margin_min": 0.10,
+            "change_point_override_min": 0.80,
+            "transition_penalty": 0.12,
+            "allowed_transitions": {
+                "UNKNOWN": [
+                    "RANGE", "LOW_VOL_COMPRESSION", "UP_TREND", "DOWN_TREND",
+                    "HIGH_VOL_CHOP", "BREAKOUT", "REVERSAL_WATCH", "PANIC_SPIKE",
+                ],
+                "RANGE": ["RANGE", "LOW_VOL_COMPRESSION", "BREAKOUT", "HIGH_VOL_CHOP"],
+                "LOW_VOL_COMPRESSION": ["LOW_VOL_COMPRESSION", "RANGE", "BREAKOUT"],
+                "BREAKOUT": ["BREAKOUT", "UP_TREND", "DOWN_TREND", "HIGH_VOL_CHOP", "RANGE"],
+                "UP_TREND": ["UP_TREND", "REVERSAL_WATCH", "HIGH_VOL_CHOP", "RANGE"],
+                "DOWN_TREND": ["DOWN_TREND", "REVERSAL_WATCH", "HIGH_VOL_CHOP", "RANGE"],
+                "REVERSAL_WATCH": ["REVERSAL_WATCH", "RANGE", "UP_TREND", "DOWN_TREND", "HIGH_VOL_CHOP"],
+                "HIGH_VOL_CHOP": ["HIGH_VOL_CHOP", "RANGE", "UP_TREND", "DOWN_TREND", "PANIC_SPIKE"],
+                "PANIC_SPIKE": ["PANIC_SPIKE", "HIGH_VOL_CHOP", "RANGE"],
+            },
+            "observation_only": True,
+        },
         # MR-F3_EXPLAINABLE_CANDIDATE_SCORING_2026_07_12
         "explainable_candidate_scoring": {
             "volatility_reference_bps": 20.0,

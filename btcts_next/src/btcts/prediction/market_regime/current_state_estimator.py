@@ -14,6 +14,8 @@ from .feature_scoring import (
     score_market_regime_candidates,
     summarize_market_regime_candidate_scores,
 )
+from .parameter_set import build_default_market_regime_parameter_set
+from .transition_policy import evaluate_market_regime_transition
 
 CURRENT_STATE_ESTIMATOR_VERSION = "prediction.market_regime.current_state_estimator.mr_f2.v1"
 
@@ -50,6 +52,12 @@ def _window_age_sec(started_at: str, cutoff: str) -> int | None:
     if start is None or end is None or end < start:
         return None
     return int((end - start).total_seconds())
+
+
+def _previous_state_age_sec(previous_state: Mapping[str, Any] | None, observed_at: str) -> int | None:
+    previous = dict(previous_state or {})
+    started_at = str(previous.get("state_started_at") or "")
+    return _window_age_sec(started_at, observed_at)
 
 
 def _as_float(value: Any, default: float = 0.0) -> float:
@@ -163,10 +171,22 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
         candidate_summary,
         selected_label=label if usable else "UNKNOWN",
     )
+    observation_time = str(observed_at or bundle.generated_at)
+    shadow_transition = evaluate_market_regime_transition(
+        previous_regime=str(dict(previous_state or {}).get("regime_code") or "UNKNOWN"),
+        candidate_regime=str(
+            shadow_recommendation.get("shadow_recommended_regime_code") or "UNKNOWN"
+        ),
+        previous_state_age_sec=_previous_state_age_sec(previous_state, observation_time),
+        candidate_score=candidate_summary.get("eligible_top_candidate_score"),
+        runner_up_score=candidate_summary.get("eligible_runner_up_score"),
+        change_point_evidence_score=change_point_evidence_score if usable else 0.0,
+        parameter_set=build_default_market_regime_parameter_set(),
+    )
     persistence = build_persisted_current_state(
         previous=previous_state,
         regime_code=label if usable else "UNKNOWN",
-        observed_at=str(observed_at or bundle.generated_at),
+        observed_at=observation_time,
         estimator_version=CURRENT_STATE_ESTIMATOR_VERSION,
         source_cutoff_time=cutoff,
     )
@@ -227,6 +247,22 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
         "shadow_recommendation_mismatch_reason": shadow_recommendation.get("shadow_recommendation_mismatch_reason", ""),
         "shadow_recommendation_enabled": shadow_recommendation.get("shadow_recommendation_enabled", False),
         "shadow_recommendation_applied_to_selected_label": shadow_recommendation.get("shadow_recommendation_applied_to_selected_label", False),
+        "shadow_transition_policy_version": shadow_transition.get("logic_version", ""),
+        "shadow_transition_previous_regime": shadow_transition.get("previous_regime", "UNKNOWN"),
+        "shadow_transition_candidate_regime": shadow_transition.get("candidate_regime", "UNKNOWN"),
+        "shadow_transition_accepted_regime": shadow_transition.get("accepted_regime", "UNKNOWN"),
+        "shadow_transition_decision": shadow_transition.get("decision", "unknown"),
+        "shadow_transition_blockers": shadow_transition.get("blockers", []),
+        "shadow_transition_allowed": shadow_transition.get("transition_allowed", False),
+        "shadow_transition_dwell_satisfied": shadow_transition.get("dwell_satisfied", False),
+        "shadow_transition_hysteresis_satisfied": shadow_transition.get("hysteresis_satisfied", False),
+        "shadow_transition_change_point_override_applied": shadow_transition.get("change_point_override_applied", False),
+        "shadow_transition_candidate_margin": shadow_transition.get("candidate_margin"),
+        "shadow_transition_penalty": shadow_transition.get("transition_penalty"),
+        "shadow_persistence_probability": shadow_transition.get("persistence_probability"),
+        "shadow_persistence_probability_calibrated": shadow_transition.get("persistence_probability_calibrated", False),
+        "shadow_transition_observation_only": True,
+        "shadow_transition_applied_to_selected_label": False,
         "current_state_outcome_rule_version": "market_regime_current_state_outcome_rule.mr_f2.v1",
         "current_state_outcome_rule_defined": True,
         "current_state_outcome_rule_gap": "",

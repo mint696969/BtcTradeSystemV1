@@ -159,6 +159,12 @@ def test_current_estimator_uses_current_l4_and_never_future_forecast_label() -> 
     assert "shadow_recommended_regime_code" in packet
     assert packet["shadow_recommendation_enabled"] is False
     assert packet["shadow_recommendation_applied_to_selected_label"] is False
+    assert packet["shadow_transition_policy_version"] == "prediction.market_regime.transition_policy.mr_f4.v1"
+    assert packet["shadow_transition_previous_regime"] == "UNKNOWN"
+    assert packet["shadow_transition_observation_only"] is True
+    assert packet["shadow_transition_applied_to_selected_label"] is False
+    assert packet["shadow_persistence_probability_calibrated"] is False
+    assert 0.0 <= packet["shadow_persistence_probability"] <= 1.0
     assert packet["scoring_label_selection_deferred_reason"] == "mr_f3_observe_before_cutover"
     assert isinstance(packet["scoring_readiness_thresholds"]["required_feature_groups"], list)
     assert packet["would_send_to_broker"] is False
@@ -185,3 +191,26 @@ def test_current_estimator_fails_closed_when_current_evidence_is_not_live() -> N
     assert packet["transition_candidate"] is False
     assert packet["supporting_evidence"] == {}
     assert packet["future_forecast_label_used"] is False
+
+def test_mr_f4_shadow_transition_holds_previous_state_when_recommendation_unknown() -> None:
+    packet = estimate_current_market_regime(
+        _bundle(
+            current_enough=True,
+            hint="RANGE",
+            cutoff="2026-07-12T00:10:00Z",
+        ),
+        previous_state={
+            "regime_code": "RANGE",
+            "state_started_at": "2026-07-12T00:00:00Z",
+        },
+        observed_at="2026-07-12T00:10:01Z",
+    )
+    assert packet["regime_label"] == "RANGE"
+    assert packet["shadow_transition_previous_regime"] == "RANGE"
+    assert packet["shadow_transition_candidate_regime"] in {
+        "UNKNOWN", "RANGE", "LOW_VOL_COMPRESSION", "UP_TREND", "DOWN_TREND",
+        "HIGH_VOL_CHOP", "BREAKOUT", "REVERSAL_WATCH", "PANIC_SPIKE",
+    }
+    assert packet["shadow_transition_observation_only"] is True
+    assert packet["shadow_transition_applied_to_selected_label"] is False
+    assert packet["label_source"] == "current_l4_candle_regime_hint"
