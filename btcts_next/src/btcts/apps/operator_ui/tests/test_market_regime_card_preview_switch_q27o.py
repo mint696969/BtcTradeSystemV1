@@ -96,9 +96,12 @@ def test_q27o_preview_switch_enabled_uses_explicit_tmp_root_cards(tmp_path: Path
     assert packet["explicit_source_root_read_performed"] is True
     assert packet["dry_run_invoked"] is True
     assert packet["card_count"] == 8
-    assert packet["cards"][0]["regime_code"] == "RANGE"
-    assert packet["cards"][0]["short_tag"] == "NO_DIRECTION"
-    assert packet["cards"][0]["confidence_percent"] >= 70
+    by_horizon = {card["horizon"]: card for card in packet["cards"]}
+    assert by_horizon["現在"]["regime_code"] == "UNKNOWN"
+    assert by_horizon["現在"]["confidence_percent"] == 15
+    assert by_horizon["24時間後"]["regime_code"] == "RANGE"
+    assert by_horizon["24時間後"]["short_tag"] == "NO_DIRECTION"
+    assert by_horizon["24時間後"]["confidence_percent"] >= 70
 
 
 def test_q27o_preview_switch_enabled_without_root_falls_back_to_sample() -> None:

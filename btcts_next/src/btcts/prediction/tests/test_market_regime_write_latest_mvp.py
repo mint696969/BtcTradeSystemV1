@@ -107,8 +107,32 @@ def test_cp5_build_artifact_set_without_filesystem_write(tmp_path: Path) -> None
     assert artifacts["run_id"] == "market_regime_test_run"
     assert artifacts["card_count"] == 8
     assert artifacts["latest_cards"]["horizon_count"] == 8
-    assert artifacts["latest_cards"]["cards"][0]["regime_label"] == "レンジ"
-    assert artifacts["latest_read_model"]["horizons"][0]["primary_regime"] == "RANGE"
+    cards_by_horizon = {
+        int(card["horizon_sec"]): card
+        for card in artifacts["latest_cards"]["cards"]
+    }
+    read_model_by_horizon = {
+        int(row["horizon_sec"]): row
+        for row in artifacts["latest_read_model"]["horizons"]
+    }
+
+    assert cards_by_horizon[0]["regime_label"] == "不明"
+    assert read_model_by_horizon[0]["primary_regime"] == "UNKNOWN"
+    assert (
+        read_model_by_horizon[0]["diagnostic_record"][
+            "label_selection_reason"
+        ]
+        == "current_state_estimator_unavailable"
+    )
+    assert (
+        read_model_by_horizon[0]["diagnostic_record"][
+            "future_forecast_label_used_for_current"
+        ]
+        is False
+    )
+
+    assert cards_by_horizon[300]["regime_label"] == "レンジ"
+    assert read_model_by_horizon[300]["primary_regime"] == "RANGE"
     assert artifacts["latest_cards"]["compact_summary"]["source_snapshot_ok"] is True
     assert artifacts["validation"]["ok"] is True
     assert not (tmp_path / "prediction/market_regime/latest_cards.json").exists()

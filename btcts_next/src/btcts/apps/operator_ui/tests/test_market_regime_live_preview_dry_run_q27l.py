@@ -65,9 +65,11 @@ def test_q27l_live_preview_dry_run_composes_full_pipeline_with_tmp_path(tmp_path
     assert packet["source_snapshot_ok"] is True
     assert packet["card_count"] == 8
     assert packet["horizons"] == ["現在", "5分後", "15分後", "30分後", "60分後", "6時間後", "12時間後", "24時間後"]
-    assert packet["cards"][0]["regime_code"] == "RANGE"
-    assert packet["cards"][0]["short_tag"] == "NO_NEW_ENTRY"
-    assert packet["cards"][0]["extra"]["would_send_to_broker"] is False
+    by_horizon = {card["horizon"]: card for card in packet["cards"]}
+    assert by_horizon["現在"]["regime_code"] == "UNKNOWN"
+    assert by_horizon["5分後"]["regime_code"] == "RANGE"
+    assert by_horizon["5分後"]["short_tag"] == "NO_NEW_ENTRY"
+    assert by_horizon["現在"]["extra"]["would_send_to_broker"] is False
 
 
 def test_q27l_stage_versions_and_flags_show_dry_run_only(tmp_path: Path) -> None:
@@ -84,7 +86,9 @@ def test_q27l_stage_versions_and_flags_show_dry_run_only(tmp_path: Path) -> None
     assert packet["warroom_page_mounted"] is False
     assert packet["renderer_changed"] is False
     assert packet["live_data_connected"] is False
-    assert packet["cards"][0]["regime_code"] == "UP_TREND"
+    by_horizon = {card["horizon"]: card for card in packet["cards"]}
+    assert by_horizon["現在"]["regime_code"] == "UNKNOWN"
+    assert by_horizon["5分後"]["regime_code"] == "UP_TREND"
 
 
 def test_q27l_missing_sources_degrade_to_cards_without_exception(tmp_path: Path) -> None:

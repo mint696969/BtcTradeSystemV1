@@ -135,8 +135,8 @@ def test_q27q_preview_on_smoke_uses_explicit_tmp_root_read_only(tmp_path: Path) 
     _assert_card_spec_shape(packet)
     range_cards = [card for card in packet["cards"] if card["regime_code"] == "RANGE"]
     unknown_cards = [card for card in packet["cards"] if card["regime_code"] == "UNKNOWN"]
-    assert len(range_cards) == 2
-    assert len(unknown_cards) == 6
+    assert len(range_cards) == 1
+    assert len(unknown_cards) == 7
     assert {card["short_tag"] for card in range_cards} == {"NO_DIRECTION"}
     assert all(card["confidence_percent"] == 15 for card in unknown_cards)
     assert all(card["freshness_badge"] in {"STALE", "MISSING"} for card in unknown_cards)

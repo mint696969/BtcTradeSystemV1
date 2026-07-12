@@ -1,0 +1,193 @@
+# path: ./btcts_next/src/btcts/prediction/market_regime/current_state_estimator.py
+# desc: MR-F2 pure current-state estimator from current L4 candle signals only. No forecast-label reuse, reads, writes, UI, broker, scheduler, or AutoTrade.
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any, Mapping
+
+from .contracts import FeatureGroup
+from .features import MarketRegimeFeatureBundle
+from .current_state_persistence import build_persisted_current_state
+
+CURRENT_STATE_ESTIMATOR_VERSION = "prediction.market_regime.current_state_estimator.mr_f2.v1"
+
+
+def _signals(bundle: MarketRegimeFeatureBundle, group: FeatureGroup) -> Mapping[str, Any]:
+    return {signal.name: signal for signal in bundle.signals_by_group(group)}
+
+
+def _value(bundle: MarketRegimeFeatureBundle, group: FeatureGroup, name: str, default: Any = None) -> Any:
+    signal = _signals(bundle, group).get(name)
+    if signal is None or not signal.available:
+        return default
+    return signal.value
+
+
+def _parse_utc(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except Exception:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _window_age_sec(started_at: str, cutoff: str) -> int | None:
+    start = _parse_utc(started_at)
+    end = _parse_utc(cutoff)
+    if start is None or end is None or end < start:
+        return None
+    return int((end - start).total_seconds())
+
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def _change_point_evidence_score(*, net_bps: float, range_bps: float, close_position: float) -> float:
+    if range_bps <= 0:
+        return 0.0
+    directional_ratio = min(1.0, abs(net_bps) / range_bps)
+    edge_distance = min(1.0, abs(close_position - 0.5) * 2.0)
+    return round(min(1.0, 0.65 * directional_ratio + 0.35 * edge_distance), 4)
+
+
+def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previous_state: Mapping[str, Any] | None = None, observed_at: str | None = None) -> dict[str, Any]:
+    current_enough = bool(
+        _value(
+            bundle,
+            FeatureGroup.SOURCE_QUALITY,
+            "current_l4_candle_window_current_enough",
+            False,
+        )
+    )
+    label = str(
+        _value(
+            bundle,
+            FeatureGroup.PRICE_STRUCTURE,
+            "current_l4_candle_regime_hint",
+            "UNKNOWN",
+        )
+        or "UNKNOWN"
+    )
+    reason = str(
+        _value(
+            bundle,
+            FeatureGroup.PRICE_STRUCTURE,
+            "current_l4_candle_regime_reason",
+            "current_l4_candle_regime_reason_missing",
+        )
+        or "current_l4_candle_regime_reason_missing"
+    )
+    cutoff = str(
+        _value(
+            bundle,
+            FeatureGroup.SOURCE_QUALITY,
+            "current_l4_candle_window_generated_at",
+            "",
+        )
+        or ""
+    )
+    threshold_set_id = str(
+        _value(
+            bundle,
+            FeatureGroup.PRICE_STRUCTURE,
+            "current_l4_candle_threshold_set_id",
+            "",
+        )
+        or ""
+    )
+    state_window_started_at = str(
+        _value(
+            bundle,
+            FeatureGroup.PRICE_STRUCTURE,
+            "current_l4_candle_window_first_ts",
+            "",
+        )
+        or ""
+    )
+    net_bps = _as_float(
+        _value(bundle, FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_net_change_bps", 0.0)
+    )
+    range_bps = _as_float(
+        _value(bundle, FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_range_bps", 0.0)
+    )
+    close_position = _as_float(
+        _value(bundle, FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_close_position", 0.5),
+        0.5,
+    )
+    realized_volatility_bps = _as_float(
+        _value(bundle, FeatureGroup.VOLATILITY, "current_l4_candle_realized_volatility_bps", 0.0)
+    )
+    change_point_evidence_score = _change_point_evidence_score(
+        net_bps=net_bps,
+        range_bps=range_bps,
+        close_position=close_position,
+    )
+    transition_candidate = change_point_evidence_score >= 0.65
+    state_window_age_sec = _window_age_sec(state_window_started_at, cutoff)
+    usable = (
+        current_enough
+        and label != "UNKNOWN"
+        and bool(cutoff)
+        and bool(state_window_started_at)
+        and state_window_age_sec is not None
+    )
+    evidence = {
+        "net_change_bps": round(net_bps, 4),
+        "range_bps": round(range_bps, 4),
+        "close_position": round(close_position, 4),
+        "realized_volatility_bps": round(realized_volatility_bps, 4),
+        "threshold_set_id": threshold_set_id,
+        "source_refs": ["warroom_candles", "active_parameter_set"],
+    }
+    persistence = build_persisted_current_state(
+        previous=previous_state,
+        regime_code=label if usable else "UNKNOWN",
+        observed_at=str(observed_at or bundle.generated_at),
+        estimator_version=CURRENT_STATE_ESTIMATOR_VERSION,
+        source_cutoff_time=cutoff,
+    )
+    return {
+        "ok": usable,
+        "regime_label": label if usable else "UNKNOWN",
+        "selection_reason": "current_state_estimator" if usable else "current_state_estimator_unavailable",
+        "estimator_version": CURRENT_STATE_ESTIMATOR_VERSION,
+        "source_cutoff_time": cutoff,
+        "state_started_at": persistence.get("state_started_at", ""),
+        "state_age_sec": persistence.get("state_age_sec"),
+        "state_start_estimation_status": persistence.get("persistence_status", "unavailable"),
+        "state_transition_detected": persistence.get("transition_detected", False),
+        "previous_regime_code": persistence.get("previous_regime_code", "UNKNOWN"),
+        "state_window_started_at": state_window_started_at if usable else "",
+        "state_window_age_sec": state_window_age_sec if usable else None,
+        "change_point_probability": None,
+        "change_point_probability_calibrated": False,
+        "change_point_evidence_score": change_point_evidence_score if usable else 0.0,
+        "transition_candidate": transition_candidate if usable else False,
+        "transition_candidate_basis": "heuristic_change_point_evidence_score" if usable else "unavailable",
+        "threshold_set_id": threshold_set_id,
+        "evidence_reason": reason,
+        "supporting_evidence": evidence if usable else {},
+        "conflicting_evidence": [],
+        "current_state_outcome_rule_version": "market_regime_current_state_outcome_rule.mr_f2.v1",
+        "current_state_outcome_rule_defined": True,
+        "current_state_outcome_rule_gap": "",
+        "future_forecast_label_used": False,
+        "read_only": True,
+        "non_executing": True,
+        "prediction_artifact_write_allowed": False,
+        "broker_private_api_allowed": False,
+        "autotrade_trigger_allowed": False,
+        "would_send_to_broker": False,
+    }

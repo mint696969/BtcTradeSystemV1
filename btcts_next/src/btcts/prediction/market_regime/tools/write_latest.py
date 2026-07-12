@@ -31,6 +31,11 @@ from btcts.prediction.market_regime.artifact_projection import (
 )
 from btcts.prediction.market_regime.confidence_integration import build_market_regime_shadow_confidence_report
 from btcts.prediction.market_regime.currentness_gate import build_market_regime_currentness_gate_report
+from btcts.prediction.market_regime.current_state_persistence import (
+    CURRENT_STATE_RELPATH,
+    read_persisted_current_state,
+    write_persisted_current_state,
+)
 from btcts.prediction.market_regime.features import build_market_regime_feature_bundle
 from btcts.prediction.market_regime.signal_scoring import MARKET_REGIME_SIGNAL_SCORING_VERSION, score_market_regime_signals
 from btcts.prediction.market_regime.inference import MARKET_REGIME_CLASSIFIER_VERSION, classify_market_regime_feature_bundle
@@ -175,7 +180,12 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         raise ValueError(f"parameter-set registry validation failed: {parameter_set_registry_validation}")
     source_snapshot = build_market_regime_source_snapshot(root)
     feature_bundle = build_market_regime_feature_bundle(source_snapshot, generated_at=generated_at, parameter_set=active_parameter_set)
-    prediction_packet = classify_market_regime_feature_bundle(feature_bundle, generated_at=generated_at)
+    previous_current_state = read_persisted_current_state(root)
+    prediction_packet = classify_market_regime_feature_bundle(
+        feature_bundle,
+        generated_at=generated_at,
+        previous_current_state=previous_current_state,
+    )
     signal_score_report = score_market_regime_signals(feature_bundle)
     shadow_confidence_by_horizon = _build_shadow_confidence_by_horizon(
         prediction_packet=prediction_packet,
@@ -290,6 +300,7 @@ def build_market_regime_latest_artifact_set(*, hot_root: str | Path, generated_a
         "card_count": len(cards),
         "active_parameter_set_id": active_parameter_set.parameter_set_id,
         "shadow_confidence_by_horizon": shadow_confidence_by_horizon,
+        "current_state_snapshot": next((dict(row.diagnostic_record) for row in prediction_packet.predictions if int(row.horizon_sec) == 0), {}),
     }
 
 
@@ -431,6 +442,23 @@ def write_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated
     for relpath, payload in rel_payloads.items():
         _write_json_atomic(root / relpath, payload)
         written.append(relpath)
+    current_diag = artifacts.get("current_state_snapshot") if isinstance(artifacts.get("current_state_snapshot"), Mapping) else {}
+    current_state_payload = {
+        "schema_version": "prediction.market_regime.current_state_persistence.mr_f2.v1",
+        "regime_code": str(current_diag.get("selected_label") or "UNKNOWN"),
+        "observed_at": effective_generated_at,
+        "state_started_at": str(current_diag.get("current_state_started_at") or ""),
+        "state_age_sec": current_diag.get("current_state_age_sec"),
+        "transition_detected": bool(current_diag.get("current_state_transition_detected", False)),
+        "previous_regime_code": str(current_diag.get("current_state_previous_regime_code") or "UNKNOWN"),
+        "persistence_status": str(current_diag.get("current_state_start_estimation_status") or "unavailable"),
+        "estimator_version": str(current_diag.get("current_state_estimator_version") or ""),
+        "source_cutoff_time": str(current_diag.get("current_state_source_cutoff_time") or ""),
+        "read_only_sources": True,
+        "would_send_to_broker": False,
+    }
+    current_state_write = write_persisted_current_state(root, current_state_payload)
+    written.append(CURRENT_STATE_RELPATH)
     trace_append = append_market_regime_trace_row_once(root, artifacts["trace_row"])
     written.append(str(trace_append["trace_part_jsonl"]))
     written.append(str(trace_append["trace_part_meta_json"]))
@@ -479,6 +507,7 @@ def write_market_regime_latest_artifacts_once(*, hot_root: str | Path, generated
         "feature_bundle_available_signal_count": int(artifacts["feature_bundle_available_signal_count"]),
         "card_count": int(artifacts["card_count"]),
         "trace_ledger_append": trace_append,
+        "current_state_write": current_state_write,
         "parameter_set_comparison_refresh": parameter_set_comparison_refresh,
         "parameter_set_comparison_refresh_ok": bool(parameter_set_comparison_refresh.get("ok")),
         "parameter_set_comparison_refresh_skipped": bool(parameter_set_comparison_refresh.get("skipped")),

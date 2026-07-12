@@ -71,22 +71,30 @@ def test_q27j_classifier_emits_all_canonical_horizons(tmp_path: Path) -> None:
 
 def test_q27j_range_candidate_maps_to_range_with_no_new_entry_on_negative_spread(tmp_path: Path) -> None:
     packet = _packet(tmp_path, label="range_candidate", spread=-1479.0)
-    first = packet.predictions[0]
-    assert first.regime_code == MarketRegimeCode.RANGE
-    assert first.tactical_hint == TacticalHint.NO_NEW_ENTRY
-    assert first.evidence_quality.value in {"PARTIAL", "WEAK"}
-    assert "negative_spread_seen" in first.warnings
-    assert first.confidence_percent >= 50
-    assert first.safety.would_send_to_broker is False
+    by_horizon = {row.horizon_sec: row for row in packet.predictions}
+    current = by_horizon[0]
+    forecast = by_horizon[300]
+    assert current.regime_code == MarketRegimeCode.UNKNOWN
+    assert current.diagnostic_record["future_forecast_label_used_for_current"] is False
+    assert forecast.regime_code == MarketRegimeCode.RANGE
+    assert forecast.tactical_hint == TacticalHint.NO_NEW_ENTRY
+    assert forecast.evidence_quality.value in {"PARTIAL", "WEAK"}
+    assert "negative_spread_seen" in forecast.warnings
+    assert forecast.confidence_percent >= 50
+    assert forecast.safety.would_send_to_broker is False
 
 
 def test_q27j_trend_candidate_maps_to_up_trend_when_spread_safe(tmp_path: Path) -> None:
     packet = _packet(tmp_path, label="trend_candidate", spread=1200.0)
-    first = packet.predictions[0]
-    assert first.regime_code == MarketRegimeCode.UP_TREND
-    assert first.tactical_hint == TacticalHint.TREND_FOLLOW_WATCH
-    assert "negative_spread_seen" not in first.warnings
-    assert first.confidence_percent >= 60
+    by_horizon = {row.horizon_sec: row for row in packet.predictions}
+    current = by_horizon[0]
+    forecast = by_horizon[300]
+    assert current.regime_code == MarketRegimeCode.UNKNOWN
+    assert current.diagnostic_record["future_forecast_label_used_for_current"] is False
+    assert forecast.regime_code == MarketRegimeCode.UP_TREND
+    assert forecast.tactical_hint == TacticalHint.TREND_FOLLOW_WATCH
+    assert "negative_spread_seen" not in forecast.warnings
+    assert forecast.confidence_percent >= 60
 
 
 def test_q27j_missing_sources_degrade_to_unknown_without_exception(tmp_path: Path) -> None:
@@ -146,8 +154,9 @@ def test_q27w_classifier_uses_horizon_specific_forecast_labels(tmp_path: Path) -
 
     packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-01T17:25:03Z")
     by_horizon = {prediction.horizon_sec: prediction for prediction in packet.predictions}
-    assert by_horizon[0].regime_code == MarketRegimeCode.UP_TREND
-    assert by_horizon[0].diagnostic_record["label_selection_reason"] == "shortest_forecast_for_current"
+    assert by_horizon[0].regime_code == MarketRegimeCode.UNKNOWN
+    assert by_horizon[0].diagnostic_record["label_selection_reason"] == "current_state_estimator_unavailable"
+    assert by_horizon[0].diagnostic_record["future_forecast_label_used_for_current"] is False
     assert by_horizon[300].regime_code == MarketRegimeCode.UP_TREND
     assert by_horizon[300].diagnostic_record["selected_forecast_horizon_sec"] == 300
     assert by_horizon[900].regime_code == MarketRegimeCode.RANGE
@@ -211,7 +220,8 @@ def test_q27y_classifier_calibrates_confidence_from_selected_forecast_metrics(tm
     packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-01T17:35:03Z")
     by_horizon = {prediction.horizon_sec: prediction for prediction in packet.predictions}
     assert by_horizon[300].confidence_percent < by_horizon[900].confidence_percent
-    assert by_horizon[0].confidence_percent == by_horizon[300].confidence_percent
+    assert by_horizon[0].confidence_percent == 15
+    assert by_horizon[0].diagnostic_record["future_forecast_label_used_for_current"] is False
     assert by_horizon[300].diagnostic_record["selected_forecast_score"] == 0.2
     assert by_horizon[900].diagnostic_record["selected_signal_strength_percent"] == 85.0
     assert by_horizon[900].diagnostic_record["selected_reference_hit_rate_percent"] == 80.0
@@ -337,7 +347,8 @@ def test_mr_a1_stale_forecast_records_are_blocked_by_currentness_gate(tmp_path: 
     assert "forecast_records_stale" in first.warnings
     assert first.diagnostic_record["forecast_records_currentness_gate_applied"] is True
     assert first.diagnostic_record["selected_forecast_label"] == ""
-    assert first.diagnostic_record["label_selection_reason"] == "forecast_records_stale_blocked"
+    assert first.diagnostic_record["label_selection_reason"] == "current_state_estimator_unavailable"
+    assert first.diagnostic_record["future_forecast_label_used_for_current"] is False
     price = {signal.name: signal for signal in bundle.signals_by_group(FeatureGroup.PRICE_STRUCTURE)}
     # MR_A4_COVERAGE_IGNORES_THRESHOLD_METADATA_2026_07_09
     # Threshold metadata may be present without a live current-L4 candle window.
@@ -406,10 +417,11 @@ def test_mr_a2_stale_forecast_can_fallback_to_current_l4_candle_window(tmp_path:
     assert source_quality["current_l4_candle_window_current_enough"].value is True
     assert first.diagnostic_record["forecast_records_currentness_gate_applied"] is True
     assert first.diagnostic_record["current_l4_candle_window_current_enough"] is True
-    assert first.diagnostic_record["current_l4_candle_window_fallback_used"] is True
-    assert first.diagnostic_record["label_selection_reason"] == "current_l4_candle_window_fallback"
+    assert first.diagnostic_record["current_l4_candle_window_fallback_used"] is False
+    assert first.diagnostic_record["current_state_estimator_used"] is True
+    assert first.diagnostic_record["label_selection_reason"] == "current_state_estimator"
     assert first.diagnostic_record["selected_label"] == "UP_TREND"
-    assert first.diagnostic_record["selected_label_source"] == "current_l4_candle_window"
+    assert first.diagnostic_record["selected_label_source"] == "current_state_estimator"
     assert first.diagnostic_record["selected_forecast_label"] == ""
     assert first.diagnostic_record["selected_l4_candle_regime_hint"] == "UP_TREND"
     evidence = first.diagnostic_record["current_l4_candle_evidence"]
@@ -446,10 +458,12 @@ def test_mr_vs4_stale_forecast_and_stale_l4_ignore_negative_spread_for_regime(tm
     for prediction in packet.predictions:
         assert "negative_spread_seen" in prediction.warnings
         assert prediction.diagnostic_record["selected_label"] == ""
-        assert (
-            prediction.diagnostic_record["label_selection_reason"]
-            == "forecast_records_stale_blocked"
+        expected_reason = (
+            "current_state_estimator_unavailable"
+            if prediction.horizon_sec == 0
+            else "forecast_records_stale_blocked"
         )
+        assert prediction.diagnostic_record["label_selection_reason"] == expected_reason
         assert prediction.diagnostic_record["forecast_records_current_enough"] is False
         assert (
             prediction.diagnostic_record["current_l4_candle_window_current_enough"]
@@ -486,7 +500,14 @@ def test_mr_vs4_fresh_l4_is_live_only_for_applicable_short_horizons(tmp_path: Pa
     packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-08T19:32:31Z")
     by_horizon = {row.horizon_sec: row for row in packet.predictions}
 
-    for horizon_sec in (0, 300, 900, 1800, 3600):
+    current = by_horizon[0]
+    assert current.freshness_state.value == "LIVE"
+    assert current.regime_code != MarketRegimeCode.UNKNOWN
+    assert current.evidence_quality.value in {"PARTIAL", "WEAK"}
+    assert "current_state_estimator_used" in current.warnings
+    assert "current_l4_candle_window_fallback_used" not in current.warnings
+
+    for horizon_sec in (300, 900, 1800, 3600):
         row = by_horizon[horizon_sec]
         assert row.freshness_state.value == "LIVE"
         assert row.regime_code != MarketRegimeCode.UNKNOWN
@@ -536,8 +557,10 @@ def test_mr_vs4_missing_exact_forecast_horizon_fails_closed_without_cross_horizo
     packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-10T12:00:31Z")
     by_horizon = {row.horizon_sec: row for row in packet.predictions}
 
-    assert by_horizon[0].regime_code == MarketRegimeCode.RANGE
-    assert by_horizon[0].freshness_state.value == "LIVE"
+    assert by_horizon[0].regime_code == MarketRegimeCode.UNKNOWN
+    assert by_horizon[0].freshness_state.value == "STALE"
+    assert by_horizon[0].diagnostic_record["label_selection_reason"] == "current_state_estimator_unavailable"
+    assert by_horizon[0].diagnostic_record["future_forecast_label_used_for_current"] is False
     assert by_horizon[300].regime_code == MarketRegimeCode.RANGE
     assert by_horizon[300].freshness_state.value == "LIVE"
 

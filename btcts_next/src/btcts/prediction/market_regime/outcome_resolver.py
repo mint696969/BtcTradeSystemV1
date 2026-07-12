@@ -13,6 +13,7 @@ from .artifact_contracts import MARKET_REGIME_OUTCOME_SCHEMA_VERSION
 
 MARKET_REGIME_OUTCOME_RESOLVER_VERSION = "prediction.market_regime.outcome_resolver.2026_07_08.v1"
 MARKET_REGIME_OUTCOME_RULE_VERSION = "market_regime_outcome_rule.2026_07_08.v1"
+MARKET_REGIME_CURRENT_STATE_OUTCOME_RULE_VERSION = "market_regime_current_state_outcome_rule.mr_f2.v1"
 OUTCOME_PART_FILENAME = "part-00001.jsonl"
 OUTCOME_META_FILENAME = "part-00001.meta.json"
 _MAX_OUTCOME_ROW_BYTES = 64 * 1024
@@ -136,6 +137,28 @@ def _prediction_fields(prediction: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def resolve_market_regime_current_state_outcome_label(*, predicted_regime_code: str, observation: Mapping[str, Any], generated_at: str) -> tuple[str, str]:
+    predicted = _regime(predicted_regime_code)
+    if predicted == "UNKNOWN":
+        return "unknown", "current_state_prediction_unknown"
+    if bool(observation.get("invalidated")):
+        return "invalidated", str(observation.get("invalidation_reason") or "current_state_observation_invalidated")
+    if not bool(observation.get("observation_available", True)):
+        return "unknown", "current_state_observation_unavailable"
+    observed_at = _parse_ts(observation.get("observation_at") or observation.get("observed_at"))
+    generated_dt = _parse_ts(generated_at)
+    if observed_at is None or generated_dt is None or observed_at < generated_dt:
+        return "unknown", "current_state_observation_timestamp_invalid"
+    observed = _regime(observation.get("observed_regime_code") or observation.get("regime_code"))
+    if observed == "UNKNOWN":
+        return "unknown", "current_state_observed_regime_unknown"
+    if observed == predicted:
+        return "hit", "current_state_observation_matches"
+    if bool(observation.get("partial_match")) or observed in _COMPATIBLE_PARTIALS.get(predicted, set()):
+        return "partial", "current_state_observation_compatible_partial"
+    return "miss", "current_state_observation_differs"
+
+
 def resolve_market_regime_outcome_label(*, predicted_regime_code: str, observation: Mapping[str, Any], expiry_at: str) -> tuple[str, str]:
     if bool(observation.get("invalidated")):
         return "invalidated", str(observation.get("invalidation_reason") or "observation_invalidated_prediction")
@@ -148,6 +171,8 @@ def resolve_market_regime_outcome_label(*, predicted_regime_code: str, observati
     if observed_at < expiry_dt:
         return "unknown", "prediction_horizon_not_expired"
     predicted = _regime(predicted_regime_code)
+    if predicted == "UNKNOWN":
+        return "unknown", "prediction_regime_unknown"
     observed = _regime(observation.get("observed_regime_code") or observation.get("regime_code"))
     if observed == "UNKNOWN":
         return "unknown", "observed_regime_unknown"
@@ -179,11 +204,20 @@ def build_market_regime_outcome_row(
     resolved_at: str,
 ) -> Dict[str, Any]:
     fields = _prediction_fields(prediction)
-    label, reason = resolve_market_regime_outcome_label(
-        predicted_regime_code=fields["predicted_regime_code"],
-        observation=observation,
-        expiry_at=fields["expiry_at"],
-    )
+    if int(fields["horizon_sec"]) == 0:
+        label, reason = resolve_market_regime_current_state_outcome_label(
+            predicted_regime_code=fields["predicted_regime_code"],
+            observation=observation,
+            generated_at=fields["generated_at"],
+        )
+        outcome_rule_version = MARKET_REGIME_CURRENT_STATE_OUTCOME_RULE_VERSION
+    else:
+        label, reason = resolve_market_regime_outcome_label(
+            predicted_regime_code=fields["predicted_regime_code"],
+            observation=observation,
+            expiry_at=fields["expiry_at"],
+        )
+        outcome_rule_version = MARKET_REGIME_OUTCOME_RULE_VERSION
     observed_regime = _regime(observation.get("observed_regime_code") or observation.get("regime_code"))
     observation_source = _observation_source(observation)
     observation_evaluator_version = _observation_evaluator_version(observation)
@@ -198,7 +232,7 @@ def build_market_regime_outcome_row(
     row = {
         "schema_version": MARKET_REGIME_OUTCOME_SCHEMA_VERSION,
         "outcome_resolver_version": MARKET_REGIME_OUTCOME_RESOLVER_VERSION,
-        "outcome_rule_version": MARKET_REGIME_OUTCOME_RULE_VERSION,
+        "outcome_rule_version": outcome_rule_version,
         "artifact_family": "prediction/market_regime",
         "artifact_kind": "outcome_row",
         "prediction_family_id": "market_regime",

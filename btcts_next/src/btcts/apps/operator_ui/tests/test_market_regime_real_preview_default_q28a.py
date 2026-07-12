@@ -131,7 +131,7 @@ def test_q28a_default_enablement_feeds_real_preview_cards_when_root_available(tm
     assert renderer_packet["dry_run_version"] is not None
     assert renderer_packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27z.v3"
     by_horizon = {card["horizon"]: card for card in renderer_packet["cards"]}
-    assert by_horizon["現在"]["regime_code"] == "RANGE"
+    assert by_horizon["現在"]["regime_code"] == "UNKNOWN"
     assert by_horizon["5分後"]["regime_code"] == "UP_TREND"
     assert by_horizon["24時間後"]["regime_code"] == "BREAKOUT"
     assert renderer_packet["would_send_to_broker"] is False

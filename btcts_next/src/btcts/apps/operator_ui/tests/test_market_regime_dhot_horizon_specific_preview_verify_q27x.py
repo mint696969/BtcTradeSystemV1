@@ -108,8 +108,10 @@ def test_q27x_classifier_uses_dhot_like_horizon_specific_labels(tmp_path: Path) 
     packet = classify_market_regime_feature_bundle(bundle, generated_at="2026-07-02T01:20:24Z")
     by_horizon = {prediction.horizon_sec: prediction for prediction in packet.predictions}
     assert packet.logic_version == "prediction.market_regime.regime_classifier.ps_q27z.v3"
-    assert by_horizon[0].diagnostic_record["selected_forecast_horizon_sec"] == 15
-    assert by_horizon[0].regime_code == MarketRegimeCode.RANGE
+    assert by_horizon[0].diagnostic_record["selected_forecast_horizon_sec"] is None
+    assert by_horizon[0].diagnostic_record["label_selection_reason"] == "current_state_estimator_unavailable"
+    assert by_horizon[0].diagnostic_record["future_forecast_label_used_for_current"] is False
+    assert by_horizon[0].regime_code == MarketRegimeCode.UNKNOWN
     assert by_horizon[300].regime_code == MarketRegimeCode.UP_TREND
     assert by_horizon[1800].regime_code == MarketRegimeCode.BREAKOUT
     assert by_horizon[3600].regime_code == MarketRegimeCode.REVERSAL_WATCH
@@ -136,7 +138,7 @@ def test_q27x_warroom_preview_binding_uses_ps_q27z_stage_version_without_ui_chan
     assert packet["stage_versions"]["classifier"] == "prediction.market_regime.regime_classifier.ps_q27z.v3"
     assert packet["card_count"] == 8
     by_horizon = {card["horizon"]: card for card in packet["cards"]}
-    assert by_horizon["現在"]["regime_code"] == "RANGE"
+    assert by_horizon["現在"]["regime_code"] == "UNKNOWN"
     assert by_horizon["5分後"]["regime_code"] == "UP_TREND"
     assert by_horizon["30分後"]["regime_code"] == "BREAKOUT"
     assert by_horizon["60分後"]["regime_code"] == "REVERSAL_WATCH"

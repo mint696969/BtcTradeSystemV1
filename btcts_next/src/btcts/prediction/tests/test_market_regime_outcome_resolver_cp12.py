@@ -159,3 +159,38 @@ def test_cp12_bulk_append_rejects_duplicate_input_outcome_ids(tmp_path: Path) ->
         assert "duplicate outcome_id" in str(exc)
     else:
         raise AssertionError("duplicate bulk input was not rejected")
+
+
+def test_mr_f2_unknown_prediction_is_not_counted_as_miss() -> None:
+    label, reason = resolve_market_regime_outcome_label(
+        predicted_regime_code="UNKNOWN",
+        observation={
+            "observation_available": True,
+            "observation_at": "2026-07-12T00:05:00Z",
+            "observed_regime_code": "RANGE",
+        },
+        expiry_at="2026-07-12T00:05:00Z",
+    )
+    assert label == "unknown"
+    assert reason == "prediction_regime_unknown"
+
+
+def test_mr_f2_current_state_uses_dedicated_outcome_rule() -> None:
+    row = build_market_regime_outcome_row(
+        prediction={
+            "generated_at": "2026-07-12T00:00:00Z",
+            "horizon_sec": 0,
+            "horizon_key": "current",
+            "regime_code": "RANGE",
+            "run_id": "run-current",
+            "parameter_set_id": "ps1",
+        },
+        observation={
+            "observation_available": True,
+            "observation_at": "2026-07-12T00:00:30Z",
+            "observed_regime_code": "RANGE",
+        },
+        resolved_at="2026-07-12T00:00:31Z",
+    )
+    assert row["outcome_label"] == "hit"
+    assert row["outcome_rule_version"] == "market_regime_current_state_outcome_rule.mr_f2.v1"

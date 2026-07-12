@@ -84,15 +84,18 @@ def test_q27n_probe_reads_explicit_tmp_root_and_builds_cards(tmp_path: Path) -> 
     assert packet["explicit_source_root_read_performed"] is True
     assert packet["source_snapshot_ok"] is True
     assert packet["card_count"] == 8
-    assert packet["cards"][0]["regime_code"] == "RANGE"
-    assert packet["cards"][0]["short_tag"] == "NO_DIRECTION"
+    by_horizon = {card["horizon"]: card for card in packet["cards"]}
+    assert by_horizon["現在"]["regime_code"] == "UNKNOWN"
+    assert by_horizon["24時間後"]["regime_code"] == "RANGE"
+    assert by_horizon["24時間後"]["short_tag"] == "NO_DIRECTION"
 
 
 def test_q27n_values_snapshot_fallback_preserves_real_forecast_driver_lines(tmp_path: Path) -> None:
     _build_actual_like_fixture(tmp_path)
     packet = build_market_regime_real_dhot_preview_probe_packet(tmp_path, generated_at="2026-07-01T17:55:03Z")
-    first_detail = packet["cards"][0]["detail"]
-    joined = "\n".join(first_detail["reason_lines"] + first_detail["source_lines"])
+    by_horizon = {card["horizon"]: card for card in packet["cards"]}
+    forecast_detail = by_horizon["24時間後"]["detail"]
+    joined = "\n".join(forecast_detail["reason_lines"] + forecast_detail["source_lines"])
     assert "volatility_state:compressed" in joined
     assert "cross_venue_agreement:confirmed" in joined
     assert "values_snapshot" in FEATURE_BUILDER.read_text(encoding="utf-8-sig")
