@@ -12,6 +12,7 @@ from .contracts import FeatureGroup, MarketRegimeCode
 from .features import MarketRegimeFeatureBundle
 from .future_baseline_model import FutureBaselineEvidence, forecast_future_market_regime_baseline
 from .future_forecast_contract import FUTURE_MARKET_REGIME_HORIZONS_SEC, MarketRegimeFutureForecast, validate_future_forecast_set
+from .future_shadow_candidate_registry import BASELINE_CANDIDATE, FutureShadowCandidateParameters
 
 MARKET_REGIME_FUTURE_SHADOW_ADAPTER_VERSION = "prediction.market_regime.future_shadow_adapter.mr_f5_4.v1"
 MARKET_REGIME_FUTURE_SHADOW_PACKET_VERSION = "prediction.market_regime.future_shadow_packet.mr_f5_4.v1"
@@ -128,6 +129,7 @@ def build_market_regime_future_shadow_packet(
     origin_current_state: MarketRegimeCode,
     origin_timestamp_epoch_sec: float,
     source_timestamp_epoch_sec: float,
+    candidate: FutureShadowCandidateParameters = BASELINE_CANDIDATE,
 ) -> MarketRegimeFutureShadowPacket:
     if not feature_bundle.source_snapshot_ok:
         raise ValueError("future_shadow_source_snapshot_not_ok")
@@ -152,7 +154,7 @@ def build_market_regime_future_shadow_packet(
             origin_timestamp_epoch_sec=origin_timestamp_epoch_sec,
             invalidation_conditions=tuple(feature_bundle.warnings) + tuple(feature_bundle.missing_sources),
         )
-        forecasts.append(forecast_future_market_regime_baseline(evidence))
+        forecasts.append(forecast_future_market_regime_baseline(evidence, candidate=candidate))
     return MarketRegimeFutureShadowPacket(
         generated_at=feature_bundle.generated_at,
         origin_current_state=origin_current_state,

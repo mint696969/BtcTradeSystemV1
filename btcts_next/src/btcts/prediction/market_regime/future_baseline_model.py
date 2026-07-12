@@ -16,6 +16,7 @@ from .future_forecast_contract import (
     MarketRegimeFutureForecast,
 )
 from .future_target_definition import future_target_definitions_by_horizon
+from .future_shadow_candidate_registry import BASELINE_CANDIDATE, FutureShadowCandidateParameters
 
 MARKET_REGIME_FUTURE_BASELINE_MODEL_ID = "market_regime.future.transparent_baseline.shadow.v1"
 MARKET_REGIME_FUTURE_BASELINE_LOGIC_VERSION = "prediction.market_regime.future_baseline_model.mr_f5_3.v1"
@@ -92,7 +93,13 @@ def _shortest_transition_path(origin: MarketRegimeCode, target: MarketRegimeCode
     return ()
 
 
-def _abstain(evidence: FutureBaselineEvidence, reason: str, blockers: Tuple[str, ...]) -> MarketRegimeFutureForecast:
+def _abstain(
+    evidence: FutureBaselineEvidence,
+    reason: str,
+    blockers: Tuple[str, ...],
+    *,
+    candidate: FutureShadowCandidateParameters,
+) -> MarketRegimeFutureForecast:
     definition = future_target_definitions_by_horizon()[int(evidence.target_horizon_sec)]
     return MarketRegimeFutureForecast(
         origin_timestamp=evidence.origin_timestamp,
@@ -105,7 +112,7 @@ def _abstain(evidence: FutureBaselineEvidence, reason: str, blockers: Tuple[str,
         feature_snapshot_ref=evidence.feature_snapshot_ref,
         model_id=MARKET_REGIME_FUTURE_BASELINE_MODEL_ID,
         logic_version=MARKET_REGIME_FUTURE_BASELINE_LOGIC_VERSION,
-        parameter_set_id=MARKET_REGIME_FUTURE_BASELINE_PARAMETER_SET_ID,
+        parameter_set_id=candidate.parameter_set_id,
         target_definition_version=definition.target_definition_version,
         invalidation_conditions=tuple(dict.fromkeys(evidence.invalidation_conditions + blockers)),
         abstain_reason=reason,
@@ -113,19 +120,23 @@ def _abstain(evidence: FutureBaselineEvidence, reason: str, blockers: Tuple[str,
     )
 
 
-def forecast_future_market_regime_baseline(evidence: FutureBaselineEvidence) -> MarketRegimeFutureForecast:
+def forecast_future_market_regime_baseline(
+    evidence: FutureBaselineEvidence,
+    *,
+    candidate: FutureShadowCandidateParameters = BASELINE_CANDIDATE,
+) -> MarketRegimeFutureForecast:
     definition = future_target_definitions_by_horizon()[int(evidence.target_horizon_sec)]
     available = set(evidence.available_feature_families)
     missing_required = tuple(sorted(set(definition.required_feature_families) - available))
     if missing_required:
-        return _abstain(evidence, "required_feature_family_missing", tuple(f"missing_required_feature:{item}" for item in missing_required))
+        return _abstain(evidence, "required_feature_family_missing", tuple(f"missing_required_feature:{item}" for item in missing_required), candidate=candidate)
 
     ranked = sorted(
         ((regime, score) for regime, score in evidence.regime_scores.items() if regime is not MarketRegimeCode.UNKNOWN),
         key=lambda item: (-item[1], item[0].value),
     )
     if len(ranked) < 2:
-        return _abstain(evidence, "insufficient_ranked_regime_candidates", ("ranked_candidate_count_below_2",))
+        return _abstain(evidence, "insufficient_ranked_regime_candidates", ("ranked_candidate_count_below_2",), candidate=candidate)
 
     (top_regime, top_score), (_, runner_score) = ranked[:2]
     total_positive = sum(score for _, score in ranked if score > 0.0)
@@ -133,16 +144,15 @@ def forecast_future_market_regime_baseline(evidence: FutureBaselineEvidence) -> 
     normalized_runner = 0.0 if total_positive <= 0.0 else runner_score / total_positive
     margin = normalized_top - normalized_runner
 
-    minimum_top = 0.34 if evidence.target_horizon_sec <= 3600 else 0.30
-    minimum_margin = 0.08 if evidence.target_horizon_sec <= 3600 else 0.06
+    minimum_top, minimum_margin = candidate.thresholds_for_horizon(evidence.target_horizon_sec)
     if normalized_top < minimum_top:
-        return _abstain(evidence, "top_score_below_minimum", (f"normalized_top_score:{normalized_top:.4f}",))
+        return _abstain(evidence, "top_score_below_minimum", (f"normalized_top_score:{normalized_top:.4f}",), candidate=candidate)
     if margin < minimum_margin:
-        return _abstain(evidence, "score_margin_below_minimum", (f"normalized_score_margin:{margin:.4f}",))
+        return _abstain(evidence, "score_margin_below_minimum", (f"normalized_score_margin:{margin:.4f}",), candidate=candidate)
 
     path = _shortest_transition_path(evidence.origin_current_state, top_regime)
     if not path:
-        return _abstain(evidence, "future_transition_path_unavailable", ("transition_graph_disconnected",))
+        return _abstain(evidence, "future_transition_path_unavailable", ("transition_graph_disconnected",), candidate=candidate)
 
     step_count = len(path)
     steps = tuple(
@@ -164,7 +174,7 @@ def forecast_future_market_regime_baseline(evidence: FutureBaselineEvidence) -> 
         feature_snapshot_ref=evidence.feature_snapshot_ref,
         model_id=MARKET_REGIME_FUTURE_BASELINE_MODEL_ID,
         logic_version=MARKET_REGIME_FUTURE_BASELINE_LOGIC_VERSION,
-        parameter_set_id=MARKET_REGIME_FUTURE_BASELINE_PARAMETER_SET_ID,
+        parameter_set_id=candidate.parameter_set_id,
         target_definition_version=definition.target_definition_version,
         invalidation_conditions=tuple(dict.fromkeys(evidence.invalidation_conditions + ("required_feature_becomes_unavailable", "source_timestamp_after_origin"))),
         metadata={
@@ -174,5 +184,6 @@ def forecast_future_market_regime_baseline(evidence: FutureBaselineEvidence) -> 
             "normalized_runner_score": round(normalized_runner, 6),
             "normalized_score_margin": round(margin, 6),
             "available_feature_families": list(evidence.available_feature_families),
+            "candidate_registry_state": candidate.registry_state,
         },
     )
