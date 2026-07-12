@@ -67,6 +67,76 @@ def _as_float(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _transition_settings(parameter_set: Any) -> Mapping[str, Any]:
+    thresholds = getattr(parameter_set, "thresholds", {})
+    if not isinstance(thresholds, Mapping):
+        return {}
+    value = thresholds.get("transition_and_persistence", {})
+    return value if isinstance(value, Mapping) else {}
+
+
+def resolve_market_regime_canonical_label(
+    *,
+    usable: bool,
+    legacy_label: str,
+    previous_state: Mapping[str, Any] | None,
+    shadow_recommendation: Mapping[str, Any],
+    transition_result: Mapping[str, Any],
+    parameter_set: Any,
+) -> dict[str, Any]:
+    legacy = str(legacy_label or "UNKNOWN").strip().upper() or "UNKNOWN"
+    previous = str(dict(previous_state or {}).get("regime_code") or "UNKNOWN").strip().upper() or "UNKNOWN"
+    settings = _transition_settings(parameter_set)
+    enabled = bool(settings.get("canonical_application_enabled", False))
+    recommendation_ready = bool(shadow_recommendation.get("shadow_recommendation_ready", False))
+    decision = str(transition_result.get("decision") or "unknown")
+    accepted = str(transition_result.get("accepted_regime") or "UNKNOWN").strip().upper() or "UNKNOWN"
+
+    if not usable:
+        selected = "UNKNOWN"
+        source = "current_state_estimator_unavailable"
+        reason = "current_evidence_unusable"
+        applied = False
+    elif not enabled:
+        selected = legacy
+        source = "current_l4_candle_regime_hint"
+        reason = "mr_f4_canonical_application_disabled"
+        applied = False
+    elif recommendation_ready and decision in {"started", "continued", "transitioned"} and accepted != "UNKNOWN":
+        selected = accepted
+        source = "mr_f4_transition_policy"
+        reason = f"mr_f4_transition_policy_{decision}"
+        applied = True
+    elif previous != "UNKNOWN":
+        selected = previous
+        source = "mr_f4_transition_policy_hold"
+        reason = (
+            f"mr_f4_transition_policy_{decision}"
+            if recommendation_ready
+            else "mr_f4_shadow_recommendation_not_ready_hold_previous"
+        )
+        applied = True
+    else:
+        selected = legacy
+        source = "current_l4_candle_regime_hint"
+        reason = (
+            "mr_f4_transition_policy_no_previous_fallback"
+            if recommendation_ready
+            else "mr_f4_shadow_recommendation_not_ready_no_previous_fallback"
+        )
+        applied = False
+
+    return {
+        "selected_regime": selected,
+        "label_source": source,
+        "selection_reason": reason,
+        "canonical_application_enabled": enabled,
+        "transition_policy_applied_to_selected_label": applied,
+        "legacy_fallback_used": source == "current_l4_candle_regime_hint",
+        "previous_regime_held": source == "mr_f4_transition_policy_hold",
+    }
+
+
 def _change_point_evidence_score(*, net_bps: float, range_bps: float, close_position: float) -> float:
     if range_bps <= 0:
         return 0.0
@@ -172,6 +242,7 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
         selected_label=label if usable else "UNKNOWN",
     )
     observation_time = str(observed_at or bundle.generated_at)
+    parameter_set = build_default_market_regime_parameter_set()
     shadow_transition = evaluate_market_regime_transition(
         previous_regime=str(dict(previous_state or {}).get("regime_code") or "UNKNOWN"),
         candidate_regime=str(
@@ -181,19 +252,37 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
         candidate_score=candidate_summary.get("eligible_top_candidate_score"),
         runner_up_score=candidate_summary.get("eligible_runner_up_score"),
         change_point_evidence_score=change_point_evidence_score if usable else 0.0,
-        parameter_set=build_default_market_regime_parameter_set(),
+        parameter_set=parameter_set,
     )
+    canonical_selection = resolve_market_regime_canonical_label(
+        usable=usable,
+        legacy_label=label if usable else "UNKNOWN",
+        previous_state=previous_state,
+        shadow_recommendation=shadow_recommendation,
+        transition_result=shadow_transition,
+        parameter_set=parameter_set,
+    )
+    selected_regime = str(canonical_selection["selected_regime"])
     persistence = build_persisted_current_state(
         previous=previous_state,
-        regime_code=label if usable else "UNKNOWN",
+        regime_code=selected_regime,
         observed_at=observation_time,
         estimator_version=CURRENT_STATE_ESTIMATOR_VERSION,
         source_cutoff_time=cutoff,
     )
     return {
         "ok": usable,
-        "regime_label": label if usable else "UNKNOWN",
-        "selection_reason": "current_state_estimator" if usable else "current_state_estimator_unavailable",
+        "regime_label": selected_regime,
+        "selection_reason": (
+            "current_state_estimator_unavailable"
+            if not usable
+            else (
+                "mr_f4_transition_policy"
+                if canonical_selection["transition_policy_applied_to_selected_label"]
+                else "current_state_estimator"
+            )
+        ),
+        "canonical_selection_reason": canonical_selection["selection_reason"],
         "estimator_version": CURRENT_STATE_ESTIMATOR_VERSION,
         "source_cutoff_time": cutoff,
         "state_started_at": persistence.get("state_started_at", ""),
@@ -212,7 +301,12 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
         "evidence_reason": reason,
         "supporting_evidence": evidence if usable else {},
         "conflicting_evidence": [],
-        "label_source": "current_l4_candle_regime_hint",
+        "label_source": canonical_selection["label_source"],
+        "legacy_current_l4_regime_label": label if usable else "UNKNOWN",
+        "transition_policy_canonical_application_enabled": canonical_selection["canonical_application_enabled"],
+        "transition_policy_applied_to_selected_label": canonical_selection["transition_policy_applied_to_selected_label"],
+        "transition_policy_legacy_fallback_used": canonical_selection["legacy_fallback_used"],
+        "transition_policy_previous_regime_held": canonical_selection["previous_regime_held"],
         "candidate_scoring_version": candidate_scoring.get("logic_version", ""),
         "candidate_scores": candidate_scoring.get("candidate_scores", {}),
         "candidate_scoring_blockers": candidate_summary.get("scoring_blockers", []),
@@ -261,8 +355,8 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
         "shadow_transition_penalty": shadow_transition.get("transition_penalty"),
         "shadow_persistence_probability": shadow_transition.get("persistence_probability"),
         "shadow_persistence_probability_calibrated": shadow_transition.get("persistence_probability_calibrated", False),
-        "shadow_transition_observation_only": True,
-        "shadow_transition_applied_to_selected_label": False,
+        "shadow_transition_observation_only": not canonical_selection["transition_policy_applied_to_selected_label"],
+        "shadow_transition_applied_to_selected_label": canonical_selection["transition_policy_applied_to_selected_label"],
         "current_state_outcome_rule_version": "market_regime_current_state_outcome_rule.mr_f2.v1",
         "current_state_outcome_rule_defined": True,
         "current_state_outcome_rule_gap": "",

@@ -12,6 +12,11 @@ from ..current_state_estimator import estimate_current_market_regime
 from .current_l4_diagnostic import build_current_l4_candle_evidence_digest
 
 MARKET_REGIME_CLASSIFIER_VERSION = "prediction.market_regime.regime_classifier.ps_q27z.v3"
+_CURRENT_EVIDENCE_SELECTION_REASONS = {
+    "current_l4_candle_window_fallback",
+    "current_state_estimator",
+    "mr_f4_transition_policy",
+}
 # MR_A1_STALE_SOURCE_GATE_2026_07_09
 # MR_A2_CURRENT_L4_CANDLE_FEATURES_2026_07_09
 
@@ -139,7 +144,7 @@ def _evidence_quality(
         return EvidenceQuality.MISSING, "source_snapshot_missing"
     if regime == MarketRegimeCode.UNKNOWN:
         return EvidenceQuality.MISSING, "no_current_evidence_for_horizon"
-    if label_selection_reason in {"current_l4_candle_window_fallback", "current_state_estimator"}:
+    if label_selection_reason in _CURRENT_EVIDENCE_SELECTION_REASONS:
         if crossed_or_negative_spread:
             return EvidenceQuality.WEAK, "current_l4_fallback_uncalibrated_with_crossed_or_negative_spread"
         return EvidenceQuality.PARTIAL, "current_l4_fallback_uncalibrated_partial"
@@ -232,7 +237,7 @@ def _drivers(
     volatility_state = _value(bundle, FeatureGroup.VOLATILITY, "volatility_state")
     cross_venue = _value(bundle, FeatureGroup.CROSS_VENUE, "cross_venue_agreement")
     if selected_label:
-        if label_selection_reason in {"current_l4_candle_window_fallback", "current_state_estimator"}:
+        if label_selection_reason in _CURRENT_EVIDENCE_SELECTION_REASONS:
             drivers.append(f"current_l4_candle_regime_hint:{selected_label}")
         else:
             drivers.append(f"forecast_label:{selected_label}")
@@ -267,8 +272,10 @@ def _warnings(
         warnings.append("forecast_label_blocked_by_currentness_gate")
         if label_selection_reason == "current_l4_candle_window_fallback":
             warnings.append("current_l4_candle_window_fallback_used")
-        elif label_selection_reason == "current_state_estimator":
+        elif label_selection_reason in {"current_state_estimator", "mr_f4_transition_policy"}:
             warnings.append("current_state_estimator_used")
+            if label_selection_reason == "mr_f4_transition_policy":
+                warnings.append("mr_f4_transition_policy_used")
         elif current_l4_candle_current_enough and int(horizon_sec) > 3600:
             warnings.append("current_l4_candle_window_not_applicable_to_horizon")
     if not bundle.source_snapshot_ok:
@@ -286,11 +293,7 @@ def _freshness_state_for_horizon(
         return FreshnessState.MISSING
     if regime == MarketRegimeCode.UNKNOWN:
         return FreshnessState.STALE
-    if label_selection_reason in {
-        "exact_forecast_horizon",
-        "current_l4_candle_window_fallback",
-        "current_state_estimator",
-    }:
+    if label_selection_reason == "exact_forecast_horizon" or label_selection_reason in _CURRENT_EVIDENCE_SELECTION_REASONS:
         return FreshnessState.LIVE
     return FreshnessState.STALE
 
@@ -392,15 +395,31 @@ def classify_market_regime_feature_bundle(
                     "available_signal_count": bundle.available_signal_count(),
                     # MR_A2_DIAGNOSTIC_LABEL_SOURCE_2026_07_09
                     "selected_label": str(selected_label or ""),
-                    "selected_label_source": "current_state_estimator" if label_selection_reason == "current_state_estimator" else ("current_l4_candle_window" if label_selection_reason == "current_l4_candle_window_fallback" else ("forecast_records" if selected_label else "none")),
-                    "selected_forecast_label": "" if label_selection_reason in {"current_l4_candle_window_fallback", "current_state_estimator"} else str(selected_label or ""),
-                    "selected_l4_candle_regime_hint": str(selected_label or "") if label_selection_reason in {"current_l4_candle_window_fallback", "current_state_estimator"} else "",
+                    "selected_label_source": (
+                        "current_state_estimator"
+                        if label_selection_reason in {"current_state_estimator", "mr_f4_transition_policy"}
+                        else (
+                            "current_l4_candle_window"
+                            if label_selection_reason == "current_l4_candle_window_fallback"
+                            else ("forecast_records" if selected_label else "none")
+                        )
+                    ),
+                    "selected_forecast_label": (
+                        ""
+                        if label_selection_reason in _CURRENT_EVIDENCE_SELECTION_REASONS
+                        else str(selected_label or "")
+                    ),
+                    "selected_l4_candle_regime_hint": (
+                        str(selected_label or "")
+                        if label_selection_reason in _CURRENT_EVIDENCE_SELECTION_REASONS
+                        else ""
+                    ),
                     "selected_forecast_horizon_sec": selected_horizon_sec,
                     "forecast_records_current_enough": forecast_current_enough,
                     "forecast_records_currentness_gate_applied": not forecast_current_enough,
                     "current_l4_candle_window_current_enough": current_l4_candle_current_enough,
                     "current_l4_candle_window_fallback_used": label_selection_reason == "current_l4_candle_window_fallback",
-                    "current_state_estimator_used": label_selection_reason == "current_state_estimator",
+                    "current_state_estimator_used": label_selection_reason in _CURRENT_EVIDENCE_SELECTION_REASONS,
                     "current_state_estimator_version": current_estimate.get("estimator_version") if int(horizon.horizon_sec) == 0 else "",
                     "current_state_source_cutoff_time": current_estimate.get("source_cutoff_time") if int(horizon.horizon_sec) == 0 else "",
                     "current_state_started_at": current_estimate.get("state_started_at") if int(horizon.horizon_sec) == 0 else "",
@@ -417,6 +436,12 @@ def classify_market_regime_feature_bundle(
                     "current_state_transition_candidate_basis": current_estimate.get("transition_candidate_basis") if int(horizon.horizon_sec) == 0 else "",
                     "current_state_supporting_evidence": current_estimate.get("supporting_evidence") if int(horizon.horizon_sec) == 0 else {},
                     "current_state_label_source": current_estimate.get("label_source") if int(horizon.horizon_sec) == 0 else "",
+                    "current_state_canonical_selection_reason": current_estimate.get("canonical_selection_reason") if int(horizon.horizon_sec) == 0 else "",
+                    "current_state_legacy_current_l4_regime_label": current_estimate.get("legacy_current_l4_regime_label") if int(horizon.horizon_sec) == 0 else "UNKNOWN",
+                    "current_state_transition_policy_canonical_application_enabled": current_estimate.get("transition_policy_canonical_application_enabled") if int(horizon.horizon_sec) == 0 else False,
+                    "current_state_transition_policy_applied_to_selected_label": current_estimate.get("transition_policy_applied_to_selected_label") if int(horizon.horizon_sec) == 0 else False,
+                    "current_state_transition_policy_legacy_fallback_used": current_estimate.get("transition_policy_legacy_fallback_used") if int(horizon.horizon_sec) == 0 else False,
+                    "current_state_transition_policy_previous_regime_held": current_estimate.get("transition_policy_previous_regime_held") if int(horizon.horizon_sec) == 0 else False,
                     "current_state_candidate_scoring_version": current_estimate.get("candidate_scoring_version") if int(horizon.horizon_sec) == 0 else "",
                     "current_state_candidate_scores": current_estimate.get("candidate_scores") if int(horizon.horizon_sec) == 0 else {},
                     "current_state_top_candidate": current_estimate.get("top_candidate") if int(horizon.horizon_sec) == 0 else "",

@@ -14,6 +14,10 @@ from btcts.prediction.market_regime import FeatureGroup, FreshnessState, SourceC
 from btcts.prediction.market_regime.current_state_estimator import (  # noqa: E402
     CURRENT_STATE_ESTIMATOR_VERSION,
     estimate_current_market_regime,
+    resolve_market_regime_canonical_label,
+)
+from btcts.prediction.market_regime.parameter_set import (  # noqa: E402
+    build_default_market_regime_parameter_set,
 )
 from btcts.prediction.market_regime.features import FeatureSignal, MarketRegimeFeatureBundle  # noqa: E402
 
@@ -161,8 +165,10 @@ def test_current_estimator_uses_current_l4_and_never_future_forecast_label() -> 
     assert packet["shadow_recommendation_applied_to_selected_label"] is False
     assert packet["shadow_transition_policy_version"] == "prediction.market_regime.transition_policy.mr_f4.v1"
     assert packet["shadow_transition_previous_regime"] == "UNKNOWN"
-    assert packet["shadow_transition_observation_only"] is True
-    assert packet["shadow_transition_applied_to_selected_label"] is False
+    assert packet["shadow_transition_observation_only"] is (
+        not packet["transition_policy_applied_to_selected_label"]
+    )
+    assert packet["shadow_transition_applied_to_selected_label"] is packet["transition_policy_applied_to_selected_label"]
     assert packet["shadow_persistence_probability_calibrated"] is False
     assert 0.0 <= packet["shadow_persistence_probability"] <= 1.0
     assert packet["scoring_label_selection_deferred_reason"] == "mr_f3_observe_before_cutover"
@@ -211,6 +217,67 @@ def test_mr_f4_shadow_transition_holds_previous_state_when_recommendation_unknow
         "UNKNOWN", "RANGE", "LOW_VOL_COMPRESSION", "UP_TREND", "DOWN_TREND",
         "HIGH_VOL_CHOP", "BREAKOUT", "REVERSAL_WATCH", "PANIC_SPIKE",
     }
-    assert packet["shadow_transition_observation_only"] is True
-    assert packet["shadow_transition_applied_to_selected_label"] is False
-    assert packet["label_source"] == "current_l4_candle_regime_hint"
+    assert packet["shadow_transition_observation_only"] is (
+        not packet["transition_policy_applied_to_selected_label"]
+    )
+    assert packet["shadow_transition_applied_to_selected_label"] is packet["transition_policy_applied_to_selected_label"]
+    assert packet["label_source"] == "mr_f4_transition_policy_hold"
+    assert packet["transition_policy_previous_regime_held"] is True
+    assert packet["canonical_selection_reason"] == "mr_f4_shadow_recommendation_not_ready_hold_previous"
+
+def _canonical_resolution(
+    *,
+    previous: str = "UNKNOWN",
+    ready: bool = True,
+    decision: str = "transitioned",
+    accepted: str = "LOW_VOL_COMPRESSION",
+    usable: bool = True,
+) -> dict:
+    return resolve_market_regime_canonical_label(
+        usable=usable,
+        legacy_label="RANGE",
+        previous_state={"regime_code": previous} if previous != "UNKNOWN" else {},
+        shadow_recommendation={"shadow_recommendation_ready": ready},
+        transition_result={"decision": decision, "accepted_regime": accepted},
+        parameter_set=build_default_market_regime_parameter_set(),
+    )
+
+
+def test_mr_f4_canonical_selection_applies_accepted_transition() -> None:
+    result = _canonical_resolution()
+    assert result["selected_regime"] == "LOW_VOL_COMPRESSION"
+    assert result["label_source"] == "mr_f4_transition_policy"
+    assert result["selection_reason"] == "mr_f4_transition_policy_transitioned"
+    assert result["canonical_application_enabled"] is True
+    assert result["transition_policy_applied_to_selected_label"] is True
+    assert result["legacy_fallback_used"] is False
+
+
+def test_mr_f4_canonical_selection_holds_previous_on_policy_hold() -> None:
+    result = _canonical_resolution(previous="RANGE", decision="held", accepted="RANGE")
+    assert result["selected_regime"] == "RANGE"
+    assert result["label_source"] == "mr_f4_transition_policy_hold"
+    assert result["previous_regime_held"] is True
+    assert result["transition_policy_applied_to_selected_label"] is True
+
+
+def test_mr_f4_canonical_selection_holds_previous_when_recommendation_not_ready() -> None:
+    result = _canonical_resolution(previous="RANGE", ready=False, decision="unknown", accepted="UNKNOWN")
+    assert result["selected_regime"] == "RANGE"
+    assert result["selection_reason"] == "mr_f4_shadow_recommendation_not_ready_hold_previous"
+    assert result["previous_regime_held"] is True
+
+
+def test_mr_f4_canonical_selection_uses_l4_fallback_without_previous() -> None:
+    result = _canonical_resolution(ready=False, decision="unknown", accepted="UNKNOWN")
+    assert result["selected_regime"] == "RANGE"
+    assert result["label_source"] == "current_l4_candle_regime_hint"
+    assert result["legacy_fallback_used"] is True
+    assert result["transition_policy_applied_to_selected_label"] is False
+
+
+def test_mr_f4_canonical_selection_fails_closed_when_current_evidence_unusable() -> None:
+    result = _canonical_resolution(previous="RANGE", usable=False)
+    assert result["selected_regime"] == "UNKNOWN"
+    assert result["label_source"] == "current_state_estimator_unavailable"
+    assert result["transition_policy_applied_to_selected_label"] is False

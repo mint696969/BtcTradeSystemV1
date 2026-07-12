@@ -63,7 +63,8 @@ class MarketRegimeParameterSet:
                 "HIGH_VOL_CHOP": ["HIGH_VOL_CHOP", "RANGE", "UP_TREND", "DOWN_TREND", "PANIC_SPIKE"],
                 "PANIC_SPIKE": ["PANIC_SPIKE", "HIGH_VOL_CHOP", "RANGE"],
             },
-            "observation_only": True,
+            "canonical_application_enabled": True,
+            "observation_only": False,
         },
         # MR-F3_EXPLAINABLE_CANDIDATE_SCORING_2026_07_12
         "explainable_candidate_scoring": {

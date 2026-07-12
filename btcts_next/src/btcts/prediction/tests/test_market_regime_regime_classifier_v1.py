@@ -419,7 +419,10 @@ def test_mr_a2_stale_forecast_can_fallback_to_current_l4_candle_window(tmp_path:
     assert first.diagnostic_record["current_l4_candle_window_current_enough"] is True
     assert first.diagnostic_record["current_l4_candle_window_fallback_used"] is False
     assert first.diagnostic_record["current_state_estimator_used"] is True
-    assert first.diagnostic_record["label_selection_reason"] == "current_state_estimator"
+    assert first.diagnostic_record["label_selection_reason"] == "mr_f4_transition_policy"
+    assert first.diagnostic_record["current_state_canonical_selection_reason"].startswith(
+        "mr_f4_transition_policy_"
+    )
     assert first.diagnostic_record["selected_label"] == "UP_TREND"
     assert first.diagnostic_record["selected_label_source"] == "current_state_estimator"
     assert first.diagnostic_record["selected_forecast_label"] == ""
@@ -640,6 +643,11 @@ def test_mr_f3_current_diagnostic_surfaces_observed_and_eligible_rankings(tmp_pa
     assert "current_state_shadow_recommended_regime_code" in diagnostic
     assert diagnostic["current_state_shadow_recommendation_enabled"] is False
     assert diagnostic["current_state_shadow_recommendation_applied_to_selected_label"] is False
+    assert "current_state_canonical_selection_reason" in diagnostic
+    assert "current_state_transition_policy_canonical_application_enabled" in diagnostic
+    assert "current_state_transition_policy_applied_to_selected_label" in diagnostic
+    assert "current_state_transition_policy_legacy_fallback_used" in diagnostic
+    assert "current_state_transition_policy_previous_regime_held" in diagnostic
     assert "current_state_shadow_transition_policy_version" in diagnostic
     assert "current_state_shadow_transition_decision" in diagnostic
     assert isinstance(diagnostic["current_state_shadow_transition_blockers"], list)
