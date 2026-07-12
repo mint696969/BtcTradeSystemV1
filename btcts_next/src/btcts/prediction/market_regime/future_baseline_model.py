@@ -75,6 +75,17 @@ class FutureBaselineEvidence:
         object.__setattr__(self, "available_feature_families", families)
 
 
+def _transition_prior_runner_up(
+    *,
+    origin: MarketRegimeCode,
+    observed_top: MarketRegimeCode,
+) -> MarketRegimeCode | None:
+    for candidate in _FUTURE_ALLOWED_TRANSITIONS.get(origin, ()):
+        if candidate is not observed_top:
+            return candidate
+    return None
+
+
 def _shortest_transition_path(origin: MarketRegimeCode, target: MarketRegimeCode) -> Tuple[MarketRegimeCode, ...]:
     if origin is target:
         return (target,)
@@ -132,9 +143,28 @@ def forecast_future_market_regime_baseline(
         return _abstain(evidence, "required_feature_family_missing", tuple(f"missing_required_feature:{item}" for item in missing_required), candidate=candidate)
 
     ranked = sorted(
-        ((regime, score) for regime, score in evidence.regime_scores.items() if regime is not MarketRegimeCode.UNKNOWN),
+        (
+            (regime, score)
+            for regime, score in evidence.regime_scores.items()
+            if regime is not MarketRegimeCode.UNKNOWN and score > 0.0
+        ),
         key=lambda item: (-item[1], item[0].value),
     )
+    transition_prior_applied = False
+    transition_prior_regime = None
+    transition_prior_score = 0.0
+    if len(ranked) == 1:
+        observed_top_regime, observed_top_score = ranked[0]
+        prior_regime = _transition_prior_runner_up(
+            origin=evidence.origin_current_state,
+            observed_top=observed_top_regime,
+        )
+        if prior_regime is not None and observed_top_score > 0.0:
+            transition_prior_score = observed_top_score * float(candidate.transition_prior_fraction_of_top)
+            ranked.append((prior_regime, transition_prior_score))
+            ranked.sort(key=lambda item: (-item[1], item[0].value))
+            transition_prior_applied = True
+            transition_prior_regime = prior_regime
     if len(ranked) < 2:
         return _abstain(evidence, "insufficient_ranked_regime_candidates", ("ranked_candidate_count_below_2",), candidate=candidate)
 
@@ -185,5 +215,9 @@ def forecast_future_market_regime_baseline(
             "normalized_score_margin": round(margin, 6),
             "available_feature_families": list(evidence.available_feature_families),
             "candidate_registry_state": candidate.registry_state,
+            "transition_prior_applied": transition_prior_applied,
+            "transition_prior_regime": transition_prior_regime.value if transition_prior_regime is not None else None,
+            "transition_prior_score": round(transition_prior_score, 6) if transition_prior_applied else 0.0,
+            "transition_prior_fraction_of_top": candidate.transition_prior_fraction_of_top,
         },
     )

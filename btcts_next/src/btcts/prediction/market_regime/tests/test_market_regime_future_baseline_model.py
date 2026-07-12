@@ -91,7 +91,11 @@ def test_low_top_score_and_small_margin_abstain_independently() -> None:
     one = forecast_future_market_regime_baseline(
         _evidence(regime_scores={MarketRegimeCode.BREAKOUT: 1.0})
     )
-    assert one.abstain_reason == "insufficient_ranked_regime_candidates"
+    assert one.status is FutureForecastStatus.FORECAST
+    assert one.predicted_future_state is MarketRegimeCode.BREAKOUT
+    assert one.metadata["transition_prior_applied"] is True
+    assert one.metadata["transition_prior_regime"] == MarketRegimeCode.RANGE.value
+    assert one.metadata["transition_prior_score"] < 1.0
 
 
 def test_origin_state_and_feature_family_names_fail_closed() -> None:

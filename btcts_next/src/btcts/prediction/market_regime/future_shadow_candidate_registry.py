@@ -15,6 +15,7 @@ class FutureShadowCandidateParameters:
     short_horizon_minimum_margin: float
     long_horizon_minimum_top: float
     long_horizon_minimum_margin: float
+    transition_prior_fraction_of_top: float
     registry_state: str = "shadow"
     live_parameter_apply_allowed: bool = False
     auto_promotion_allowed: bool = False
@@ -30,10 +31,13 @@ class FutureShadowCandidateParameters:
             ("short_horizon_minimum_margin", self.short_horizon_minimum_margin),
             ("long_horizon_minimum_top", self.long_horizon_minimum_top),
             ("long_horizon_minimum_margin", self.long_horizon_minimum_margin),
+            ("transition_prior_fraction_of_top", self.transition_prior_fraction_of_top),
         ):
             number = float(value)
             if not 0.0 <= number <= 1.0:
                 raise ValueError(f"future_shadow_candidate_threshold_invalid:{name}")
+        if not 0.0 < float(self.transition_prior_fraction_of_top) < 1.0:
+            raise ValueError("future_shadow_candidate_transition_prior_fraction_invalid")
         if self.live_parameter_apply_allowed is not False:
             raise ValueError("future_shadow_candidate_live_apply_not_allowed")
         if self.auto_promotion_allowed is not False:
@@ -59,6 +63,7 @@ class FutureShadowCandidateParameters:
             "short_horizon_minimum_margin": self.short_horizon_minimum_margin,
             "long_horizon_minimum_top": self.long_horizon_minimum_top,
             "long_horizon_minimum_margin": self.long_horizon_minimum_margin,
+            "transition_prior_fraction_of_top": self.transition_prior_fraction_of_top,
             "registry_state": self.registry_state,
             "live_parameter_apply_allowed": False,
             "auto_promotion_allowed": False,
@@ -72,6 +77,7 @@ BASELINE_CANDIDATE = FutureShadowCandidateParameters(
     short_horizon_minimum_margin=0.08,
     long_horizon_minimum_top=0.30,
     long_horizon_minimum_margin=0.06,
+    transition_prior_fraction_of_top=0.20,
     registry_state="active",
 )
 
@@ -81,6 +87,7 @@ CONSERVATIVE_CANDIDATE = FutureShadowCandidateParameters(
     short_horizon_minimum_margin=0.12,
     long_horizon_minimum_top=0.36,
     long_horizon_minimum_margin=0.10,
+    transition_prior_fraction_of_top=0.10,
     registry_state="shadow",
 )
 

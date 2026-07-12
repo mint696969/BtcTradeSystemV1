@@ -54,3 +54,32 @@ def test_conservative_candidate_can_abstain_when_baseline_forecasts() -> None:
     assert baseline.status.value == "FORECAST"
     assert conservative.status.value == "ABSTAIN"
     assert conservative.abstain_reason == "score_margin_below_minimum"
+
+
+
+def test_transition_prior_is_parameterized_and_shadow_safe() -> None:
+    registry = build_default_future_shadow_candidate_registry()
+    assert registry[0].transition_prior_fraction_of_top == 0.20
+    assert registry[1].transition_prior_fraction_of_top == 0.10
+    assert all(item.transition_prior_fraction_of_top < 1.0 for item in registry)
+    assert all(item.live_parameter_apply_allowed is False for item in registry)
+
+
+def test_single_positive_candidate_uses_explicit_transition_prior() -> None:
+    evidence = _evidence()
+    evidence = FutureBaselineEvidence(
+        origin_timestamp=evidence.origin_timestamp,
+        origin_current_state=MarketRegimeCode.RANGE,
+        target_horizon_sec=evidence.target_horizon_sec,
+        feature_snapshot_ref=evidence.feature_snapshot_ref,
+        regime_scores={MarketRegimeCode.RANGE: 0.5},
+        available_feature_families=evidence.available_feature_families,
+        source_timestamp_epoch_sec=evidence.source_timestamp_epoch_sec,
+        origin_timestamp_epoch_sec=evidence.origin_timestamp_epoch_sec,
+    )
+    result = forecast_future_market_regime_baseline(evidence, candidate=BASELINE_CANDIDATE)
+    assert result.status.value == "FORECAST"
+    assert result.predicted_future_state is MarketRegimeCode.RANGE
+    assert result.metadata["transition_prior_applied"] is True
+    assert result.metadata["transition_prior_regime"] == MarketRegimeCode.LOW_VOL_COMPRESSION.value
+    assert result.metadata["transition_prior_score"] == 0.1

@@ -163,6 +163,39 @@ def _signal(group: FeatureGroup, name: str, value: Any, *, available: bool, sour
     )
 
 
+def _session_context_signals(*, generated_at: str) -> Tuple[FeatureSignal, ...]:
+    parsed = _parse_utc_ts(generated_at)
+    if parsed is None:
+        return (
+            _signal(
+                FeatureGroup.SOURCE_QUALITY,
+                "session_context",
+                None,
+                available=False,
+                source_refs=("generated_at",),
+                warnings=("session_context_generated_at_invalid",),
+                weight_hint=0.0,
+            ),
+        )
+    hour = int(parsed.hour)
+    if 0 <= hour < 8:
+        session = "asia"
+    elif 8 <= hour < 16:
+        session = "europe"
+    else:
+        session = "us"
+    return (
+        _signal(
+            FeatureGroup.SOURCE_QUALITY,
+            "session_context",
+            session,
+            available=True,
+            source_refs=("generated_at",),
+            weight_hint=0.0,
+        ),
+    )
+
+
 def _source_quality_signals(snapshot: MarketRegimeSourceSnapshot, *, generated_at: str) -> Tuple[FeatureSignal, ...]:
     refs = ("latest_manifest", "forecast_records", "collector_market_state", "collector_health")
     missing_count = len(snapshot.missing_sources)
@@ -426,6 +459,7 @@ def _coverage_for_group(group: FeatureGroup, signals: Tuple[FeatureSignal, ...])
 
 def build_market_regime_feature_bundle(snapshot: MarketRegimeSourceSnapshot, *, generated_at: str, parameter_set: object | None = None) -> MarketRegimeFeatureBundle:
     signals = (
+        *_session_context_signals(generated_at=generated_at),
         *_source_quality_signals(snapshot, generated_at=generated_at),
         *_liquidity_signals(snapshot),
         *_orderflow_signals(snapshot),

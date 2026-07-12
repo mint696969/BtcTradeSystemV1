@@ -148,6 +148,31 @@ def _base_votes(bundle: MarketRegimeFeatureBundle, horizon_key: str) -> list[Mar
         regime = MarketRegimeCode.UP_TREND if cvd > 0 else MarketRegimeCode.DOWN_TREND
         votes.append(_vote(bundle=bundle, horizon_key=horizon_key, group=FeatureGroup.ORDERFLOW, signal_id="cvd", supports=regime, strength=min(abs(cvd) / 10.0, 1.0), reason="CVD direction supports directional pressure", value=cvd))
 
+    current_l4_hint = str(_value(bundle, FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_regime_hint", "") or "").upper()
+    hint_to_regime = {
+        "RANGE": MarketRegimeCode.RANGE,
+        "LOW_VOL_COMPRESSION": MarketRegimeCode.LOW_VOL_COMPRESSION,
+        "BREAKOUT": MarketRegimeCode.BREAKOUT,
+        "UP_TREND": MarketRegimeCode.UP_TREND,
+        "DOWN_TREND": MarketRegimeCode.DOWN_TREND,
+        "HIGH_VOL_CHOP": MarketRegimeCode.HIGH_VOL_CHOP,
+        "REVERSAL_WATCH": MarketRegimeCode.REVERSAL_WATCH,
+        "PANIC_SPIKE": MarketRegimeCode.PANIC_SPIKE,
+    }
+    hinted_regime = hint_to_regime.get(current_l4_hint)
+    if hinted_regime is not None:
+        # Existing current L4 candle regime hint contributes a bounded directional vote.
+        votes.append(_vote(
+            bundle=bundle,
+            horizon_key=horizon_key,
+            group=FeatureGroup.PRICE_STRUCTURE,
+            signal_id="current_l4_candle_regime_hint",
+            supports=hinted_regime,
+            strength=0.35,
+            reason="current L4 candle structure supplies a bounded regime candidate",
+            value=current_l4_hint,
+        ))
+
     ma_slope = _float(bundle, FeatureGroup.PRICE_STRUCTURE, "ma_slope")
     if ma_slope is not None and abs(ma_slope) >= 0.05:
         regime = MarketRegimeCode.UP_TREND if ma_slope > 0 else MarketRegimeCode.DOWN_TREND
