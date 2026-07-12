@@ -142,6 +142,22 @@ def test_current_estimator_uses_current_l4_and_never_future_forecast_label() -> 
     assert packet["current_state_outcome_rule_defined"] is True
     assert packet["current_state_outcome_rule_gap"] == ""
     assert packet["future_forecast_label_used"] is False
+    assert packet["label_source"] == "current_l4_candle_regime_hint"
+    assert packet["candidate_scoring_version"] == "prediction.market_regime.feature_scoring.mr_f3.v1"
+    assert set(packet["candidate_scores"]) == {
+        "trend_score", "range_score", "breakout_score", "high_vol_chop_score",
+        "compression_score", "reversal_score", "panic_score",
+    }
+    assert packet["top_candidate"]
+    assert packet["top_candidate_score"] is not None
+    assert "eligible_top_candidate" in packet
+    assert "eligible_candidate_score_margin" in packet
+    assert isinstance(packet["label_selection_eligible_candidates"], list)
+    assert isinstance(packet["label_selection_ineligible_candidates"], dict)
+    assert isinstance(packet["label_selection_readiness_blockers"], list)
+    assert packet["scoring_label_selection_enabled"] is False
+    assert packet["scoring_label_selection_deferred_reason"] == "mr_f3_observe_before_cutover"
+    assert isinstance(packet["scoring_readiness_thresholds"]["required_feature_groups"], list)
     assert packet["would_send_to_broker"] is False
 
 

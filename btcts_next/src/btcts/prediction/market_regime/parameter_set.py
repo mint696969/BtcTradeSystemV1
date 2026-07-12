@@ -43,6 +43,22 @@ class MarketRegimeParameterSet:
             "directional_abs_net_range_ratio_min": 0.45,
             "low_vol_range_bps_max": 20.0,
         },
+        # MR-F3_EXPLAINABLE_CANDIDATE_SCORING_2026_07_12
+        "explainable_candidate_scoring": {
+            "volatility_reference_bps": 20.0,
+            "spread_stress_bps": 8.0,
+            "contradictory_support_max": 0.20,
+            "label_selection_min_available_weight": 0.65,
+            "label_selection_min_top_score": 0.55,
+            "label_selection_min_margin": 0.08,
+            "label_selection_required_feature_groups": [
+                "price_structure",
+                "volatility",
+                "liquidity",
+                "source_quality",
+            ],
+            "label_selection_observation_only": True,
+        },
     })
     weights: Mapping[str, float] = field(default_factory=lambda: {
         "price_structure": 0.25,

@@ -624,3 +624,17 @@ def test_mr_vs4_blocked_forecast_record_is_not_accepted_as_horizon_label(tmp_pat
     assert row.freshness_state.value == "STALE"
     assert row.evidence_quality.value == "MISSING"
     assert row.diagnostic_record["label_selection_reason"] == "forecast_horizon_label_missing"
+
+def test_mr_f3_current_diagnostic_surfaces_observed_and_eligible_rankings(tmp_path: Path) -> None:
+    packet = _packet(tmp_path, label="range_candidate", spread=1200.0)
+    current = next(row for row in packet.predictions if row.horizon_sec == 0)
+    diagnostic = current.diagnostic_record
+    assert "current_state_eligible_top_candidate" in diagnostic
+    assert "current_state_eligible_top_candidate_score" in diagnostic
+    assert "current_state_eligible_runner_up_candidate" in diagnostic
+    assert "current_state_eligible_candidate_score_margin" in diagnostic
+    assert "current_state_label_selection_eligible_candidates" in diagnostic
+    assert "current_state_label_selection_ineligible_candidates" in diagnostic
+    assert "current_state_label_selection_readiness_blockers" in diagnostic
+    assert diagnostic["current_state_scoring_label_selection_enabled"] is False
+    assert diagnostic["future_forecast_label_used_for_current"] is False

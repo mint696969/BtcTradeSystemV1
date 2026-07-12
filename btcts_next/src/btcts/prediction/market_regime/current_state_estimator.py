@@ -9,6 +9,10 @@ from typing import Any, Mapping
 from .contracts import FeatureGroup
 from .features import MarketRegimeFeatureBundle
 from .current_state_persistence import build_persisted_current_state
+from .feature_scoring import (
+    score_market_regime_candidates,
+    summarize_market_regime_candidate_scores,
+)
 
 CURRENT_STATE_ESTIMATOR_VERSION = "prediction.market_regime.current_state_estimator.mr_f2.v1"
 
@@ -151,6 +155,8 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
         "threshold_set_id": threshold_set_id,
         "source_refs": ["warroom_candles", "active_parameter_set"],
     }
+    candidate_scoring = score_market_regime_candidates(bundle)
+    candidate_summary = summarize_market_regime_candidate_scores(candidate_scoring)
     persistence = build_persisted_current_state(
         previous=previous_state,
         regime_code=label if usable else "UNKNOWN",
@@ -180,6 +186,32 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
         "evidence_reason": reason,
         "supporting_evidence": evidence if usable else {},
         "conflicting_evidence": [],
+        "label_source": "current_l4_candle_regime_hint",
+        "candidate_scoring_version": candidate_scoring.get("logic_version", ""),
+        "candidate_scores": candidate_scoring.get("candidate_scores", {}),
+        "candidate_scoring_blockers": candidate_summary.get("scoring_blockers", []),
+        "top_candidate": candidate_summary.get("top_candidate", ""),
+        "top_candidate_score": candidate_summary.get("top_candidate_score"),
+        "runner_up_candidate": candidate_summary.get("runner_up_candidate", ""),
+        "runner_up_score": candidate_summary.get("runner_up_score"),
+        "candidate_score_margin": candidate_summary.get("score_margin"),
+        "eligible_top_candidate": candidate_summary.get("eligible_top_candidate", ""),
+        "eligible_top_candidate_score": candidate_summary.get("eligible_top_candidate_score"),
+        "eligible_runner_up_candidate": candidate_summary.get("eligible_runner_up_candidate", ""),
+        "eligible_runner_up_score": candidate_summary.get("eligible_runner_up_score"),
+        "eligible_candidate_score_margin": candidate_summary.get("eligible_score_margin"),
+        "eligible_top_candidate_available_weight": candidate_summary.get("eligible_top_candidate_available_weight", 0.0),
+        "label_selection_eligible_candidates": candidate_summary.get("label_selection_eligible_candidates", []),
+        "label_selection_ineligible_candidates": candidate_summary.get("label_selection_ineligible_candidates", {}),
+        "label_selection_readiness_blockers": candidate_summary.get("label_selection_readiness_blockers", []),
+        "top_candidate_available_weight": candidate_summary.get("top_candidate_available_weight", 0.0),
+        "top_candidate_missing_feature_groups": candidate_summary.get("top_candidate_missing_feature_groups", []),
+        "top_candidate_contradictory_feature_groups": candidate_summary.get("top_candidate_contradictory_feature_groups", []),
+        "top_candidate_contributions": candidate_summary.get("top_candidate_contributions", []),
+        "scoring_ready_for_label_selection": candidate_summary.get("scoring_ready_for_label_selection", False),
+        "scoring_label_selection_enabled": candidate_summary.get("label_selection_enabled", False),
+        "scoring_label_selection_deferred_reason": candidate_summary.get("label_selection_deferred_reason", ""),
+        "scoring_readiness_thresholds": candidate_summary.get("readiness_thresholds", {}),
         "current_state_outcome_rule_version": "market_regime_current_state_outcome_rule.mr_f2.v1",
         "current_state_outcome_rule_defined": True,
         "current_state_outcome_rule_gap": "",
