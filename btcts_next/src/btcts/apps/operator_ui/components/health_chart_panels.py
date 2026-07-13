@@ -10,6 +10,30 @@ import pandas as pd
 from btcts.apps.operator_ui.components import live_shell
 
 
+def _inject_health_chart_readability_styles(st) -> None:
+    st.markdown(
+        """
+        <style>
+        [data-testid="stVegaLiteChart"] svg text {
+            fill: rgba(31, 41, 55, 0.96) !important;
+        }
+
+        /* Health chart stack only: reduce the space between API, WS,
+           continuity, and Layer3 without changing spacing on other pages. */
+        [class*="st-key-health"][class*="api_chart_panel"],
+        [class*="st-key-health"][class*="ws_chart_panel"] {
+            margin-bottom: -0.45rem !important;
+        }
+
+        [class*="st-key-health"][class*="layer3_chart_panel"] {
+            margin-top: -0.45rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_api_chart_panel(
     *,
     lang: str,
@@ -39,6 +63,7 @@ def render_api_chart_panel(
 
         import streamlit as st
 
+        _inject_health_chart_readability_styles(st)
         api_df = pd.DataFrame(api_ws_series)
         api_df["ts"] = pd.to_datetime(api_df["ts"], utc=True)
 
@@ -48,9 +73,11 @@ def render_api_chart_panel(
         coverage_oldest_available_ts = latest_api.get("coverage_oldest_available_ts")
         coverage_window_start_ts = latest_api.get("coverage_window_start_ts")
         api_metric_mode = str(latest_api.get("api_metric_mode") or "short")
+        latest_overlay = dict(rate_overlay[-1]) if rate_overlay else {}
+        overlay_source_kind = str(latest_overlay.get("source_kind") or "unknown")
 
-        a1, a2, a3, a4 = st.columns(4)
         if api_metric_mode == "short":
+            a1, a2, a3, a4, a5, a6 = st.columns(6)
             a1.metric(
                 get_text(lang, "health_metric_req_1m"),
                 "-" if not bitflyer_rate else format_metric_number(bitflyer_rate.get("requests_60s")),
@@ -60,14 +87,31 @@ def render_api_chart_panel(
                 "-" if not bitflyer_rate else format_metric_number(bitflyer_rate.get("requests_300s")),
             )
             a3.metric(
+                get_text(lang, "health_metric_target_ratio"),
+                "-" if not latest_overlay else format_metric_number(
+                    latest_overlay.get("target_utilization"),
+                    decimals=1,
+                    percent=True,
+                ),
+            )
+            a4.metric(
+                get_text(lang, "health_metric_hard_cap_ratio"),
+                "-" if not latest_overlay else format_metric_number(
+                    latest_overlay.get("hard_cap_utilization"),
+                    decimals=1,
+                    percent=True,
+                ),
+            )
+            a5.metric(
                 get_text(lang, "health_metric_public_rest_1m"),
                 "-" if not bitflyer_rate_public else format_metric_number(bitflyer_rate_public.get("requests_60s")),
             )
-            a4.metric(
+            a6.metric(
                 get_text(lang, "health_metric_private_rest_1m"),
                 "-" if not bitflyer_rate_private else format_metric_number(bitflyer_rate_private.get("requests_60s")),
             )
         else:
+            a1, a2, a3, a4 = st.columns(4)
             a1.metric(
                 get_text(lang, "health_chart_api_events"),
                 format_metric_number(latest_api.get("api_events")),
@@ -88,7 +132,7 @@ def render_api_chart_panel(
         api_chart_columns, api_chart_labels = api_chart_columns_and_labels(api_df, lang)
         if api_chart_columns:
             api_chart_df = api_df.set_index("ts")[api_chart_columns].rename(columns=api_chart_labels)
-            st.line_chart(api_chart_df, height=260, width="stretch")
+            st.line_chart(api_chart_df, height=190, width="stretch")
 
             if not coverage_complete and coverage_warning:
                 st.warning(
@@ -100,43 +144,22 @@ def render_api_chart_panel(
         else:
             st.info(get_text(lang, "health_value_no_data"))
 
-        if rate_overlay:
-            overlay_df = pd.DataFrame(rate_overlay)
-            overlay_df["ts"] = pd.to_datetime(overlay_df["ts"], utc=True)
+        # Budget values remain in rate_overlay for diagnostics and explanation,
+        # but the duplicate lower metric row is intentionally hidden.
 
-            o1, o2, o3, o4 = st.columns(4)
-            latest_overlay = overlay_df.iloc[-1].to_dict() if not overlay_df.empty else {}
+        with st.expander("説明" if lang == "ja" else "Details", expanded=False):
+            if rate_overlay:
+                st.caption(
+                    "rate overlay is current-state only "
+                    f"(source={overlay_source_kind}, range={range_key})"
+                )
+                st.caption(get_text(lang, "health_chart_api_overlay_current_only_short_caption"))
 
-            o1.metric(
-                get_text(lang, "health_metric_budget_60s"),
-                format_metric_number(latest_overlay.get("budget_60s")),
-            )
-            o2.metric(
-                get_text(lang, "health_metric_budget_300s"),
-                format_metric_number(latest_overlay.get("budget_300s")),
-            )
-            o3.metric(
-                get_text(lang, "health_metric_target_ratio"),
-                format_metric_number(latest_overlay.get("target_utilization"), decimals=1, percent=True),
-            )
-            o4.metric(
-                get_text(lang, "health_metric_hard_cap_ratio"),
-                format_metric_number(latest_overlay.get("hard_cap_utilization"), decimals=1, percent=True),
-            )
-
-            overlay_source_kind = str(latest_overlay.get("source_kind") or "unknown")
-
-            st.caption(
-                "rate overlay is current-state only "
-                f"(source={overlay_source_kind}, range={range_key})"
-            )
-            st.caption(get_text(lang, "health_chart_api_overlay_current_only_short_caption"))
-
-        st.caption(get_text(lang, "health_chart_api_caption"))
-        if api_metric_mode != "short":
-            st.caption(get_text(lang, "health_chart_api_long_range_caption"))
-            st.caption(get_text(lang, "health_chart_api_overlay_current_only_caption"))
-        st.caption(get_text(lang, "health_chart_unfinished_bucket_caption"))
+            st.caption(get_text(lang, "health_chart_api_caption"))
+            if api_metric_mode != "short":
+                st.caption(get_text(lang, "health_chart_api_long_range_caption"))
+                st.caption(get_text(lang, "health_chart_api_overlay_current_only_caption"))
+            st.caption(get_text(lang, "health_chart_unfinished_bucket_caption"))
 
 
 def render_ws_chart_panel(
@@ -157,6 +180,7 @@ def render_ws_chart_panel(
     ):
         import streamlit as st
 
+        _inject_health_chart_readability_styles(st)
         if not api_ws_series:
             st.info(get_text(lang, "health_value_no_data"))
             return
@@ -201,7 +225,7 @@ def render_ws_chart_panel(
                 "resync_events": get_text(lang, "health_chart_resync_events"),
             }
         )
-        st.line_chart(ws_chart_df, height=220, width="stretch")
+        st.line_chart(ws_chart_df, height=180, width="stretch")
 
         if not coverage_complete and coverage_warning:
             st.warning(
@@ -210,8 +234,9 @@ def render_ws_chart_panel(
                 f"oldest_available={coverage_oldest_available_ts})"
             )
 
-        st.caption(get_text(lang, "health_chart_ws_caption"))
-        st.caption(get_text(lang, "health_chart_unfinished_bucket_caption"))
+        with st.expander("説明" if lang == "ja" else "Details", expanded=False):
+            st.caption(get_text(lang, "health_chart_ws_caption"))
+            st.caption(get_text(lang, "health_chart_unfinished_bucket_caption"))
 
 
 def _distribution_dict_text(counts: dict[str, int] | None) -> str:

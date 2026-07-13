@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import html
 
 import streamlit as st
 
 from btcts.apps.operator_ui.components import live_shell
-from btcts.apps.operator_ui.components.health_continuity import render_continuity_rail
+from btcts.apps.operator_ui.components.health_continuity import (
+    render_continuity_legend,
+    render_continuity_rail,
+)
 from btcts.apps.operator_ui.components.market_summary_presenter import (
     active_event_compact_reading_line,
 )
@@ -29,6 +33,52 @@ def render_read_guide_section(
         st.caption(f"3. {get_text(lang, 'health_read_guide_line3')}")
 
 
+
+def _health_summary_level(value: str) -> str:
+    normalized = str(value or "").strip().lower()
+    if not normalized or normalized in {"-", "unknown", "データなし", "no data"}:
+        return "gray"
+    if any(token in normalized for token in ("危険", "critical", "error", "failed", "broken", "down", "disconnected")):
+        return "red"
+    if any(token in normalized for token in ("注意", "warning", "warn", "stale", "degraded", "backoff")):
+        return "yellow"
+    if any(token in normalized for token in ("正常", "healthy", "running", "normal", "live", "ok")):
+        return "green"
+    return "gray"
+
+
+def _render_health_summary_card(*, title: str, value: str, details: list[str]) -> None:
+    palette = {
+        "green": ("#16a34a", "#f0fdf4", "#86efac"),
+        "yellow": ("#a16207", "#fefce8", "#fde047"),
+        "red": ("#dc2626", "#fef2f2", "#fca5a5"),
+        "gray": ("#6b7280", "#f8fafc", "#cbd5e1"),
+    }
+    level = _health_summary_level(value)
+    accent, background, border = palette[level]
+    detail_text = " / ".join(str(item).strip() for item in details if str(item).strip())
+    safe_title = html.escape(str(title))
+    safe_value = html.escape(str(value))
+    safe_detail = html.escape(detail_text)
+    card_html = (
+        f'<div style="box-sizing:border-box;height:88px;border:1px solid {border};'
+        f'border-left:4px solid {accent};border-radius:8px;background:{background};'
+        'padding:8px 10px;overflow:hidden;">'
+        f'<div style="font-size:0.875rem;line-height:1.15;color:#374151;margin-bottom:2px;">{safe_title}</div>'
+        f'<div style="font-size:1.25rem;line-height:1.2;font-weight:500;color:{accent};margin-bottom:4px;">{safe_value}</div>'
+        '<div style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;'
+        'font-size:0.78rem;line-height:1.25;color:#4b5563;display:-webkit-box;'
+        '-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;">'
+        f'{safe_detail}</div></div>'
+    )
+    st.markdown(card_html, unsafe_allow_html=True)
+
+
+def _render_health_summary_card_styles() -> None:
+    # Styles are intentionally inline so Streamlit reruns/fragments cannot drop card styling.
+    return
+
+
 def render_collector_summary_metric(
     *,
     lang: str,
@@ -38,12 +88,11 @@ def render_collector_summary_metric(
     collector_summary_label: Callable[[dict, dict, str], str],
     digest_caption: str | None = None,
 ) -> None:
-    st.metric(
-        get_text(lang, "health_summary_collector"),
-        collector_summary_label(status_payload, health_payload, lang),
+    _render_health_summary_card(
+        title=get_text(lang, "health_summary_collector"),
+        value=collector_summary_label(status_payload, health_payload, lang),
+        details=[digest_caption or ""],
     )
-    if digest_caption:
-        live_shell.render_scrollable_text_block(digest_caption, max_height_px=110, monospace=True)
 
 
 def render_api_summary_metric(
@@ -54,12 +103,11 @@ def render_api_summary_metric(
     api_summary_label: Callable[[dict, str], str],
     digest_caption: str | None = None,
 ) -> None:
-    st.metric(
-        get_text(lang, "health_summary_api"),
-        api_summary_label(bitflyer_rate, lang),
+    _render_health_summary_card(
+        title=get_text(lang, "health_summary_api"),
+        value=api_summary_label(bitflyer_rate, lang),
+        details=[digest_caption or ""],
     )
-    if digest_caption:
-        live_shell.render_scrollable_text_block(digest_caption, max_height_px=110, monospace=True)
 
 
 def render_ws_summary_metric(
@@ -70,12 +118,11 @@ def render_ws_summary_metric(
     ws_summary_label: Callable[[dict, str], str],
     digest_caption: str | None = None,
 ) -> None:
-    st.metric(
-        get_text(lang, "health_summary_ws"),
-        ws_summary_label(origin_payload, lang),
+    _render_health_summary_card(
+        title=get_text(lang, "health_summary_ws"),
+        value=ws_summary_label(origin_payload, lang),
+        details=[digest_caption or ""],
     )
-    if digest_caption:
-        live_shell.render_scrollable_text_block(digest_caption, max_height_px=110, monospace=True)
 
 
 def build_health_digest_layer3_summary_caption(
@@ -327,14 +374,11 @@ def render_layer3_summary_metric(
     digest_caption: str | None = None,
     operational_reading_caption: str | None = None,
 ) -> None:
-    st.metric(
-        get_text(lang, "health_summary_layer3"),
-        layer3_summary_label(market_latest, market_diag, lang),
+    _render_health_summary_card(
+        title=get_text(lang, "health_summary_layer3"),
+        value=layer3_summary_label(market_latest, market_diag, lang),
+        details=[digest_caption or "", operational_reading_caption or ""],
     )
-    if digest_caption:
-        live_shell.render_scrollable_text_block(digest_caption, max_height_px=110, monospace=True)
-    if operational_reading_caption:
-        live_shell.render_scrollable_text_block(operational_reading_caption, max_height_px=130, monospace=True)
 
 
 def render_overview_summary_panel(
@@ -352,6 +396,7 @@ def render_overview_summary_panel(
     ws_summary_label: Callable[[dict, str], str],
     layer3_summary_label: Callable[[dict, dict, str], str],
 ) -> None:
+    _render_health_summary_card_styles()
     c1, c2, c3, c4 = live_shell.responsive_columns(4, compact=True)
 
     with c1:
@@ -414,8 +459,12 @@ def render_continuity_panels(
         health_widget_slot("api_continuity_panel")
     ):
         if api_continuity_rail:
-            render_continuity_rail(api_continuity_rail, lang)
-            st.caption(get_text(lang, "health_continuity_caption_api"))
+            render_continuity_rail(
+                api_continuity_rail,
+                lang,
+                range_key=range_key,
+                show_legend=False,
+            )
         else:
             st.info(get_text(lang, "health_value_no_data"))
 
@@ -423,7 +472,28 @@ def render_continuity_panels(
         health_widget_slot("ws_continuity_panel")
     ):
         if ws_continuity_rail:
-            render_continuity_rail(ws_continuity_rail, lang)
-            st.caption(get_text(lang, "health_continuity_caption_ws"))
+            render_continuity_rail(
+                ws_continuity_rail,
+                lang,
+                range_key=range_key,
+                show_legend=False,
+            )
         else:
             st.info(get_text(lang, "health_value_no_data"))
+
+    if api_continuity_rail or ws_continuity_rail:
+        render_continuity_legend(range_key=range_key, lang=lang)
+        st.caption(
+            (
+                "API REST / WS Board / WS Executions の連続性を見ます。"
+                "セル幅は表示レンジに合わせて、1分・30分・3時間へ切り替わります。"
+                "緑=安定、黄=注意、橙=不安定、赤=危険、灰=データなし。"
+            )
+            if lang == "ja"
+            else (
+                "This summarizes continuity for API REST, WS Board, and WS Executions. "
+                "Cell duration follows the selected range: 1 minute, 30 minutes, or 3 hours. "
+                "Green=stable, yellow=attention, "
+                "orange=unstable, red=danger, gray=no data."
+            )
+        )

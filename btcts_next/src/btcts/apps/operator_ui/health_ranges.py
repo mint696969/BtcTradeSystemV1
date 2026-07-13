@@ -35,8 +35,13 @@ def range_config(range_key: str) -> dict[str, Any]:
 
 
 def bucket_floor(dt: datetime, bucket_minutes: int) -> datetime:
-    minute_bucket = (dt.minute // bucket_minutes) * bucket_minutes
-    return dt.replace(minute=minute_bucket, second=0, microsecond=0)
+    if bucket_minutes < 1:
+        raise ValueError("bucket_minutes must be at least 1")
+
+    day_start = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+    minutes_since_day_start = dt.hour * 60 + dt.minute
+    floored_minutes = (minutes_since_day_start // bucket_minutes) * bucket_minutes
+    return day_start + timedelta(minutes=floored_minutes)
 
 
 def time_buckets(window_minutes: int, bucket_minutes: int) -> list[datetime]:

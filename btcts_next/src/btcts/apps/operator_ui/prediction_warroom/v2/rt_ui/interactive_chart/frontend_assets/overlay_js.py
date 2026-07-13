@@ -45,8 +45,13 @@ function renderOverlayLayers(chart, baseSeries) {
     if (layer.kind === 'board_band') renderBoardBandOverlay(chart, layer);
   }
 }
+function clearSelectionMarkers() {
+  try {
+    if (markersApi && markersApi.setMarkers) markersApi.setMarkers([]);
+  } catch (err) { console.debug(err); }
+}
 function markSelection(series) {
-  if (!selectedStart || !selectedEnd) return;
+  if (!selectedStart || !selectedEnd) { clearSelectionMarkers(); return; }
   const [s, e] = orderSelection(selectedStart, selectedEnd);
   const markers = [
     { time: s.time, position: 'belowBar', color: '#2563eb', shape: 'arrowUp', text: 'start' },

@@ -17,9 +17,29 @@ function formatChartTimeJst(time, includeDate) {
   const ts = chartDisplayTimestamp(time);
   if (ts === null) return '';
   const options = includeDate
-    ? { timeZone: WARROOM_CHART_DISPLAY_TIMEZONE, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }
-    : { timeZone: WARROOM_CHART_DISPLAY_TIMEZONE, hour: '2-digit', minute: '2-digit', hour12: false };
+    ? { timeZone: WARROOM_CHART_DISPLAY_TIMEZONE, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }
+    : { timeZone: WARROOM_CHART_DISPLAY_TIMEZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
   return new Intl.DateTimeFormat('ja-JP', options).format(new Date(ts));
+}
+function isCalendarBoundaryTick(tickMarkType) {
+  const type = Number(tickMarkType);
+  return Number.isFinite(type) && type <= 2;
+}
+function formatChartTickJst(time, tickMarkType) {
+  const ts = chartDisplayTimestamp(time);
+  if (ts === null) return '';
+  const parts = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: WARROOM_CHART_DISPLAY_TIMEZONE,
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ts));
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  const isMidnight = values.hour === '00' && values.minute === '00';
+  if (isMidnight || isCalendarBoundaryTick(tickMarkType)) return `${values.month}/${values.day}`;
+  return `${values.hour}:${values.minute}`;
 }
 function boot() {
   if (!window.LightweightCharts || !CANDLES.length) { document.getElementById('fallback').style.display = 'block'; return; }
@@ -38,7 +58,7 @@ function boot() {
     localization: { locale: 'ja-JP', priceFormatter: price => Number(price).toLocaleString('ja-JP', { maximumFractionDigits: 0 }), timeFormatter: time => formatChartTimeJst(time, true) },
     crosshair: { mode: LightweightCharts.CrosshairMode ? LightweightCharts.CrosshairMode.Normal : 0 },
     rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.08, bottom: 0.24 } },
-    timeScale: { borderVisible: false, rightOffset: 14, barSpacing: 2, minBarSpacing: 1, fixLeftEdge: false, fixRightEdge: false, timeVisible: true, secondsVisible: false, tickMarkFormatter: time => formatChartTimeJst(time, false) },
+    timeScale: { borderVisible: false, rightOffset: 14, barSpacing: 1, minBarSpacing: 0.5, fixLeftEdge: false, fixRightEdge: false, timeVisible: true, secondsVisible: false, tickMarkFormatter: (time, tickMarkType) => formatChartTickJst(time, tickMarkType) },
     handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
     handleScale: { mouseWheel: true, pinch: true, axisPressedMouseMove: true },
   });
@@ -52,6 +72,48 @@ function boot() {
   let volumeSeries = null;
   let lastClosePriceLine = null;
   let operatorViewportLocked = false;
+  const FIXED_BAR_SPACING = 8;
+  const FIXED_MIN_BAR_SPACING = 0.5;
+  const BAR_SPACING_STORAGE_KEY = 'warroom:base-candle-bar-spacing:v1';
+  function clampBarSpacing(value) {
+    const spacing = Number(value);
+    if (!Number.isFinite(spacing)) return FIXED_BAR_SPACING;
+    return Math.max(FIXED_MIN_BAR_SPACING, Math.min(80, spacing));
+  }
+  function loadPreferredBarSpacing() {
+    try {
+      const stored = window.localStorage.getItem(BAR_SPACING_STORAGE_KEY);
+      return stored === null ? FIXED_BAR_SPACING : clampBarSpacing(stored);
+    } catch (err) {
+      return FIXED_BAR_SPACING;
+    }
+  }
+  function savePreferredBarSpacing() {
+    try {
+      const options = chart.timeScale().options ? chart.timeScale().options() : null;
+      const spacing = clampBarSpacing(options && options.barSpacing);
+      window.localStorage.setItem(BAR_SPACING_STORAGE_KEY, String(spacing));
+    } catch (err) {
+      // localStorage or chart options may be unavailable; the chart remains usable.
+    }
+  }
+  function applyPreferredBarSpacing() {
+    chart.timeScale().applyOptions({
+      barSpacing: loadPreferredBarSpacing(),
+      minBarSpacing: FIXED_MIN_BAR_SPACING,
+    });
+  }
+  function resetPreferredBarSpacing() {
+    try { window.localStorage.removeItem(BAR_SPACING_STORAGE_KEY); } catch (err) { /* ignore unavailable storage */ }
+    chart.timeScale().applyOptions({
+      barSpacing: FIXED_BAR_SPACING,
+      minBarSpacing: FIXED_MIN_BAR_SPACING,
+    });
+  }
+  function setVisibleLogicalRangeFixed(range) {
+    chart.timeScale().setVisibleLogicalRange(range);
+    applyPreferredBarSpacing();
+  }
   let plotBarCount = Array.isArray(CANDLES) ? CANDLES.length : 0;
   const MAX_WHITESPACE_BARS = Number(ctx.max_whitespace_bars || 200000);
   function candleBar(c) { return { time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }; }
@@ -164,11 +226,11 @@ function boot() {
     updateBaseMeta(CANDLES, payload.meta || {});
     if (preserveRange && chart.timeScale().setVisibleLogicalRange) {
       if (previousRange && (operatorViewportLocked || !wasFollowingLatest)) {
-        chart.timeScale().setVisibleLogicalRange(previousRange);
+        setVisibleLogicalRangeFixed(previousRange);
       } else {
-        const liveVisible = Math.max(visible || 120, Math.ceil((visible || 120) * 3.0));
+        const liveVisible = Math.max(visible || 120, Math.ceil((visible || 120) * 8.0));
         const latestPlotBar = plotBarCount || CANDLES.length;
-        chart.timeScale().setVisibleLogicalRange({ from: latestPlotBar - liveVisible, to: latestPlotBar + 8 });
+        setVisibleLogicalRangeFixed({ from: latestPlotBar - liveVisible, to: latestPlotBar + 8 });
       }
     }
     return true;
@@ -177,7 +239,7 @@ function boot() {
   renderOverlayLayers(chart, series);
   const liveFollowLatestOnLoad = ctx.chart_engine_polling_enabled !== false;
   const visible = Math.max(12, BASE.visible_candle_count || 120);
-  const thinVisible = Math.max(visible, Math.ceil(visible * 3.0));
+  const thinVisible = Math.max(visible, Math.ceil(visible * 8.0));
   const total = Math.max(plotBarCount || 0, CANDLES.length);
   const rangeStorageKey = ['warroom', 'base-candle-range', BASE.component_version || 'v1', BASE.mode || 'live', ctx.viewport_label || BASE.chart_context?.viewport_label || 'window', visible, thinVisible, total].join(':');
   const defaultVisibleRange = { from: total - thinVisible, to: total + 10 };
@@ -213,17 +275,21 @@ function boot() {
   function resetVisibleRange() {
     operatorViewportLocked = false;
     try { window.localStorage.removeItem(rangeStorageKey); } catch (err) { /* ignore unavailable storage */ }
+    resetPreferredBarSpacing();
     const latestTotal = Math.max(plotBarCount || 0, CANDLES.length, total);
     const latestRange = { from: latestTotal - thinVisible, to: latestTotal + 10 };
     chart.timeScale().setVisibleLogicalRange(latestRange);
   }
   const loadedVisibleRange = liveFollowLatestOnLoad ? null : loadVisibleRange();
   if (loadedVisibleRange) operatorViewportLocked = true;
-  chart.timeScale().setVisibleLogicalRange(loadedVisibleRange || defaultVisibleRange);
+  setVisibleLogicalRangeFixed(loadedVisibleRange || defaultVisibleRange);
   if (chart.timeScale().subscribeVisibleLogicalRangeChange) {
     chart.timeScale().subscribeVisibleLogicalRangeChange(saveVisibleRange);
   }
-  chartEl.addEventListener('wheel', () => { operatorViewportLocked = true; }, { passive: true });
+  chartEl.addEventListener('wheel', () => {
+    operatorViewportLocked = true;
+    window.requestAnimationFrame(() => window.requestAnimationFrame(savePreferredBarSpacing));
+  }, { passive: true });
   chartEl.addEventListener('pointerdown', () => { operatorViewportLocked = true; });
   if (resetRangeBtn) resetRangeBtn.addEventListener('click', resetVisibleRange);
   async function pollChartDataEndpoint() {
@@ -253,7 +319,7 @@ function boot() {
   });
   copyBtn.addEventListener('click', copySelection);
   if (!restoreFinalizedSelection(series)) restoreSelectionAnchor(series);
-  window.addEventListener('resize', () => chart.applyOptions({ width: chartEl.clientWidth }));
+  window.addEventListener('resize', () => { chart.applyOptions({ width: chartEl.clientWidth }); applyPreferredBarSpacing(); });
 }
 boot();
 """.strip()

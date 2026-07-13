@@ -60,7 +60,70 @@ def _coverage_warning_label(warning: str) -> str:
     return mapping.get(str(warning or ""), str(warning or ""))
 
 
-def render_continuity_rail(rail_rows: list[dict], lang: str) -> None:
+def continuity_scale_config(range_key: str, lang: str) -> dict[str, object]:
+    normalized = str(range_key or "1h")
+    if normalized == "24h":
+        return {
+            "cell_label": "1セル＝30分" if lang == "ja" else "1 cell = 30 minutes",
+            "major_every": 6,
+            "major_label": "3時間ごと" if lang == "ja" else "every 3 hours",
+            "time_format": "%H:%M",
+        }
+    if normalized == "1w":
+        return {
+            "cell_label": "1セル＝3時間" if lang == "ja" else "1 cell = 3 hours",
+            "major_every": 8,
+            "major_label": "1日ごと" if lang == "ja" else "every day",
+            "time_format": "%m/%d %H:%M",
+        }
+    return {
+        "cell_label": "1セル＝1分" if lang == "ja" else "1 cell = 1 minute",
+        "major_every": 10,
+        "major_label": "10分ごと" if lang == "ja" else "every 10 minutes",
+        "time_format": "%H:%M",
+    }
+
+
+def _compact_ts_label(value: object, *, time_format: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "-"
+    try:
+        from datetime import datetime
+
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    return dt.strftime(time_format)
+
+
+def render_continuity_legend(*, range_key: str = "1h", lang: str = "ja") -> None:
+    scale = continuity_scale_config(range_key, lang)
+    if lang == "ja":
+        text = (
+            f"{scale['cell_label']}。緑=正常更新 / 黄=単発の不安定 / "
+            "橙=繰り返し不安定または警告 / 赤=断絶または危険 / 灰=観測データなし。"
+            "右端の枠付きセルには現在状態を重ねます。"
+        )
+    else:
+        text = (
+            f"{scale['cell_label']}. green=normal update / yellow=single instability / "
+            "orange=repeated instability or warning / red=broken or dangerous / gray=no observed data. "
+            "The rightmost outlined cell includes current lane truth."
+        )
+    st.markdown(
+        f"<div class='health-continuity-legend'>{html.escape(text)}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_continuity_rail(
+    rail_rows: list[dict],
+    lang: str,
+    *,
+    range_key: str = "1h",
+    show_legend: bool = True,
+) -> None:
     st.markdown(
         """
         <style>
@@ -104,6 +167,29 @@ def render_continuity_rail(rail_rows: list[dict], lang: str) -> None:
             height: 16px;
             border-radius: 2px;
         }
+        .health-continuity-cell-major {
+            box-shadow: inset 2px 0 0 rgba(55,65,81,0.32);
+        }
+        .health-continuity-scale {
+            display: grid;
+            grid-template-columns: 170px 1fr;
+            gap: 0.75rem;
+            margin-top: -0.05rem;
+            margin-bottom: 0.20rem;
+            color: rgba(75,85,99,0.96);
+            font-size: 0.70rem;
+        }
+        .health-continuity-scale-track {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+        }
+        .health-continuity-scale-track span:nth-child(2) {
+            justify-self: center;
+        }
+        .health-continuity-scale-track span:last-child {
+            justify-self: end;
+        }
         .health-continuity-cell-current {
             outline: 2px solid rgba(255,255,255,0.70);
             outline-offset: -2px;
@@ -115,6 +201,17 @@ def render_continuity_rail(rail_rows: list[dict], lang: str) -> None:
             padding: 0.65rem 0.8rem;
             margin-top: 0.4rem;
             margin-bottom: 0.9rem;
+            display: flex;
+            align-items: baseline;
+            gap: 1.25rem;
+            flex-wrap: wrap;
+        }
+        .health-continuity-reason-title {
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .health-continuity-reason-text {
+            min-width: 0;
         }
         .health-continuity-legend {
             color: rgba(107,114,128,0.95);
@@ -126,14 +223,10 @@ def render_continuity_rail(rail_rows: list[dict], lang: str) -> None:
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        "<div class='health-continuity-legend'>"
-        "1 cell = 1 minute. green=normal update / yellow=single instability / "
-        "orange=repeated instability or warning / red=broken or dangerous / gray=no observed data. "
-        "The rightmost outlined cell includes current lane truth."
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    if show_legend:
+        render_continuity_legend(range_key=range_key, lang=lang)
+
+    scale = continuity_scale_config(range_key, lang)
 
     for row in rail_rows:
         raw_venue = str(row.get("venue") or "-")
@@ -159,11 +252,14 @@ def render_continuity_rail(rail_rows: list[dict], lang: str) -> None:
                 break
 
         cell_html_parts: list[str] = []
-        for cell in cells:
+        major_every = max(1, int(scale["major_every"]))
+        for index, cell in enumerate(cells):
             level = str(cell.get("level") or "gray")
             reason_text = get_text(lang, str(cell.get("reason") or "health_continuity_reason_none"))
             is_current_overlay = bool(cell.get("current_truth_overlay"))
             classes = "health-continuity-cell"
+            if index > 0 and index % major_every == 0:
+                classes += " health-continuity-cell-major"
             if is_current_overlay:
                 classes += " health-continuity-cell-current"
             title = (
@@ -204,6 +300,30 @@ def render_continuity_rail(rail_rows: list[dict], lang: str) -> None:
             unsafe_allow_html=True,
         )
 
+        if cells:
+            first_label = _compact_ts_label(cells[0].get("ts"), time_format=str(scale["time_format"]))
+            middle_label = _compact_ts_label(
+                cells[len(cells) // 2].get("ts"),
+                time_format=str(scale["time_format"]),
+            )
+            last_label = _compact_ts_label(cells[-1].get("ts"), time_format=str(scale["time_format"]))
+        else:
+            first_label = middle_label = last_label = "-"
+
+        st.markdown(
+            (
+                "<div class='health-continuity-scale'>"
+                f"<div>{html.escape(str(scale['cell_label']))} / "
+                f"{html.escape(str(scale['major_label']))}</div>"
+                "<div class='health-continuity-scale-track'>"
+                f"<span>{html.escape(first_label)}</span>"
+                f"<span>{html.escape(middle_label)}</span>"
+                f"<span>{html.escape(last_label)}</span>"
+                "</div></div>"
+            ),
+            unsafe_allow_html=True,
+        )
+
         coverage_line = ""
         if coverage_warning:
             coverage_line = (
@@ -218,9 +338,13 @@ def render_continuity_rail(rail_rows: list[dict], lang: str) -> None:
         st.markdown(
             (
                 "<div class='health-continuity-reason'>"
-                f"<strong>{get_text(lang, 'health_continuity_reason_title')}</strong><br>"
+                "<span class='health-continuity-reason-title'>"
+                f"{get_text(lang, 'health_continuity_reason_title')}"
+                "</span>"
+                "<span class='health-continuity-reason-text'>"
                 f"current={html.escape(current_label)} / {html.escape(current_reason)}"
                 f"{coverage_line}"
+                "</span>"
                 "</div>"
             ),
             unsafe_allow_html=True,

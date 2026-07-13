@@ -379,15 +379,13 @@ def _render_health_range_selector(lang: str) -> str:
     }
     selected_range_key = st.session_state.get("health_selected_range_key", "1h")
 
-    range_cols = st.columns([1, 6])
-    with range_cols[0]:
-        st.session_state.health_selected_range_key = st.selectbox(
-            get_text(lang, "health_label_range_selector"),
-            options=["1h", "24h", "1w"],
-            index=["1h", "24h", "1w"].index(selected_range_key),
-            format_func=lambda key: range_options.get(key, key),
-            key="health_range_selector",
-        )
+    st.session_state.health_selected_range_key = st.selectbox(
+        get_text(lang, "health_label_range_selector"),
+        options=["1h", "24h", "1w"],
+        index=["1h", "24h", "1w"].index(selected_range_key),
+        format_func=lambda key: range_options.get(key, key),
+        key="health_range_selector",
+    )
 
     return str(st.session_state.health_selected_range_key)
 
@@ -506,7 +504,11 @@ def _render_live_tick_caption(lang: str) -> None:
     if getattr(now, "tzinfo", None) is None:
         now = now.tz_localize("UTC")
     tick_text = now.strftime("%H:%M:%S UTC")
-    st.caption(get_text(lang, "health_caption_live_tick_prefix") + tick_text)
+    label = get_text(lang, "health_caption_live_tick_prefix") + tick_text
+    st.markdown(
+        f'<div style="padding-top:1.9rem;color:#4b5563;font-size:0.875rem;white-space:nowrap;">{label}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render():
@@ -519,7 +521,17 @@ def render():
         return _section_title_with_range(title, range_key, lang)
 
     live_shell.render_compact_page_header(get_text(lang, "page_health"))
-    selected_range_key = _render_health_range_selector(lang)
+
+    controls_left, controls_right = st.columns([1.25, 5.75], gap="large")
+    with controls_left:
+        selected_range_key = _render_health_range_selector(lang)
+    with controls_right:
+        live_shell.render_fragment_slot(
+            health_widget_slot("live_tick_caption"),
+            lambda: _render_live_tick_caption(lang),
+            enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+        )
+
     # Build the expensive Health read model once per page render and share it
     # across all sections.  st.cache_data(ttl=1) can expire during a heavy
     # page render, causing repeated snapshot rebuilds inside one UI pass.
@@ -529,12 +541,6 @@ def render():
         if live_shell.in_fragment_context("health"):
             return _load_cached_health_snapshot(selected_range_key)
         return health_snapshot
-
-    live_shell.render_fragment_slot(
-        health_widget_slot("live_tick_caption"),
-        lambda: _render_live_tick_caption(lang),
-        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
-    )
 
 
     def _render_collector_summary_section() -> None:
@@ -633,31 +639,13 @@ def render():
         if safety_payload is not None:
             render_hot_cold_retention_safety_panel(safety_payload, expanded=False)
 
-    live_shell.render_fragment_slot(
-        health_widget_slot("hot_cold_retention_safety_panel"),
-        _render_hot_cold_retention_safety_section,
-        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
-    )
-
     def _render_evidence_presentation_section() -> None:
         snapshot = _health_snapshot_for_section()
         evidence_payload = _snapshot_evidence_presentation_payload(snapshot)
         render_evidence_presentation_panel(evidence_payload, expanded=False)
 
-    live_shell.render_fragment_slot(
-        health_widget_slot("evidence_presentation_panel"),
-        _render_evidence_presentation_section,
-        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
-    )
-
     def _render_dashboard_hub_source_panel_section() -> None:
         render_dashboard_hub_display_source_panel()
-
-    live_shell.render_fragment_slot(
-        health_widget_slot("dashboard_hub_source_panel"),
-        _render_dashboard_hub_source_panel_section,
-        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
-    )
 
     def _render_api_chart_section() -> None:
         snapshot = _health_snapshot_for_section()
@@ -883,9 +871,33 @@ def render():
         _render_ws_chart_section,
         enabled=bool(st.session_state.get("ui_auto_refresh", True)),
     )
+
+    # Keep the continuity rails directly under the WebSocket chart while
+    # preserving their internal API REST / WS Board / WS Executions order.
+    _render_health_fragment(
+        refresh_mode="poll_normal",
+        render_body=_render_continuity_section,
+    )
+
     live_shell.render_fragment_slot(
         health_widget_slot("layer3_chart_panel"),
         _render_layer3_chart_section,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
+
+    live_shell.render_fragment_slot(
+        health_widget_slot("hot_cold_retention_safety_panel"),
+        _render_hot_cold_retention_safety_section,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
+    live_shell.render_fragment_slot(
+        health_widget_slot("evidence_presentation_panel"),
+        _render_evidence_presentation_section,
+        enabled=bool(st.session_state.get("ui_auto_refresh", True)),
+    )
+    live_shell.render_fragment_slot(
+        health_widget_slot("dashboard_hub_source_panel"),
+        _render_dashboard_hub_source_panel_section,
         enabled=bool(st.session_state.get("ui_auto_refresh", True)),
     )
     live_shell.render_fragment_slot(
@@ -902,11 +914,6 @@ def render():
     render_read_guide_section(
         lang=lang,
         get_text=get_text,
-    )
-
-    _render_health_fragment(
-        refresh_mode="poll_normal",
-        render_body=_render_continuity_section,
     )
 
     def _render_market_summary_caption() -> None:

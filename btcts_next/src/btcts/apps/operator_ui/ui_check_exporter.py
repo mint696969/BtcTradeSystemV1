@@ -16,6 +16,7 @@ import sys
 SCHEMA_VERSION = "btcts.operator_ui.uicheck.v2"
 UICHK_DIR = Path("tmp/uicheck")
 AUTOSAVE_STATE_FILE = UICHK_DIR / "autosave_state.json"
+UICHK_MAX_SNAPSHOTS = 10
 
 ENV_WHITELIST = (
     "BTCTS_MARKET", "BTCTS_SYMBOL", "BTCTS_INSTRUMENT_ID",
@@ -163,6 +164,29 @@ def _session_state_snapshot(session_state: Mapping[str, Any]) -> dict[str, Any]:
     return {"key_count": len(keys), "keys": keys, "selected_safe_values": selected}
 
 
+def prune_gpt_ui_check_snapshots(
+    *,
+    out_dir: Path | None = None,
+    keep: int = UICHK_MAX_SNAPSHOTS,
+) -> list[str]:
+    """Delete old UI Check snapshots while preserving management files."""
+    if keep < 1:
+        raise ValueError("keep must be at least 1")
+
+    target_dir = out_dir or (_repo_root() / UICHK_DIR)
+    snapshots = sorted(
+        (path for path in target_dir.glob("uicheck_*.json") if path.is_file()),
+        key=lambda path: path.name,
+        reverse=True,
+    )
+
+    deleted: list[str] = []
+    for path in snapshots[keep:]:
+        path.unlink()
+        deleted.append(str(path))
+    return deleted
+
+
 def save_gpt_ui_check_snapshot(
     *,
     page_key: str,
@@ -226,4 +250,5 @@ def save_gpt_ui_check_snapshot(
         "human_note": str(human_note or ""),
     }
     out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    prune_gpt_ui_check_snapshots(out_dir=out_dir, keep=UICHK_MAX_SNAPSHOTS)
     return str(out_path)

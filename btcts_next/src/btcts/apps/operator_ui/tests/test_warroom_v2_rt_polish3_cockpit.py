@@ -299,15 +299,19 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "handleCandleClick" in html
     assert "finalizedNow" in html
     assert "if (finalizedNow) copySelection();" in html
-    assert "SELECTION_ANCHOR_TTL_MS = 5000" in html
-    assert "SELECTION_FINALIZED_TTL_MS = 5000" in html
+    assert "SELECTION_ANCHOR_TTL_MS = 30000" in html
+    assert "SELECTION_FINALIZED_TTL_MS = 10000" in html
     assert "storeSelectionAnchor(c, series)" in html
     assert "clearStoredFinalizedSelection();" in html
     assert "storeFinalizedSelection('copied')" in html
     assert "storeFinalizedSelection('manual')" in html
     assert "restoreFinalizedSelection(series)" in html
     assert "restoreSelectionAnchor(series)" in html
-    assert "finalizeAnchorWaitWithoutCopy" in html
+    assert "clearSelectionStateAfterAnchorExpiry" in html
+    assert "scheduleFinalizedMarkerExpiry" in html
+    assert "clearFinalizedSelectionPresentation" in html
+    assert "clearSelectionMarkers" in html
+    assert "finalizeAnchorWaitWithoutCopy" not in html
     assert "selectionAnchor" in html
     assert "selectionRangeFinalized" in html
     assert "subscribeCrosshairMove" not in html
@@ -316,10 +320,21 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "base-candle-range" in html
     assert "BASE.component_version" in html
     assert "ctx.viewport_label" in html
-    assert "barSpacing: 2" in html
-    assert "minBarSpacing: 1" in html
+    assert "barSpacing: 1" in html
+    assert "FIXED_BAR_SPACING = 8" in html
+    assert "FIXED_MIN_BAR_SPACING = 0.5" in html
+    assert "BAR_SPACING_STORAGE_KEY" in html
+    assert "function loadPreferredBarSpacing()" in html
+    assert "function savePreferredBarSpacing()" in html
+    assert "function applyPreferredBarSpacing()" in html
+    assert "function resetPreferredBarSpacing()" in html
+    assert "function setVisibleLogicalRangeFixed(range)" in html
+    assert "requestAnimationFrame(savePreferredBarSpacing)" in html
+    assert "localStorage.removeItem(BAR_SPACING_STORAGE_KEY)" in html
+    assert "minBarSpacing: 0.5" in html
     assert "thinVisible" in html
-    assert "Math.ceil(visible * 3.0)" in html
+    assert "Math.ceil(visible * 8.0)" in html
+    assert "Math.ceil((visible || 120) * 8.0)" in html
     assert "visible, thinVisible, total" in html
     assert "subscribeVisibleLogicalRangeChange" in html
     assert "loadedVisibleRange || defaultVisibleRange" in html
@@ -334,6 +349,12 @@ def test_interactive_chart_package_builds_selection_copy_surface() -> None:
     assert "frontend_tail_record_index_not_store_index" in html
     assert "WARROOM_CHART_DISPLAY_TIMEZONE" in html
     assert "tickMarkFormatter" in html
+    assert "function isCalendarBoundaryTick(tickMarkType)" in html
+    assert "function formatChartTickJst(time, tickMarkType)" in html
+    assert "values.hour === '00' && values.minute === '00'" in html
+    assert "return `${values.month}/${values.day}`" in html
+    assert "tickMarkFormatter: (time, tickMarkType) => formatChartTickJst(time, tickMarkType)" in html
+    assert "isMidnight || isCalendarBoundaryTick(tickMarkType)" in html
     compact_html = build_interactive_chart_html(candles=candles, mode="1分足", chart_context={"initial_visible_candle_count": 1}, visible_candle_count=1)
     assert '"visible_candle_count": 1' in compact_html
     assert _resolve_visible_candle_count(mode="1分足", chart_context={"initial_visible_candle_count": 16}) == 16

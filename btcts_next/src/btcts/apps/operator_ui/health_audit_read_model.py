@@ -11,6 +11,7 @@ from typing import Any
 from btcts.core import io
 from btcts.core import paths as core_paths
 from btcts.core.sharded_jsonl import iter_jsonl_part_files
+from btcts.apps.operator_ui.health_telemetry_rollup import build_health_telemetry_rows
 
 HEALTH_AUDIT_READ_MODEL_VERSION = "health_audit_read_model.v2.health_event_input"
 HEALTH_TELEMETRY_STREAMS = ("collector_vnext",)
@@ -157,28 +158,26 @@ def read_recent_telemetry_rows(
     return rows
 
 
-def read_recent_health_event_rows(*, max_lines: int = 4000) -> list[dict[str, Any]]:
-    """Return bounded rows for Health timelines and continuity rails.
-
-    Since PS-Q19B, high-frequency collector success events live under
-    ``logs/telemetry`` instead of ``logs/audit.jsonl``. Health activity charts
-    need those telemetry rows, while anomaly feeds still need audit WARN/ERROR
-    rows.  This merged input preserves both without scanning full files.
-    """
+def read_recent_health_event_rows(
+    *,
+    max_lines: int = 4000,
+    range_key: str = "1h",
+) -> list[dict[str, Any]]:
+    """Return audit anomalies plus complete range-aware telemetry rollups."""
     rows: list[dict[str, Any]] = []
     rows.extend(read_recent_audit_only_rows(max_lines=max_lines))
-    rows.extend(read_recent_telemetry_rows(max_lines=max_lines))
+    rows.extend(build_health_telemetry_rows(range_key=range_key))
     rows.sort(key=_sort_key)
     return rows
 
 
-def read_recent_audit_rows(*, max_lines: int = 4000) -> list[dict[str, Any]]:
-    """Backward-compatible Health input reader.
-
-    Existing callers still use the audit-oriented function name, but the Health
-    event input now includes PS-Q19B telemetry rows as well as primary audit rows.
-    """
-    return read_recent_health_event_rows(max_lines=max_lines)
+def read_recent_audit_rows(
+    *,
+    max_lines: int = 4000,
+    range_key: str = "1h",
+) -> list[dict[str, Any]]:
+    """Backward-compatible name for the merged Health event input."""
+    return read_recent_health_event_rows(max_lines=max_lines, range_key=range_key)
 
 
 def build_health_audit_input(
@@ -197,7 +196,16 @@ def build_health_audit_input(
     resolved_max_lines_for_range = max_lines_for_range or audit_max_lines_for_range
     resolved_read_recent_rows = read_recent_rows or read_recent_audit_rows
     max_lines = int(resolved_max_lines_for_range(range_key))
-    rows = list(resolved_read_recent_rows(max_lines=max_lines))
+    try:
+        rows = list(
+            resolved_read_recent_rows(
+                max_lines=max_lines,
+                range_key=range_key,
+            )
+        )
+    except TypeError:
+        # Preserve compatibility with focused tests and legacy injected readers.
+        rows = list(resolved_read_recent_rows(max_lines=max_lines))
     return HealthAuditInput(
         range_key=range_key,
         max_lines=max_lines,

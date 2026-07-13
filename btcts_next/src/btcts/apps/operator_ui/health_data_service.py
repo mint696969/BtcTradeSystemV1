@@ -51,12 +51,22 @@ from btcts.processing.l4_consumer_models.shared import (
 )
 
 
+HEALTH_MARKET_SYMBOL_RAW = "FX_BTC_JPY"
+
+
 def _audit_log_path() -> Path:
     return _audit_log_path_impl()
 
 
-def _read_recent_audit_rows(*, max_lines: int = 4000) -> list[dict[str, Any]]:
-    return _read_recent_audit_rows_impl(max_lines=max_lines)
+def _read_recent_audit_rows(
+    *,
+    max_lines: int = 4000,
+    range_key: str = "1h",
+) -> list[dict[str, Any]]:
+    return _read_recent_audit_rows_impl(
+        max_lines=max_lines,
+        range_key=range_key,
+    )
 
 
 def _audit_max_lines_for_range(range_key: str) -> int:
@@ -276,15 +286,19 @@ def build_recent_api_ws_series(
 
         flags = _classify_row(row)
         payload = row.get("payload") or {}
+        try:
+            event_weight = max(1.0, float(payload.get("health_event_count") or 1.0))
+        except (TypeError, ValueError):
+            event_weight = 1.0
 
         if flags["is_rest"]:
-            per_bucket[bucket]["api_events"] += 1.0
+            per_bucket[bucket]["api_events"] += event_weight
         if flags["is_ws"]:
-            per_bucket[bucket]["ws_events"] += 1.0
+            per_bucket[bucket]["ws_events"] += event_weight
         if flags["is_ws_board"]:
-            per_bucket[bucket]["ws_board_events"] += 1.0
+            per_bucket[bucket]["ws_board_events"] += event_weight
         if flags["is_ws_exec"]:
-            per_bucket[bucket]["ws_exec_events"] += 1.0
+            per_bucket[bucket]["ws_exec_events"] += event_weight
         if flags["is_429"]:
             per_bucket[bucket]["events_429"] += 1.0
         if flags["is_gap"]:
@@ -416,8 +430,8 @@ def build_recent_layer3_series(
     range_key: str = "1h",
     include_in_progress: bool = False,
 ) -> list[dict[str, Any]]:
-    latest = load_latest_market_state()
-    diagnostics = market_state_diagnostics()
+    latest = load_latest_market_state(symbol_raw=HEALTH_MARKET_SYMBOL_RAW)
+    diagnostics = market_state_diagnostics(symbol_raw=HEALTH_MARKET_SYMBOL_RAW)
 
     trust_state = str(latest.get("trust_state") or diagnostics.get("preferred_row_trust_state") or "")
     continuity_state = str(
@@ -878,14 +892,19 @@ def _build_continuity_rail(
             continue
 
         flags = _classify_row(row)
+        payload = row.get("payload") or {}
+        try:
+            event_weight = max(1.0, float(payload.get("health_event_count") or 1.0))
+        except (TypeError, ValueError):
+            event_weight = 1.0
         if flags["is_rest"]:
-            per_bucket[bucket]["api_events"] += 1.0
+            per_bucket[bucket]["api_events"] += event_weight
         if flags["is_ws"]:
-            per_bucket[bucket]["ws_events"] += 1.0
+            per_bucket[bucket]["ws_events"] += event_weight
         if flags["is_ws_board"]:
-            per_bucket[bucket]["ws_board_events"] += 1.0
+            per_bucket[bucket]["ws_board_events"] += event_weight
         if flags["is_ws_exec"]:
-            per_bucket[bucket]["ws_exec_events"] += 1.0
+            per_bucket[bucket]["ws_exec_events"] += event_weight
         if flags["is_gap"]:
             per_bucket[bucket]["gap_events"] += 1.0
         if flags["is_resync"]:
@@ -1325,8 +1344,12 @@ def load_health_current_state_bundle(
     market_diag: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     resolved_state = dict(state or load_state())
-    resolved_market_latest = dict(market_latest or load_latest_market_state())
-    resolved_market_diag = dict(market_diag or market_state_diagnostics())
+    resolved_market_latest = dict(
+        market_latest or load_latest_market_state(symbol_raw=HEALTH_MARKET_SYMBOL_RAW)
+    )
+    resolved_market_diag = dict(
+        market_diag or market_state_diagnostics(symbol_raw=HEALTH_MARKET_SYMBOL_RAW)
+    )
     return _build_health_current_state_bundle(
         state=resolved_state,
         market_latest=resolved_market_latest,

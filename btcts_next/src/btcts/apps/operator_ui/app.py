@@ -241,6 +241,50 @@ def render_page_top_label(label: str) -> None:
     )
 
 
+def _page_top_scroll_html() -> str:
+    """Return a display-only script that scrolls the parent Streamlit view to top."""
+    return """
+<!doctype html>
+<html>
+<body style="margin:0;padding:0;overflow:hidden">
+<script>
+(function scrollOperatorPageToTop() {
+  const parentWindow = window.parent;
+  const parentDocument = parentWindow.document;
+  const candidates = [
+    parentDocument.querySelector('[data-testid="stAppViewContainer"]'),
+    parentDocument.querySelector('[data-testid="stMain"]'),
+    parentDocument.querySelector('section.main'),
+    parentDocument.scrollingElement,
+  ].filter(Boolean);
+
+  function forceTop() {
+    for (const element of candidates) {
+      try { element.scrollTo({ top: 0, left: 0, behavior: 'auto' }); } catch (err) { /* ignore unsupported targets */ }
+      try { element.scrollTop = 0; } catch (err) { /* ignore read-only targets */ }
+    }
+    try { parentWindow.scrollTo({ top: 0, left: 0, behavior: 'auto' }); } catch (err) { /* ignore */ }
+  }
+
+  parentWindow.requestAnimationFrame(() => {
+    parentWindow.requestAnimationFrame(forceTop);
+  });
+  parentWindow.setTimeout(forceTop, 80);
+  parentWindow.setTimeout(forceTop, 240);
+})();
+</script>
+</body>
+</html>
+"""
+
+
+def render_page_change_scroll_to_top(*, page_changed: bool) -> None:
+    """Scroll only after sidebar navigation, not on refresh or same-page reruns."""
+    if not page_changed:
+        return
+    components.html(_page_top_scroll_html(), height=0)
+
+
 def render_sidebar_section_label(label: str) -> None:
     safe_label = html.escape(str(label))
     st.sidebar.markdown(
@@ -417,6 +461,7 @@ render_page_top_label(selected_page_label)
 page_render_started_at = time.perf_counter()
 page_module.render()
 page_render_elapsed_ms = int((time.perf_counter() - page_render_started_at) * 1000)
+render_page_change_scroll_to_top(page_changed=page_changed)
 
 refresh_plan = live_shell.resolve_page_refresh_plan(
     page_key=selected_page_key,

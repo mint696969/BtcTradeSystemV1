@@ -13,8 +13,8 @@ const copyPanelEl = document.getElementById('copy-panel');
 const selectionSummaryEl = document.getElementById('selection-summary');
 const copyHintEl = document.getElementById('copy-hint');
 const copySafetyEl = document.getElementById('copy-safety');
-const SELECTION_ANCHOR_TTL_MS = 5000;
-const SELECTION_FINALIZED_TTL_MS = 5000;
+const SELECTION_ANCHOR_TTL_MS = 30000;
+const SELECTION_FINALIZED_TTL_MS = 10000;
 const SELECTION_ANCHOR_STORAGE_KEY = `warroom_v2_interactive_chart_anchor.${BASE.component_version || 'v1'}.${BASE.mode || 'live'}`;
 const SELECTION_FINALIZED_STORAGE_KEY = `warroom_v2_interactive_chart_finalized.${BASE.component_version || 'v1'}.${BASE.mode || 'live'}`;
 let selectedStart = null;
@@ -22,6 +22,7 @@ let selectedEnd = null;
 let selectionAnchor = null;
 let selectionRangeFinalized = false;
 let selectionAnchorTimer = null;
+let finalizedMarkerTimer = null;
 let markersApi = null;
 
 function candleByTime(t) {
@@ -58,6 +59,37 @@ function clearSelectionAnchorTimer() {
   if (selectionAnchorTimer) clearTimeout(selectionAnchorTimer);
   selectionAnchorTimer = null;
 }
+function clearFinalizedMarkerTimer() {
+  if (finalizedMarkerTimer) clearTimeout(finalizedMarkerTimer);
+  finalizedMarkerTimer = null;
+}
+function clearFinalizedSelectionPresentation() {
+  selectionAnchor = null;
+  selectionRangeFinalized = false;
+  selectedStart = null;
+  selectedEnd = null;
+  clearSelectionMarkers();
+  clearStoredFinalizedSelection();
+  clearFinalizedMarkerTimer();
+  updateStatus();
+}
+function clearSelectionStateAfterAnchorExpiry() {
+  selectionAnchor = null;
+  selectionRangeFinalized = false;
+  selectedStart = null;
+  selectedEnd = null;
+  clearSelectionAnchorTimer();
+  clearStoredSelectionAnchor();
+  clearSelectionMarkers();
+  updateStatus();
+}
+function scheduleFinalizedMarkerExpiry(expiresAtMs) {
+  clearFinalizedMarkerTimer();
+  const remaining = Math.max(0, Number(expiresAtMs) - Date.now());
+  finalizedMarkerTimer = setTimeout(() => {
+    clearFinalizedSelectionPresentation();
+  }, remaining);
+}
 function clearStoredSelectionAnchor() {
   try { localStorage.removeItem(SELECTION_ANCHOR_STORAGE_KEY); } catch (err) { console.debug(err); }
 }
@@ -70,6 +102,7 @@ function storeFinalizedSelection(copyState) {
   try {
     localStorage.setItem(SELECTION_FINALIZED_STORAGE_KEY, JSON.stringify({ start_time: selectedStart.time, end_time: selectedEnd.time, copy_state: copyState || 'ready', expires_at_ms: expiresAtMs }));
   } catch (err) { console.debug(err); }
+  scheduleFinalizedMarkerExpiry(expiresAtMs);
 }
 function restoreFinalizedSelection(series) {
   try {
@@ -86,6 +119,7 @@ function restoreFinalizedSelection(series) {
     selectedEnd = end;
     updateStatus();
     markSelection(series);
+    scheduleFinalizedMarkerExpiry(Number(saved.expires_at_ms));
     if (saved.copy_state === 'copied') {
       copiedEl.textContent = 'コピーしました';
       setCopyPanelState('copied', selectionSummaryEl.textContent, 'コピー成功: 下のJSONと同じ内容をクリップボードへ保存しました。');
@@ -96,22 +130,14 @@ function restoreFinalizedSelection(series) {
     return true;
   } catch (err) { console.debug(err); clearStoredFinalizedSelection(); return false; }
 }
-function finalizeAnchorWaitWithoutCopy(series) {
-  if (!selectionAnchor || selectionRangeFinalized) return;
-  selectionAnchor = null;
-  selectionRangeFinalized = true;
-  clearSelectionAnchorTimer();
-  clearStoredSelectionAnchor();
-  updateStatus();
-  markSelection(series);
-}
 function scheduleSelectionAnchorExpiry(series, expiresAtMs) {
   clearSelectionAnchorTimer();
   const remaining = Math.max(0, expiresAtMs - Date.now());
-  selectionAnchorTimer = setTimeout(() => finalizeAnchorWaitWithoutCopy(series), remaining);
+  selectionAnchorTimer = setTimeout(() => clearSelectionStateAfterAnchorExpiry(series), remaining);
 }
 function storeSelectionAnchor(c, series) {
   clearStoredFinalizedSelection();
+  clearFinalizedMarkerTimer();
   const expiresAtMs = Date.now() + SELECTION_ANCHOR_TTL_MS;
   try { localStorage.setItem(SELECTION_ANCHOR_STORAGE_KEY, JSON.stringify({ time: c.time, expires_at_ms: expiresAtMs })); } catch (err) { console.debug(err); }
   scheduleSelectionAnchorExpiry(series, expiresAtMs);
@@ -121,7 +147,7 @@ function restoreSelectionAnchor(series) {
     const raw = localStorage.getItem(SELECTION_ANCHOR_STORAGE_KEY);
     if (!raw) return;
     const saved = JSON.parse(raw);
-    if (!saved || Number(saved.expires_at_ms) <= Date.now()) { clearStoredSelectionAnchor(); return; }
+    if (!saved || Number(saved.expires_at_ms) <= Date.now()) { clearSelectionStateAfterAnchorExpiry(); return; }
     const c = candleByTime(saved.time);
     if (!c) { clearStoredSelectionAnchor(); return; }
     selectionAnchor = c;
@@ -134,7 +160,7 @@ function restoreSelectionAnchor(series) {
   } catch (err) { console.debug(err); clearStoredSelectionAnchor(); }
 }
 function selectionHintText(s, e) {
-  if (!selectionRangeFinalized) return '開始点を選択中: 5秒以内に同じローソク再クリックで単ポイント確定、別ローソククリックで範囲確定。';
+  if (!selectionRangeFinalized) return '開始点を選択中: 30秒以内に同じローソク再クリックで単ポイント確定、別ローソククリックで範囲確定。';
   return Number(s.time) === Number(e.time) ? '単ポイント確定: ボタンでJSONをコピーできます。' : '範囲確定: ボタンでJSONをコピーできます。';
 }
 function handleCandleClick(c, series) {

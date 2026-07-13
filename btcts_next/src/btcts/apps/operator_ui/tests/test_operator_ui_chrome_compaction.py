@@ -139,3 +139,21 @@ def test_operator_page_top_headings_use_compact_labels() -> None:
     assert 'st.header("Exchange Configuration")' not in combined
     assert 'st.title(get_text(lang, "research_title"))' not in combined
     assert 'st.title(get_text(lang, "replay_title"))' not in combined
+
+def test_sidebar_page_change_scrolls_main_view_to_top_only_on_navigation() -> None:
+    text = APP.read_text(encoding="utf-8-sig")
+
+    assert "def _page_top_scroll_html() -> str:" in text
+    assert "def render_page_change_scroll_to_top(*, page_changed: bool)" in text
+    assert "if not page_changed:" in text
+    assert "components.html(_page_top_scroll_html(), height=0)" in text
+    assert "render_page_change_scroll_to_top(page_changed=page_changed)" in text
+    assert "element.scrollTo({ top: 0, left: 0, behavior: 'auto' })" in text
+
+    change_pos = text.index("page_changed = bool(")
+    render_pos = text.index("page_module.render()")
+    elapsed_pos = text.index("page_render_elapsed_ms = int(")
+    scroll_pos = text.index("render_page_change_scroll_to_top(page_changed=page_changed)")
+    assert change_pos < render_pos < elapsed_pos < scroll_pos
+    assert "parentWindow.setTimeout(forceTop, 80)" in text
+    assert "parentWindow.setTimeout(forceTop, 240)" in text
