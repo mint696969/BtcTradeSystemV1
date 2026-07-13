@@ -116,17 +116,43 @@ def test_bad_source_snapshot_or_non_market_report_fails_closed() -> None:
         )
 
 
-def test_negative_regime_score_fails_closed() -> None:
+def test_negative_regime_score_abstains_only_affected_horizon() -> None:
     report = _report()
     report["horizons"][1]["regime_scores"]["BREAKOUT"] = -0.1
-    with pytest.raises(ValueError, match="future_baseline_regime_score_invalid"):
-        build_market_regime_future_shadow_packet(
-            feature_bundle=_bundle(include_session=True),
-            signal_score_report=report,
-            origin_current_state=MarketRegimeCode.RANGE,
-            source_timestamp_epoch_sec=100.0,
-            origin_timestamp_epoch_sec=100.0,
-        )
+    packet = build_market_regime_future_shadow_packet(
+        feature_bundle=_bundle(include_session=True),
+        signal_score_report=report,
+        origin_current_state=MarketRegimeCode.RANGE,
+        source_timestamp_epoch_sec=100.0,
+        origin_timestamp_epoch_sec=100.0,
+    )
+    affected = next(item for item in packet.forecasts if item.target_horizon_sec == 900)
+    assert affected.status.value == "ABSTAIN"
+    assert affected.abstain_reason == "invalid_regime_score"
+    assert affected.predicted_future_state is MarketRegimeCode.UNKNOWN
+    assert affected.metadata["canonical_replacement"] is False
+    assert affected.metadata["blockers"] == ["future_shadow_regime_score_invalid:BREAKOUT:-0.1"]
+    assert all(
+        item.status.value == "FORECAST"
+        for item in packet.forecasts
+        if item.target_horizon_sec != 900
+    )
+
+
+def test_non_finite_regime_score_abstains_only_affected_horizon() -> None:
+    report = _report()
+    report["horizons"][0]["regime_scores"]["BREAKOUT"] = float("nan")
+    packet = build_market_regime_future_shadow_packet(
+        feature_bundle=_bundle(include_session=True),
+        signal_score_report=report,
+        origin_current_state=MarketRegimeCode.RANGE,
+        source_timestamp_epoch_sec=100.0,
+        origin_timestamp_epoch_sec=100.0,
+    )
+    affected = next(item for item in packet.forecasts if item.target_horizon_sec == 300)
+    assert affected.status.value == "ABSTAIN"
+    assert affected.abstain_reason == "invalid_regime_score"
+    assert affected.metadata["blockers"] == ["future_shadow_regime_score_invalid:BREAKOUT:nan"]
 
 
 def test_missing_long_horizon_session_context_abstains_not_synthesizes() -> None:

@@ -5,17 +5,29 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from hashlib import sha256
+from math import isfinite
 from types import MappingProxyType
 from typing import Any, Dict, Mapping, Tuple
 
 from .contracts import FeatureGroup, MarketRegimeCode
 from .features import MarketRegimeFeatureBundle
-from .future_baseline_model import FutureBaselineEvidence, forecast_future_market_regime_baseline
-from .future_forecast_contract import FUTURE_MARKET_REGIME_HORIZONS_SEC, MarketRegimeFutureForecast, validate_future_forecast_set
+from .future_baseline_model import (
+    MARKET_REGIME_FUTURE_BASELINE_LOGIC_VERSION,
+    MARKET_REGIME_FUTURE_BASELINE_MODEL_ID,
+    FutureBaselineEvidence,
+    forecast_future_market_regime_baseline,
+)
+from .future_forecast_contract import (
+    FUTURE_MARKET_REGIME_HORIZONS_SEC,
+    FutureForecastStatus,
+    MarketRegimeFutureForecast,
+    validate_future_forecast_set,
+)
+from .future_target_definition import future_target_definitions_by_horizon
 from .future_shadow_candidate_registry import BASELINE_CANDIDATE, FutureShadowCandidateParameters
 
-MARKET_REGIME_FUTURE_SHADOW_ADAPTER_VERSION = "prediction.market_regime.future_shadow_adapter.mr_f5_4.v1"
-MARKET_REGIME_FUTURE_SHADOW_PACKET_VERSION = "prediction.market_regime.future_shadow_packet.mr_f5_4.v1"
+MARKET_REGIME_FUTURE_SHADOW_ADAPTER_VERSION = "prediction.market_regime.future_shadow_adapter.mr_f5_4.v2"
+MARKET_REGIME_FUTURE_SHADOW_PACKET_VERSION = "prediction.market_regime.future_shadow_packet.mr_f5_4.v2"
 
 
 @dataclass(frozen=True)
@@ -118,8 +130,48 @@ def _scores(row: Mapping[str, Any]) -> Mapping[MarketRegimeCode, float]:
             regime = key if isinstance(key, MarketRegimeCode) else MarketRegimeCode(str(key))
         except ValueError as exc:
             raise ValueError(f"future_shadow_regime_code_invalid:{key}") from exc
-        result[regime] = float(value)
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"future_shadow_regime_score_invalid:{regime.value}:non_numeric") from exc
+        if not isfinite(numeric) or numeric < 0.0:
+            raise ValueError(f"future_shadow_regime_score_invalid:{regime.value}:{numeric!r}")
+        result[regime] = numeric
     return MappingProxyType(result)
+
+
+def _invalid_score_abstain(
+    *,
+    origin_timestamp: str,
+    origin_current_state: MarketRegimeCode,
+    target_horizon_sec: int,
+    feature_snapshot_ref: str,
+    candidate: FutureShadowCandidateParameters,
+    blocker: str,
+) -> MarketRegimeFutureForecast:
+    definition = future_target_definitions_by_horizon()[int(target_horizon_sec)]
+    return MarketRegimeFutureForecast(
+        origin_timestamp=origin_timestamp,
+        origin_current_state=origin_current_state,
+        target_horizon_sec=target_horizon_sec,
+        predicted_future_state=MarketRegimeCode.UNKNOWN,
+        status=FutureForecastStatus.ABSTAIN,
+        transition_path_candidate=(),
+        raw_model_score_or_probability=None,
+        feature_snapshot_ref=feature_snapshot_ref,
+        model_id=MARKET_REGIME_FUTURE_BASELINE_MODEL_ID,
+        logic_version=MARKET_REGIME_FUTURE_BASELINE_LOGIC_VERSION,
+        parameter_set_id=candidate.parameter_set_id,
+        target_definition_version=definition.target_definition_version,
+        invalidation_conditions=(blocker,),
+        abstain_reason="invalid_regime_score",
+        metadata={
+            "shadow_only": True,
+            "canonical_replacement": False,
+            "candidate_registry_state": candidate.registry_state,
+            "blockers": [blocker],
+        },
+    )
 
 
 def build_market_regime_future_shadow_packet(
@@ -143,12 +195,29 @@ def build_market_regime_future_shadow_packet(
         row = rows.get(horizon)
         if row is None:
             raise ValueError(f"future_shadow_horizon_score_missing:{horizon}")
+        try:
+            regime_scores = _scores(row)
+        except ValueError as exc:
+            blocker = str(exc)
+            if not blocker.startswith("future_shadow_regime_score_invalid:"):
+                raise
+            forecasts.append(
+                _invalid_score_abstain(
+                    origin_timestamp=feature_bundle.generated_at,
+                    origin_current_state=origin_current_state,
+                    target_horizon_sec=horizon,
+                    feature_snapshot_ref=feature_snapshot_ref,
+                    candidate=candidate,
+                    blocker=blocker,
+                )
+            )
+            continue
         evidence = FutureBaselineEvidence(
             origin_timestamp=feature_bundle.generated_at,
             origin_current_state=origin_current_state,
             target_horizon_sec=horizon,
             feature_snapshot_ref=feature_snapshot_ref,
-            regime_scores=_scores(row),
+            regime_scores=regime_scores,
             available_feature_families=available_families,
             source_timestamp_epoch_sec=source_timestamp_epoch_sec,
             origin_timestamp_epoch_sec=origin_timestamp_epoch_sec,
