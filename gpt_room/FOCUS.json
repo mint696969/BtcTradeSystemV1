@@ -1,22 +1,27 @@
 {
   "schema_version": "btcts.gpt_room.focus.v1",
-  "active_baseline": "phase2",
-  "current_head": "0e615c31",
-  "last_test_checkpoint": "247 passed",
-  "current_focus": "pre-live operational validation after AutoTrade parameter bundle readiness merge",
+  "active_baseline": "docs/phase2-handoff-sync",
+  "current_head": "bffb802a",
+  "last_test_checkpoint": "Prediction 461 passed; MarketRegime 192 passed; Operator UI 1230 passed",
+  "current_focus": "MR-F6 mandatory simple baseline comparison after MR-F5 operational evidence acceptance",
   "completed_recently": [
-    "PR #1 AutoTrade parameter bundle readiness chain merged into phase2",
-    "PR #2 pytest discovery hygiene merged into phase2"
+    "MR-F5 implementation series accepted",
+    "MR-F5 24-hour operational evidence gate accepted",
+    "MR-F5 canonical migration review completed with promotion deferred",
+    "invalid regime-score horizons now fail closed as explicit ABSTAIN",
+    "Operator UI Health telemetry and readability work committed"
   ],
   "next_tasks": [
-    "pre-live operational validation",
-    "paper/readiness verification",
-    "Operator UI AutoTrade closeout review",
-    "consider GitHub Actions CI setup"
+    "start MR-F6 mandatory simple baseline comparison",
+    "reuse identical MR-F5 source snapshots, origins, horizons, targets, and outcome rules",
+    "compare accepted transparent baseline path against required simple baselines",
+    "keep canonical promotion disabled until later review"
   ],
   "safety_notes": [
-    "AutoTrade readiness work is read-only/pre-live oriented",
-    "do not treat this as live broker execution enablement",
-    "broker-send paths remain out of scope unless explicitly reviewed"
+    "MR-F5 remains prediction-only and shadow-isolated",
+    "canonical replacement is false",
+    "live parameter apply is false",
+    "scheduler registration is false",
+    "broker private API, autotrade trigger, and order submission remain disallowed"
   ]
 }
