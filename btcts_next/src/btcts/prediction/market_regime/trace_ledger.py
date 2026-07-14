@@ -12,6 +12,7 @@ from .contracts import MarketRegimePredictionPacket
 from .features import MarketRegimeFeatureBundle
 
 MARKET_REGIME_TRACE_LEDGER_VERSION = "prediction.market_regime.trace_ledger.2026_07_08.v1"
+MARKET_REGIME_SOURCE_FLAG_CONTRIBUTION_LEDGER_VERSION = "prediction.market_regime.source_flag_contribution_ledger.mr_f7.v1"
 TRACE_PART_FILENAME = "part-00001.jsonl"
 TRACE_META_FILENAME = "part-00001.meta.json"
 _MAX_TRACE_ROW_BYTES = 128 * 1024
@@ -123,6 +124,51 @@ def _prediction_summary(packet: MarketRegimePredictionPacket) -> Dict[str, Any]:
     }
 
 
+def _json_safe_compact_value(value: Any) -> Any:
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, (list, tuple)):
+        return [_json_safe_compact_value(item) for item in value[:16]]
+    if isinstance(value, Mapping):
+        return {str(key): _json_safe_compact_value(nested) for key, nested in list(value.items())[:16]}
+    return str(value)
+
+
+def _compact_source_flag_contributions(row: Mapping[str, Any]) -> list[dict[str, Any]]:
+    votes = row.get("signal_votes_all")
+    if not isinstance(votes, list):
+        raise ValueError("signal_votes_all_required_for_mr_f7_contribution_ledger")
+    compact: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    horizon_key = str(row.get("horizon_key") or "")
+    for vote in votes:
+        if not isinstance(vote, Mapping):
+            continue
+        source_family = str(vote.get("source_family") or "")
+        flag_id = str(vote.get("signal_id") or "")
+        supports_regime = str(vote.get("supports_regime") or "")
+        if not source_family or not flag_id or not supports_regime or not horizon_key:
+            raise ValueError("source_flag_contribution_identity_missing")
+        contribution_key = "|".join((horizon_key, source_family, flag_id, supports_regime))
+        if contribution_key in seen:
+            raise ValueError(f"duplicate_source_flag_contribution:{contribution_key}")
+        seen.add(contribution_key)
+        compact.append({
+            "contribution_key": contribution_key,
+            "horizon_key": horizon_key,
+            "source_id": source_family,
+            "flag_id": flag_id,
+            "supports_regime": supports_regime,
+            "strength": float(vote.get("strength") or 0.0),
+            "weighted_strength": float(vote.get("weighted_strength") or 0.0),
+            "observed_value": _json_safe_compact_value(vote.get("value")),
+            "against_regimes": [str(item) for item in vote.get("against_regimes", [])],
+            "source_refs": [str(item) for item in vote.get("source_refs", [])],
+            "reason": str(vote.get("reason") or ""),
+        })
+    return compact
+
+
 def _signal_summary(signal_score_report: Mapping[str, Any]) -> Dict[str, Any]:
     horizons: list[dict[str, Any]] = []
     for row in signal_score_report.get("horizons", []):
@@ -133,6 +179,7 @@ def _signal_summary(signal_score_report: Mapping[str, Any]) -> Dict[str, Any]:
             "horizon_sec": row.get("horizon_sec"),
             "horizon_key": row.get("horizon_key"),
             "top_vote_ids": [vote.get("signal_id") for vote in row.get("signal_votes_top_n", [])[:5] if isinstance(vote, Mapping)],
+            "source_flag_contributions": _compact_source_flag_contributions(row),
             "regime_scores": dict(row.get("regime_scores", {})),
             "source_family_scores": dict(row.get("source_family_scores", {})),
             "conflict_count": len(row.get("signal_conflicts_top_n", [])),
@@ -141,6 +188,7 @@ def _signal_summary(signal_score_report: Mapping[str, Any]) -> Dict[str, Any]:
         "signal_scoring_version": signal_score_report.get("signal_scoring_version"),
         "signal_registry_version": signal_score_report.get("signal_registry_version"),
         "horizon_weight_version": signal_score_report.get("horizon_weight_version"),
+        "source_flag_contribution_ledger_version": MARKET_REGIME_SOURCE_FLAG_CONTRIBUTION_LEDGER_VERSION,
         "total_vote_count": signal_score_report.get("total_vote_count", 0),
         "horizon_count": signal_score_report.get("horizon_count", len(horizons)),
         "horizons": horizons,
@@ -250,6 +298,36 @@ def validate_market_regime_trace_row(row: Mapping[str, Any]) -> Dict[str, Any]:
         failures.append("signal_summary_missing")
     if not isinstance(row.get("prediction_summary"), Mapping):
         failures.append("prediction_summary_missing")
+    signal_summary = row.get("signal_summary") if isinstance(row.get("signal_summary"), Mapping) else {}
+    if signal_summary.get("source_flag_contribution_ledger_version") != MARKET_REGIME_SOURCE_FLAG_CONTRIBUTION_LEDGER_VERSION:
+        failures.append("source_flag_contribution_ledger_version_mismatch")
+    contribution_keys: list[str] = []
+    contribution_count = 0
+    for horizon in signal_summary.get("horizons", []):
+        if not isinstance(horizon, Mapping):
+            failures.append("signal_summary_horizon_invalid")
+            continue
+        contributions = horizon.get("source_flag_contributions")
+        if not isinstance(contributions, list):
+            failures.append("source_flag_contributions_missing")
+            continue
+        for contribution in contributions:
+            if not isinstance(contribution, Mapping):
+                failures.append("source_flag_contribution_invalid")
+                continue
+            key = str(contribution.get("contribution_key") or "")
+            if not key:
+                failures.append("source_flag_contribution_key_missing")
+            contribution_keys.append(key)
+            contribution_count += 1
+    if len(contribution_keys) != len(set(contribution_keys)):
+        failures.append("duplicate_source_flag_contribution_key")
+    try:
+        expected_vote_count = int(signal_summary.get("total_vote_count") or 0)
+    except Exception:
+        expected_vote_count = -1
+    if contribution_count != expected_vote_count:
+        failures.append("source_flag_contribution_count_mismatch")
     if not isinstance(row.get("source_attribution_by_horizon"), Mapping):
         failures.append("source_attribution_by_horizon_missing")
     if _has_forbidden_raw_keys(row):

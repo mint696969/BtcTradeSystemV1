@@ -12,7 +12,9 @@ if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
 from btcts.prediction.market_regime.trace_ledger import (  # noqa: E402
+    MARKET_REGIME_SOURCE_FLAG_CONTRIBUTION_LEDGER_VERSION,
     MARKET_REGIME_TRACE_LEDGER_VERSION,
+    _compact_source_flag_contributions,
     append_market_regime_trace_row_once,
     trace_ledger_meta_relpath,
     trace_ledger_part_relpath,
@@ -134,6 +136,7 @@ def test_cp9_write_latest_once_appends_trace_and_updates_status_manifest(tmp_pat
     assert status["outcome_resolver_available"] is True
     assert manifest["refs"]["trace_part_jsonl"] == "prediction/market_regime/ledgers/date=2026-07-08/hour=11/part-00001.jsonl"
 
+
 def test_mr_vs4_trace_row_contains_compact_source_attribution_for_future_scorecards(tmp_path: Path) -> None:
     _fixture_root(tmp_path)
     artifacts = build_market_regime_latest_artifact_set(
@@ -160,3 +163,79 @@ def test_mr_vs4_trace_row_contains_compact_source_attribution_for_future_scoreca
     encoded = json.dumps(trace_row, ensure_ascii=False, sort_keys=True).encode("utf-8")
     assert len(encoded) < 128 * 1024
     assert _contains_forbidden_key(trace_row) is False
+
+
+def test_mr_f7_trace_preserves_all_source_flag_contributions_for_later_calibration(tmp_path: Path) -> None:
+    _fixture_root(tmp_path)
+    artifacts = build_market_regime_latest_artifact_set(
+        hot_root=tmp_path,
+        generated_at="2026-07-08T11:05:00Z",
+        run_id="market_regime_mr_f7_contribution_test",
+    )
+    trace_row = artifacts["trace_row"]
+    signal_summary = trace_row["signal_summary"]
+    assert signal_summary["source_flag_contribution_ledger_version"] == MARKET_REGIME_SOURCE_FLAG_CONTRIBUTION_LEDGER_VERSION
+    total = 0
+    keys: list[str] = []
+    for horizon in signal_summary["horizons"]:
+        contributions = horizon["source_flag_contributions"]
+        total += len(contributions)
+        for item in contributions:
+            assert set(item) == {
+                "contribution_key",
+                "horizon_key",
+                "source_id",
+                "flag_id",
+                "supports_regime",
+                "strength",
+                "weighted_strength",
+                "observed_value",
+                "against_regimes",
+                "source_refs",
+                "reason",
+            }
+            assert item["horizon_key"] == horizon["horizon_key"]
+            assert item["source_id"]
+            assert item["flag_id"]
+            assert item["supports_regime"]
+            keys.append(item["contribution_key"])
+    assert total == signal_summary["total_vote_count"]
+    assert len(keys) == len(set(keys))
+    assert validate_market_regime_trace_row(trace_row)["ok"] is True
+    encoded = json.dumps(trace_row, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    assert len(encoded) < 128 * 1024
+    assert _contains_forbidden_key(trace_row) is False
+
+
+def test_mr_f7_trace_rejects_partial_or_count_mismatched_contribution_ledger(tmp_path: Path) -> None:
+    _fixture_root(tmp_path)
+    artifacts = build_market_regime_latest_artifact_set(
+        hot_root=tmp_path,
+        generated_at="2026-07-08T11:06:00Z",
+        run_id="market_regime_mr_f7_incomplete_contribution_test",
+    )
+    trace_row = artifacts["trace_row"]
+
+    incomplete = json.loads(json.dumps(trace_row))
+    incomplete["signal_summary"]["horizons"][0]["source_flag_contributions"] = []
+    validation = validate_market_regime_trace_row(incomplete)
+    assert validation["ok"] is False
+    assert "source_flag_contribution_count_mismatch" in validation["failures"]
+
+    try:
+        _compact_source_flag_contributions(
+            {
+                "horizon_key": "300s",
+                "signal_votes_top_n": [
+                    {
+                        "signal_id": "legacy_top_vote_only",
+                        "source_family": "prediction",
+                        "supports_regime": "RANGE",
+                    }
+                ],
+            }
+        )
+    except ValueError as exc:
+        assert "signal_votes_all_required_for_mr_f7_contribution_ledger" in str(exc)
+    else:
+        raise AssertionError("partial signal vote ledger must fail closed")

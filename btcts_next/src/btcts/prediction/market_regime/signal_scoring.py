@@ -244,6 +244,7 @@ def score_market_regime_signals(bundle: MarketRegimeFeatureBundle, *, top_n: int
             "horizon_sec": horizon.horizon_sec,
             "horizon_key": horizon_key,
             "signal_votes_top_n": [vote.to_dict() for vote in votes[:top_n]],
+            "signal_votes_all": [vote.to_dict() for vote in votes],
             "signal_conflicts_top_n": _conflicts(votes)[:top_n],
             "regime_scores": _regime_scores(votes),
             "source_family_scores": _source_family_scores(votes),
