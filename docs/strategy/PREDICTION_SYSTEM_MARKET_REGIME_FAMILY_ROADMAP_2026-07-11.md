@@ -389,9 +389,12 @@ MR-F6.22 accepted:
   no filesystem read/write, writer invocation, or D-hot write
   acceptance document commit=dc33b919
 
-MR-F6.23:
-  immutable audit and replay evidence
-  preserve request, boundary, plan, result, and receipt identity
+MR-F6.23 accepted:
+  immutable audit/replay evidence schema v1
+  execution-plan through recovery-decision hash chain preserved
+  replay manifest and failure context bound
+  replay remains verification-only and non-I/O
+  acceptance document commit=28a85936
 
 MR-F6.24 Integration & Hardening:
   responsibility and dependency audit
@@ -647,8 +650,8 @@ MarketRegime provides prediction context, not execution authorization.
 
 ```text
 reference_head=a894211b
-current_gate=MR_F6_22_FAILURE_RECOVERY_AND_RESUME_ACCEPTED
-next_gate=MR_F6_23_IMMUTABLE_AUDIT_AND_REPLAY_EVIDENCE
+current_gate=MR_F6_23_IMMUTABLE_AUDIT_AND_REPLAY_EVIDENCE_ACCEPTED
+next_gate=MR_F6_24_INTEGRATION_AND_HARDENING
 current_phase=MR-F6
 mr_f5_complete=true
 mr_f6_18_complete=true
@@ -658,6 +661,8 @@ mr_f6_21_complete=true
 mr_f6_duplicate_safe_receipt=true
 mr_f6_22_complete=true
 mr_f6_recovery_resume_decision=true
+mr_f6_23_complete=true
+mr_f6_audit_replay_evidence=true
 mr_f6_writer_preflight_invoked=true
 mr_f6_writer_invoked=false
 mr_f6_d_hot_modified=false
@@ -692,7 +697,13 @@ mr_f6_22c_commit=dc33b919
 mr_f6_22_recovery_resume_schema=prediction.market_regime.origin_evidence_recovery_resume_decision.mr_f6_22.v1
 mr_f6_22_focused_tests=11_passed
 mr_f6_22_connected_tests=24_passed
-market_regime_suite=355_passed
+mr_f6_23a_commit=6fb17a46
+mr_f6_23b_commit=3cd7737b
+mr_f6_23c_commit=28a85936
+mr_f6_23_audit_replay_schema=prediction.market_regime.origin_evidence_audit_replay_evidence.mr_f6_23.v1
+mr_f6_23_focused_tests=10_passed
+mr_f6_23_connected_tests=21_passed
+market_regime_suite=365_passed
 request_schema=prediction.market_regime.origin_evidence_execution_request.mr_f6_17.v4
 execution_boundary=prediction.market_regime.origin_evidence_execution_boundary.mr_f6_18.v1
 execution_plan=prediction.market_regime.origin_evidence_execution_plan.mr_f6_19.v2
