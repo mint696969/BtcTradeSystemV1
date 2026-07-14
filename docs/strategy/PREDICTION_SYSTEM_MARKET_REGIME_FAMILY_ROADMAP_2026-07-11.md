@@ -350,7 +350,7 @@ A more complex candidate does not become canonical unless it provides material b
 
 #### MR-F6 delivery sequence and closeout plan
 
-MR-F6 baseline comparison logic is implemented through the final pure execution boundary. The remaining work is deliberately separated from prediction scoring so execution safety can mature without changing forecast behavior.
+MR-F6 baseline comparison logic is implemented through the accepted dry-run writer adapter. The remaining work is deliberately separated from prediction scoring so execution safety can mature without changing forecast behavior.
 
 ```text
 MR-F6.18 accepted:
@@ -361,15 +361,18 @@ MR-F6.18 accepted:
   pure final execution boundary
   no writer invocation or D-hot write
 
-MR-F6.19:
-  deterministic dry-run execution plan
-  bind request, writer, destination, acknowledgements, and execution-time identity
-  no writer invocation
+MR-F6.19 accepted:
+  deterministic immutable execution-plan schema v2
+  request, boundary, approval window, writer, destination, and bundle identity bound
+  no writer import or invocation
 
-MR-F6.20:
-  dry-run writer invocation adapter
-  exercise the exact public writer contract without modifying D-hot
-  preserve disabled-by-default and one-shot boundaries
+MR-F6.20 accepted:
+  public writer preflight adapter schema v1
+  execution-plan hash, writer scope, approval window, and exact bundle set revalidated
+  preflight_only=true, write_allowed=true, would_write=false
+  write function not imported or invoked
+  no filesystem or D-hot modification
+  acceptance document commit=a894211b
 
 MR-F6.21:
   idempotency and duplicate-safe receipt contract
@@ -636,16 +639,20 @@ MarketRegime provides prediction context, not execution authorization.
 ## 8. Current start point
 
 ```text
-reference_head=cf868d55
-current_gate=MR_F6_FINAL_EXECUTION_BOUNDARY_ACCEPTED
-next_gate=MR_F6_19_DRY_RUN_EXECUTION_PLAN
+reference_head=a894211b
+current_gate=MR_F6_20_DRY_RUN_WRITER_INVOCATION_ADAPTER_ACCEPTED
+next_gate=MR_F6_21_IDEMPOTENCY_AND_DUPLICATE_SAFE_RECEIPT
 current_phase=MR-F6
 mr_f5_complete=true
 mr_f6_18_complete=true
+mr_f6_19_complete=true
+mr_f6_20_complete=true
+mr_f6_writer_preflight_invoked=true
 mr_f6_writer_invoked=false
 mr_f6_d_hot_modified=false
-mr_f7_parallel_start_allowed=false
+mr_f7_parallel_start_allowed=true
 mr_f7_parallel_start_condition=MR_F6_20_ACCEPTED
+mr_f6_21_through_mr_f6_24_required=true
 mr_f6_24_hardening_required=true
 market_regime_family_ready_for_next_prediction_family=false
 implementation_started=true
@@ -654,11 +661,23 @@ implementation_started=true
 MR-F6 accepted checkpoint:
 
 ```text
-commit=cf868d55
+commit=a894211b
+mr_f6_17_commit=9100bb53
+mr_f6_18_commit=cf868d55
+mr_f6_19_commit=6be149c4
+mr_f6_20a_commit=c12688e8
+mr_f6_20b_commit=c2d8acd1
+mr_f6_20c_commit=410dfe7f
+mr_f6_20d_commit=a894211b
 request_schema=prediction.market_regime.origin_evidence_execution_request.mr_f6_17.v4
 execution_boundary=prediction.market_regime.origin_evidence_execution_boundary.mr_f6_18.v1
-market_regime_suite=314_passed
+execution_plan=prediction.market_regime.origin_evidence_execution_plan.mr_f6_19.v2
+dry_run_writer_adapter=prediction.market_regime.origin_evidence_dry_run_writer_adapter.mr_f6_20.v1
+market_regime_suite=331_passed
+writer_preflight_invoked=true
+writer_write_function_imported=false
 writer_invoked=false
+filesystem_write_performed=false
 d_hot_modified=false
 scheduler_enabled=false
 auto_promotion_allowed=false
