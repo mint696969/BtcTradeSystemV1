@@ -15,6 +15,7 @@ from .features.current_l4_origin_feature_shadow_registry import (
 from .features.current_l4_origin_features import calculate_current_l4_origin_features
 from .future_origin_evidence_adapter import MarketRegimeOriginFeatureInputs
 from .future_origin_evidence_runtime_source import build_market_regime_origin_runtime_source
+from .future_shadow_adapter import market_regime_feature_snapshot_ref
 
 MARKET_REGIME_ORIGIN_FEATURE_RUNTIME_BUNDLE_VERSION = (
     "prediction.market_regime.origin_feature_runtime_bundle.mr_f6_15.v1"
@@ -164,6 +165,8 @@ def build_market_regime_origin_feature_runtime_bundle(
         "schema_version": MARKET_REGIME_ORIGIN_FEATURE_RUNTIME_BUNDLE_VERSION,
         "artifact_family": "prediction/market_regime",
         "artifact_kind": "future_origin_feature_runtime_bundle_readiness",
+        "feature_bundle_generated_at": feature_bundle.generated_at,
+        "feature_snapshot_ref": market_regime_feature_snapshot_ref(feature_bundle),
         "shadow_candidate_id": candidate.candidate_id,
         "parameter_set_id": candidate.parameters.parameter_set_id,
         "runtime_source_ready": not blockers,

@@ -77,7 +77,9 @@ class MarketRegimeFutureShadowPacket:
         }
 
 
-def _feature_snapshot_ref(bundle: MarketRegimeFeatureBundle) -> str:
+def market_regime_feature_snapshot_ref(bundle: MarketRegimeFeatureBundle) -> str:
+    if not isinstance(bundle, MarketRegimeFeatureBundle):
+        raise ValueError("future_shadow_feature_bundle_invalid")
     parts = [bundle.generated_at, bundle.logic_version, str(bundle.source_snapshot_ok)]
     for item in sorted(bundle.coverage, key=lambda row: row.feature_group.value):
         parts.extend((item.feature_group.value, str(item.available), item.freshness_state.value, *item.used_sources, *item.missing_sources))
@@ -188,7 +190,7 @@ def build_market_regime_future_shadow_packet(
     if str(signal_score_report.get("market_regime_only") or "").lower() not in ("true", "1") and signal_score_report.get("market_regime_only") is not True:
         raise ValueError("future_shadow_signal_report_not_market_regime_only")
     rows = _rows_by_horizon(signal_score_report)
-    feature_snapshot_ref = _feature_snapshot_ref(feature_bundle)
+    feature_snapshot_ref = market_regime_feature_snapshot_ref(feature_bundle)
     available_families = _available_feature_families(feature_bundle)
     forecasts = []
     for horizon in FUTURE_MARKET_REGIME_HORIZONS_SEC:

@@ -55,6 +55,8 @@ def test_explicit_shadow_candidate_completes_runtime_feature_inputs() -> None:
         shadow_candidate_id=CANDIDATE_ID,
     )
     assert result["runtime_source_ready"] is True
+    assert result["feature_bundle_generated_at"] == "2026-07-14T00:00:00Z"
+    assert result["feature_snapshot_ref"].startswith("market_regime_feature_snapshot:")
     assert result["shadow_candidate_id"] == CANDIDATE_ID
     assert result["parameter_set_id"] == CANDIDATE_ID
     inputs = result["feature_inputs"]
