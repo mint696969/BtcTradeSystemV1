@@ -105,6 +105,9 @@ def test_without_approval_builds_immutable_plan_but_not_writer_preflight() -> No
 def test_active_approval_runs_preflight_only_and_never_writes() -> None:
     result = _build(approval=_approval())
     assert result["preflight_ready"] is True
+    assert result["approval_requested_at"] == "2026-07-14T00:00:00Z"
+    assert result["approval_expires_at"] == "2026-07-15T00:00:00Z"
+    assert result["preflight_executed_at"] == "2026-07-14T01:00:00Z"
     assert result["writer_preflight"]["write_allowed"] is True
     assert result["writer_preflight"]["would_write"] is False
     assert result["preflight_only"] is True
