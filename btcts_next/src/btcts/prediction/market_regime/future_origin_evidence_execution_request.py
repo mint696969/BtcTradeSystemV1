@@ -16,7 +16,7 @@ from .future_origin_evidence_writer_preflight import (
 )
 
 MARKET_REGIME_ORIGIN_EVIDENCE_EXECUTION_REQUEST_VERSION = (
-    "prediction.market_regime.origin_evidence_execution_request.mr_f6_17.v1"
+    "prediction.market_regime.origin_evidence_execution_request.mr_f6_17.v4"
 )
 
 
@@ -202,13 +202,27 @@ def build_origin_evidence_execution_request(
         raise ValueError("origin_evidence_execution_request_preflight_outside_approval_window")
     if requested < approval_requested or requested >= approval_expires:
         raise PermissionError("origin_evidence_execution_request_approval_not_active")
+    if reviewed < preflight_executed:
+        raise ValueError("origin_evidence_execution_request_review_before_preflight")
     if requested < preflight_executed:
         raise ValueError("origin_evidence_execution_request_before_preflight")
 
     approval_id = str(nested.get("approval_id") or "").strip()
     artifact_relpath = str(nested.get("artifact_relpath") or "").strip()
     dedupe_key = str(plan.get("dedupe_key") or "").strip()
-    if not approval_id or not artifact_relpath or not dedupe_key:
+    writer_id = str(plan.get("writer_id") or "").strip()
+    writer_contract_version = str(plan.get("writer_contract_version") or "").strip()
+    writer_contract_schema_version = str(
+        preflight_artifact.get("writer_contract_schema_version") or ""
+    ).strip()
+    if (
+        not approval_id
+        or not artifact_relpath
+        or not dedupe_key
+        or not writer_id
+        or not writer_contract_version
+        or not writer_contract_schema_version
+    ):
         raise ValueError("origin_evidence_execution_request_identity_missing")
 
     identity = {
@@ -218,9 +232,17 @@ def build_origin_evidence_execution_request(
         "origin_feature_parameter_set_id": str(
             preflight_artifact["origin_feature_parameter_set_id"]
         ),
+        "target_horizons_sec": horizons,
         "bundle_ids": bundle_ids,
+        "write_plan_bundle_ids": plan_bundle_ids,
+        "forecast_parameter_set_ids": tuple(
+            preflight_artifact.get("forecast_parameter_set_ids") or ()
+        ),
         "dedupe_key": dedupe_key,
         "artifact_relpath": artifact_relpath,
+        "writer_id": writer_id,
+        "writer_contract_version": writer_contract_version,
+        "writer_contract_schema_version": writer_contract_schema_version,
         "approval_id": approval_id,
         "approval_requested_at": approval_requested_at,
         "approval_expires_at": approval_expires_at,
@@ -228,9 +250,20 @@ def build_origin_evidence_execution_request(
         "requested_at": requested_at,
         "reviewer_ids": review.reviewer_ids,
         "reviewed_at": review.reviewed_at,
+        "preflight_reviewed": review.preflight_reviewed,
+        "bundle_identity_reviewed": review.bundle_identity_reviewed,
+        "destination_reviewed": review.destination_reviewed,
+        "duplicate_prevention_reviewed": review.duplicate_prevention_reviewed,
+        "append_only_reviewed": review.append_only_reviewed,
+        "canonical_isolation_reviewed": review.canonical_isolation_reviewed,
+        "one_shot_scope_reviewed": review.one_shot_scope_reviewed,
+        "review_complete": review.complete,
+        "request_ready_for_separate_execution": review.complete,
+        "blockers": () if review.complete else ("human_review_incomplete",),
+        "one_shot_execution_requested": review.complete,
     }
     request_hash = _canonical_hash(identity)
-    blockers = () if review.complete else ("human_review_incomplete",)
+    blockers = identity["blockers"]
 
     return MappingProxyType({
         "schema_version": MARKET_REGIME_ORIGIN_EVIDENCE_EXECUTION_REQUEST_VERSION,
@@ -251,6 +284,9 @@ def build_origin_evidence_execution_request(
         "write_plan_bundle_ids": plan_bundle_ids,
         "dedupe_key": dedupe_key,
         "artifact_relpath": artifact_relpath,
+        "writer_id": writer_id,
+        "writer_contract_version": writer_contract_version,
+        "writer_contract_schema_version": writer_contract_schema_version,
         "approval_id": approval_id,
         "approval_requested_at": approval_requested_at,
         "approval_expires_at": approval_expires_at,

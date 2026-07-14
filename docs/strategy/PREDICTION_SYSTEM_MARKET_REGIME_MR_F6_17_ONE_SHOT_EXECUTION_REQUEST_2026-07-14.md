@@ -18,13 +18,14 @@ exact shadow candidate and origin-feature parameter set
 seven bundle IDs in canonical horizon order
 write-plan bundle IDs in deterministic writer-sort order
 write-plan dedupe key
+writer ID, writer contract version, and writer schema version
 append-only artifact destination
 operator approval ID, requested-at, and expires-at
 preflight execution timestamp
 reviewer IDs and review timestamp
 ```
 
-The request hash covers these identities. The horizon-facing bundle list and writer-plan bundle list may have different deterministic orders, but must contain the exact same unique IDs. Changing the batch, destination, candidate, approval, reviewer, or request time changes the request ID.
+The request hash covers these identities, canonical target horizons, forecast parameter-set IDs, both bundle-ID orderings, every review checklist flag, `review_complete`, request readiness, blockers, and one-shot request state. The horizon-facing bundle list and writer-plan bundle list may have different deterministic orders, but must contain the exact same unique IDs. Changing the batch, destination, candidate, approval, reviewer, review result, blocker state, or request time changes the request ID. This hash contract is schema v4.
 
 ## Human review checklist
 
@@ -38,7 +39,7 @@ canonical isolation reviewed
 one-shot scope reviewed
 ```
 
-Incomplete review produces a blocked request. Request construction also revalidates that both the original preflight timestamp and the request timestamp are inside the same active approval window; a stale preflight cannot be converted into a ready request after approval expiry.
+Incomplete review produces a blocked request. Request construction enforces `preflight_executed_at <= reviewed_at <= requested_at`; the request timestamp must be inside the active approval window, so review-window validity follows from the ordered chain without a duplicate review-window branch.
 
 ## Execution boundary
 
@@ -60,4 +61,4 @@ auto_promotion_allowed=false
 canonical_replacement_allowed=false
 ```
 
-MR-F6.18 must be a separate human-approved execution boundary. It may expose a once-only execution command only after reconfirming the request hash, active approval, empty/conflict-free destination, and explicit `enabled` and `once` acknowledgements.
+MR-F6.18 is a separate pure human-approved execution boundary. It reconfirms the request hash, active approval, empty/conflict-free destination, and explicit `enabled` and `once` acknowledgements, but exposes no writer command and performs no execution.

@@ -121,6 +121,9 @@ def test_request_identity_is_deterministic_and_bound_to_batch() -> None:
     )
     assert first["request_id"] == second["request_id"]
     assert first["request_hash"] == second["request_hash"]
+    assert first["schema_version"].endswith("mr_f6_17.v4")
+    assert first["writer_id"] == "mr-f6-origin-writer"
+    assert first["writer_contract_version"] == "writer.v1"
     assert set(first["bundle_ids"]) == set(first["write_plan_bundle_ids"])
     assert first["bundle_ids"] != first["write_plan_bundle_ids"]
     assert first["dedupe_key"]
@@ -150,6 +153,15 @@ def test_request_time_must_be_inside_active_approval_window() -> None:
     with pytest.raises(ValueError, match="preflight_outside_approval_window"):
         build_origin_evidence_execution_request(
             preflight_artifact=preflight, review=_review(),
+            requested_at="2026-07-14T01:10:00Z",
+        )
+
+
+def test_review_must_follow_preflight_and_be_inside_approval_window() -> None:
+    with pytest.raises(ValueError, match="review_before_preflight"):
+        build_origin_evidence_execution_request(
+            preflight_artifact=_preflight(),
+            review=_review(reviewed_at="2026-07-14T00:59:59Z"),
             requested_at="2026-07-14T01:10:00Z",
         )
 
