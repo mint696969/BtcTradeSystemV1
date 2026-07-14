@@ -514,3 +514,9 @@ execution request
 The accepted contracts remain small, immutable, fail-closed, and non-authorizing. Any schema, hash-identity, state-semantics, public-interface, or safety-boundary change requires explicit contract review, migration evidence, connected tests, and an updated architecture decision.
 
 Canonical closeout: `docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F6_MANDATORY_SIMPLE_BASELINE_COMPARISON_CLOSEOUT_2026-07-14.md`
+
+
+## 2026-07-14 open-work register binding
+<!-- PS_MARKET_REGIME_OPEN_WORK_REGISTER_BINDING_2026_07_14 -->
+
+All unfinished MarketRegime work is governed by `docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_REMAINING_WORK_REGISTER_2026-07-14.md`. Parallel work, deferral, and thread changes do not imply completion. Family-wide integration, hardening, public-interface freeze, full-suite guards, and handoff synchronization remain mandatory after MR-F10 and before `MARKET_REGIME_READY_FOR_NEXT_FAMILY`.

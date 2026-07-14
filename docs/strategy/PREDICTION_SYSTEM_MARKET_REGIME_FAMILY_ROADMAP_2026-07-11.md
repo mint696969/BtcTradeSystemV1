@@ -562,6 +562,18 @@ liquidity_execution_quality:
 
 MarketRegime context may condition another prediction. It must not directly grant trade permission.
 
+## 4.1 Family-wide remaining-work and anti-loss policy
+
+The canonical open-work register is:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_REMAINING_WORK_REGISTER_2026-07-14.md
+```
+
+MR-F7 through MR-F10 may overlap only when their contracts do not conflict. Starting a later phase never completes, cancels, or hides an earlier open item. All deferred, parallel, blocked, and family-closeout work must remain in the register until accepted, explicitly cancelled with reason, superseded by a named contract, or reclassified as non-blocking research with a reentry condition.
+
+After MR-F10, family-wide Integration, Hardening, and Closeout is mandatory before `MARKET_REGIME_READY_FOR_NEXT_FAMILY`. It includes responsibility/dependency audit, duplicate/obsolete/unreachable-contract audit, public-interface freeze, end-to-end identity continuity, TrendBias consumer integration, full prediction and operator-UI guards, architecture/philosophy/roadmap/project-memory synchronization, rollback evidence, known gaps, and a thread-handoff pack.
+
 ## 5. Completion gate before the next family
 
 The next prediction family must not begin until this gate is accepted:
@@ -650,10 +662,10 @@ MarketRegime provides prediction context, not execution authorization.
 ## 8. Current start point
 
 ```text
-reference_head=a894211b
+reference_head=b6390dfb
 current_gate=MR_F6_MANDATORY_SIMPLE_BASELINE_COMPARISON_CLOSEOUT_ACCEPTED
 next_gate=MR_F7_CONFIDENCE_CALIBRATION
-current_phase=MR-F6
+current_phase=MR-F7
 mr_f5_complete=true
 mr_f6_18_complete=true
 mr_f6_19_complete=true
@@ -718,7 +730,6 @@ request_schema=prediction.market_regime.origin_evidence_execution_request.mr_f6_
 execution_boundary=prediction.market_regime.origin_evidence_execution_boundary.mr_f6_18.v1
 execution_plan=prediction.market_regime.origin_evidence_execution_plan.mr_f6_19.v2
 dry_run_writer_adapter=prediction.market_regime.origin_evidence_dry_run_writer_adapter.mr_f6_20.v1
-market_regime_suite=331_passed
 writer_preflight_invoked=true
 writer_write_function_imported=false
 writer_invoked=false
