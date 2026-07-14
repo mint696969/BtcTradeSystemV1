@@ -381,9 +381,13 @@ MR-F6.21 accepted:
   acceptance document commit=72f01881 contract
   distinguish absent, already-satisfied, and conflicting destination states
 
-MR-F6.22:
-  failure recovery and resume contract
-  define partial-failure, retry, and fail-closed behavior
+MR-F6.22 accepted:
+  immutable recovery/resume decision schema v1
+  four state-preserving recovery dispositions
+  receipt hash and blockers preserved
+  automatic retry and resume authorization remain false
+  no filesystem read/write, writer invocation, or D-hot write
+  acceptance document commit=dc33b919
 
 MR-F6.23:
   immutable audit and replay evidence
@@ -643,8 +647,8 @@ MarketRegime provides prediction context, not execution authorization.
 
 ```text
 reference_head=a894211b
-current_gate=MR_F6_21_IDEMPOTENCY_AND_DUPLICATE_SAFE_RECEIPT_ACCEPTED
-next_gate=MR_F6_22_FAILURE_RECOVERY_AND_RESUME
+current_gate=MR_F6_22_FAILURE_RECOVERY_AND_RESUME_ACCEPTED
+next_gate=MR_F6_23_IMMUTABLE_AUDIT_AND_REPLAY_EVIDENCE
 current_phase=MR-F6
 mr_f5_complete=true
 mr_f6_18_complete=true
@@ -652,12 +656,14 @@ mr_f6_19_complete=true
 mr_f6_20_complete=true
 mr_f6_21_complete=true
 mr_f6_duplicate_safe_receipt=true
+mr_f6_22_complete=true
+mr_f6_recovery_resume_decision=true
 mr_f6_writer_preflight_invoked=true
 mr_f6_writer_invoked=false
 mr_f6_d_hot_modified=false
 mr_f7_parallel_start_allowed=true
 mr_f7_parallel_start_condition=MR_F6_20_ACCEPTED
-mr_f6_22_through_mr_f6_24_required=true
+mr_f6_23_through_mr_f6_24_required=true
 mr_f6_24_hardening_required=true
 market_regime_family_ready_for_next_prediction_family=false
 implementation_started=true
@@ -680,7 +686,13 @@ mr_f6_21c_commit=72f01881
 mr_f6_21_receipt_schema=prediction.market_regime.origin_evidence_duplicate_safe_receipt.mr_f6_21.v1
 mr_f6_21_focused_tests=13_passed
 mr_f6_21_connected_tests=21_passed
-market_regime_suite=344_passed
+mr_f6_22a_commit=84642d02
+mr_f6_22b_commit=9fbbbdbb
+mr_f6_22c_commit=dc33b919
+mr_f6_22_recovery_resume_schema=prediction.market_regime.origin_evidence_recovery_resume_decision.mr_f6_22.v1
+mr_f6_22_focused_tests=11_passed
+mr_f6_22_connected_tests=24_passed
+market_regime_suite=355_passed
 request_schema=prediction.market_regime.origin_evidence_execution_request.mr_f6_17.v4
 execution_boundary=prediction.market_regime.origin_evidence_execution_boundary.mr_f6_18.v1
 execution_plan=prediction.market_regime.origin_evidence_execution_plan.mr_f6_19.v2
