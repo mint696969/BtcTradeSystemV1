@@ -351,6 +351,26 @@ def market_regime_operator_ui_snapshot(hot_root: Path | None = None) -> dict[str
         "first_card_label": str(first_card.get("regime_label") or first_card.get("regime_code") or ""),
         "first_card_confidence": first_card.get("confidence_percent"),
         "first_card_freshness": str(first_card.get("freshness_badge") or ""),
+        "first_card_calibration_state": str(
+            (first_card.get("detail") or {}).get("calibration_state")
+            if isinstance(first_card.get("detail"), Mapping)
+            else ""
+        ),
+        "first_card_calibrated_probability_claim": bool(
+            (first_card.get("detail") or {}).get("calibrated_probability_claim")
+            if isinstance(first_card.get("detail"), Mapping)
+            else False
+        ),
+        "first_card_calibrated_reliability_percent": (
+            (first_card.get("detail") or {}).get("calibrated_reliability_percent")
+            if isinstance(first_card.get("detail"), Mapping)
+            else None
+        ),
+        "first_card_calibration_display_confidence_percent": (
+            (first_card.get("detail") or {}).get("calibration_display_confidence_percent")
+            if isinstance(first_card.get("detail"), Mapping)
+            else None
+        ),
         "last_preflight_can_write": bool(status.get("can_write_live_once")),
         "last_preflight_missing_sources": list(status.get("missing_sources") or []),
         "last_preflight_warnings": list(status.get("warnings") or []),

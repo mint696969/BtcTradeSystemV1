@@ -59,7 +59,13 @@ class MarketRegimeFutureForecast:
     invalidation_conditions: Tuple[str, ...] = ()
     abstain_reason: str = ""
     calibrated_reliability: float | None = None
+    calibration_display_confidence: float | None = None
     calibrated_probability_claim: bool = False
+    calibration_state: str = "UNCALIBRATED"
+    calibration_sample_count: int = 0
+    calibration_maturity: str = ""
+    calibration_cap_reasons: Tuple[str, ...] = ()
+    calibration_estimator_version: str = ""
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -84,10 +90,65 @@ class MarketRegimeFutureForecast:
                 f"expected={expected_target_definition_version}:actual={self.target_definition_version}"
             )
         object.__setattr__(self, "metadata", MappingProxyType(dict(self.metadata)))
-        if self.calibrated_probability_claim:
-            raise ValueError("calibrated_probability_claim_not_allowed_before_mr_f7")
+        allowed_states = {"UNCALIBRATED", "INSUFFICIENT_SAMPLE", "PROVISIONAL", "CAPPED", "CALIBRATED"}
+        if self.calibration_state not in allowed_states:
+            raise ValueError("calibration_state_invalid")
+        if int(self.calibration_sample_count) < 0:
+            raise ValueError("calibration_sample_count_must_be_non_negative")
         if self.calibrated_reliability is not None:
-            raise ValueError("calibrated_reliability_not_allowed_before_mr_f7")
+            reliability = float(self.calibrated_reliability)
+            if not 0.0 <= reliability <= 1.0:
+                raise ValueError("calibrated_reliability_out_of_range")
+            if not self.calibration_estimator_version.strip():
+                raise ValueError("calibration_estimator_version_required")
+            if not self.calibration_maturity.strip():
+                raise ValueError("calibration_maturity_required")
+        if self.calibration_display_confidence is not None:
+            display_confidence = float(self.calibration_display_confidence)
+            if not 0.0 <= display_confidence <= 1.0:
+                raise ValueError("calibration_display_confidence_out_of_range")
+            if self.calibrated_reliability is None:
+                raise ValueError("calibration_display_confidence_requires_reliability")
+            if display_confidence > float(self.calibrated_reliability):
+                raise ValueError("calibration_display_confidence_exceeds_reliability")
+        if self.calibrated_probability_claim:
+            if self.status is not FutureForecastStatus.FORECAST:
+                raise ValueError("calibrated_probability_claim_requires_forecast")
+            if self.calibrated_reliability is None:
+                raise ValueError("calibrated_probability_claim_requires_reliability")
+            if self.calibration_state != "CALIBRATED":
+                raise ValueError("calibrated_probability_claim_requires_calibrated_state")
+            if self.calibration_maturity != "MATURE":
+                raise ValueError("calibrated_probability_claim_requires_mature_sample")
+            if int(self.calibration_sample_count) <= 0:
+                raise ValueError("calibrated_probability_claim_requires_samples")
+            if self.calibration_cap_reasons:
+                raise ValueError("calibrated_probability_claim_disallows_caps")
+        if self.calibration_state == "CALIBRATED" and not self.calibrated_probability_claim:
+            raise ValueError("calibrated_state_requires_probability_claim")
+        if self.calibration_state == "CAPPED" and not self.calibration_cap_reasons:
+            raise ValueError("capped_state_requires_cap_reasons")
+        if self.calibration_state != "CAPPED" and self.calibration_cap_reasons:
+            raise ValueError("cap_reasons_require_capped_state")
+        if self.calibration_state == "INSUFFICIENT_SAMPLE":
+            if self.calibrated_reliability is not None or self.calibration_display_confidence is not None:
+                raise ValueError("insufficient_sample_disallows_calibration_values")
+            if int(self.calibration_sample_count) != 0:
+                raise ValueError("insufficient_sample_requires_zero_samples")
+        if self.calibration_state == "UNCALIBRATED":
+            if self.calibrated_reliability is not None or self.calibration_display_confidence is not None:
+                raise ValueError("uncalibrated_state_disallows_calibration_values")
+            if self.calibration_maturity:
+                raise ValueError("uncalibrated_state_disallows_maturity")
+            if int(self.calibration_sample_count) != 0:
+                raise ValueError("uncalibrated_state_requires_zero_samples")
+        if self.calibration_state == "PROVISIONAL":
+            if self.calibrated_reliability is None:
+                raise ValueError("provisional_state_requires_reliability")
+            if self.calibration_maturity not in {"SPARSE", "PROVISIONAL"}:
+                raise ValueError("provisional_state_requires_non_mature_sample")
+            if int(self.calibration_sample_count) <= 0:
+                raise ValueError("provisional_state_requires_samples")
         if self.raw_model_score_or_probability is not None:
             score = float(self.raw_model_score_or_probability)
             if not 0.0 <= score <= 1.0:
@@ -130,7 +191,13 @@ class MarketRegimeFutureForecast:
             "transition_path_candidate": [step.to_dict() for step in self.transition_path_candidate],
             "raw_model_score_or_probability": self.raw_model_score_or_probability,
             "calibrated_reliability": self.calibrated_reliability,
+            "calibration_display_confidence": self.calibration_display_confidence,
             "calibrated_probability_claim": self.calibrated_probability_claim,
+            "calibration_state": self.calibration_state,
+            "calibration_sample_count": int(self.calibration_sample_count),
+            "calibration_maturity": self.calibration_maturity,
+            "calibration_cap_reasons": list(self.calibration_cap_reasons),
+            "calibration_estimator_version": self.calibration_estimator_version,
             "invalidation_conditions": list(self.invalidation_conditions),
             "feature_snapshot_ref": self.feature_snapshot_ref,
             "model_id": self.model_id,

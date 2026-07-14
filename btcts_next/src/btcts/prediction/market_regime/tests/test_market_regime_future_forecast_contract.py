@@ -93,13 +93,29 @@ def test_metadata_is_defensively_frozen() -> None:
         result.metadata["evidence"] = "blocked"  # type: ignore[index]
 
 
-def test_identity_and_pre_mr_f7_calibration_guards() -> None:
+def test_identity_and_mr_f7_calibration_guards() -> None:
     with pytest.raises(ValueError, match="required_identity_missing"):
         MarketRegimeFutureForecast(**{**_forecast().__dict__, "target_definition_version": ""})
-    with pytest.raises(ValueError, match="calibrated_probability_claim_not_allowed_before_mr_f7"):
-        MarketRegimeFutureForecast(**{**_forecast().__dict__, "calibrated_probability_claim": True})
-    with pytest.raises(ValueError, match="calibrated_reliability_not_allowed_before_mr_f7"):
-        MarketRegimeFutureForecast(**{**_forecast().__dict__, "calibrated_reliability": 0.8})
+    with pytest.raises(ValueError, match="calibrated_probability_claim_requires_reliability"):
+        MarketRegimeFutureForecast(
+            **{
+                **_forecast().__dict__,
+                "calibrated_probability_claim": True,
+                "calibration_state": "CALIBRATED",
+                "calibration_sample_count": 100,
+                "calibration_maturity": "MATURE",
+                "calibration_estimator_version": "estimator.v1",
+            }
+        )
+    with pytest.raises(ValueError, match="calibration_estimator_version_required"):
+        MarketRegimeFutureForecast(
+            **{
+                **_forecast().__dict__,
+                "calibrated_reliability": 0.8,
+                "calibration_state": "PROVISIONAL",
+                "calibration_maturity": "PROVISIONAL",
+            }
+        )
 
 
 def test_complete_set_requires_each_future_horizon_exactly_once() -> None:
@@ -115,4 +131,68 @@ def test_serialization_keeps_raw_score_distinct_from_calibration() -> None:
     payload = _forecast().to_dict()
     assert payload["raw_model_score_or_probability"] == 0.61
     assert payload["calibrated_reliability"] is None
+    assert payload["calibration_display_confidence"] is None
     assert payload["calibrated_probability_claim"] is False
+
+
+def test_display_confidence_is_distinct_and_cannot_exceed_reliability() -> None:
+    valid = MarketRegimeFutureForecast(
+        **{
+            **_forecast().__dict__,
+            "calibrated_reliability": 0.8,
+            "calibration_display_confidence": 0.65,
+            "calibration_state": "CAPPED",
+            "calibration_sample_count": 120,
+            "calibration_maturity": "MATURE",
+            "calibration_cap_reasons": ("freshness_cap",),
+            "calibration_estimator_version": "estimator.v1",
+        }
+    )
+    assert valid.calibrated_reliability == 0.8
+    assert valid.calibration_display_confidence == 0.65
+    with pytest.raises(ValueError, match="calibration_display_confidence_exceeds_reliability"):
+        MarketRegimeFutureForecast(
+            **{
+                **valid.__dict__,
+                "calibration_display_confidence": 0.9,
+            }
+        )
+
+
+def test_calibration_state_combinations_fail_closed() -> None:
+    with pytest.raises(ValueError, match="capped_state_requires_cap_reasons"):
+        MarketRegimeFutureForecast(
+            **{
+                **_forecast().__dict__,
+                "calibrated_reliability": 0.8,
+                "calibration_display_confidence": 0.7,
+                "calibration_state": "CAPPED",
+                "calibration_sample_count": 120,
+                "calibration_maturity": "MATURE",
+                "calibration_estimator_version": "estimator.v1",
+            }
+        )
+    with pytest.raises(ValueError, match="provisional_state_requires_non_mature_sample"):
+        MarketRegimeFutureForecast(
+            **{
+                **_forecast().__dict__,
+                "calibrated_reliability": 0.8,
+                "calibration_display_confidence": 0.8,
+                "calibration_state": "PROVISIONAL",
+                "calibration_sample_count": 120,
+                "calibration_maturity": "MATURE",
+                "calibration_estimator_version": "estimator.v1",
+            }
+        )
+    with pytest.raises(ValueError, match="uncalibrated_state_disallows_calibration_values"):
+        MarketRegimeFutureForecast(
+            **{
+                **_forecast().__dict__,
+                "calibrated_reliability": 0.8,
+                "calibration_display_confidence": 0.8,
+                "calibration_state": "UNCALIBRATED",
+                "calibration_sample_count": 120,
+                "calibration_maturity": "MATURE",
+                "calibration_estimator_version": "estimator.v1",
+            }
+        )

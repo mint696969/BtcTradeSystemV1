@@ -35,6 +35,12 @@ def _write_latest_cards(root: Path) -> None:
                 "regime_label": "レンジ",
                 "confidence_percent": 70,
                 "freshness_badge": "LIVE",
+                "detail": {
+                    "calibration_state": "CAPPED",
+                    "calibrated_probability_claim": False,
+                    "calibrated_reliability_percent": 78.0,
+                    "calibration_display_confidence_percent": 65.0,
+                },
             }
         ],
     }
@@ -102,6 +108,10 @@ def test_cp24_operator_snapshot_exposes_calibration_summary_read_only(tmp_path: 
     assert snapshot["calibration_primary_known_total"] == 568
     assert snapshot["calibration_primary_counts"] == {"hit": 306, "partial": 138, "miss": 124, "unknown": 0, "invalidated": 0}
     assert snapshot["calibration_reference_score"] == 1.0
+    assert snapshot["first_card_calibration_state"] == "CAPPED"
+    assert snapshot["first_card_calibrated_probability_claim"] is False
+    assert snapshot["first_card_calibrated_reliability_percent"] == 78.0
+    assert snapshot["first_card_calibration_display_confidence_percent"] == 65.0
     assert snapshot["calibration_latest_read_model_path"].replace("\\", "/").endswith("prediction/market_regime/calibration/latest_read_model.json")
     assert snapshot["calibration_read_model"]["artifact_kind"] == "calibration_read_model"
     assert snapshot["scheduler_enabled"] is False
