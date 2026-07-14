@@ -3,7 +3,7 @@
 
 # Prediction System MarketRegime Family Roadmap
 
-Updated: 2026-07-11 JST
+Updated: 2026-07-14 JST
 Checkpoint: MARKET_REGIME_FAMILY_ROADMAP_ACCEPTED
 Contract status: current
 
@@ -348,6 +348,87 @@ regime duration consistency
 
 A more complex candidate does not become canonical unless it provides material benefit over simple baselines or a clearly documented operational benefit such as safer abstention.
 
+#### MR-F6 delivery sequence and closeout plan
+
+MR-F6 baseline comparison logic is implemented through the final pure execution boundary. The remaining work is deliberately separated from prediction scoring so execution safety can mature without changing forecast behavior.
+
+```text
+MR-F6.18 accepted:
+  immutable request schema v4
+  complete request-hash binding
+  external expected-hash confirmation
+  writer-scope confirmation
+  pure final execution boundary
+  no writer invocation or D-hot write
+
+MR-F6.19:
+  deterministic dry-run execution plan
+  bind request, writer, destination, acknowledgements, and execution-time identity
+  no writer invocation
+
+MR-F6.20:
+  dry-run writer invocation adapter
+  exercise the exact public writer contract without modifying D-hot
+  preserve disabled-by-default and one-shot boundaries
+
+MR-F6.21:
+  idempotency and duplicate-safe receipt contract
+  distinguish absent, already-satisfied, and conflicting destination states
+
+MR-F6.22:
+  failure recovery and resume contract
+  define partial-failure, retry, and fail-closed behavior
+
+MR-F6.23:
+  immutable audit and replay evidence
+  preserve request, boundary, plan, result, and receipt identity
+
+MR-F6.24 Integration & Hardening:
+  responsibility and dependency audit
+  unreachable and duplicate-contract audit
+  request/hash/writer/destination identity audit
+  public-interface freeze
+  full-suite guards
+  roadmap, architecture, philosophy, and gpt_room synchronization
+
+MR-F6 closeout:
+  publish accepted contracts, known gaps, rollback point, and handoff pack
+```
+
+MR-F6.24 is a mandatory quality gate, not optional cleanup. It adds no prediction shortcut, automatic promotion, broker path, scheduler, or live parameter mutation.
+
+#### MR-F7 parallel-start condition
+
+MR-F7 confidence-calibration work may begin after MR-F6.20 is accepted because calibration quality and execution-safety hardening have separate owners. Parallel work must obey these conditions:
+
+```text
+mr_f6_20_accepted=true
+mr_f7_may_start_in_parallel=true
+mr_f6_21_through_mr_f6_24_remain_mandatory=true
+mr_f6_closeout_may_not_be_skipped=true
+market_regime_ready_for_next_family=false
+trend_bias_family_still_blocked=true
+shared_contract_changes_require_cross-track_review=true
+```
+
+MR-F7 parallel start does not satisfy `MARKET_REGIME_READY_FOR_NEXT_FAMILY`. The next prediction family remains blocked until MR-F6 through MR-F10 and the family completion gate are accepted.
+
+#### Thread-handoff readiness
+
+A new development thread becomes preferred only after MR-F6 closeout and its architecture freeze are complete. Before handoff, the repository must contain enough canonical material that a new GPT can recover the same responsibility boundaries and safety posture without relying on conversation history.
+
+Required handoff pack:
+
+```text
+MarketRegime architecture overview
+prediction philosophy and non-toy requirements
+MR-F6 execution-contract map
+hardening checklist and accepted public interfaces
+MR-F7 start guide and parallel-work boundaries
+current roadmap and gpt_room state
+known gaps, rollback point, and full-suite evidence
+```
+
 ### MR-F7 — Confidence calibration
 
 Displayed confidence must evolve from a heuristic support score toward empirical reliability.
@@ -555,12 +636,33 @@ MarketRegime provides prediction context, not execution authorization.
 ## 8. Current start point
 
 ```text
-current_gate=MR_F5_OPERATIONAL_EVIDENCE_AND_CANONICAL_MIGRATION_REVIEW_ACCEPTED
-next_gate=MR_F6_MANDATORY_SIMPLE_BASELINE_COMPARISON
+reference_head=cf868d55
+current_gate=MR_F6_FINAL_EXECUTION_BOUNDARY_ACCEPTED
+next_gate=MR_F6_19_DRY_RUN_EXECUTION_PLAN
 current_phase=MR-F6
 mr_f5_complete=true
+mr_f6_18_complete=true
+mr_f6_writer_invoked=false
+mr_f6_d_hot_modified=false
+mr_f7_parallel_start_allowed=false
+mr_f7_parallel_start_condition=MR_F6_20_ACCEPTED
+mr_f6_24_hardening_required=true
 market_regime_family_ready_for_next_prediction_family=false
-implementation_started=false
+implementation_started=true
+```
+
+MR-F6 accepted checkpoint:
+
+```text
+commit=cf868d55
+request_schema=prediction.market_regime.origin_evidence_execution_request.mr_f6_17.v4
+execution_boundary=prediction.market_regime.origin_evidence_execution_boundary.mr_f6_18.v1
+market_regime_suite=314_passed
+writer_invoked=false
+d_hot_modified=false
+scheduler_enabled=false
+auto_promotion_allowed=false
+canonical_replacement_allowed=false
 ```
 
 MR-F5 closeout:
