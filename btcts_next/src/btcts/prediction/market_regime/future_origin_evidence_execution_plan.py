@@ -18,7 +18,7 @@ from .future_origin_evidence_execution_request import (
 )
 
 MARKET_REGIME_ORIGIN_EVIDENCE_EXECUTION_PLAN_VERSION = (
-    "prediction.market_regime.origin_evidence_execution_plan.mr_f6_19.v1"
+    "prediction.market_regime.origin_evidence_execution_plan.mr_f6_19.v2"
 )
 
 
@@ -194,12 +194,25 @@ def build_origin_evidence_dry_run_execution_plan(
         raise ValueError("origin_evidence_execution_plan_bundle_identity_invalid")
 
     approval_id = str(execution_request.get("approval_id") or "").strip()
+    approval_requested_at = str(
+        execution_request.get("approval_requested_at") or ""
+    ).strip()
+    if execution_boundary.get("approval_requested_at") != approval_requested_at:
+        raise ValueError(
+            "origin_evidence_execution_plan_boundary_identity_mismatch:approval_requested_at"
+        )
     artifact_relpath = str(execution_request.get("artifact_relpath") or "").strip()
     dedupe_key = str(execution_request.get("dedupe_key") or "").strip()
     writer_contract_schema_version = str(
         execution_request.get("writer_contract_schema_version") or ""
     ).strip()
-    if not approval_id or not artifact_relpath or not dedupe_key or not writer_contract_schema_version:
+    if (
+        not approval_id
+        or not approval_requested_at
+        or not artifact_relpath
+        or not dedupe_key
+        or not writer_contract_schema_version
+    ):
         raise ValueError("origin_evidence_execution_plan_identity_missing")
     for field, value in (
         ("approval_id", approval_id),
@@ -219,6 +232,7 @@ def build_origin_evidence_dry_run_execution_plan(
         "writer_contract_version": writer_contract_version,
         "writer_contract_schema_version": writer_contract_schema_version,
         "approval_id": approval_id,
+        "approval_requested_at": approval_requested_at,
         "approval_expires_at": approval_expires_at,
         "artifact_relpath": artifact_relpath,
         "dedupe_key": dedupe_key,
@@ -249,6 +263,7 @@ def build_origin_evidence_dry_run_execution_plan(
         "writer_contract_version": writer_contract_version,
         "writer_contract_schema_version": writer_contract_schema_version,
         "approval_id": approval_id,
+        "approval_requested_at": approval_requested_at,
         "approval_expires_at": approval_expires_at,
         "artifact_relpath": artifact_relpath,
         "dedupe_key": dedupe_key,

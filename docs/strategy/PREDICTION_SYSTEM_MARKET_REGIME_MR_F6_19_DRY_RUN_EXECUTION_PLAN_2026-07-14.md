@@ -18,7 +18,7 @@ request ID and externally confirmed request hash
 boundary snapshot hash
 planned-at timestamp
 writer ID, writer contract version, and writer schema version
-approval ID and expiry
+approval ID, requested-at, and expiry
 append-only destination path
 dedupe key
 canonical seven horizons
@@ -65,4 +65,4 @@ auto_promotion_allowed=false
 canonical_replacement_allowed=false
 ```
 
-MR-F6.19 imports no writer function, exposes no CLI or scheduler hook, and performs no filesystem or D-hot operation. MR-F6.20 may consume this plan only through a separate dry-run adapter and must revalidate plan identity before exercising the public writer contract.
+MR-F6.19 schema v2 explicitly binds both ends of the approval window. MR-F6.19 imports no writer function, exposes no CLI or scheduler hook, and performs no filesystem or D-hot operation. MR-F6.20 may consume this plan only through a separate dry-run adapter and must revalidate plan identity before exercising the public writer contract.

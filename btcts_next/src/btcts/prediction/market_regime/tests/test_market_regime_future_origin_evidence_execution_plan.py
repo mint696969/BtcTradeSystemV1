@@ -31,6 +31,7 @@ def _request() -> dict[str, object]:
         "writer_contract_version": "writer.v1",
         "writer_contract_schema_version": "writer-schema.v1",
         "approval_id": "approval:fixture",
+        "approval_requested_at": "2026-07-14T00:00:00Z",
         "approval_expires_at": "2026-07-15T00:00:00Z",
         "artifact_relpath": "prediction/market_regime/future_origin_evidence/date=2026-07-14/batch-dedupe.json",
         "dedupe_key": "dedupe",
@@ -99,6 +100,7 @@ def test_ready_boundary_builds_deterministic_immutable_plan() -> None:
     assert first["execution_plan_hash"] == second["execution_plan_hash"]
     assert first["execution_plan_ready"] is True
     assert first["dry_run_only"] is True
+    assert first["approval_requested_at"] == "2026-07-14T00:00:00Z"
     assert first["bundle_ids"] == BUNDLE_IDS
     assert first["write_plan_bundle_ids"] == WRITE_PLAN_BUNDLE_IDS
     with pytest.raises(TypeError):
@@ -157,6 +159,22 @@ def test_bundle_and_destination_identity_are_revalidated() -> None:
     boundary["dedupe_key"] = "other"
     with pytest.raises(ValueError, match="boundary_identity_mismatch:dedupe_key"):
         _plan(execution_boundary=boundary)
+
+
+def test_plan_hash_binds_approval_requested_at() -> None:
+    first = _plan()
+
+    request = _request()
+    boundary = _boundary()
+    request["approval_requested_at"] = "2026-07-13T23:59:00Z"
+    boundary["approval_requested_at"] = "2026-07-13T23:59:00Z"
+    second = _plan(
+        execution_request=request,
+        execution_boundary=boundary,
+    )
+
+    assert first["approval_requested_at"] != second["approval_requested_at"]
+    assert first["execution_plan_hash"] != second["execution_plan_hash"]
 
 
 def test_plan_hash_changes_when_execution_time_changes() -> None:
