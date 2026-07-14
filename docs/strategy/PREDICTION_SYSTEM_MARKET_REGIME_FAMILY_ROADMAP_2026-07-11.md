@@ -378,8 +378,7 @@ MR-F6.21 accepted:
   immutable duplicate-safe receipt schema v1
   absent, already_satisfied, conflicting, and inconsistent states
   no filesystem read, writer invocation, or D-hot write
-  acceptance document commit=72f01881 contract
-  distinguish absent, already-satisfied, and conflicting destination states
+  acceptance document commit=72f01881
 
 MR-F6.22 accepted:
   immutable recovery/resume decision schema v1
@@ -396,16 +395,18 @@ MR-F6.23 accepted:
   replay remains verification-only and non-I/O
   acceptance document commit=28a85936
 
-MR-F6.24 Integration & Hardening:
-  responsibility and dependency audit
-  unreachable and duplicate-contract audit
-  request/hash/writer/destination identity audit
-  public-interface freeze
-  full-suite guards
-  roadmap, architecture, philosophy, and gpt_room synchronization
+MR-F6.24 accepted:
+  cross-contract integration and hardening suite
+  complete hash, path, dedupe, state, and safety continuity verified
+  focused=7 passed, connected=49 passed, MarketRegime=372 passed
+  production code added=false
+  acceptance document commit=c6e92864
 
-MR-F6 closeout:
-  publish accepted contracts, known gaps, rollback point, and handoff pack
+MR-F6 closeout accepted:
+  mandatory baseline comparison and execution-safety chain accepted
+  architecture frozen
+  rollback point and MR-F7 handoff published
+  closeout document commit=7747a976
 ```
 
 MR-F6.24 is a mandatory quality gate, not optional cleanup. It adds no prediction shortcut, automatic promotion, broker path, scheduler, or live parameter mutation.
@@ -650,8 +651,8 @@ MarketRegime provides prediction context, not execution authorization.
 
 ```text
 reference_head=a894211b
-current_gate=MR_F6_23_IMMUTABLE_AUDIT_AND_REPLAY_EVIDENCE_ACCEPTED
-next_gate=MR_F6_24_INTEGRATION_AND_HARDENING
+current_gate=MR_F6_MANDATORY_SIMPLE_BASELINE_COMPARISON_CLOSEOUT_ACCEPTED
+next_gate=MR_F7_CONFIDENCE_CALIBRATION
 current_phase=MR-F6
 mr_f5_complete=true
 mr_f6_18_complete=true
@@ -663,13 +664,17 @@ mr_f6_22_complete=true
 mr_f6_recovery_resume_decision=true
 mr_f6_23_complete=true
 mr_f6_audit_replay_evidence=true
+mr_f6_24_complete=true
+mr_f6_integration_hardening=true
+mr_f6_architecture_frozen=true
+mr_f6_complete=true
 mr_f6_writer_preflight_invoked=true
 mr_f6_writer_invoked=false
 mr_f6_d_hot_modified=false
 mr_f7_parallel_start_allowed=true
 mr_f7_parallel_start_condition=MR_F6_20_ACCEPTED
-mr_f6_23_through_mr_f6_24_required=true
-mr_f6_24_hardening_required=true
+mr_f6_24_hardening_required=false
+mr_f6_closeout_complete=true
 market_regime_family_ready_for_next_prediction_family=false
 implementation_started=true
 ```
@@ -703,7 +708,12 @@ mr_f6_23c_commit=28a85936
 mr_f6_23_audit_replay_schema=prediction.market_regime.origin_evidence_audit_replay_evidence.mr_f6_23.v1
 mr_f6_23_focused_tests=10_passed
 mr_f6_23_connected_tests=21_passed
-market_regime_suite=365_passed
+mr_f6_24a_commit=121071fc
+mr_f6_24b_commit=c6e92864
+mr_f6_closeout_commit=7747a976
+mr_f6_24_focused_tests=7_passed
+mr_f6_24_connected_tests=49_passed
+market_regime_suite=372_passed
 request_schema=prediction.market_regime.origin_evidence_execution_request.mr_f6_17.v4
 execution_boundary=prediction.market_regime.origin_evidence_execution_boundary.mr_f6_18.v1
 execution_plan=prediction.market_regime.origin_evidence_execution_plan.mr_f6_19.v2

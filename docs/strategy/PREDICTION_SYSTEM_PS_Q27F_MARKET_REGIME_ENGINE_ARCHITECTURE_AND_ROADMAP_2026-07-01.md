@@ -478,3 +478,39 @@ chart_selection_packets_are_manual_review_artifacts_not_canonical_predictions=tr
 ```
 
 This update does not change code or runtime behavior. It fixes the design baseline before implementation resumes.
+
+
+## 2026-07-14 MR-F6 execution-evidence architecture freeze
+<!-- PS_MARKET_REGIME_MR_F6_ARCHITECTURE_FREEZE_2026_07_14 -->
+
+The MR-F6 mandatory simple-baseline comparison execution-safety architecture is accepted and frozen.
+
+```text
+mr_f6_closeout_commit=7747a976
+mr_f6_architecture_frozen=true
+current_gate=MR_F6_MANDATORY_SIMPLE_BASELINE_COMPARISON_CLOSEOUT_ACCEPTED
+next_gate=MR_F7_CONFIDENCE_CALIBRATION
+writer_invoked=false
+filesystem_read_performed=false
+filesystem_write_performed=false
+d_hot_modified=false
+scheduler_enabled=false
+canonical_replacement=false
+live_parameter_apply=false
+```
+
+Accepted chain:
+
+```text
+execution request
+  -> execution boundary
+  -> dry-run execution plan
+  -> writer preflight adapter result
+  -> duplicate-safe receipt
+  -> recovery/resume decision
+  -> immutable audit/replay evidence
+```
+
+The accepted contracts remain small, immutable, fail-closed, and non-authorizing. Any schema, hash-identity, state-semantics, public-interface, or safety-boundary change requires explicit contract review, migration evidence, connected tests, and an updated architecture decision.
+
+Canonical closeout: `docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F6_MANDATORY_SIMPLE_BASELINE_COMPARISON_CLOSEOUT_2026-07-14.md`
