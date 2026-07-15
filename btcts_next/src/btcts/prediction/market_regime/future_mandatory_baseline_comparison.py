@@ -238,6 +238,26 @@ def _candidate_summary(candidate_id: str, rows: Sequence[MandatoryBaselineCompar
     return MappingProxyType(payload)
 
 
+def summarize_mandatory_baseline_candidate(
+    *,
+    candidate_id: str,
+    rows: Iterable[MandatoryBaselineComparisonRow],
+    total_slots: int,
+) -> Mapping[str, Any]:
+    """Public pure summary surface reused by MR-F8 candidate comparisons."""
+    safe_id = str(candidate_id).strip()
+    if not safe_id:
+        raise ValueError("mandatory_baseline_summary_candidate_id_missing")
+    safe_rows = tuple(rows)
+    if any(not isinstance(row, MandatoryBaselineComparisonRow) for row in safe_rows):
+        raise ValueError("mandatory_baseline_summary_row_type_invalid")
+    if any(row.candidate_id != safe_id for row in safe_rows):
+        raise ValueError("mandatory_baseline_summary_candidate_id_mismatch")
+    if int(total_slots) <= 0:
+        raise ValueError("mandatory_baseline_summary_total_slots_invalid")
+    return _candidate_summary(safe_id, safe_rows, int(total_slots))
+
+
 def build_mandatory_baseline_comparison(
     *,
     rows: Iterable[MandatoryBaselineComparisonRow],

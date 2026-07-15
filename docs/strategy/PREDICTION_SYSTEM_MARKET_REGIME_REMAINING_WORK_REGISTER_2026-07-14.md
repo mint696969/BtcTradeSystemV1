@@ -225,6 +225,33 @@ compatibility_requirement=preserve raw/calibrated/display confidence separation 
 
 This item covers evidence accumulation and later activation review only. It does not reopen the accepted MR-F7 architecture and does not authorize runtime fit, auto-promotion, or live parameter application.
 
+### Deferred-work ownership crosswalk
+
+Earlier phase documents contain deferred wording that must not become unnamed work. The canonical ownership is:
+
+```text
+changing or promoting card confidence = RW-MR-NB-001, owner MR-F9 activation review
+changing UNKNOWN / 15% policy = RW-MR-005 family-wide contract hardening unless separately promoted to a named blocking item
+multiple parameter-set generation and comparison = RW-MR-002
+review_request / review_note / review_link persistence = RW-MR-003
+same-run linkage across forecast, calibration, scorecard, and review evidence = RW-MR-003 and RW-MR-005 continuity guard
+family-neutral consumer contract and parent naming reconciliation = RW-MR-004
+operator UI stale-test baseline repair = RW-MR-005 full-suite closeout prerequisite
+warning scorecard persistence = RW-MR-003 when used as review evidence; otherwise RW-MR-005 contract audit
+price_structure signal-generation enrichment = non-blocking feature research; must receive a stable ID before implementation
+additional feature enrichment or ensemble research = non-blocking research; must receive a stable ID before implementation
+```
+
+MR-F8-specific discovered risks remain owned by RW-MR-002 until accepted or reclassified:
+
+```text
+candidate-layer ambiguity between the two future candidates and eight L4 feature candidates
+origin-feature candidate-count hardcoding
+unknown-rate versus justified/avoidable abstention semantics
+full-metric winner/tie/insufficient decision contract
+D-hot comparison artifact discovery and bounded read-only adapter
+```
+
 ## 5. Parallel-work rule
 
 ```text
