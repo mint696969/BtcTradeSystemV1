@@ -213,6 +213,7 @@ mr_f7_projection_commit=615c501d
 mr_f7_source_flag_trace_commit=b1020269
 mr_f7_evidence_readiness_commit=c708ada0
 mr_f7_evidence_audit_commit=23660311
+mr_f7_closeout_commit=a7299bdf
 ```
 
 Accepted rollback point:

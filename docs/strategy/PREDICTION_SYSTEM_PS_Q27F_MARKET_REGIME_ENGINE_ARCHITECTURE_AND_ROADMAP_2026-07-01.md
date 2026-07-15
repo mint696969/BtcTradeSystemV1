@@ -527,7 +527,8 @@ All unfinished MarketRegime work is governed by `docs/strategy/PREDICTION_SYSTEM
 MR-F7 confidence calibration architecture, evidence boundaries, and fail-closed activation contract are accepted.
 
 ```text
-mr_f7_closeout_commit_pending=true
+mr_f7_closeout_commit_pending=false
+mr_f7_closeout_commit=a7299bdf
 mr_f7_implementation_complete=true
 current_gate=MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED
 next_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON

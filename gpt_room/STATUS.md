@@ -5,7 +5,8 @@
 ## Current Baseline
 
 - Active branch: `docs/phase2-handoff-sync`
-- Current HEAD: `23660311`
+- Accepted MR-F7 closeout HEAD: `a7299bdf`
+- MR-F7 implementation rollback point: `23660311`
 - Current gate: `MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED`
 - Next gate: `MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON`
 
@@ -63,6 +64,6 @@
 
 ## Next Recommended Work
 
-1. Commit MR-F7 closeout and specification synchronization.
-2. Start MR-F8 shadow model and parameter-set comparison over identical windows and sources.
+1. Start MR-F8 shadow model and parameter-set comparison over identical windows and sources.
+2. Preserve MR-F7 raw/calibrated/display-confidence semantics during every candidate comparison.
 3. Keep detailed source/flag activation in the MR-F9 evidence loop until mature enriched-trace outcomes exist.

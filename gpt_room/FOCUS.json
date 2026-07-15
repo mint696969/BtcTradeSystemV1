@@ -1,9 +1,8 @@
 {
   "schema_version": "btcts.gpt_room.focus.v1",
   "active_baseline": "docs/phase2-handoff-sync",
-  "current_head": "23660311",
   "last_test_checkpoint": "Prediction 288 passed; MarketRegime 404 passed; Operator UI 1230 passed",
-  "current_focus": "MR-F7 confidence calibration accepted; finalize closeout commit and hand off to MR-F8 shadow model and parameter-set comparison",
+  "current_focus": "MR-F7 confidence calibration is closed and accepted; begin MR-F8 shadow model and parameter-set comparison",
   "completed_recently": [
     "MR-F7 calibration dataset, context, OOS split, maturity, estimator, caps, and diagnostics accepted",
     "MR-F7 calibrated reliability projection and operator read-model separation accepted",
@@ -11,13 +10,15 @@
     "MR-F7 complete D-hot read-only evidence audit accepted"
   ],
   "next_tasks": [
-    "commit MR-F7 closeout and specification synchronization",
     "start MR-F8 shadow model and parameter-set comparison",
-    "keep runtime calibrated-probability claim and card-confidence replacement disabled"
+    "compare candidates over identical windows, sources, and target definitions",
+    "keep runtime calibrated-probability claim, auto-promotion, and live parameter apply disabled"
   ],
   "safety_notes": [
     "legacy history is coarse-calibration evidence only",
     "detailed source/flag fitting waits for enriched trace outcomes",
     "runtime fit, auto-promotion, live parameter apply, scheduler, broker private API, AutoTrade, and order submission remain disabled"
-  ]
+  ],
+  "accepted_closeout_head": "a7299bdf",
+  "implementation_rollback_point": "23660311"
 }

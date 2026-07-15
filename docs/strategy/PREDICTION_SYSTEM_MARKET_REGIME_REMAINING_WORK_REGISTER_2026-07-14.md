@@ -5,7 +5,7 @@
 
 Updated: 2026-07-15 JST
 Status: current and binding
-Reference HEAD: 23660311
+Reference HEAD: a7299bdf
 
 <!-- PS_MARKET_REGIME_REMAINING_WORK_REGISTER_2026_07_14 -->
 
@@ -43,6 +43,7 @@ trend_bias_blocked=true
 status=accepted
 accepted_checkpoint=MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED
 accepted_rollback_point=23660311
+accepted_closeout_commit=a7299bdf
 closeout=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F7_CONFIDENCE_CALIBRATION_CLOSEOUT_2026-07-15.md
 blocking_gate=MARKET_REGIME_READY_FOR_NEXT_FAMILY
 owner_phase=MR-F7

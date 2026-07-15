@@ -496,6 +496,7 @@ runtime_probability_claim=false
 runtime_card_confidence_replacement=false
 detailed_source_flag_fit_active=false
 rollback_point=23660311
+closeout_commit=a7299bdf
 closeout=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F7_CONFIDENCE_CALIBRATION_CLOSEOUT_2026-07-15.md
 next_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON
 ```
@@ -681,7 +682,7 @@ MarketRegime provides prediction context, not execution authorization.
 ## 8. Current start point
 
 ```text
-reference_head=23660311
+reference_head=a7299bdf
 current_gate=MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED
 next_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON
 current_phase=MR-F8
