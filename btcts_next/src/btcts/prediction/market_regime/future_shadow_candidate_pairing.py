@@ -20,6 +20,7 @@ from .future_shadow_candidate_registry import (
     validate_future_shadow_candidate_registry,
 )
 from .future_shadow_model_comparison import FutureShadowCandidateIdentity
+from .future_trace_identity import build_market_regime_future_trace_identity
 
 MARKET_REGIME_FUTURE_SHADOW_PAIRING_VERSION = (
     "prediction.market_regime.future_shadow_candidate_pairing.mr_f8_3.v1"
@@ -55,7 +56,10 @@ def _identity(candidate: FutureShadowCandidateParameters) -> FutureShadowCandida
 
 
 def _forecast_payload(forecast: MarketRegimeFutureForecast) -> Mapping[str, Any]:
+    trace = build_market_regime_future_trace_identity(forecast)
     return MappingProxyType({
+        "trace_id": trace.trace_id,
+        "expiry_at": trace.expiry_at,
         "model_id": forecast.model_id,
         "logic_version": forecast.logic_version,
         "parameter_set_id": forecast.parameter_set_id,
