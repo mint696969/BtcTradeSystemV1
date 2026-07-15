@@ -95,3 +95,23 @@ def test_unready_runtime_bundle_fails_closed() -> None:
         build_future_shadow_runtime_preflight_report(
             packet=_packet(), signal_score_report=_report(), runtime_bundle=runtime
         )
+
+
+def test_runtime_preflight_preserves_origin_evidence_bundle_per_pair() -> None:
+    report = build_future_shadow_runtime_preflight_report(
+        packet=_packet(),
+        signal_score_report=_report(),
+        runtime_bundle=_runtime_bundle(),
+    )
+    assert report["pair_count"] == 7
+    for pair in report["pairs"]:
+        bundle = pair["origin_evidence_bundle"]
+        assert bundle["artifact_kind"] == "future_origin_evidence_bundle"
+        assert bundle["bundle_id"] == pair["source_bundle_id"]
+        assert bundle["target_horizon_sec"] == pair["slot_identity"]["target_horizon_sec"]
+        assert bundle["prediction_origin"] == pair["slot_identity"]["origin_timestamp"]
+        assert bundle["feature_snapshot_ref"] == pair["slot_identity"]["feature_snapshot_ref"]
+        assert bundle["write_performed"] is False
+        assert bundle["canonical_replacement"] is False
+        assert bundle["parameter_auto_promotion_allowed"] is False
+        assert bundle["live_parameter_apply_allowed"] is False

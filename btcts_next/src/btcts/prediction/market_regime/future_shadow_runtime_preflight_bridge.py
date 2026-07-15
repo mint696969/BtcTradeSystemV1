@@ -112,6 +112,7 @@ def build_future_shadow_runtime_preflight_report(
         trace_plan = build_future_shadow_pair_trace_plan(pair=pair)
         pairs.append(MappingProxyType({
             "source_bundle_id": bundle_id,
+            "origin_evidence_bundle": bundle,
             **dict(pair),
             "trace_plan": trace_plan,
         }))
