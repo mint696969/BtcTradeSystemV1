@@ -1,0 +1,67 @@
+# path: ./btcts_next/src/btcts/prediction/market_regime/tests/test_market_regime_shadow_runtime_preflight_once.py
+# desc: MR-F8.8 orchestration tests for the read-only runtime preflight once boundary.
+
+from __future__ import annotations
+
+from types import MappingProxyType, SimpleNamespace
+
+import pytest
+
+from btcts.prediction.market_regime.contracts import MarketRegimeCode
+from btcts.prediction.market_regime.tools import shadow_runtime_preflight_once as module
+
+
+def test_runtime_once_orchestrates_read_only_components(monkeypatch, tmp_path) -> None:
+    calls: list[str] = []
+    source_snapshot = SimpleNamespace(ok=True)
+    feature_bundle = SimpleNamespace(
+        signals=(SimpleNamespace(name="current_l4_candle_window_generated_at", available=True, value="2026-07-15T00:00:00Z"),),
+        available_signal_count=lambda: 42,
+    )
+    prediction_packet = SimpleNamespace(
+        predictions=(SimpleNamespace(horizon_sec=0, regime_code=MarketRegimeCode.RANGE),)
+    )
+    shadow_packet = object()
+    runtime_bundle = MappingProxyType({"runtime_source_ready": True})
+    preflight = MappingProxyType({"pair_count": 7, "pairs": ()})
+
+    monkeypatch.setattr(module, "build_default_market_regime_parameter_set_registry", lambda: SimpleNamespace(active_parameter_set=lambda: object()))
+    monkeypatch.setattr(module, "build_market_regime_source_snapshot", lambda root: calls.append("snapshot") or source_snapshot)
+    monkeypatch.setattr(module, "build_market_regime_feature_bundle", lambda *args, **kwargs: calls.append("features") or feature_bundle)
+    monkeypatch.setattr(module, "read_persisted_current_state", lambda root: calls.append("state") or {"regime_code": "RANGE"})
+    monkeypatch.setattr(module, "classify_market_regime_feature_bundle", lambda *args, **kwargs: calls.append("classify") or prediction_packet)
+    monkeypatch.setattr(module, "score_market_regime_signals", lambda bundle: calls.append("score") or {"market_regime_only": True})
+    monkeypatch.setattr(module, "build_market_regime_future_shadow_packet", lambda **kwargs: calls.append("packet") or shadow_packet)
+    monkeypatch.setattr(module, "current_l4_candle_rows", lambda snapshot: ({"time_utc": "x"},) * 60)
+    monkeypatch.setattr(module, "build_market_regime_origin_feature_runtime_bundle", lambda **kwargs: calls.append("runtime") or runtime_bundle)
+    monkeypatch.setattr(module, "build_future_shadow_runtime_preflight_report", lambda **kwargs: calls.append("preflight") or preflight)
+
+    result = module.build_shadow_runtime_preflight_once(
+        hot_root=tmp_path,
+        generated_at="2026-07-15T00:00:00Z",
+        shadow_candidate_id="candidate:shadow",
+    )
+    assert calls == ["snapshot", "features", "state", "classify", "score", "packet", "runtime", "preflight"]
+    assert result["pair_count"] == 7
+    assert result["current_regime"] == "RANGE"
+    assert result["writer_invoked"] is False
+    assert result["writes_dhot"] is False
+
+
+def test_cli_requires_preflight() -> None:
+    with pytest.raises(SystemExit) as exc:
+        module.main([
+            "--hot-root", "D:/btc_ts_hot",
+            "--generated-at", "2026-07-15T00:00:00Z",
+            "--shadow-candidate-id", "candidate:shadow",
+        ])
+    assert exc.value.code == 2
+
+
+def test_missing_candidate_fails_closed(tmp_path) -> None:
+    with pytest.raises(ValueError, match="shadow_candidate_missing"):
+        module.build_shadow_runtime_preflight_once(
+            hot_root=tmp_path,
+            generated_at="2026-07-15T00:00:00Z",
+            shadow_candidate_id="",
+        )
