@@ -3,9 +3,9 @@
 
 # Prediction System MarketRegime Remaining Work Register
 
-Updated: 2026-07-15 JST
+Updated: 2026-07-16 JST
 Status: current and binding
-Reference HEAD: a7299bdf
+Reference implementation HEAD: 7d9e81f4
 
 <!-- PS_MARKET_REGIME_REMAINING_WORK_REGISTER_2026_07_14 -->
 
@@ -27,9 +27,9 @@ Starting a later phase does not implicitly complete earlier open work.
 ## 2. Current position
 
 ```text
-current_phase=MR-F8
-current_gate=MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED
-next_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON
+current_phase=MR-F9
+current_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON_ACCEPTED
+next_gate=MR_F9_OUTCOME_REVIEW_CALIBRATION_EVIDENCE_LOOP
 family_completion_gate=MARKET_REGIME_READY_FOR_NEXT_FAMILY
 market_regime_ready_for_next_family=false
 trend_bias_blocked=true
@@ -73,24 +73,44 @@ canonical acceptance and rollback point
 ### RW-MR-002 — MR-F8 shadow model and parameter-set comparison
 
 ```text
-status=open
+status=accepted
+accepted_checkpoint=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON_ACCEPTED
+accepted_implementation_basis_head=7d9e81f4
+accepted_decision=insufficient_evidence
+selected_candidate=null
+rollback_candidate=market_regime.future.transparent_baseline.params.v1
+closeout=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON_CLOSEOUT_2026-07-16.md
 blocking_gate=MARKET_REGIME_READY_FOR_NEXT_FAMILY
 owner_phase=MR-F8
-may_start_before_mr_f7_complete=only_if_contracts_do_not_conflict
 may_be_skipped=false
 ```
 
-Required outcomes:
+Accepted outcomes:
 
 ```text
-at least two candidate models or parameter sets
+two parameter sets compared
 same-window and same-source comparison
-condition-specific performance
-coverage, abstention, churn, transition-delay, and calibration comparison
+seven paired horizons and fourteen immutable trace identities
+canonical ledger outcome resolution
+coverage and abstention comparison
 candidate identity and rollback point
+winner/tie/insufficient-evidence contract
 human approval contract
 auto-promotion forbidden
 live parameter apply forbidden
+```
+
+Evidence-maturity outcomes not available from the single accepted origin are explicitly transferred to `RW-MR-003`, `RW-MR-003A`, and `RW-MR-003B`:
+
+```text
+full condition-specific performance
+balanced accuracy and macro F1
+Brier score, log loss, and ECE
+multi-origin churn
+transition-detection delay
+full-horizon outcome completion
+promotion maturity
+independent horizon-execution proof
 ```
 
 ### RW-MR-003 — MR-F9 outcome/review/calibration evidence loop
@@ -105,18 +125,88 @@ may_be_skipped=false
 Required outcomes:
 
 ```text
+continuous paired forecast generation across multiple origins
 horizon-expiry detection
 outcome resolution under accepted target definitions
 immutable prediction-to-outcome link
 unresolved and invalid outcome states
-calibration summaries
+full condition-specific comparison
+calibration summaries and probability metrics
 miss-concentration analysis
+coverage, abstention, UNKNOWN, churn, and transition-delay analysis
 WarRoom review selection
 review_request, review_note, and review_link contracts
 parameter/model proposal evidence
 proposal separated from live apply
 replayable review trail
 ```
+
+### RW-MR-003A — MR-F9 horizon-specific inference execution proof
+
+```text
+status=open
+parent=RW-MR-003
+blocking_gate=MARKET_REGIME_READY_FOR_NEXT_FAMILY
+owner_phase=MR-F9
+may_be_skipped=false
+```
+
+This item records the operator's unresolved trust concern about the upstream artifacts shown by the display-only UI. Repeated short-horizon confidence values and persistent long-horizon `UNKNOWN` must not be treated as proof of independent prediction execution.
+
+Required outcomes:
+
+```text
+one immutable trace per enabled horizon and origin
+horizon-specific raw score or probability distribution
+model, logic, parameter-set, snapshot, and target identity
+source freshness and generated-at continuity
+abstention decision
+fallback-used flag and fallback reason
+full-inference rate versus fallback rate by horizon
+fixed-confidence persistence diagnostic across horizons and origins
+stale-forecast recurrence diagnostic
+long-horizon UNKNOWN persistence diagnostic
+proof that agreement is independently calculated rather than copied
+operator UI remains display-only and inference-free
+```
+
+Acceptance is based on traceable upstream execution evidence, not on forcing labels or confidence values to differ.
+
+### RW-MR-003B — MR-F9 shadow promotion evidence and human-gated review
+
+```text
+status=open
+parent=RW-MR-003
+blocking_gate=MARKET_REGIME_READY_FOR_NEXT_FAMILY
+owner_phase=MR-F9
+may_be_skipped=false
+```
+
+Minimum current proposal policy:
+
+```text
+minimum_observed_slots=30
+minimum_coverage_rate=0.20
+minimum_accuracy_delta=0.02
+maximum_brier_regression=0.01
+maximum_ece_regression=0.02
+maximum_unknown_rate_increase=0.05
+```
+
+Required outcomes:
+
+```text
+winner, tie, or insufficient-evidence proposal
+condition-specific evidence
+calibration and risk regression checks
+active rollback point
+human approval required
+auto-promotion forbidden
+live parameter apply forbidden
+separately guarded activation change if approval is later granted
+```
+
+Development activity alone does not promote a candidate. Only mature OOS evidence can create a promotion proposal, and that proposal is not runtime activation.
 
 ### RW-MR-004 — MR-F10 stable family-neutral context contract
 
@@ -180,7 +270,7 @@ thread-handoff pack
 
 ```text
 status=blocked
-blocked_by=RW-MR-001,RW-MR-002,RW-MR-003,RW-MR-004,RW-MR-005
+blocked_by=RW-MR-003,RW-MR-003A,RW-MR-003B,RW-MR-004,RW-MR-005
 next_family=trend_bias
 may_be_skipped=false
 ```
@@ -242,14 +332,16 @@ price_structure signal-generation enrichment = non-blocking feature research; mu
 additional feature enrichment or ensemble research = non-blocking research; must receive a stable ID before implementation
 ```
 
-MR-F8-specific discovered risks remain owned by RW-MR-002 until accepted or reclassified:
+MR-F8-specific discovered risks were dispositioned at closeout:
 
 ```text
-candidate-layer ambiguity between the two future candidates and eight L4 feature candidates
-origin-feature candidate-count hardcoding
-unknown-rate versus justified/avoidable abstention semantics
-full-metric winner/tie/insufficient decision contract
-D-hot comparison artifact discovery and bounded read-only adapter
+candidate-layer identity and exactly-two comparison contract = accepted under RW-MR-002
+origin-feature candidate-count validation = accepted under RW-MR-002
+unknown versus abstention semantics = comparison contract accepted; evidence maturity continues in RW-MR-003
+winner/tie/insufficient decision contract = accepted under RW-MR-002
+D-hot comparison artifact discovery and bounded read-only observation = accepted under RW-MR-002
+independent horizon-execution proof and fallback diagnostics = RW-MR-003A
+promotion maturity and human-gated review = RW-MR-003B
 ```
 
 ## 5. Parallel-work rule

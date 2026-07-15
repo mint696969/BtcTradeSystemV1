@@ -3,7 +3,7 @@
 
 # Prediction System MarketRegime Family Roadmap
 
-Updated: 2026-07-15 JST
+Updated: 2026-07-16 JST
 Checkpoint: MARKET_REGIME_FAMILY_ROADMAP_ACCEPTED
 Contract status: current
 
@@ -505,14 +505,7 @@ Detailed source/flag activation is evidence-maturity work owned by the MR-F9 out
 
 ### MR-F8 — Shadow model and parameter-set comparison
 
-At minimum compare:
-
-```text
-A. explainable weighted-score model
-B. transition/statistical model
-```
-
-Future candidates may include ML or ensemble models.
+At minimum compare two candidate models or parameter sets over identical origins, source snapshots, targets, horizons, missing-data boundaries, and outcome resolution rules.
 
 Governance:
 
@@ -523,23 +516,95 @@ human approval required
 rollback required
 same-window comparison required
 condition-specific performance preserved
+missing evidence may not be inferred
 ```
 
-### MR-F9 — Review, outcome, and calibration evidence loop
+#### MR-F8 accepted closeout
+
+```text
+checkpoint=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON_ACCEPTED
+implementation_complete=true
+implementation_basis_head=7d9e81f4
+active_candidate=market_regime.future.transparent_baseline.params.v1
+shadow_candidate=market_regime.future.transparent_baseline.params.conservative.v1
+same_window_comparison=true
+same_source_snapshot=true
+pair_count=7
+outcome_row_count=14
+decision=insufficient_evidence
+selected_candidate=null
+rollback_candidate=market_regime.future.transparent_baseline.params.v1
+human_approval_required=true
+auto_promotion_allowed=false
+live_parameter_apply_allowed=false
+D_hot_modified_by_closeout=false
+closeout=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON_CLOSEOUT_2026-07-16.md
+next_gate=MR_F9_OUTCOME_REVIEW_CALIBRATION_EVIDENCE_LOOP
+```
+
+The comparison mechanism and fail-closed governance are accepted. Evidence maturity is not sufficient to promote the shadow candidate. Missing calibration, multi-origin churn, transition-delay, and full-horizon evidence are transferred to named MR-F9 work rather than inferred or discarded.
+
+### MR-F9 — Review, outcome, calibration, and prediction-execution evidence loop
 
 Complete the operational improvement loop:
 
 ```text
-prediction trace
+paired prediction trace
   -> horizon expiry
-  -> outcome resolution
-  -> calibration summary
+  -> canonical outcome resolution
+  -> calibration and condition summary
+  -> prediction-execution diagnostics
   -> WarRoom chart selection
   -> review_request
   -> human/GPT review_note
   -> review_link
   -> parameter/model review proposal
 ```
+
+Required evidence:
+
+```text
+multiple prediction origins
+at least 30 observed slots per compared candidate
+at least 20 percent coverage per compared candidate
+horizon-specific raw score or probability distribution
+Brier score, log loss, ECE, accuracy, balanced accuracy, and macro F1
+coverage, abstention, UNKNOWN, churn, and transition-delay metrics
+condition-specific performance
+immutable forecast-to-outcome-to-review identity
+```
+
+Promotion proposal policy:
+
+```text
+minimum_accuracy_delta=0.02
+maximum_brier_regression=0.01
+maximum_ece_regression=0.02
+maximum_unknown_rate_increase=0.05
+human approval required
+auto promotion forbidden
+live parameter apply forbidden
+rollback required
+```
+
+MR-F9 must also prove that upstream prediction actually executes independently for every enabled horizon. The operator UI remains display-only and must not infer or recalculate confidence.
+
+Required horizon-execution proof:
+
+```text
+separate trace identity per horizon
+horizon-specific model and parameter identity
+feature snapshot and source freshness
+raw score or probability distribution
+abstention decision
+fallback-used flag and reason
+prediction-origin update continuity
+full-inference versus fallback rate
+fixed-confidence persistence diagnostic
+long-horizon UNKNOWN persistence diagnostic
+```
+
+Agreement between horizons is allowed when independently produced. Repeated identical labels or confidence values are not, by themselves, proof of correct prediction execution.
 
 Review evidence may recommend changes but may not mutate canonical live parameters automatically.
 
@@ -682,10 +747,10 @@ MarketRegime provides prediction context, not execution authorization.
 ## 8. Current start point
 
 ```text
-reference_head=a7299bdf
-current_gate=MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED
-next_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON
-current_phase=MR-F8
+reference_head=7d9e81f4
+current_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON_ACCEPTED
+next_gate=MR_F9_OUTCOME_REVIEW_CALIBRATION_EVIDENCE_LOOP
+current_phase=MR-F9
 mr_f5_complete=true
 mr_f6_18_complete=true
 mr_f6_19_complete=true
@@ -712,6 +777,11 @@ mr_f7_runtime_probability_claim=false
 mr_f7_runtime_card_confidence_replacement=false
 mr_f7_detailed_source_flag_fit_active=false
 mr_f7_rollback_point=23660311
+mr_f8_complete=true
+mr_f8_decision=insufficient_evidence
+mr_f8_selected_candidate=null
+mr_f8_rollback_candidate=market_regime.future.transparent_baseline.params.v1
+mr_f8_implementation_basis_head=7d9e81f4
 market_regime_family_ready_for_next_prediction_family=false
 implementation_started=true
 ```
