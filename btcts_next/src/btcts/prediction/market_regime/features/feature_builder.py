@@ -417,6 +417,7 @@ def _coverage_for_group(group: FeatureGroup, signals: Tuple[FeatureSignal, ...])
     warnings = tuple(dict.fromkeys(warn for signal in group_signals for warn in signal.warnings if warn))
     # MR_A4_COVERAGE_IGNORES_THRESHOLD_METADATA_2026_07_09
     current_l4_live_signal_names = {
+        "current_l4_candle_window_current_enough",
         "current_l4_candle_window_available",
         "current_l4_candle_window_candle_count",
         "current_l4_candle_window_first_ts",
