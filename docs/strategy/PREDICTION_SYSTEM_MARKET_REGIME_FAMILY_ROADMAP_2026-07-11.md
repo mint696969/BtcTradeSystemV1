@@ -3,7 +3,7 @@
 
 # Prediction System MarketRegime Family Roadmap
 
-Updated: 2026-07-14 JST
+Updated: 2026-07-15 JST
 Checkpoint: MARKET_REGIME_FAMILY_ROADMAP_ACCEPTED
 Contract status: current
 
@@ -483,6 +483,25 @@ abstention quality
 
 Displayed confidence must never be described as a calibrated probability until the relevant calibration guard passes.
 
+
+#### MR-F7 accepted closeout
+
+```text
+checkpoint=MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED
+implementation_complete=true
+coarse_D_hot_evidence_rows=36360
+legacy_outcomes_joined=37248
+full_contribution_history_rows=0
+runtime_probability_claim=false
+runtime_card_confidence_replacement=false
+detailed_source_flag_fit_active=false
+rollback_point=23660311
+closeout=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F7_CONFIDENCE_CALIBRATION_CLOSEOUT_2026-07-15.md
+next_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON
+```
+
+Detailed source/flag activation is evidence-maturity work owned by the MR-F9 outcome/review loop under `RW-MR-NB-001`. Legacy history may support coarse calibration but may not be used to infer missing contribution semantics.
+
 ### MR-F8 — Shadow model and parameter-set comparison
 
 At minimum compare:
@@ -662,10 +681,10 @@ MarketRegime provides prediction context, not execution authorization.
 ## 8. Current start point
 
 ```text
-reference_head=b6390dfb
-current_gate=MR_F6_MANDATORY_SIMPLE_BASELINE_COMPARISON_CLOSEOUT_ACCEPTED
-next_gate=MR_F7_CONFIDENCE_CALIBRATION
-current_phase=MR-F7
+reference_head=23660311
+current_gate=MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED
+next_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON
+current_phase=MR-F8
 mr_f5_complete=true
 mr_f6_18_complete=true
 mr_f6_19_complete=true
@@ -687,6 +706,11 @@ mr_f7_parallel_start_allowed=true
 mr_f7_parallel_start_condition=MR_F6_20_ACCEPTED
 mr_f6_24_hardening_required=false
 mr_f6_closeout_complete=true
+mr_f7_complete=true
+mr_f7_runtime_probability_claim=false
+mr_f7_runtime_card_confidence_replacement=false
+mr_f7_detailed_source_flag_fit_active=false
+mr_f7_rollback_point=23660311
 market_regime_family_ready_for_next_prediction_family=false
 implementation_started=true
 ```

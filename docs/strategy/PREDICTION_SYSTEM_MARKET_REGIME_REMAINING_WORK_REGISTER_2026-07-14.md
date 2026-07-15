@@ -3,9 +3,9 @@
 
 # Prediction System MarketRegime Remaining Work Register
 
-Updated: 2026-07-14 JST
+Updated: 2026-07-15 JST
 Status: current and binding
-Reference HEAD: b6390dfb
+Reference HEAD: 23660311
 
 <!-- PS_MARKET_REGIME_REMAINING_WORK_REGISTER_2026_07_14 -->
 
@@ -27,9 +27,9 @@ Starting a later phase does not implicitly complete earlier open work.
 ## 2. Current position
 
 ```text
-current_phase=MR-F7
-current_gate=MR_F6_MANDATORY_SIMPLE_BASELINE_COMPARISON_CLOSEOUT_ACCEPTED
-next_gate=MR_F7_CONFIDENCE_CALIBRATION
+current_phase=MR-F8
+current_gate=MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED
+next_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON
 family_completion_gate=MARKET_REGIME_READY_FOR_NEXT_FAMILY
 market_regime_ready_for_next_family=false
 trend_bias_blocked=true
@@ -40,7 +40,10 @@ trend_bias_blocked=true
 ### RW-MR-001 — MR-F7 confidence calibration
 
 ```text
-status=open
+status=accepted
+accepted_checkpoint=MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED
+accepted_rollback_point=23660311
+closeout=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F7_CONFIDENCE_CALIBRATION_CLOSEOUT_2026-07-15.md
 blocking_gate=MARKET_REGIME_READY_FOR_NEXT_FAMILY
 owner_phase=MR-F7
 parallel_allowed=true
@@ -207,6 +210,19 @@ compatibility requirement
 ```
 
 No unnamed deferred task is allowed.
+
+### RW-MR-NB-001 — MR-F7 detailed source/flag calibration evidence accumulation and activation review
+
+```text
+status=moved_to_non_blocking_research_with_owner_and_reentry_condition
+blocking=false
+owner_phase=MR-F9
+reason=legacy history predates the complete contribution ledger
+reentry_condition=trusted mature OOS outcomes exist for enriched MR-F7 trace rows and activation diagnostics pass
+compatibility_requirement=preserve raw/calibrated/display confidence separation and do not silently replace card confidence
+```
+
+This item covers evidence accumulation and later activation review only. It does not reopen the accepted MR-F7 architecture and does not authorize runtime fit, auto-promotion, or live parameter application.
 
 ## 5. Parallel-work rule
 

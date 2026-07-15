@@ -5,58 +5,64 @@
 ## Current Baseline
 
 - Active branch: `docs/phase2-handoff-sync`
-- Current HEAD: `bffb802a`
-- Current gate: `MR_F5_OPERATIONAL_EVIDENCE_AND_CANONICAL_MIGRATION_REVIEW_ACCEPTED`
-- Next gate: `MR_F6_MANDATORY_SIMPLE_BASELINE_COMPARISON`
+- Current HEAD: `23660311`
+- Current gate: `MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED`
+- Next gate: `MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON`
 
-## MR-F5 Final Status
+## MR-F7 Final Status
 
-- MR-F5 implementation: complete
-- 24-hour operational evidence window: complete
-- Original origin batches: 20
-- Supplemental origin batches: 2
-- Selected evaluation rows: 288
-- Scored rows: 282
-- Unresolved audit rows: 6
-- Invalidated rows: 0
-- All 14 candidate/horizon cells have at least 20 scored rows
-- Candidate comparison: ready
-- Canonical migration review: complete
-- Canonical promotion: deferred
-- Live parameter apply: false
-- Scheduler registration: false
+- Calibration dataset/context/OOS/maturity: accepted
+- Hierarchical estimator, shrinkage, caps, fallback, diagnostics: accepted
+- Forecast contract projection: accepted
+- Operator read-model separation: accepted
+- Full source/flag contribution trace ledger: accepted
+- Evidence readiness contract: accepted
+- D-hot complete read-only audit: accepted
+- Runtime calibrated-probability claim: disabled
+- Runtime card-confidence replacement: disabled
+- Detailed source/flag fit: evidence accumulation pending under `RW-MR-NB-001`
 
-## Model Findings Carried Forward
+## D-hot Evidence Checkpoint
 
-- Baseline and conservative parameter sets did not separate in the accepted window.
-- 43,200-second and 86,400-second horizons were weak and must not be promoted canonically.
-- MR-F6 must compare the accepted MR-F5 path against mandatory simple baselines over identical evidence windows.
+- Outcome rows: 37,248
+- Matched outcome rows: 37,248
+- Unmatched outcome rows: 0
+- Trusted/evaluable coarse rows: 36,360
+- Full contribution history rows: 0
+- Detailed source/flag eligible rows: 0
+- Input complete: true
+- Reader failures: 0
 
 ## Test Checkpoint
 
-- Future shadow adapter focused: 8 passed
-- Future baseline focused: 9 passed
-- MarketRegime full: 192 passed
-- Prediction full: 461 passed
+- Prediction full: 288 passed
+- MarketRegime full: 404 passed
 - Operator UI full: 1230 passed
-- Operator UI post-header focused: 58 passed
-- `git diff --check`: passed
+- MR-F7 evidence once focused: 5 passed
+- MR-F7 readiness connected: 12 passed
+- `git diff --cached --check`: passed
 
-## Recent Commits
+## Accepted Rollback Chain
 
-- `bffb802a` docs(prediction): close MR-F5 operational evidence gate
-- `05756700` fix(prediction): abstain on invalid MR-F5 regime scores
-- `11da64fa` feat(operator-ui): finalize Health telemetry views and UI readability
+- `6487a117` MR-F7 dataset foundation
+- `8737655b` MR-F7 estimator
+- `615c501d` MR-F7 projection
+- `b1020269` MR-F7 source/flag contribution trace
+- `c708ada0` MR-F7 evidence readiness
+- `23660311` MR-F7 evidence audit
 
 ## Safety Position
 
-- MR-F5 evidence remains isolated under the future-shadow namespace.
-- No canonical forecast replacement occurred.
-- No broker-send, autotrade trigger, or order-submission path was enabled.
-- D-hot operational evidence remains outside Git.
+- No broker private API access
+- No AutoTrade trigger or order submission
+- No runtime calibration fit
+- No card-confidence replacement
+- No auto-promotion or live parameter apply
+- No scheduler registration
+- No D-hot mutation by MR-F7 closeout
 
 ## Next Recommended Work
 
-1. Start MR-F6 mandatory simple-baseline comparison in a new thread.
-2. Reuse the accepted MR-F5 evidence contract without changing targets or outcome rules.
-3. Keep canonical promotion disabled until later comparison and calibration gates are accepted.
+1. Commit MR-F7 closeout and specification synchronization.
+2. Start MR-F8 shadow model and parameter-set comparison over identical windows and sources.
+3. Keep detailed source/flag activation in the MR-F9 evidence loop until mature enriched-trace outcomes exist.

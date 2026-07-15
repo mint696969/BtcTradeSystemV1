@@ -1,27 +1,23 @@
 {
   "schema_version": "btcts.gpt_room.focus.v1",
   "active_baseline": "docs/phase2-handoff-sync",
-  "current_head": "bffb802a",
-  "last_test_checkpoint": "Prediction 461 passed; MarketRegime 192 passed; Operator UI 1230 passed",
-  "current_focus": "MR-F6 mandatory simple baseline comparison after MR-F5 operational evidence acceptance",
+  "current_head": "23660311",
+  "last_test_checkpoint": "Prediction 288 passed; MarketRegime 404 passed; Operator UI 1230 passed",
+  "current_focus": "MR-F7 confidence calibration accepted; finalize closeout commit and hand off to MR-F8 shadow model and parameter-set comparison",
   "completed_recently": [
-    "MR-F5 implementation series accepted",
-    "MR-F5 24-hour operational evidence gate accepted",
-    "MR-F5 canonical migration review completed with promotion deferred",
-    "invalid regime-score horizons now fail closed as explicit ABSTAIN",
-    "Operator UI Health telemetry and readability work committed"
+    "MR-F7 calibration dataset, context, OOS split, maturity, estimator, caps, and diagnostics accepted",
+    "MR-F7 calibrated reliability projection and operator read-model separation accepted",
+    "MR-F7 full source/flag contribution trace ledger accepted",
+    "MR-F7 complete D-hot read-only evidence audit accepted"
   ],
   "next_tasks": [
-    "start MR-F6 mandatory simple baseline comparison",
-    "reuse identical MR-F5 source snapshots, origins, horizons, targets, and outcome rules",
-    "compare accepted transparent baseline path against required simple baselines",
-    "keep canonical promotion disabled until later review"
+    "commit MR-F7 closeout and specification synchronization",
+    "start MR-F8 shadow model and parameter-set comparison",
+    "keep runtime calibrated-probability claim and card-confidence replacement disabled"
   ],
   "safety_notes": [
-    "MR-F5 remains prediction-only and shadow-isolated",
-    "canonical replacement is false",
-    "live parameter apply is false",
-    "scheduler registration is false",
-    "broker private API, autotrade trigger, and order submission remain disallowed"
+    "legacy history is coarse-calibration evidence only",
+    "detailed source/flag fitting waits for enriched trace outcomes",
+    "runtime fit, auto-promotion, live parameter apply, scheduler, broker private API, AutoTrade, and order submission remain disabled"
   ]
 }

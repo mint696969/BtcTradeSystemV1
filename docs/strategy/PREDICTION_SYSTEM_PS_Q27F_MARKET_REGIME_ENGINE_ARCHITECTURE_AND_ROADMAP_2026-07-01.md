@@ -520,3 +520,51 @@ Canonical closeout: `docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F6_MANDATO
 <!-- PS_MARKET_REGIME_OPEN_WORK_REGISTER_BINDING_2026_07_14 -->
 
 All unfinished MarketRegime work is governed by `docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_REMAINING_WORK_REGISTER_2026-07-14.md`. Parallel work, deferral, and thread changes do not imply completion. Family-wide integration, hardening, public-interface freeze, full-suite guards, and handoff synchronization remain mandatory after MR-F10 and before `MARKET_REGIME_READY_FOR_NEXT_FAMILY`.
+
+## 2026-07-15 MR-F7 confidence-calibration acceptance
+<!-- PS_MARKET_REGIME_MR_F7_CONFIDENCE_CALIBRATION_ACCEPTANCE_2026_07_15 -->
+
+MR-F7 confidence calibration architecture, evidence boundaries, and fail-closed activation contract are accepted.
+
+```text
+mr_f7_closeout_commit_pending=true
+mr_f7_implementation_complete=true
+current_gate=MR_F7_CONFIDENCE_CALIBRATION_ACCEPTED
+next_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON
+coarse_calibration_evidence_available=true
+runtime_calibrated_probability_claim=false
+runtime_card_confidence_replacement=false
+detailed_source_flag_fit_active=false
+auto_parameter_update=false
+live_parameter_apply=false
+scheduler_enabled=false
+broker_private_api=false
+autotrade=false
+order_submission=false
+```
+
+Accepted confidence semantics:
+
+```text
+raw_model_score_or_probability=model output before empirical calibration
+calibrated_reliability=empirical OOS outcome probability
+calibration_display_confidence=safety-capped display value
+card_confidence_replacement=explicit mature uncapped claim only
+```
+
+D-hot complete read-only evidence audit:
+
+```text
+outcome_rows=37248
+matched_outcome_rows=37248
+unmatched_outcome_rows=0
+trusted_evaluable_coarse_rows=36360
+full_contribution_trace_outcomes=0
+detailed_source_flag_rows=0
+input_complete=true
+reader_ok=true
+```
+
+Legacy history may be used for coarse calibration analysis only. Missing source/flag contribution semantics must not be inferred. Detailed source/flag activation is deferred to the MR-F9 evidence loop under `RW-MR-NB-001` until enriched traces accumulate mature trusted candle outcomes.
+
+Canonical closeout: `docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F7_CONFIDENCE_CALIBRATION_CLOSEOUT_2026-07-15.md`
