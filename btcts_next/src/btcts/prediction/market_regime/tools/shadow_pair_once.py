@@ -11,6 +11,7 @@ from typing import Any, Mapping, Sequence
 from btcts.prediction.market_regime.contracts import MarketRegimeCode
 from btcts.prediction.market_regime.future_baseline_model import FutureBaselineEvidence
 from btcts.prediction.market_regime.future_shadow_candidate_pairing import build_future_shadow_candidate_pair
+from btcts.prediction.market_regime.future_shadow_pair_trace_plan import build_future_shadow_pair_trace_plan
 
 MARKET_REGIME_SHADOW_PAIR_ONCE_TOOL_VERSION = (
     "prediction.market_regime.tools.shadow_pair_once.mr_f8_6.v1"
@@ -104,7 +105,8 @@ def build_shadow_pair_once_report(*, input_payload: Any) -> Mapping[str, Any]:
             raise ValueError("shadow_pair_once_duplicate_bundle_id")
         seen_bundle_ids.add(bundle_id)
         pair = build_future_shadow_candidate_pair(evidence=_evidence_from_bundle(bundle))
-        pairs.append({"source_bundle_id": bundle_id, **dict(pair)})
+        trace_plan = build_future_shadow_pair_trace_plan(pair=pair)
+        pairs.append({"source_bundle_id": bundle_id, **dict(pair), "trace_plan": trace_plan})
 
     return {
         "schema_version": "market_regime_shadow_pair_once_report.mr_f8_6.v1",
@@ -115,9 +117,13 @@ def build_shadow_pair_once_report(*, input_payload: Any) -> Mapping[str, Any]:
         "comparison_ready_for_outcome_join_count": sum(
             1 for pair in pairs if pair.get("comparison_ready_for_outcome_join") is True
         ),
+        "trace_plan_ready_count": sum(
+            1 for pair in pairs if pair.get("trace_plan", {}).get("persistence_plan", {}).get("would_write") is False
+        ),
         "safety": {
             "read_only": True,
             "writes_hot_data": False,
+            "trace_writer_invoked": False,
             "writes_repository": False,
             "scheduler_enabled": False,
             "producer_loop_enabled": False,

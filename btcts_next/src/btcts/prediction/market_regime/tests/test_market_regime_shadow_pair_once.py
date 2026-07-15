@@ -32,6 +32,9 @@ def test_builds_pair_from_single_bundle_without_write_surface() -> None:
     report = build_shadow_pair_once_report(input_payload=bundle())
     assert report["pair_count"] == 1
     assert report["pairs"][0]["candidate_count"] == 2
+    assert report["trace_plan_ready_count"] == 1
+    assert report["pairs"][0]["trace_plan"]["trace_count"] == 2
+    assert report["pairs"][0]["trace_plan"]["persistence_plan"]["would_write"] is False
     assert report["safety"]["writes_hot_data"] is False
     assert report["safety"]["parameter_auto_promotion_allowed"] is False
 
@@ -40,6 +43,7 @@ def test_builds_pairs_from_batch() -> None:
     payload = {"artifact_kind": "future_origin_evidence_batch", "rows": [bundle("a"), bundle("b")]}
     report = build_shadow_pair_once_report(input_payload=payload)
     assert report["pair_count"] == 2
+    assert report["trace_plan_ready_count"] == 2
 
 
 def test_duplicate_bundle_id_fails_closed() -> None:
