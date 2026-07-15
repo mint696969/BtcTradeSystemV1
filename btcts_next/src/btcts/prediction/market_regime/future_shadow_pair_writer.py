@@ -125,7 +125,7 @@ def _validate_canonical_payload(payload: Mapping[str, Any]) -> dict[str, Any]:
 def build_mr_f8_shadow_pair_write_plan(*, pair: Mapping[str, Any]) -> Mapping[str, Any]:
     payload = _canonical_payload(pair)
     origin = str(payload["slot_identity"]["origin_timestamp"])
-    digest = hashlib.sha256(str(payload["pair_id"]).encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(str(payload["pair_id"]).encode("utf-8")).hexdigest()[:32]
     relpath = f"{MR_F8_PAIR_NAMESPACE}/date={origin[:10]}/pair-{digest}.json"
     return {
         "schema_version": MR_F8_PAIR_WRITER_VERSION,

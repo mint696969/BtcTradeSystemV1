@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -38,6 +39,7 @@ def test_plan_uses_dedicated_namespace_and_stays_disabled() -> None:
     plan = build_mr_f8_shadow_pair_write_plan(pair=pair())
     assert plan["namespace"] == MR_F8_PAIR_NAMESPACE
     assert plan["artifact_relpath"].startswith(MR_F8_PAIR_NAMESPACE + "/date=2026-07-15/")
+    assert len(Path(plan["artifact_relpath"]).stem.removeprefix("pair-")) == 32
     assert plan["would_write"] is False
 
 
