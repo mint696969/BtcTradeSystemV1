@@ -82,9 +82,42 @@ def test_missing_or_invalid_score_rows_fail_closed() -> None:
     report = _report(); report["horizons"] = report["horizons"][:-1]
     with pytest.raises(ValueError, match="missing_horizons"):
         build_market_regime_origin_evidence_bundles(packet=_packet(), signal_score_report=report, feature_inputs=_inputs())
-    report = _report(); report["horizons"][0]["regime_scores"]["RANGE"] = -1.0
-    with pytest.raises(ValueError, match="score_invalid"):
+
+    report = _report(); report["horizons"][0]["regime_scores"] = {
+        "RANGE": 0.0,
+        "UP_TREND": -1.0,
+        "UNKNOWN": 99.0,
+    }
+    with pytest.raises(ValueError, match="positive_score_missing"):
         build_market_regime_origin_evidence_bundles(packet=_packet(), signal_score_report=report, feature_inputs=_inputs())
+
+    report = _report(); report["horizons"][0]["regime_scores"]["RANGE"] = float("nan")
+    with pytest.raises(ValueError, match="score_non_finite"):
+        build_market_regime_origin_evidence_bundles(packet=_packet(), signal_score_report=report, feature_inputs=_inputs())
+
+
+def test_signed_raw_scores_are_clamped_and_normalized_at_evidence_boundary() -> None:
+    report = _report()
+    report["horizons"][0]["regime_scores"] = {
+        "RANGE": 2.0,
+        "UP_TREND": 1.0,
+        "DOWN_TREND": -5.0,
+        "UNKNOWN": 100.0,
+    }
+
+    bundle = build_market_regime_origin_evidence_bundles(
+        packet=_packet(),
+        signal_score_report=report,
+        feature_inputs=_inputs(),
+    )[0]
+
+    assert bundle["candidate_probability_by_state"] == pytest.approx({
+        "RANGE": 2.0 / 3.0,
+        "UP_TREND": 1.0 / 3.0,
+    })
+    assert "DOWN_TREND" not in bundle["candidate_probability_by_state"]
+    assert "UNKNOWN" not in bundle["candidate_probability_by_state"]
+    assert report["horizons"][0]["regime_scores"]["DOWN_TREND"] == -5.0
 
 
 def test_adapter_has_no_writer_or_scheduler_surface() -> None:

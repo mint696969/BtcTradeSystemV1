@@ -98,13 +98,25 @@ def _score_rows(signal_score_report: Mapping[str, Any]) -> Mapping[int, Mapping[
         scores = raw.get("regime_scores")
         if not isinstance(scores, Mapping):
             raise ValueError(f"origin_evidence_adapter_scores_missing:{horizon}")
-        normalized: dict[MarketRegimeCode, float] = {}
+        positive_mass: dict[MarketRegimeCode, float] = {}
         for raw_state, raw_value in scores.items():
             state = raw_state if isinstance(raw_state, MarketRegimeCode) else MarketRegimeCode(str(raw_state))
             value = float(raw_value)
-            if not isfinite(value) or value < 0.0:
-                raise ValueError(f"origin_evidence_adapter_score_invalid:{horizon}:{state.value}")
-            normalized[state] = value
+            if not isfinite(value):
+                raise ValueError(f"origin_evidence_adapter_score_non_finite:{horizon}:{state.value}")
+            if state is MarketRegimeCode.UNKNOWN:
+                continue
+            clamped = max(value, 0.0)
+            if clamped > 0.0:
+                positive_mass[state] = clamped
+        total = sum(positive_mass.values())
+        if total <= 0.0:
+            raise ValueError(f"origin_evidence_adapter_positive_score_missing:{horizon}")
+        normalized = {state: value / total for state, value in positive_mass.items()}
+        residual = 1.0 - sum(normalized.values())
+        if normalized and abs(residual) > 0.0:
+            largest = max(normalized, key=normalized.get)
+            normalized[largest] += residual
         if horizon in result:
             raise ValueError(f"origin_evidence_adapter_duplicate_horizon:{horizon}")
         result[horizon] = MappingProxyType(normalized)
