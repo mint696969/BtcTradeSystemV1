@@ -47,6 +47,7 @@ def test_runtime_once_orchestrates_read_only_components(monkeypatch, tmp_path) -
     shadow_packet = MappingProxyType({"forecasts": ()})
     runtime_bundle = MappingProxyType({"runtime_source_ready": True})
     preflight = MappingProxyType({"pair_count": 7, "pairs": ()})
+    runtime_artifact = MappingProxyType({"horizon_count": 8, "horizons": ()})
 
     monkeypatch.setattr(module, "build_default_market_regime_parameter_set_registry", lambda: SimpleNamespace(active_parameter_set=lambda: object()))
     monkeypatch.setattr(module, "build_market_regime_source_snapshot", lambda root: calls.append("snapshot") or source_snapshot)
@@ -75,18 +76,26 @@ def test_runtime_once_orchestrates_read_only_components(monkeypatch, tmp_path) -
         "build_future_shadow_runtime_preflight_report",
         lambda **kwargs: calls.append("preflight") or observed_future_reports.append(kwargs["signal_score_report"]) or preflight,
     )
+    monkeypatch.setattr(
+        module,
+        "build_market_regime_runtime_horizon_artifact",
+        lambda **kwargs: calls.append("artifact") or runtime_artifact,
+    )
 
     result = module.build_shadow_runtime_preflight_once(
         hot_root=tmp_path,
         generated_at="2026-07-15T00:00:00Z",
         shadow_candidate_id="candidate:shadow",
     )
-    assert calls == ["snapshot", "features", "state", "classify", "runtime", "score", "packet", "preflight"]
+    assert calls == ["snapshot", "features", "state", "classify", "runtime", "score", "packet", "preflight", "artifact"]
     assert len(observed_future_reports) == 2
     assert all(item["horizon_count"] == 7 for item in observed_future_reports)
     assert all([row["horizon_sec"] for row in item["horizons"]] == [300, 900, 1800, 3600, 21600, 43200, 86400] for item in observed_future_reports)
     assert result["pair_count"] == 7
     assert result["current_regime"] == "RANGE"
+    assert result["runtime_horizon_artifact_built"] is True
+    assert result["runtime_horizon_artifact_persisted"] is False
+    assert result["runtime_horizon_artifact"]["horizon_count"] == 8
     assert result["writer_invoked"] is False
     assert result["writes_dhot"] is False
 
@@ -165,6 +174,13 @@ def test_runtime_once_result_contains_json_native_preflight(monkeypatch, tmp_pat
         "pair_count": 7,
         "pairs": tuple(MappingProxyType({"pair_id": f"pair:{index}"}) for index in range(7)),
     })
+    runtime_artifact = MappingProxyType({
+        "horizon_count": 8,
+        "horizons": tuple(MappingProxyType({"horizon_sec": value}) for value in (0, 300, 900, 1800, 3600, 21600, 43200, 86400)),
+        "ui_inference_allowed": False,
+        "ui_confidence_recalculation_allowed": False,
+        "safety": MappingProxyType({"writes_dhot": False, "websocket_opened": False}),
+    })
     monkeypatch.setattr(module, "build_default_market_regime_parameter_set_registry", lambda: SimpleNamespace(active_parameter_set=lambda: object()))
     monkeypatch.setattr(module, "build_market_regime_source_snapshot", lambda root: source_snapshot)
     monkeypatch.setattr(module, "build_market_regime_feature_bundle", lambda *args, **kwargs: feature_bundle)
@@ -175,6 +191,7 @@ def test_runtime_once_result_contains_json_native_preflight(monkeypatch, tmp_pat
     monkeypatch.setattr(module, "future_origin_l4_candle_rows", lambda snapshot: ({"time_utc": "x"},) * 60)
     monkeypatch.setattr(module, "build_market_regime_origin_feature_runtime_bundle", lambda **kwargs: MappingProxyType({"runtime_source_ready": True}))
     monkeypatch.setattr(module, "build_future_shadow_runtime_preflight_report", lambda **kwargs: preflight)
+    monkeypatch.setattr(module, "build_market_regime_runtime_horizon_artifact", lambda **kwargs: runtime_artifact)
     result = module.build_shadow_runtime_preflight_once(
         hot_root=tmp_path,
         generated_at="2026-07-15T00:00:00.987Z",
@@ -184,3 +201,8 @@ def test_runtime_once_result_contains_json_native_preflight(monkeypatch, tmp_pat
     assert isinstance(result["preflight_report"], dict)
     assert isinstance(result["preflight_report"]["pairs"], list)
     assert len(result["preflight_report"]["pairs"]) == 7
+    assert isinstance(result["runtime_horizon_artifact"], dict)
+    assert isinstance(result["runtime_horizon_artifact"]["horizons"], list)
+    assert len(result["runtime_horizon_artifact"]["horizons"]) == 8
+    assert result["runtime_horizon_artifact"]["ui_inference_allowed"] is False
+    assert result["runtime_horizon_artifact"]["safety"]["websocket_opened"] is False

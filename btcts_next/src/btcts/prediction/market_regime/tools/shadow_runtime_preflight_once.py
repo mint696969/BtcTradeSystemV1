@@ -26,6 +26,9 @@ from btcts.prediction.market_regime.inference import classify_market_regime_feat
 from btcts.prediction.market_regime.parameter_set_registry import (
     build_default_market_regime_parameter_set_registry,
 )
+from btcts.prediction.market_regime.runtime_horizon_artifact import (
+    build_market_regime_runtime_horizon_artifact,
+)
 from btcts.prediction.market_regime.signal_scoring import score_market_regime_signals
 from btcts.prediction.market_regime.sources import build_market_regime_source_snapshot
 
@@ -66,11 +69,15 @@ def _signal_value(feature_bundle: Any, name: str) -> Any:
     return matches[0].value
 
 
-def _current_regime(prediction_packet: Any) -> Any:
+def _current_prediction(prediction_packet: Any) -> Any:
     matches = tuple(item for item in prediction_packet.predictions if int(item.horizon_sec) == 0)
     if len(matches) != 1:
         raise ValueError("mr_f8_runtime_once_current_prediction_invalid")
-    return matches[0].regime_code
+    return matches[0]
+
+
+def _current_regime(prediction_packet: Any) -> Any:
+    return _current_prediction(prediction_packet).regime_code
 
 
 def _future_only_signal_score_report(signal_score_report: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -150,6 +157,14 @@ def build_shadow_runtime_preflight_once(
         signal_score_report=future_signal_score_report,
         runtime_bundle=runtime_bundle,
     )
+    runtime_horizon_artifact = build_market_regime_runtime_horizon_artifact(
+        current_prediction=_current_prediction(prediction_packet),
+        future_packet=shadow_packet,
+        future_source_timestamp=source_timestamp,
+        future_source_currentness_verified=bool(
+            runtime_bundle.get("selected_window_is_latest_source", False)
+        ),
+    )
     return {
         "schema_version": MR_F8_RUNTIME_PREFLIGHT_ONCE_TOOL_VERSION,
         "artifact_kind": "mr_f8_runtime_preflight_once_result",
@@ -162,6 +177,9 @@ def build_shadow_runtime_preflight_once(
         "pair_count": preflight["pair_count"],
         "shadow_packet": _json_native(shadow_packet),
         "preflight_report": _json_native(preflight),
+        "runtime_horizon_artifact": _json_native(runtime_horizon_artifact),
+        "runtime_horizon_artifact_built": True,
+        "runtime_horizon_artifact_persisted": False,
         "preflight_only": True,
         "writer_invoked": False,
         "writes_dhot": False,

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from hashlib import sha256
 from types import MappingProxyType
+from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from .contracts import MarketRegimePrediction
@@ -68,7 +69,27 @@ def _current_row(current: MarketRegimePrediction, generated_at: str) -> dict[str
     }
 
 
-def _future_rows(packet: MarketRegimeFutureShadowPacket) -> list[dict[str, Any]]:
+def _epoch(value: str, field: str) -> float:
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"runtime_horizon_timestamp_invalid:{field}") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"runtime_horizon_timestamp_timezone_missing:{field}")
+    return parsed.astimezone(timezone.utc).timestamp()
+
+
+def _future_rows(
+    packet: MarketRegimeFutureShadowPacket,
+    *,
+    source_timestamp: str,
+    source_currentness_verified: bool,
+) -> list[dict[str, Any]]:
+    origin_epoch = _epoch(packet.generated_at, "prediction_origin")
+    source_epoch = _epoch(source_timestamp, "future_source_timestamp")
+    if source_epoch > origin_epoch:
+        raise ValueError("runtime_horizon_future_source_after_origin")
+    source_age_sec = round(max(0.0, origin_epoch - source_epoch), 6)
     traces = {item.target_horizon_sec: item for item in build_market_regime_future_trace_set(packet)}
     rows = []
     for forecast in sorted(packet.forecasts, key=lambda item: int(item.target_horizon_sec)):
@@ -93,12 +114,12 @@ def _future_rows(packet: MarketRegimeFutureShadowPacket) -> list[dict[str, Any]]
             "calibrated_probability_claim": bool(forecast.calibrated_probability_claim),
             "display_confidence_percent": None if forecast.calibration_display_confidence is None else round(float(forecast.calibration_display_confidence) * 100.0, 2),
             "confidence_semantics": "calibrated_probability" if forecast.calibrated_probability_claim else "not_promoted_for_runtime_display",
-            "source_kind": "horizon_specific_model_artifact",
-            "source_timestamp": forecast.origin_timestamp,
-            "source_age_sec": 0,
-            "source_age_semantics": "age_at_prediction_origin_only",
-            "source_currentness_verified": True,
-            "source_freshness_state": "LIVE_AT_ORIGIN",
+            "source_kind": "selected_contiguous_l4_candle_window",
+            "source_timestamp": source_timestamp,
+            "source_age_sec": source_age_sec,
+            "source_age_semantics": "age_from_selected_source_to_prediction_origin",
+            "source_currentness_verified": bool(source_currentness_verified),
+            "source_freshness_state": "LIVE" if source_currentness_verified else "STALE_SOURCE_WINDOW",
             "display_freshness_claim_allowed": False,
             "fallback_used": False,
             "fallback_reason": "",
@@ -116,10 +137,21 @@ def build_market_regime_runtime_horizon_artifact(
     *,
     current_prediction: MarketRegimePrediction,
     future_packet: MarketRegimeFutureShadowPacket,
+    future_source_timestamp: str,
+    future_source_currentness_verified: bool,
 ) -> Mapping[str, Any]:
     if future_packet.generated_at.strip() == "":
         raise ValueError("runtime_horizon_prediction_origin_missing")
-    rows = [_current_row(current_prediction, future_packet.generated_at), *_future_rows(future_packet)]
+    if not str(future_source_timestamp).strip():
+        raise ValueError("runtime_horizon_future_source_timestamp_missing")
+    rows = [
+        _current_row(current_prediction, future_packet.generated_at),
+        *_future_rows(
+            future_packet,
+            source_timestamp=str(future_source_timestamp),
+            source_currentness_verified=bool(future_source_currentness_verified),
+        ),
+    ]
     expected = (0, *FUTURE_MARKET_REGIME_HORIZONS_SEC)
     actual = tuple(int(item["horizon_sec"]) for item in rows)
     if actual != expected:

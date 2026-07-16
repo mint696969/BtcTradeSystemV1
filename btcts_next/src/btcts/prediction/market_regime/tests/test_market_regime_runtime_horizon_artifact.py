@@ -12,6 +12,7 @@ from btcts.prediction.market_regime.future_shadow_adapter import MarketRegimeFut
 from btcts.prediction.market_regime.runtime_horizon_artifact import build_market_regime_runtime_horizon_artifact
 
 ORIGIN = "2026-07-16T08:00:00Z"
+SOURCE = "2026-07-16T07:59:00Z"
 
 
 def _current() -> MarketRegimePrediction:
@@ -64,7 +65,7 @@ def _future_packet() -> MarketRegimeFutureShadowPacket:
 
 
 def test_artifact_has_current_plus_seven_independent_future_horizons() -> None:
-    artifact = build_market_regime_runtime_horizon_artifact(current_prediction=_current(), future_packet=_future_packet())
+    artifact = build_market_regime_runtime_horizon_artifact(current_prediction=_current(), future_packet=_future_packet(), future_source_timestamp=SOURCE, future_source_currentness_verified=True)
     rows = artifact["horizons"]
     assert artifact["horizon_count"] == 8
     assert tuple(row["horizon_sec"] for row in rows) == (0, *FUTURE_MARKET_REGIME_HORIZONS_SEC)
@@ -74,14 +75,14 @@ def test_artifact_has_current_plus_seven_independent_future_horizons() -> None:
 
 
 def test_uncalibrated_scores_are_not_exposed_as_display_probability() -> None:
-    artifact = build_market_regime_runtime_horizon_artifact(current_prediction=_current(), future_packet=_future_packet())
+    artifact = build_market_regime_runtime_horizon_artifact(current_prediction=_current(), future_packet=_future_packet(), future_source_timestamp=SOURCE, future_source_currentness_verified=True)
     assert all(row["display_confidence_percent"] is None for row in artifact["horizons"])
     assert all(row["calibrated_probability_claim"] is False for row in artifact["horizons"])
     assert artifact["runtime_card_confidence_replacement"] is False
 
 
 def test_push_contract_is_receive_only_and_non_executing() -> None:
-    artifact = build_market_regime_runtime_horizon_artifact(current_prediction=_current(), future_packet=_future_packet())
+    artifact = build_market_regime_runtime_horizon_artifact(current_prediction=_current(), future_packet=_future_packet(), future_source_timestamp=SOURCE, future_source_currentness_verified=True)
     assert artifact["push_ready"] is True
     assert artifact["push_topic"] == "prediction.family.market_regime"
     assert artifact["ui_inference_allowed"] is False
@@ -96,17 +97,43 @@ def test_push_contract_is_receive_only_and_non_executing() -> None:
 def test_non_current_prediction_fails_closed() -> None:
     bad = MarketRegimePrediction(horizon_label="5分後", horizon_sec=300)
     with pytest.raises(ValueError, match="runtime_horizon_current_prediction_required"):
-        build_market_regime_runtime_horizon_artifact(current_prediction=bad, future_packet=_future_packet())
+        build_market_regime_runtime_horizon_artifact(current_prediction=bad, future_packet=_future_packet(), future_source_timestamp=SOURCE, future_source_currentness_verified=True)
 
 def test_freshness_and_abstain_semantics_are_not_conflated() -> None:
-    artifact = build_market_regime_runtime_horizon_artifact(current_prediction=_current(), future_packet=_future_packet())
+    artifact = build_market_regime_runtime_horizon_artifact(current_prediction=_current(), future_packet=_future_packet(), future_source_timestamp=SOURCE, future_source_currentness_verified=True)
     current = artifact["horizons"][0]
     future = artifact["horizons"][1:]
     assert current["source_age_semantics"] == "age_reported_by_current_state_source"
     assert current["source_currentness_verified"] is True
     assert current["display_freshness_claim_allowed"] is True
-    assert all(row["source_age_semantics"] == "age_at_prediction_origin_only" for row in future)
+    assert all(row["source_timestamp"] == SOURCE for row in future)
+    assert all(row["source_age_sec"] == 60.0 for row in future)
+    assert all(row["source_age_semantics"] == "age_from_selected_source_to_prediction_origin" for row in future)
+    assert all(row["source_currentness_verified"] is True for row in future)
+    assert all(row["source_freshness_state"] == "LIVE" for row in future)
     assert all(row["display_freshness_claim_allowed"] is False for row in future)
     assert all(row["fallback_used"] is False for row in future)
     assert all(row["abstained"] is False for row in future)
     assert artifact["runtime_card_freshness_replacement"] is False
+
+def test_future_source_after_origin_fails_closed() -> None:
+    with pytest.raises(ValueError, match="future_source_after_origin"):
+        build_market_regime_runtime_horizon_artifact(
+            current_prediction=_current(),
+            future_packet=_future_packet(),
+            future_source_timestamp="2026-07-16T08:00:01Z",
+            future_source_currentness_verified=True,
+        )
+
+def test_non_latest_future_source_is_explicitly_stale() -> None:
+    artifact = build_market_regime_runtime_horizon_artifact(
+        current_prediction=_current(),
+        future_packet=_future_packet(),
+        future_source_timestamp=SOURCE,
+        future_source_currentness_verified=False,
+    )
+    future = artifact["horizons"][1:]
+    assert all(row["source_timestamp"] == SOURCE for row in future)
+    assert all(row["source_currentness_verified"] is False for row in future)
+    assert all(row["source_freshness_state"] == "STALE_SOURCE_WINDOW" for row in future)
+    assert all(row["display_freshness_claim_allowed"] is False for row in future)
