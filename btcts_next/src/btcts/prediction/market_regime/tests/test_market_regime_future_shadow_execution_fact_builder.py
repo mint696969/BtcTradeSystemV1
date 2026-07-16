@@ -52,7 +52,24 @@ def _bundle() -> MarketRegimeFeatureBundle:
 
 def _report() -> dict[str, object]:
     return {"market_regime_only": True, "horizons": [
-        {"horizon_sec": item.horizon_sec, "horizon_key": item.horizon_key, "regime_scores": {"RANGE": 0.8, "UP_TREND": 0.2}}
+        {
+            "horizon_sec": item.horizon_sec,
+            "horizon_key": item.horizon_key,
+            "regime_scores": (
+                {
+                    "RANGE": 0.1,
+                    "UP_TREND": 0.1,
+                    "DOWN_TREND": 0.1,
+                    "BREAKOUT": 0.1,
+                    "HIGH_VOL_CHOP": 0.1,
+                    "LOW_VOL_COMPRESSION": 0.1,
+                    "REVERSAL_WATCH": 0.1,
+                    "PANIC_SPIKE": 0.1,
+                }
+                if item.horizon_sec == 21600
+                else {"RANGE": 0.8, "UP_TREND": 0.2}
+            ),
+        }
         for item in build_default_horizon_policy().horizons if item.horizon_sec
     ]}
 

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from hashlib import sha256
 from math import isfinite
 from types import MappingProxyType
@@ -17,6 +17,7 @@ from .future_baseline_model import (
     FutureBaselineEvidence,
     forecast_future_market_regime_baseline,
 )
+from .future_horizon_conditioning import condition_horizon_regime_scores
 from .future_forecast_contract import (
     FUTURE_MARKET_REGIME_HORIZONS_SEC,
     FutureForecastStatus,
@@ -193,6 +194,8 @@ def build_market_regime_future_shadow_packet(
     feature_snapshot_ref = market_regime_feature_snapshot_ref(feature_bundle)
     available_families = _available_feature_families(feature_bundle)
     forecasts = []
+    predecessor_scores: Mapping[MarketRegimeCode, float] | None = None
+    predecessor_forecast: MarketRegimeFutureForecast | None = None
     for horizon in FUTURE_MARKET_REGIME_HORIZONS_SEC:
         row = rows.get(horizon)
         if row is None:
@@ -214,6 +217,14 @@ def build_market_regime_future_shadow_packet(
                 )
             )
             continue
+        conditioning = None
+        if predecessor_scores is not None and predecessor_forecast is not None:
+            regime_scores, conditioning = condition_horizon_regime_scores(
+                local_scores=regime_scores,
+                predecessor_scores=predecessor_scores,
+                predecessor_forecast=predecessor_forecast,
+                transition_prior_fraction_of_top=candidate.transition_prior_fraction_of_top,
+            )
         evidence = FutureBaselineEvidence(
             origin_timestamp=feature_bundle.generated_at,
             origin_current_state=origin_current_state,
@@ -225,7 +236,15 @@ def build_market_regime_future_shadow_packet(
             origin_timestamp_epoch_sec=origin_timestamp_epoch_sec,
             invalidation_conditions=tuple(feature_bundle.warnings) + tuple(feature_bundle.missing_sources),
         )
-        forecasts.append(forecast_future_market_regime_baseline(evidence, candidate=candidate))
+        forecast = forecast_future_market_regime_baseline(evidence, candidate=candidate)
+        if conditioning is not None:
+            forecast = replace(
+                forecast,
+                metadata={**dict(forecast.metadata), "horizon_conditioning": dict(conditioning)},
+            )
+        forecasts.append(forecast)
+        predecessor_scores = regime_scores
+        predecessor_forecast = forecast
     return MarketRegimeFutureShadowPacket(
         generated_at=feature_bundle.generated_at,
         origin_current_state=origin_current_state,

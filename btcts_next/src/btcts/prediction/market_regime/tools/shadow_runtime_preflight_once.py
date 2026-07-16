@@ -14,7 +14,7 @@ from typing import Any, Mapping
 
 from btcts.prediction.market_regime.current_state_persistence import read_persisted_current_state
 from btcts.prediction.market_regime.features import build_market_regime_feature_bundle
-from btcts.prediction.market_regime.features.current_l4_candle_window import current_l4_candle_rows
+from btcts.prediction.market_regime.features.current_l4_candle_window import future_origin_l4_candle_rows
 from btcts.prediction.market_regime.future_origin_feature_runtime_bundle import (
     build_market_regime_origin_feature_runtime_bundle,
 )
@@ -120,9 +120,22 @@ def build_shadow_runtime_preflight_once(
         generated_at=canonical_generated_at,
         previous_current_state=previous_current_state,
     )
-    signal_score_report = score_market_regime_signals(feature_bundle)
+    runtime_bundle = build_market_regime_origin_feature_runtime_bundle(
+        feature_bundle=feature_bundle,
+        previous_current_state=previous_current_state,
+        canonical_current_l4_candle_rows=future_origin_l4_candle_rows(source_snapshot),
+        shadow_candidate_id=shadow_candidate_id,
+    )
+    signal_score_report = score_market_regime_signals(
+        feature_bundle,
+        origin_feature_context=runtime_bundle,
+    )
     future_signal_score_report = _future_only_signal_score_report(signal_score_report)
-    source_timestamp = str(_signal_value(feature_bundle, "current_l4_candle_window_generated_at") or "")
+    source_timestamp = str(
+        runtime_bundle.get("selected_candle_source_timestamp")
+        or _signal_value(feature_bundle, "current_l4_candle_window_generated_at")
+        or ""
+    )
     origin_epoch = _parse_epoch(canonical_generated_at, "generated_at")
     source_epoch = _parse_epoch(source_timestamp, "source_timestamp")
     shadow_packet = build_market_regime_future_shadow_packet(
@@ -131,12 +144,6 @@ def build_shadow_runtime_preflight_once(
         origin_current_state=_current_regime(prediction_packet),
         origin_timestamp_epoch_sec=origin_epoch,
         source_timestamp_epoch_sec=source_epoch,
-    )
-    runtime_bundle = build_market_regime_origin_feature_runtime_bundle(
-        feature_bundle=feature_bundle,
-        previous_current_state=previous_current_state,
-        canonical_current_l4_candle_rows=current_l4_candle_rows(source_snapshot),
-        shadow_candidate_id=shadow_candidate_id,
     )
     preflight = build_future_shadow_runtime_preflight_report(
         packet=shadow_packet,
@@ -153,6 +160,7 @@ def build_shadow_runtime_preflight_once(
         "feature_signal_count": feature_bundle.available_signal_count(),
         "current_regime": _current_regime(prediction_packet).value,
         "pair_count": preflight["pair_count"],
+        "shadow_packet": _json_native(shadow_packet),
         "preflight_report": _json_native(preflight),
         "preflight_only": True,
         "writer_invoked": False,

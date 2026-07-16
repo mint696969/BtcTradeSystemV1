@@ -127,6 +127,12 @@ def build_market_regime_origin_feature_runtime_bundle(
         canonical_current_l4_candle_rows,
         source_timestamp=str(source_timestamp),
     )
+    selected_candle_source_timestamp = str(rows[-1].get("time_utc") or "")
+    selected_candle_source_age_sec = max(
+        0.0,
+        _epoch(str(source_timestamp), "source_timestamp")
+        - _epoch(selected_candle_source_timestamp, "selected_candle_source_timestamp"),
+    )
     calculated = calculate_current_l4_origin_features(
         rows,
         parameters=candidate.parameters,
@@ -135,6 +141,7 @@ def build_market_regime_origin_feature_runtime_bundle(
 
     completed = {
         **dict(extracted),
+        "source_timestamp": selected_candle_source_timestamp,
         "fast_ma": calculated["fast_ma"],
         "slow_ma": calculated["slow_ma"],
         "low_volatility_threshold": calculated["low_volatility_threshold_bps"] / 10000.0,
@@ -182,6 +189,10 @@ def build_market_regime_origin_feature_runtime_bundle(
             "high_volatility_threshold": "explicit_shadow_parameter_set.high_volatility_threshold_bps/10000",
         }),
         "candle_row_count": len(rows),
+        "selected_candle_first_timestamp": str(rows[0].get("time_utc") or ""),
+        "selected_candle_source_timestamp": selected_candle_source_timestamp,
+        "selected_candle_source_age_sec": round(selected_candle_source_age_sec, 6),
+        "selected_window_is_latest_source": selected_candle_source_age_sec <= 1e-6,
         "semantic_substitution_used": False,
         "explicit_candidate_required": True,
         "candidate_selection_performed": False,

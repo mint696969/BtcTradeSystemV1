@@ -44,7 +44,7 @@ def test_runtime_once_orchestrates_read_only_components(monkeypatch, tmp_path) -
     prediction_packet = SimpleNamespace(
         predictions=(SimpleNamespace(horizon_sec=0, regime_code=MarketRegimeCode.RANGE),)
     )
-    shadow_packet = object()
+    shadow_packet = MappingProxyType({"forecasts": ()})
     runtime_bundle = MappingProxyType({"runtime_source_ready": True})
     preflight = MappingProxyType({"pair_count": 7, "pairs": ()})
 
@@ -62,13 +62,13 @@ def test_runtime_once_orchestrates_read_only_components(monkeypatch, tmp_path) -
         ],
     }
     observed_future_reports: list[dict] = []
-    monkeypatch.setattr(module, "score_market_regime_signals", lambda bundle: calls.append("score") or score_report)
+    monkeypatch.setattr(module, "score_market_regime_signals", lambda bundle, **kwargs: calls.append("score") or score_report)
     monkeypatch.setattr(
         module,
         "build_market_regime_future_shadow_packet",
         lambda **kwargs: calls.append("packet") or observed_future_reports.append(kwargs["signal_score_report"]) or shadow_packet,
     )
-    monkeypatch.setattr(module, "current_l4_candle_rows", lambda snapshot: ({"time_utc": "x"},) * 60)
+    monkeypatch.setattr(module, "future_origin_l4_candle_rows", lambda snapshot: ({"time_utc": "x"},) * 60)
     monkeypatch.setattr(module, "build_market_regime_origin_feature_runtime_bundle", lambda **kwargs: calls.append("runtime") or runtime_bundle)
     monkeypatch.setattr(
         module,
@@ -81,7 +81,7 @@ def test_runtime_once_orchestrates_read_only_components(monkeypatch, tmp_path) -
         generated_at="2026-07-15T00:00:00Z",
         shadow_candidate_id="candidate:shadow",
     )
-    assert calls == ["snapshot", "features", "state", "classify", "score", "packet", "runtime", "preflight"]
+    assert calls == ["snapshot", "features", "state", "classify", "runtime", "score", "packet", "preflight"]
     assert len(observed_future_reports) == 2
     assert all(item["horizon_count"] == 7 for item in observed_future_reports)
     assert all([row["horizon_sec"] for row in item["horizons"]] == [300, 900, 1800, 3600, 21600, 43200, 86400] for item in observed_future_reports)
@@ -170,9 +170,9 @@ def test_runtime_once_result_contains_json_native_preflight(monkeypatch, tmp_pat
     monkeypatch.setattr(module, "build_market_regime_feature_bundle", lambda *args, **kwargs: feature_bundle)
     monkeypatch.setattr(module, "read_persisted_current_state", lambda root: {"regime_code": "RANGE"})
     monkeypatch.setattr(module, "classify_market_regime_feature_bundle", lambda *args, **kwargs: prediction_packet)
-    monkeypatch.setattr(module, "score_market_regime_signals", lambda bundle: score_report)
-    monkeypatch.setattr(module, "build_market_regime_future_shadow_packet", lambda **kwargs: object())
-    monkeypatch.setattr(module, "current_l4_candle_rows", lambda snapshot: ({"time_utc": "x"},) * 60)
+    monkeypatch.setattr(module, "score_market_regime_signals", lambda bundle, **kwargs: score_report)
+    monkeypatch.setattr(module, "build_market_regime_future_shadow_packet", lambda **kwargs: MappingProxyType({"forecasts": ()}))
+    monkeypatch.setattr(module, "future_origin_l4_candle_rows", lambda snapshot: ({"time_utc": "x"},) * 60)
     monkeypatch.setattr(module, "build_market_regime_origin_feature_runtime_bundle", lambda **kwargs: MappingProxyType({"runtime_source_ready": True}))
     monkeypatch.setattr(module, "build_future_shadow_runtime_preflight_report", lambda **kwargs: preflight)
     result = module.build_shadow_runtime_preflight_once(

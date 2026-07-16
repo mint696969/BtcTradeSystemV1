@@ -81,6 +81,7 @@ def build_future_shadow_candidate_pair(
     *,
     evidence: FutureBaselineEvidence,
     candidates: Sequence[FutureShadowCandidateParameters] | None = None,
+    precomputed_forecasts: Sequence[MarketRegimeFutureForecast] | None = None,
 ) -> Mapping[str, Any]:
     registry = tuple(candidates or build_default_future_shadow_candidate_registry())
     validation = validate_future_shadow_candidate_registry(registry)
@@ -90,7 +91,12 @@ def build_future_shadow_candidate_pair(
         raise ValueError("future_shadow_candidate_pair_noncomparison_registry_state")
 
     identities = tuple(_identity(item) for item in registry)
-    forecasts = tuple(forecast_future_market_regime_baseline(evidence, candidate=item) for item in registry)
+    if precomputed_forecasts is None:
+        forecasts = tuple(forecast_future_market_regime_baseline(evidence, candidate=item) for item in registry)
+    else:
+        forecasts = tuple(precomputed_forecasts)
+        if len(forecasts) != len(registry):
+            raise ValueError("future_shadow_candidate_pair_precomputed_count_mismatch")
     expected_slot = _slot_key(evidence)
     observed_slots = {
         (
@@ -120,6 +126,7 @@ def build_future_shadow_candidate_pair(
         "candidate_count": len(registry),
         "candidate_identities": tuple(item.to_dict() for item in identities),
         "forecasts": tuple(_forecast_payload(item) for item in forecasts),
+        "precomputed_forecasts_used": precomputed_forecasts is not None,
         "comparison_ready_for_outcome_join": True,
         "safety": MappingProxyType({
             "pure": True,

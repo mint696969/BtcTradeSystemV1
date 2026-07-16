@@ -82,6 +82,19 @@ def _clamp01(value: float) -> float:
     return max(0.0, min(float(value), 1.0))
 
 
+def _horizon_persistence_scale(horizon_key: str) -> float:
+    return {
+        "current": 1.00,
+        "300s": 1.00,
+        "900s": 0.90,
+        "1800s": 0.80,
+        "3600s": 0.70,
+        "21600s": 0.40,
+        "43200s": 0.25,
+        "86400s": 0.15,
+    }.get(horizon_key, 0.50)
+
+
 def _vote(
     *,
     bundle: MarketRegimeFeatureBundle,
@@ -200,6 +213,151 @@ def _base_votes(bundle: MarketRegimeFeatureBundle, horizon_key: str) -> list[Mar
     realized = _float(bundle, FeatureGroup.VOLATILITY, "realized_volatility")
     if realized is not None and realized >= 0.03:
         votes.append(_vote(bundle=bundle, horizon_key=horizon_key, group=FeatureGroup.VOLATILITY, signal_id="realized_volatility", supports=MarketRegimeCode.HIGH_VOL_CHOP, strength=min(realized / 0.08, 1.0), reason="realized volatility is elevated", value=realized))
+    # MR-F9.18A3: horizon-specific numeric price/volatility evidence.
+    # These are bounded shadow votes, not calibrated probabilities.
+    persistence = _horizon_persistence_scale(horizon_key)
+    net_change_bps = _float(bundle, FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_net_change_bps")
+    if net_change_bps is not None and abs(net_change_bps) >= 2.0:
+        regime = MarketRegimeCode.UP_TREND if net_change_bps > 0 else MarketRegimeCode.DOWN_TREND
+        votes.append(_vote(
+            bundle=bundle,
+            horizon_key=horizon_key,
+            group=FeatureGroup.PRICE_STRUCTURE,
+            signal_id="current_l4_candle_net_change_bps",
+            supports=regime,
+            strength=min(abs(net_change_bps) / 25.0, 1.0) * persistence,
+            reason="recent candle-window net change supplies bounded directional evidence with horizon decay",
+            value=net_change_bps,
+        ))
+
+    close_position = _float(bundle, FeatureGroup.PRICE_STRUCTURE, "current_l4_candle_close_position")
+    if close_position is not None and (close_position >= 0.65 or close_position <= 0.35):
+        regime = MarketRegimeCode.UP_TREND if close_position >= 0.65 else MarketRegimeCode.DOWN_TREND
+        distance = abs(close_position - 0.5) / 0.5
+        votes.append(_vote(
+            bundle=bundle,
+            horizon_key=horizon_key,
+            group=FeatureGroup.PRICE_STRUCTURE,
+            signal_id="current_l4_candle_close_position",
+            supports=regime,
+            strength=min(distance, 1.0) * persistence,
+            reason="close location inside the recent candle window supports directional persistence",
+            value=close_position,
+        ))
+
+    realized_bps = _float(bundle, FeatureGroup.VOLATILITY, "current_l4_candle_realized_volatility_bps")
+    if realized_bps is not None and realized_bps >= 6.0:
+        votes.append(_vote(
+            bundle=bundle,
+            horizon_key=horizon_key,
+            group=FeatureGroup.VOLATILITY,
+            signal_id="current_l4_candle_realized_volatility_bps",
+            supports=MarketRegimeCode.HIGH_VOL_CHOP,
+            strength=min(realized_bps / 30.0, 1.0) * max(0.35, persistence),
+            reason="recent realized volatility raises high-volatility regime risk",
+            value=realized_bps,
+            against=(MarketRegimeCode.RANGE,),
+        ))
+
+    average_range_bps = _float(bundle, FeatureGroup.VOLATILITY, "current_l4_candle_average_range_bps")
+    if average_range_bps is not None and average_range_bps >= 8.0:
+        votes.append(_vote(
+            bundle=bundle,
+            horizon_key=horizon_key,
+            group=FeatureGroup.VOLATILITY,
+            signal_id="current_l4_candle_average_range_bps",
+            supports=MarketRegimeCode.HIGH_VOL_CHOP,
+            strength=min(average_range_bps / 40.0, 1.0) * max(0.35, persistence),
+            reason="wide recent candles increase chop and expansion risk",
+            value=average_range_bps,
+            against=(MarketRegimeCode.LOW_VOL_COMPRESSION,),
+        ))
+    return votes
+
+
+def _origin_feature_votes(
+    bundle: MarketRegimeFeatureBundle,
+    horizon_key: str,
+    origin_feature_context: Mapping[str, Any] | None,
+) -> list[MarketRegimeSignalVote]:
+    if not isinstance(origin_feature_context, Mapping):
+        return []
+    calculated = origin_feature_context.get("calculated_features")
+    if not isinstance(calculated, Mapping):
+        return []
+
+    try:
+        fast_ma = float(calculated.get("fast_ma"))
+        slow_ma = float(calculated.get("slow_ma"))
+        fast_window = int(calculated.get("fast_ma_window_rows"))
+        slow_window = int(calculated.get("slow_ma_window_rows"))
+        realized_bps = float(calculated.get("realized_volatility_bps"))
+        low_threshold = float(calculated.get("low_volatility_threshold_bps"))
+        high_threshold = float(calculated.get("high_volatility_threshold_bps"))
+    except (TypeError, ValueError):
+        return []
+    if fast_ma <= 0.0 or slow_ma <= 0.0 or fast_window < 2 or slow_window <= fast_window:
+        return []
+
+    votes: list[MarketRegimeSignalVote] = []
+    spread_bps = (fast_ma - slow_ma) / slow_ma * 10000.0
+    candidate_id = str(origin_feature_context.get("shadow_candidate_id") or "")
+    source_refs = (candidate_id,) if candidate_id else ()
+
+    if abs(spread_bps) >= 0.5:
+        regime = MarketRegimeCode.UP_TREND if spread_bps > 0.0 else MarketRegimeCode.DOWN_TREND
+        # Short MA windows contribute more to short horizons; long windows retain more weight later.
+        horizon_sec = {
+            "current": 0, "300s": 300, "900s": 900, "1800s": 1800,
+            "3600s": 3600, "21600s": 21600, "43200s": 43200, "86400s": 86400,
+        }.get(horizon_key, 900)
+        characteristic_sec = max(float(slow_window) * 60.0, 60.0)
+        scale = 1.0 / (1.0 + max(float(horizon_sec) - characteristic_sec, 0.0) / characteristic_sec)
+        spread_strength = abs(spread_bps) / (abs(spread_bps) + 20.0)
+        strength = spread_strength * max(scale, 0.15)
+        vote = _vote(
+            bundle=bundle,
+            horizon_key=horizon_key,
+            group=FeatureGroup.PRICE_STRUCTURE,
+            signal_id="origin_feature_ma_spread_bps",
+            supports=regime,
+            strength=strength,
+            reason="candidate-specific fast/slow MA spread supplies directional evidence with window-aware horizon decay",
+            value={
+                "spread_bps": round(spread_bps, 8),
+                "fast_window_rows": fast_window,
+                "slow_window_rows": slow_window,
+                "candidate_id": candidate_id,
+            },
+        )
+        votes.append(MarketRegimeSignalVote(
+            **{**vote.__dict__, "source_refs": source_refs}
+        ))
+
+    if realized_bps <= low_threshold:
+        vote = _vote(
+            bundle=bundle,
+            horizon_key=horizon_key,
+            group=FeatureGroup.VOLATILITY,
+            signal_id="origin_feature_volatility_band",
+            supports=MarketRegimeCode.LOW_VOL_COMPRESSION,
+            strength=min((low_threshold - realized_bps) / max(low_threshold, 1e-9) + 0.25, 1.0),
+            reason="candidate-specific volatility threshold classifies the origin as low-volatility",
+            value={"realized_bps": realized_bps, "threshold_bps": low_threshold, "candidate_id": candidate_id},
+        )
+        votes.append(MarketRegimeSignalVote(**{**vote.__dict__, "source_refs": source_refs}))
+    elif realized_bps >= high_threshold:
+        vote = _vote(
+            bundle=bundle,
+            horizon_key=horizon_key,
+            group=FeatureGroup.VOLATILITY,
+            signal_id="origin_feature_volatility_band",
+            supports=MarketRegimeCode.HIGH_VOL_CHOP,
+            strength=min((realized_bps - high_threshold) / max(high_threshold, 1e-9) + 0.25, 1.0),
+            reason="candidate-specific volatility threshold classifies the origin as high-volatility",
+            value={"realized_bps": realized_bps, "threshold_bps": high_threshold, "candidate_id": candidate_id},
+        )
+        votes.append(MarketRegimeSignalVote(**{**vote.__dict__, "source_refs": source_refs}))
     return votes
 
 
@@ -232,12 +390,21 @@ def _conflicts(votes: Sequence[MarketRegimeSignalVote]) -> list[dict[str, Any]]:
     return conflicts
 
 
-def score_market_regime_signals(bundle: MarketRegimeFeatureBundle, *, top_n: int = 10) -> Dict[str, Any]:
+def score_market_regime_signals(
+    bundle: MarketRegimeFeatureBundle,
+    *,
+    top_n: int = 10,
+    origin_feature_context: Mapping[str, Any] | None = None,
+) -> Dict[str, Any]:
     horizons: list[dict[str, Any]] = []
     all_votes: list[MarketRegimeSignalVote] = []
     for horizon in build_default_horizon_policy().horizons:
         horizon_key = horizon.horizon_key
-        votes = sorted(_base_votes(bundle, horizon_key), key=lambda vote: abs(vote.weighted_strength), reverse=True)
+        votes = sorted(
+            [*_base_votes(bundle, horizon_key), *_origin_feature_votes(bundle, horizon_key, origin_feature_context)],
+            key=lambda vote: abs(vote.weighted_strength),
+            reverse=True,
+        )
         all_votes.extend(votes)
         horizons.append({
             "horizon": horizon.label,
@@ -259,6 +426,12 @@ def score_market_regime_signals(bundle: MarketRegimeFeatureBundle, *, top_n: int
         "horizon_count": len(horizons),
         "total_vote_count": len(all_votes),
         "horizons": horizons,
+        "origin_feature_context_used": isinstance(origin_feature_context, Mapping),
+        "origin_feature_candidate_id": (
+            str(origin_feature_context.get("shadow_candidate_id") or "")
+            if isinstance(origin_feature_context, Mapping)
+            else ""
+        ),
         "read_only": True,
         "non_executing": True,
         "ui_render_invokes_classifier": False,

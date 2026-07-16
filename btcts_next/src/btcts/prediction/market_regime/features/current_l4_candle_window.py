@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from math import sqrt
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from ..source_snapshot import MarketRegimeSourceSnapshot
 from .current_l4_thresholds import CurrentL4CandleThresholds
@@ -22,9 +23,62 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
+def _epoch(value: Any) -> float | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc).timestamp()
+
+
+def select_latest_contiguous_l4_candle_window(
+    rows: Sequence[Mapping[str, Any]],
+    *,
+    window_size: int = CURRENT_L4_CANDLE_WINDOW_MAX_ROWS,
+    expected_interval_sec: int = 60,
+) -> tuple[Mapping[str, Any], ...]:
+    if isinstance(rows, (str, bytes)) or not isinstance(rows, Sequence):
+        return ()
+    normalized = tuple(dict(row) for row in rows)
+    required = int(window_size)
+    if required < 2 or len(normalized) < required:
+        return ()
+    interval = float(expected_interval_sec)
+    for end in range(len(normalized), required - 1, -1):
+        candidate = normalized[end - required:end]
+        epochs = tuple(_epoch(row.get("time_utc")) for row in candidate)
+        if any(value is None for value in epochs):
+            continue
+        valid = all(
+            abs(float(current) - float(previous) - interval) <= 1e-6
+            for previous, current in zip(epochs, epochs[1:])
+        )
+        if valid:
+            return candidate
+    return ()
+
+
 def current_l4_candle_rows(snapshot: MarketRegimeSourceSnapshot) -> tuple[Mapping[str, Any], ...]:
-    rows = tuple(dict(row) for row in snapshot.warroom_candles.closed_candles[-CURRENT_L4_CANDLE_WINDOW_MAX_ROWS:])
-    return rows
+    return tuple(
+        dict(row)
+        for row in snapshot.warroom_candles.closed_candles[-CURRENT_L4_CANDLE_WINDOW_MAX_ROWS:]
+    )
+
+
+def future_origin_l4_candle_rows(
+    snapshot: MarketRegimeSourceSnapshot,
+) -> tuple[Mapping[str, Any], ...]:
+    timeframe_sec = int(getattr(snapshot.warroom_candles, "timeframe_sec", 60) or 60)
+    return select_latest_contiguous_l4_candle_window(
+        snapshot.warroom_candles.closed_candles,
+        window_size=CURRENT_L4_CANDLE_WINDOW_MAX_ROWS,
+        expected_interval_sec=timeframe_sec,
+    )
 
 
 def summarize_current_l4_candle_rows(rows: tuple[Mapping[str, Any], ...]) -> Mapping[str, Any]:

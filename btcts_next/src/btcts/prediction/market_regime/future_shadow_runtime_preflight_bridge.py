@@ -3,18 +3,21 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from .future_baseline_model import FutureBaselineEvidence
+from .future_baseline_model import FutureBaselineEvidence, forecast_future_market_regime_baseline
 from .future_origin_evidence_adapter import build_market_regime_origin_evidence_bundles
 from .future_origin_feature_runtime_bundle import (
     MARKET_REGIME_ORIGIN_FEATURE_RUNTIME_BUNDLE_VERSION,
 )
 from .contracts import MarketRegimeCode
+from .future_horizon_conditioning import condition_horizon_regime_scores
 from .future_shadow_adapter import MarketRegimeFutureShadowPacket
 from .future_shadow_candidate_pairing import build_future_shadow_candidate_pair
+from .future_shadow_candidate_registry import build_default_future_shadow_candidate_registry
 from .future_shadow_pair_trace_plan import build_future_shadow_pair_trace_plan
 
 MARKET_REGIME_FUTURE_SHADOW_RUNTIME_PREFLIGHT_BRIDGE_VERSION = (
@@ -83,6 +86,9 @@ def build_future_shadow_runtime_preflight_report(
         feature_inputs=feature_inputs,
     )
     pairs = []
+    candidates = build_default_future_shadow_candidate_registry()
+    predecessor_scores_by_candidate: dict[str, Mapping[MarketRegimeCode, float]] = {}
+    predecessor_forecast_by_candidate: dict[str, Any] = {}
     seen_bundle_ids: set[str] = set()
     for bundle in bundles:
         bundle_id = str(bundle.get("bundle_id") or "")
@@ -104,11 +110,50 @@ def build_future_shadow_runtime_preflight_report(
                 "liquidity",
                 "source_quality",
                 "microprice",
+                "session_context",
             ),
             source_timestamp_epoch_sec=feature_inputs.source_timestamp_epoch_sec,
             origin_timestamp_epoch_sec=_origin_epoch(packet.generated_at),
         )
-        pair = build_future_shadow_candidate_pair(evidence=evidence)
+        local_scores = dict(evidence.regime_scores)
+        conditioned_forecasts = []
+        for candidate in candidates:
+            candidate_scores = local_scores
+            conditioning = None
+            predecessor_scores = predecessor_scores_by_candidate.get(candidate.parameter_set_id)
+            predecessor_forecast = predecessor_forecast_by_candidate.get(candidate.parameter_set_id)
+            if predecessor_scores is not None and predecessor_forecast is not None:
+                candidate_scores, conditioning = condition_horizon_regime_scores(
+                    local_scores=local_scores,
+                    predecessor_scores=predecessor_scores,
+                    predecessor_forecast=predecessor_forecast,
+                    transition_prior_fraction_of_top=candidate.transition_prior_fraction_of_top,
+                )
+            candidate_evidence = FutureBaselineEvidence(
+                origin_timestamp=evidence.origin_timestamp,
+                origin_current_state=evidence.origin_current_state,
+                target_horizon_sec=evidence.target_horizon_sec,
+                feature_snapshot_ref=evidence.feature_snapshot_ref,
+                regime_scores=candidate_scores,
+                available_feature_families=evidence.available_feature_families,
+                source_timestamp_epoch_sec=evidence.source_timestamp_epoch_sec,
+                origin_timestamp_epoch_sec=evidence.origin_timestamp_epoch_sec,
+            )
+            forecast = forecast_future_market_regime_baseline(candidate_evidence, candidate=candidate)
+            if conditioning is not None:
+                forecast = replace(
+                    forecast,
+                    metadata={**dict(forecast.metadata), "horizon_conditioning": dict(conditioning)},
+                )
+            conditioned_forecasts.append(forecast)
+            predecessor_scores_by_candidate[candidate.parameter_set_id] = candidate_scores
+            predecessor_forecast_by_candidate[candidate.parameter_set_id] = forecast
+
+        pair = build_future_shadow_candidate_pair(
+            evidence=evidence,
+            candidates=candidates,
+            precomputed_forecasts=tuple(conditioned_forecasts),
+        )
         trace_plan = build_future_shadow_pair_trace_plan(pair=pair)
         pairs.append(MappingProxyType({
             "source_bundle_id": bundle_id,
