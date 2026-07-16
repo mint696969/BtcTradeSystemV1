@@ -48,6 +48,7 @@ def test_runtime_once_orchestrates_read_only_components(monkeypatch, tmp_path) -
     runtime_bundle = MappingProxyType({"runtime_source_ready": True})
     preflight = MappingProxyType({"pair_count": 7, "pairs": ()})
     runtime_artifact = MappingProxyType({"horizon_count": 8, "horizons": ()})
+    persistence_plan = MappingProxyType({"horizon_count": 8, "write_order": ()})
 
     monkeypatch.setattr(module, "build_default_market_regime_parameter_set_registry", lambda: SimpleNamespace(active_parameter_set=lambda: object()))
     monkeypatch.setattr(module, "build_market_regime_source_snapshot", lambda root: calls.append("snapshot") or source_snapshot)
@@ -81,13 +82,18 @@ def test_runtime_once_orchestrates_read_only_components(monkeypatch, tmp_path) -
         "build_market_regime_runtime_horizon_artifact",
         lambda **kwargs: calls.append("artifact") or runtime_artifact,
     )
+    monkeypatch.setattr(
+        module,
+        "build_runtime_horizon_persistence_plan",
+        lambda **kwargs: calls.append("persistence_plan") or persistence_plan,
+    )
 
     result = module.build_shadow_runtime_preflight_once(
         hot_root=tmp_path,
         generated_at="2026-07-15T00:00:00Z",
         shadow_candidate_id="candidate:shadow",
     )
-    assert calls == ["snapshot", "features", "state", "classify", "runtime", "score", "packet", "preflight", "artifact"]
+    assert calls == ["snapshot", "features", "state", "classify", "runtime", "score", "packet", "preflight", "artifact", "persistence_plan"]
     assert len(observed_future_reports) == 2
     assert all(item["horizon_count"] == 7 for item in observed_future_reports)
     assert all([row["horizon_sec"] for row in item["horizons"]] == [300, 900, 1800, 3600, 21600, 43200, 86400] for item in observed_future_reports)
@@ -96,6 +102,9 @@ def test_runtime_once_orchestrates_read_only_components(monkeypatch, tmp_path) -
     assert result["runtime_horizon_artifact_built"] is True
     assert result["runtime_horizon_artifact_persisted"] is False
     assert result["runtime_horizon_artifact"]["horizon_count"] == 8
+    assert result["runtime_horizon_persistence_plan_built"] is True
+    assert result["runtime_horizon_writer_registered"] is False
+    assert result["runtime_horizon_persistence_plan"]["horizon_count"] == 8
     assert result["writer_invoked"] is False
     assert result["writes_dhot"] is False
 
@@ -192,6 +201,7 @@ def test_runtime_once_result_contains_json_native_preflight(monkeypatch, tmp_pat
     monkeypatch.setattr(module, "build_market_regime_origin_feature_runtime_bundle", lambda **kwargs: MappingProxyType({"runtime_source_ready": True}))
     monkeypatch.setattr(module, "build_future_shadow_runtime_preflight_report", lambda **kwargs: preflight)
     monkeypatch.setattr(module, "build_market_regime_runtime_horizon_artifact", lambda **kwargs: runtime_artifact)
+    monkeypatch.setattr(module, "build_runtime_horizon_persistence_plan", lambda **kwargs: MappingProxyType({"horizon_count": 8, "write_order": ()}))
     result = module.build_shadow_runtime_preflight_once(
         hot_root=tmp_path,
         generated_at="2026-07-15T00:00:00.987Z",
@@ -206,3 +216,5 @@ def test_runtime_once_result_contains_json_native_preflight(monkeypatch, tmp_pat
     assert len(result["runtime_horizon_artifact"]["horizons"]) == 8
     assert result["runtime_horizon_artifact"]["ui_inference_allowed"] is False
     assert result["runtime_horizon_artifact"]["safety"]["websocket_opened"] is False
+    assert result["runtime_horizon_persistence_plan_built"] is True
+    assert result["runtime_horizon_writer_registered"] is False

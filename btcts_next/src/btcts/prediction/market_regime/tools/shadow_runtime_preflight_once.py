@@ -29,6 +29,9 @@ from btcts.prediction.market_regime.parameter_set_registry import (
 from btcts.prediction.market_regime.runtime_horizon_artifact import (
     build_market_regime_runtime_horizon_artifact,
 )
+from btcts.prediction.market_regime.runtime_horizon_persistence_plan import (
+    build_runtime_horizon_persistence_plan,
+)
 from btcts.prediction.market_regime.signal_scoring import score_market_regime_signals
 from btcts.prediction.market_regime.sources import build_market_regime_source_snapshot
 
@@ -165,6 +168,9 @@ def build_shadow_runtime_preflight_once(
             runtime_bundle.get("selected_window_is_latest_source", False)
         ),
     )
+    runtime_horizon_persistence_plan = build_runtime_horizon_persistence_plan(
+        artifact=runtime_horizon_artifact,
+    )
     return {
         "schema_version": MR_F8_RUNTIME_PREFLIGHT_ONCE_TOOL_VERSION,
         "artifact_kind": "mr_f8_runtime_preflight_once_result",
@@ -180,6 +186,9 @@ def build_shadow_runtime_preflight_once(
         "runtime_horizon_artifact": _json_native(runtime_horizon_artifact),
         "runtime_horizon_artifact_built": True,
         "runtime_horizon_artifact_persisted": False,
+        "runtime_horizon_persistence_plan": _json_native(runtime_horizon_persistence_plan),
+        "runtime_horizon_persistence_plan_built": True,
+        "runtime_horizon_writer_registered": False,
         "preflight_only": True,
         "writer_invoked": False,
         "writes_dhot": False,
