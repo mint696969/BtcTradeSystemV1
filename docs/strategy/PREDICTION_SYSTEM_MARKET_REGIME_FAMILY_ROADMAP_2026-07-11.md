@@ -608,6 +608,22 @@ Agreement between horizons is allowed when independently produced. Repeated iden
 
 Review evidence may recommend changes but may not mutate canonical live parameters automatically.
 
+
+
+#### MR-F9 implementation checkpoint
+
+```text
+checkpoint=MR_F9_IMPLEMENTATION_FOUNDATION_ACCEPTED
+implementation_basis_head=aba4d8a1
+implementation_foundation_complete=true
+operational_evidence_complete=false
+mr_f9_complete=false
+closeout=false
+checkpoint_document=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_IMPLEMENTATION_CHECKPOINT_2026-07-16.md
+```
+
+The repository now contains execution-evidence, maturation, diagnostics, and human-review contracts. This checkpoint does not satisfy MR-F9 acceptance because mature multi-origin OOS evidence, probability-semantic calibration metrics, churn, transition-delay, condition-specific comparison, and promotion maturity remain unavailable. The active candidate and rollback point remain unchanged, and no runtime activation path was opened.
+
 ### MR-F10 — Stable context contract for later families
 
 MarketRegime must publish a family-neutral context that later families can consume without importing MarketRegime implementation details.
@@ -747,7 +763,7 @@ MarketRegime provides prediction context, not execution authorization.
 ## 8. Current start point
 
 ```text
-reference_head=7d9e81f4
+reference_head=aba4d8a1
 current_gate=MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON_ACCEPTED
 next_gate=MR_F9_OUTCOME_REVIEW_CALIBRATION_EVIDENCE_LOOP
 current_phase=MR-F9

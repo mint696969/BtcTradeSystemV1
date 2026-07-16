@@ -5,7 +5,7 @@
 
 Updated: 2026-07-16 JST
 Status: current and binding
-Reference implementation HEAD: 7d9e81f4
+Reference implementation HEAD: aba4d8a1
 
 <!-- PS_MARKET_REGIME_REMAINING_WORK_REGISTER_2026_07_14 -->
 
@@ -139,6 +139,42 @@ review_request, review_note, and review_link contracts
 parameter/model proposal evidence
 proposal separated from live apply
 replayable review trail
+```
+
+
+
+#### MR-F9 implementation checkpoint — 2026-07-16
+
+```text
+implementation_foundation_checkpoint=accepted
+implementation_basis_head=aba4d8a1
+checkpoint=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_IMPLEMENTATION_CHECKPOINT_2026-07-16.md
+operational_evidence_complete=false
+status_remains=open
+```
+
+Accepted implementation foundation:
+
+```text
+horizon-specific execution evidence contracts
+expiry-gated maturation and immutable snapshot persistence
+multi-origin execution diagnostics
+multi-snapshot unresolved/UNKNOWN/invalidated/abstention diagnostics
+human-gated review_request, review_note, and review_link contracts
+no scheduler, auto-promotion, live apply, broker, AutoTrade, or order path
+```
+
+Still required before `RW-MR-003`, `RW-MR-003A`, or `RW-MR-003B` can be accepted:
+
+```text
+real multi-origin D-hot evidence accumulation
+mature full-horizon outcomes
+condition-specific comparison
+probability-semantic Brier, log loss, and ECE
+balanced accuracy and macro F1
+miss concentration, churn, and transition-delay evidence
+minimum observed-slot and coverage policy satisfaction
+mature promotion proposal and WarRoom review evidence
 ```
 
 ### RW-MR-003A — MR-F9 horizon-specific inference execution proof
