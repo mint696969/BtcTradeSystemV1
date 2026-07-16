@@ -4,7 +4,7 @@
 # Prediction System MarketRegime MR-F9 Implementation Checkpoint
 
 Updated: 2026-07-16 JST
-Implementation basis HEAD: `aba4d8a1`
+Implementation basis HEAD: `5ef4c03c`
 Status: implementation foundation accepted; operational evidence maturity remains open
 Current gate: `MR_F8_SHADOW_MODEL_AND_PARAMETER_SET_COMPARISON_ACCEPTED`
 Target gate: `MR_F9_OUTCOME_REVIEW_CALIBRATION_EVIDENCE_LOOP`
@@ -32,6 +32,12 @@ f90eece4 = MR-F9 outcome maturation snapshots
 c2186376 = MR-F9 execution diagnostics
 59734839 = MR-F9 outcome persistence diagnostics
 aba4d8a1 = MR-F9 human review contracts
+cf09a323 = MR-F9 execution bridge readiness audit
+822d1e51 = MR-F9 paired execution adapter
+62d0d700 = MR-F9 runtime execution bridge
+cd9c6950 = MR-F9 explicit execution fact builder
+c205c4f9 = MR-F9 read-only execution once tool
+5ef4c03c = MR-F9 immutable execution observation request
 ```
 
 The implementation provides:
@@ -52,6 +58,11 @@ invalidation, abstention, coverage, and resolution-delay diagnostics
 human-gated review_request, review_note, and review_link contracts
 blocked insufficient-evidence review state
 replayable evidence references
+explicit active/shadow paired execution readiness audit
+pure 7-pair/14-trace execution adapter and runtime bridge
+explicit per-trace execution observation contract
+read-only one-shot JSON execution-evidence tool
+immutable incomplete observation-request template with fixed trace identity
 ```
 
 ## 3. Safety boundary
@@ -108,7 +119,7 @@ auto_promotion_allowed=false
 live_parameter_apply_allowed=false
 ```
 
-MR-F9 now has the contracts required to accumulate and review evidence safely. The next work is operational evidence acquisition and bounded analysis, not another synthetic promotion mechanism.
+MR-F9 now has the contracts and read-only one-shot tooling required to request explicit per-trace observations, validate fourteen execution facts, and build paired execution evidence safely. No production observation source or trusted D-hot evidence accumulation is active. The next work is operational evidence acquisition and bounded analysis, not another synthetic promotion mechanism.
 
 ## 6. Re-entry and closeout condition
 

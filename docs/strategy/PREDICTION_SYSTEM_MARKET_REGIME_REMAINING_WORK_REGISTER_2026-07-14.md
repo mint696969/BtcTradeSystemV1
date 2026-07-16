@@ -5,7 +5,7 @@
 
 Updated: 2026-07-16 JST
 Status: current and binding
-Reference implementation HEAD: aba4d8a1
+Reference implementation HEAD: 5ef4c03c
 
 <!-- PS_MARKET_REGIME_REMAINING_WORK_REGISTER_2026_07_14 -->
 
@@ -147,7 +147,7 @@ replayable review trail
 
 ```text
 implementation_foundation_checkpoint=accepted
-implementation_basis_head=aba4d8a1
+implementation_basis_head=5ef4c03c
 checkpoint=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_IMPLEMENTATION_CHECKPOINT_2026-07-16.md
 operational_evidence_complete=false
 status_remains=open
@@ -161,12 +161,16 @@ expiry-gated maturation and immutable snapshot persistence
 multi-origin execution diagnostics
 multi-snapshot unresolved/UNKNOWN/invalidated/abstention diagnostics
 human-gated review_request, review_note, and review_link contracts
-no scheduler, auto-promotion, live apply, broker, AutoTrade, or order path
+paired execution readiness and immutable 7-pair/14-trace runtime bridge
+explicit execution-observation fact builder and one-shot JSON tool
+immutable incomplete observation-request template with fixed trace identity
+no scheduler, automatic writer, auto-promotion, live apply, broker, AutoTrade, or order path
 ```
 
 Still required before `RW-MR-003`, `RW-MR-003A`, or `RW-MR-003B` can be accepted:
 
 ```text
+production observation-source integration without inferred facts
 real multi-origin D-hot evidence accumulation
 mature full-horizon outcomes
 condition-specific comparison
