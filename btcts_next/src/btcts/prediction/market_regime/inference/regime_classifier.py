@@ -422,6 +422,7 @@ def classify_market_regime_feature_bundle(
                     "current_state_estimator_used": label_selection_reason in _CURRENT_EVIDENCE_SELECTION_REASONS,
                     "current_state_estimator_version": current_estimate.get("estimator_version") if int(horizon.horizon_sec) == 0 else "",
                     "current_state_source_cutoff_time": current_estimate.get("source_cutoff_time") if int(horizon.horizon_sec) == 0 else "",
+                    "current_state_source_currentness_verified": current_estimate.get("source_currentness_verified", False) if int(horizon.horizon_sec) == 0 else False,
                     "current_state_started_at": current_estimate.get("state_started_at") if int(horizon.horizon_sec) == 0 else "",
                     "current_state_age_sec": current_estimate.get("state_age_sec") if int(horizon.horizon_sec) == 0 else None,
                     "current_state_start_estimation_status": current_estimate.get("state_start_estimation_status") if int(horizon.horizon_sec) == 0 else "",

@@ -129,6 +129,7 @@ def test_current_estimator_uses_current_l4_and_never_future_forecast_label() -> 
     assert packet["selection_reason"] == "current_state_estimator"
     assert packet["estimator_version"] == CURRENT_STATE_ESTIMATOR_VERSION
     assert packet["source_cutoff_time"] == "2026-07-12T00:00:00Z"
+    assert packet["source_currentness_verified"] is True
     assert packet["state_started_at"] == "2026-07-12T00:00:01Z"
     assert packet["state_age_sec"] == 0
     assert packet["state_start_estimation_status"] == "started"
@@ -187,6 +188,7 @@ def test_current_estimator_fails_closed_when_current_evidence_is_not_live() -> N
     assert packet["ok"] is False
     assert packet["regime_label"] == "UNKNOWN"
     assert packet["selection_reason"] == "current_state_estimator_unavailable"
+    assert packet["source_currentness_verified"] is False
     assert packet["state_started_at"] == ""
     assert packet["state_age_sec"] is None
     assert packet["state_window_started_at"] == ""
@@ -281,3 +283,14 @@ def test_mr_f4_canonical_selection_fails_closed_when_current_evidence_unusable()
     assert result["selected_regime"] == "UNKNOWN"
     assert result["label_source"] == "current_state_estimator_unavailable"
     assert result["transition_policy_applied_to_selected_label"] is False
+
+def test_currentness_requires_both_current_enough_and_source_cutoff() -> None:
+    packet = estimate_current_market_regime(
+        _bundle(
+            current_enough=True,
+            hint="RANGE",
+            cutoff="",
+        )
+    )
+    assert packet["source_currentness_verified"] is False
+    assert packet["ok"] is False

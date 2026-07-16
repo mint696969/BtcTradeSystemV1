@@ -76,7 +76,7 @@ def _forecast_records_currentness(snapshot: MarketRegimeSourceSnapshot, *, gener
 
 
 def _current_l4_candle_currentness(snapshot: MarketRegimeSourceSnapshot, *, generated_at: str) -> tuple[bool, float | None, str | None, tuple[str, ...]]:
-    source_ts = str(getattr(snapshot.warroom_candles, "latest_time_utc", "") or getattr(snapshot.warroom_candles, "latest_closed_time_utc", "") or "")
+    source_ts = str(getattr(snapshot.warroom_candles, "latest_closed_time_utc", "") or "")
     age = _age_sec(generated_at, source_ts)
     warnings: list[str] = []
     if not snapshot.warroom_candles.ok:

@@ -348,6 +348,7 @@ def test_mr_a1_stale_forecast_records_are_blocked_by_currentness_gate(tmp_path: 
     assert first.diagnostic_record["forecast_records_currentness_gate_applied"] is True
     assert first.diagnostic_record["selected_forecast_label"] == ""
     assert first.diagnostic_record["label_selection_reason"] == "current_state_estimator_unavailable"
+    assert first.diagnostic_record["current_state_source_currentness_verified"] is False
     assert first.diagnostic_record["future_forecast_label_used_for_current"] is False
     price = {signal.name: signal for signal in bundle.signals_by_group(FeatureGroup.PRICE_STRUCTURE)}
     # MR_A4_COVERAGE_IGNORES_THRESHOLD_METADATA_2026_07_09
@@ -417,6 +418,7 @@ def test_mr_a2_stale_forecast_can_fallback_to_current_l4_candle_window(tmp_path:
     assert source_quality["current_l4_candle_window_current_enough"].value is True
     assert first.diagnostic_record["forecast_records_currentness_gate_applied"] is True
     assert first.diagnostic_record["current_l4_candle_window_current_enough"] is True
+    assert first.diagnostic_record["current_state_source_currentness_verified"] is True
     assert first.diagnostic_record["current_l4_candle_window_fallback_used"] is False
     assert first.diagnostic_record["current_state_estimator_used"] is True
     assert first.diagnostic_record["label_selection_reason"] == "mr_f4_transition_policy"

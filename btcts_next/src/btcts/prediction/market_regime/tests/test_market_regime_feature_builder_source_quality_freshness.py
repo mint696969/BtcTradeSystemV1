@@ -3,8 +3,13 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 from btcts.prediction.market_regime.contracts import FeatureGroup, FreshnessState
-from btcts.prediction.market_regime.features.feature_builder import _coverage_for_group
+from btcts.prediction.market_regime.features.feature_builder import (
+    _coverage_for_group,
+    _current_l4_candle_currentness,
+)
 from btcts.prediction.market_regime.features.feature_bundle import FeatureSignal
 
 
@@ -67,3 +72,22 @@ def test_cross_venue_does_not_inherit_source_quality_l4_override() -> None:
     )
     coverage = _coverage_for_group(FeatureGroup.CROSS_VENUE, (signal,))
     assert coverage.freshness_state is FreshnessState.STALE
+
+
+def test_current_l4_window_currentness_uses_latest_closed_not_forming_timestamp() -> None:
+    snapshot = SimpleNamespace(
+        warroom_candles=SimpleNamespace(
+            ok=True,
+            latest_closed_time_utc="2026-07-15T08:24:00Z",
+            latest_forming_time_utc="2026-07-15T08:25:00Z",
+            latest_time_utc="2026-07-15T08:25:00Z",
+        )
+    )
+    current, age_sec, source_ts, warnings = _current_l4_candle_currentness(
+        snapshot,
+        generated_at="2026-07-15T08:25:30Z",
+    )
+    assert source_ts == "2026-07-15T08:24:00Z"
+    assert age_sec == 90
+    assert current is True
+    assert warnings == ()

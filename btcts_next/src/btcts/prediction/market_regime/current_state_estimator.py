@@ -219,6 +219,7 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
     )
     transition_candidate = change_point_evidence_score >= 0.65
     state_window_age_sec = _window_age_sec(state_window_started_at, cutoff)
+    source_currentness_verified = current_enough and bool(cutoff)
     usable = (
         current_enough
         and label != "UNKNOWN"
@@ -285,6 +286,7 @@ def estimate_current_market_regime(bundle: MarketRegimeFeatureBundle, *, previou
         "canonical_selection_reason": canonical_selection["selection_reason"],
         "estimator_version": CURRENT_STATE_ESTIMATOR_VERSION,
         "source_cutoff_time": cutoff,
+        "source_currentness_verified": source_currentness_verified,
         "state_started_at": persistence.get("state_started_at", ""),
         "state_age_sec": persistence.get("state_age_sec"),
         "state_start_estimation_status": persistence.get("persistence_status", "unavailable"),
