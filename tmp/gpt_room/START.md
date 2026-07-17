@@ -123,7 +123,7 @@ Collector/producer restart or configuration
 
 ## Roadmap
 
-MR-F9 UI/WS timestamp trace is the next active slice. After that trace is accepted, MR-F10 offline design may proceed in parallel while MR-F9 collection monitoring and scheduled checkpoints remain active. MR-F9 remains open until collection completion, final outcome maturity, evidence review, and explicit hold-release decisions. TrendBias remains blocked until `MARKET_REGIME_READY_FOR_NEXT_FAMILY`.
+MR-F9 UI/WS timestamp trace is accepted with an explicit integration limitation. MR-F10 offline design may now proceed in parallel while MR-F9 collection monitoring, the 12-hour checkpoint, and the collection-to-card integration follow-up remain active. MR-F9 remains open until collection completion, final outcome maturity, evidence review, and explicit hold-release decisions. TrendBias remains blocked until `MARKET_REGIME_READY_FOR_NEXT_FAMILY`.
 ## Durable project-memory rule
 
 ```text
@@ -146,4 +146,23 @@ MR_F10_entry_condition=UI_WS_timestamp_trace_accepted
 MR_F9_collection_monitoring_remains_active=true
 MR_F9_12_hour_checkpoint_remains_required=true
 later_phase_start_does_not_close_earlier_open_items=true
+```
+
+<!-- MR_F9_UI_WS_TIMESTAMP_TRACE_RECEIPT_2026_07_18 -->
+## UI/WS timestamp trace decision
+
+```text
+status=accepted_with_limitation
+decision=PROCEED_TO_MR_F10_OFFLINE_DESIGN
+collection_lane_directly_rendered=false
+current_dhot_market_regime_push_present=false
+selected_artifact_fallback_wired_from_page=false
+latest_cards_direct_render_fallback_present=true
+observed_latest_cards_generated_at=2026-07-17T18:24:40Z
+observed_latest_cards_run_id=market_regime_20260717T182440Z_once
+ui_prediction_invoked=false
+ui_classifier_invoked=false
+integration_follow_up_required=true
+MR_F9_collection_monitoring_remains_active=true
+MR_F9_12_hour_checkpoint_remains_required=true
 ```

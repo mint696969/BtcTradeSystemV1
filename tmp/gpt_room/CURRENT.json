@@ -43,6 +43,7 @@
   },
   "branch": "docs/phase2-handoff-sync",
   "canonical_documents": [
+    "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_UI_WS_TIMESTAMP_TRACE_RECEIPT_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_PRE_F10_EXECUTION_PLAN_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_6_HOUR_CHECKPOINT_RECEIPT_2026-07-17.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_DELAYED_EARLY_CHECKPOINT_RECEIPT_2026-07-17.md",
@@ -63,7 +64,7 @@
     "docs/strategy/PREDICTION_SYSTEM_CONTRACT_CHANGE_AND_TEST_GUARD_POLICY_2026-07-11.md"
   ],
   "current_family": "market_regime",
-  "current_focus": "mr_f9_live_24h_observation_and_ui_ws_timestamp_trace",
+  "current_focus": "mr_f9_live_24h_observation_and_mr_f10_offline_design",
   "current_gate": "MR_F9_LIVE_24H_OBSERVATION_RUNNING",
   "current_phase": "MR-F9",
   "data_roots": {
@@ -158,7 +159,7 @@
   "mr_f9_read_only_execution_path_complete": true,
   "next_gate": "MR_F9_12_HOUR_CHECKPOINT",
   "next_prediction_family": "trend_bias",
-  "next_slice": "MR_F9_UI_WS_TIMESTAMP_TRACE",
+  "next_slice": "MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN",
   "next_tasks": [
     "complete MR-F9.17 producer-to-UI horizon-by-horizon truth and display-semantics audit",
     "identify or add a trusted explicit execution-observation source without inferred semantics",
@@ -328,5 +329,21 @@
     "observation_affecting_changes_held": true,
     "trend_bias_blocked": true
   },
-  "following_parallel_slice": "MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN"
+  "following_parallel_slice": "MR_F9_12_HOUR_CHECKPOINT",
+  "mr_f9_ui_ws_timestamp_trace": {
+    "status": "accepted_with_limitation",
+    "decision": "PROCEED_TO_MR_F10_OFFLINE_DESIGN",
+    "collection_lane_directly_rendered": false,
+    "push_selector_present": true,
+    "current_dhot_market_regime_push_present": false,
+    "selected_artifact_fallback_wired_from_page": false,
+    "latest_cards_direct_render_fallback_present": true,
+    "observed_latest_cards_generated_at": "2026-07-17T18:24:40Z",
+    "observed_latest_cards_run_id": "market_regime_20260717T182440Z_once",
+    "observed_latest_cards_prediction_id": "market_regime_20260717T182440Z_once:latest",
+    "ui_prediction_invoked": false,
+    "ui_classifier_invoked": false,
+    "source_merge_performed": false,
+    "integration_follow_up_required": true
+  }
 }

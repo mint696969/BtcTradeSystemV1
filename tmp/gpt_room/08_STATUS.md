@@ -12,7 +12,7 @@ Working tree at observation start: clean
 ```text
 current_family=market_regime
 current_phase=MR-F9
-current_focus=mr_f9_live_24h_observation_and_ui_ws_timestamp_trace
+current_focus=mr_f9_live_24h_observation_and_mr_f10_offline_design
 current_gate=MR_F9_LIVE_24H_OBSERVATION_RUNNING
 observation_id=mr-f9-24h-fad90fe3ed0cf9805322
 collection_id=mr-f9-24h-fad90fe3ed0cf9805322
@@ -34,7 +34,7 @@ latest_known_iteration_count=386
 latest_known_written_origin_count=177
 latest_known_error_count=0
 next_observation_action=12_hour_checkpoint_at_2026-07-17T23:19:00Z
-next_parallel_work=MR-F9_UI_WS_timestamp_trace_then_MR-F10_offline_design
+next_parallel_work=MR-F10_offline_design_with_MR-F9_observation_and_UI_integration_follow_up
 ```
 
 ## MR-F9 implementation foundation
@@ -693,4 +693,23 @@ MR_F10_entry_condition=UI_WS_timestamp_trace_accepted
 MR_F9_collection_monitoring_remains_active=true
 MR_F9_12_hour_checkpoint_remains_required=true
 later_phase_start_does_not_close_earlier_open_items=true
+```
+
+<!-- MR_F9_UI_WS_TIMESTAMP_TRACE_RECEIPT_2026_07_18 -->
+## UI/WS timestamp trace decision
+
+```text
+status=accepted_with_limitation
+decision=PROCEED_TO_MR_F10_OFFLINE_DESIGN
+collection_lane_directly_rendered=false
+current_dhot_market_regime_push_present=false
+selected_artifact_fallback_wired_from_page=false
+latest_cards_direct_render_fallback_present=true
+observed_latest_cards_generated_at=2026-07-17T18:24:40Z
+observed_latest_cards_run_id=market_regime_20260717T182440Z_once
+ui_prediction_invoked=false
+ui_classifier_invoked=false
+integration_follow_up_required=true
+MR_F9_collection_monitoring_remains_active=true
+MR_F9_12_hour_checkpoint_remains_required=true
 ```
