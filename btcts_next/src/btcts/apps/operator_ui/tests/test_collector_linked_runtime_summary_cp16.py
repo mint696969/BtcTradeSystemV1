@@ -15,6 +15,7 @@ COLLECTOR_PAGE = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/views/collec
 PANELS = REPO_ROOT / "btcts_next/src/btcts/apps/operator_ui/components/collector_top_panels.py"
 
 from btcts.apps.operator_ui.components.collector_top_panels import (  # noqa: E402
+    _arrow_safe_detail_rows,
     build_linked_runtime_summary_items,
 )
 
@@ -104,3 +105,32 @@ def test_cp16_degraded_healthy_collector_with_stale_feed_is_warning_not_unknown(
     assert collector["severity"] == "warning"
     assert collector["badge_label"] == "WATCH"
     assert collector["primary_status"] == "要監視"
+
+
+def test_cp16_detail_rows_are_arrow_safe_strings() -> None:
+    rows = _arrow_safe_detail_rows(
+        [
+            {"label": "active", "value": True},
+            {"label": "runtime_pid", "value": 123},
+            {"label": "status_age_sec", "value": 2.5},
+            {"label": "pending_action", "value": None},
+            {"label": "mode", "value": "RUNNING"},
+        ]
+    )
+
+    assert rows == [
+        {"label": "active", "value": "True"},
+        {"label": "runtime_pid", "value": "123"},
+        {"label": "status_age_sec", "value": "2.5"},
+        {"label": "pending_action", "value": "-"},
+        {"label": "mode", "value": "RUNNING"},
+    ]
+    assert all(
+        isinstance(row["label"], str) and isinstance(row["value"], str)
+        for row in rows
+    )
+
+
+def test_cp16_detail_popover_uses_arrow_safe_rows() -> None:
+    text = PANELS.read_text(encoding="utf-8")
+    assert "st.dataframe(_arrow_safe_detail_rows(rows)" in text

@@ -111,6 +111,21 @@ def _compact_value(value: object, default: str = "-") -> str:
     return text if text else default
 
 
+def _arrow_safe_detail_rows(rows: list[dict]) -> list[dict]:
+    """Return display-only rows with stable string columns for Streamlit Arrow serialization."""
+    safe_rows: list[dict] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        safe_rows.append(
+            {
+                "label": _compact_value(row.get("label")),
+                "value": _compact_value(row.get("value")),
+            }
+        )
+    return safe_rows
+
+
 def _collector_runtime_summary_item(*, live_summary: dict, runtime: dict) -> dict:
     overall_state = str(live_summary.get("overall_state") or runtime.get("mode") or "UNKNOWN").upper()
     health = str(runtime.get("health_status") or live_summary.get("health_status") or "unknown").lower()
@@ -299,7 +314,7 @@ def _render_runtime_status_card(item: dict) -> None:
         st.caption(f"{item.get('display_name') or item.get('runtime_id')} runtime details")
         rows = item.get("detail_rows") if isinstance(item.get("detail_rows"), list) else []
         if rows:
-            st.dataframe(rows, width="stretch", hide_index=True)
+            st.dataframe(_arrow_safe_detail_rows(rows), width="stretch", hide_index=True)
         else:
             st.write(item)
 
