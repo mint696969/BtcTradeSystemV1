@@ -12,7 +12,7 @@ Working tree at observation start: clean
 ```text
 current_family=market_regime
 current_phase=MR-F9
-current_focus=mr_f9_live_24h_observation_and_mr_f10_offline_design
+current_focus=mr_f9_live_24h_observation_and_ui_ws_timestamp_trace
 current_gate=MR_F9_LIVE_24H_OBSERVATION_RUNNING
 observation_id=mr-f9-24h-fad90fe3ed0cf9805322
 collection_id=mr-f9-24h-fad90fe3ed0cf9805322
@@ -27,14 +27,14 @@ outcome_maturity_complete=false
 mr_f9_complete=false
 market_regime_ready_for_next_family=false
 trend_bias_blocked=true
-last_checkpoint_at_utc=2026-07-17T14:53:08Z
+last_checkpoint_at_utc=2026-07-17T17:45:11Z
 last_checkpoint_decision=CONTINUE
 missed_checkpoint_warning=true
-latest_known_iteration_count=214
-latest_known_written_origin_count=78
+latest_known_iteration_count=386
+latest_known_written_origin_count=177
 latest_known_error_count=0
-next_observation_action=6_hour_checkpoint_at_2026-07-17T17:19:00Z
-next_parallel_work=MR-F10_offline_context_contract_design_only
+next_observation_action=12_hour_checkpoint_at_2026-07-17T23:19:00Z
+next_parallel_work=MR-F9_UI_WS_timestamp_trace_then_MR-F10_offline_design
 ```
 
 ## MR-F9 implementation foundation
@@ -664,4 +664,33 @@ error_count=0
 latest_manifest_run_id=run-20260717T145300Z-08193b88b338
 manifest_payload_digest_match_count=8
 next_check_at_utc=2026-07-17T17:19:00Z
+```
+
+<!-- MR_F9_6_HOUR_CHECKPOINT_RECEIPT_2026_07_17 -->
+## Six-hour checkpoint decision
+
+```text
+scheduled_checkpoint_utc=2026-07-17T17:19:00Z
+checked_at_utc=2026-07-17T17:45:11Z
+late_checkpoint_warning=true
+decision=CONTINUE
+iteration_count=386
+written_origin_count=177
+readiness_skip_count=70
+error_count=0
+latest_manifest_run_id=run-20260717T174500Z-95f75c7a78b2
+manifest_payload_digest_match_count=8
+next_check_at_utc=2026-07-17T23:19:00Z
+```
+
+<!-- MR_F9_PRE_F10_EXECUTION_PLAN_2026_07_18 -->
+## Pre-F10 ordered work
+
+```text
+next_slice=MR_F9_UI_WS_TIMESTAMP_TRACE
+following_parallel_slice=MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN
+MR_F10_entry_condition=UI_WS_timestamp_trace_accepted
+MR_F9_collection_monitoring_remains_active=true
+MR_F9_12_hour_checkpoint_remains_required=true
+later_phase_start_does_not_close_earlier_open_items=true
 ```

@@ -65,14 +65,14 @@ Keep the dedicated foreground terminal open. Do not send Ctrl+C, restart Collect
 At the latest durable checkpoint:
 
 ```text
-checked_at_utc=2026-07-17T14:53:08Z
+checked_at_utc=2026-07-17T17:45:11Z
 decision=CONTINUE
-iteration_count=214
+iteration_count=386
 error_count=0
-written_origin_count=78
-duplicate_origin_skip_count=66
+written_origin_count=177
+duplicate_origin_skip_count=139
 readiness_skip_count=70
-latest_manifest_run_id=run-20260717T145300Z-08193b88b338
+latest_manifest_run_id=run-20260717T174500Z-95f75c7a78b2
 manifest_payload_digest_match_count=8
 last_error=
 ```
@@ -90,7 +90,7 @@ planned_end=2026-07-18T11:19:00Z
 final_maturity=2026-07-19T11:19:00Z
 ```
 
-The delayed 15-minute and 1-hour checkpoint receipt is accepted with `decision=CONTINUE` and `missed_checkpoint_warning=true`. The next canonical checkpoint is the 6-hour check at `2026-07-17T17:19:00Z`.
+The six-hour checkpoint is accepted with `decision=CONTINUE`. The next canonical checkpoint is the 12-hour check at `2026-07-17T23:19:00Z`.
 
 ## Parallel work
 
@@ -123,7 +123,7 @@ Collector/producer restart or configuration
 
 ## Roadmap
 
-MR-F10 offline design may proceed in parallel. MR-F9 remains open until collection completion, final outcome maturity, evidence review, and explicit hold-release decisions. TrendBias remains blocked until `MARKET_REGIME_READY_FOR_NEXT_FAMILY`.
+MR-F9 UI/WS timestamp trace is the next active slice. After that trace is accepted, MR-F10 offline design may proceed in parallel while MR-F9 collection monitoring and scheduled checkpoints remain active. MR-F9 remains open until collection completion, final outcome maturity, evidence review, and explicit hold-release decisions. TrendBias remains blocked until `MARKET_REGIME_READY_FOR_NEXT_FAMILY`.
 ## Durable project-memory rule
 
 ```text
@@ -135,3 +135,15 @@ durability_requires=commit_and_remote_push
 ```
 
 Canonical room files are intentionally tracked inside the otherwise ignored `tmp/` tree. Successor GPTs must update and commit them with checkpoint or policy changes; generated indexes, history, backups, self-tests, logs, and `tmp/work` remain untracked.
+
+<!-- MR_F9_PRE_F10_EXECUTION_PLAN_2026_07_18 -->
+## Pre-F10 ordered work
+
+```text
+next_slice=MR_F9_UI_WS_TIMESTAMP_TRACE
+following_parallel_slice=MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN
+MR_F10_entry_condition=UI_WS_timestamp_trace_accepted
+MR_F9_collection_monitoring_remains_active=true
+MR_F9_12_hour_checkpoint_remains_required=true
+later_phase_start_does_not_close_earlier_open_items=true
+```

@@ -24,10 +24,10 @@ planned_start_utc=2026-07-17T11:19:00Z
 planned_end_utc=2026-07-18T11:19:00Z
 planned_end_jst=2026-07-18T20:19:00+09:00
 latest_origin_expiry_utc=2026-07-19T11:19:00Z
-last_checkpoint_at_utc=2026-07-17T14:53:08Z
+last_checkpoint_at_utc=2026-07-17T17:45:11Z
 last_checkpoint_decision=CONTINUE
 missed_checkpoint_warning=true
-next_check_at_utc=2026-07-17T17:19:00Z
+next_check_at_utc=2026-07-17T23:19:00Z
 collection_24h_started=true
 collection_24h_completed=false
 outcome_maturity_complete=false
@@ -38,12 +38,12 @@ holds_released=false
 ## Latest known counters
 
 ```text
-iteration_count=214
+iteration_count=386
 error_count=0
-written_origin_count=78
-duplicate_origin_skip_count=66
+written_origin_count=177
+duplicate_origin_skip_count=139
 readiness_skip_count=70
-latest_manifest_run_id=run-20260717T145300Z-08193b88b338
+latest_manifest_run_id=run-20260717T174500Z-95f75c7a78b2
 manifest_payload_digest_match_count=8
 last_error=
 stop_requested=false
@@ -55,7 +55,7 @@ stop_requested=false
 startup=2026-07-17T11:20:43Z CONTINUE
 approximately_15_minutes=2026-07-17T11:34:00Z delayed receipt accepted CONTINUE
 approximately_1_hour=2026-07-17T12:19:00Z delayed receipt accepted CONTINUE
-approximately_6_hours=2026-07-17T17:19:00Z
+approximately_6_hours=2026-07-17T17:19:00Z delayed receipt accepted CONTINUE
 approximately_12_hours=2026-07-17T23:19:00Z
 planned_end=2026-07-18T11:19:00Z
 final_outcome_maturity=2026-07-19T11:19:00Z
@@ -97,8 +97,8 @@ release_condition=already allowed
 ## Next required action
 
 ```text
-next_observation_action=perform 6-hour checkpoint read-only at 2026-07-17T17:19:00Z
-next_parallel_work=begin MR-F10 stable context contract offline design only
+next_observation_action=perform 12-hour checkpoint read-only at 2026-07-17T23:19:00Z
+next_parallel_work=MR-F9_UI_WS_timestamp_trace_then_MR-F10_offline_design
 collection_terminal_action=none
 ```
 
@@ -117,4 +117,33 @@ error_count=0
 latest_manifest_run_id=run-20260717T145300Z-08193b88b338
 manifest_payload_digest_match_count=8
 next_check_at_utc=2026-07-17T17:19:00Z
+```
+
+<!-- MR_F9_6_HOUR_CHECKPOINT_RECEIPT_2026_07_17 -->
+## Six-hour checkpoint decision
+
+```text
+scheduled_checkpoint_utc=2026-07-17T17:19:00Z
+checked_at_utc=2026-07-17T17:45:11Z
+late_checkpoint_warning=true
+decision=CONTINUE
+iteration_count=386
+written_origin_count=177
+readiness_skip_count=70
+error_count=0
+latest_manifest_run_id=run-20260717T174500Z-95f75c7a78b2
+manifest_payload_digest_match_count=8
+next_check_at_utc=2026-07-17T23:19:00Z
+```
+
+<!-- MR_F9_PRE_F10_EXECUTION_PLAN_2026_07_18 -->
+## Pre-F10 ordered work
+
+```text
+next_slice=MR_F9_UI_WS_TIMESTAMP_TRACE
+following_parallel_slice=MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN
+MR_F10_entry_condition=UI_WS_timestamp_trace_accepted
+MR_F9_collection_monitoring_remains_active=true
+MR_F9_12_hour_checkpoint_remains_required=true
+later_phase_start_does_not_close_earlier_open_items=true
 ```

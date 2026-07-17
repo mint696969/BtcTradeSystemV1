@@ -43,6 +43,8 @@
   },
   "branch": "docs/phase2-handoff-sync",
   "canonical_documents": [
+    "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_PRE_F10_EXECUTION_PLAN_2026-07-18.md",
+    "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_6_HOUR_CHECKPOINT_RECEIPT_2026-07-17.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_DELAYED_EARLY_CHECKPOINT_RECEIPT_2026-07-17.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_LIVE_24H_OBSERVATION_HANDOFF_2026-07-17.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_TERMINAL_LEASE_RELEASE_HARDENING_CLOSEOUT_2026-07-17.md",
@@ -61,7 +63,7 @@
     "docs/strategy/PREDICTION_SYSTEM_CONTRACT_CHANGE_AND_TEST_GUARD_POLICY_2026-07-11.md"
   ],
   "current_family": "market_regime",
-  "current_focus": "mr_f9_live_24h_observation_and_mr_f10_offline_design",
+  "current_focus": "mr_f9_live_24h_observation_and_ui_ws_timestamp_trace",
   "current_gate": "MR_F9_LIVE_24H_OBSERVATION_RUNNING",
   "current_phase": "MR-F9",
   "data_roots": {
@@ -154,9 +156,9 @@
     "proposal_is_not_runtime_activation": true
   },
   "mr_f9_read_only_execution_path_complete": true,
-  "next_gate": "MR_F9_6_HOUR_CHECKPOINT",
+  "next_gate": "MR_F9_12_HOUR_CHECKPOINT",
   "next_prediction_family": "trend_bias",
-  "next_slice": "MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN",
+  "next_slice": "MR_F9_UI_WS_TIMESTAMP_TRACE",
   "next_tasks": [
     "complete MR-F9.17 producer-to-UI horizon-by-horizon truth and display-semantics audit",
     "identify or add a trusted explicit execution-observation source without inferred semantics",
@@ -297,10 +299,10 @@
     "final_outcome_maturity_utc": "2026-07-19T11:19:00Z",
     "startup_checked_at_utc": "2026-07-17T11:20:43Z",
     "last_checkpoint_decision": "CONTINUE",
-    "next_check_at_utc": "2026-07-17T17:19:00Z",
-    "latest_known_iteration_count": 214,
+    "next_check_at_utc": "2026-07-17T23:19:00Z",
+    "latest_known_iteration_count": 386,
     "latest_known_error_count": 0,
-    "latest_known_written_origin_count": 78,
+    "latest_known_written_origin_count": 177,
     "latest_known_readiness_skip_count": 70,
     "latest_known_last_skip_reason": "source_not_current:300,900,1800,3600,21600,43200,86400",
     "foreground_terminal_must_remain_open": true,
@@ -308,12 +310,13 @@
     "collection_started": true,
     "collection_completed": false,
     "outcome_maturity_complete": false,
-    "last_checkpoint_kind": "delayed_early_and_one_hour_checkpoint",
-    "last_checkpoint_at_utc": "2026-07-17T14:53:08Z",
+    "last_checkpoint_kind": "six_hour_checkpoint",
+    "last_checkpoint_at_utc": "2026-07-17T17:45:11Z",
     "missed_checkpoint_warning": true,
-    "latest_manifest_run_id": "run-20260717T145300Z-08193b88b338",
-    "latest_manifest_prediction_origin": "2026-07-17T14:53:00Z",
-    "manifest_payload_integrity_verified": true
+    "latest_manifest_run_id": "run-20260717T174500Z-95f75c7a78b2",
+    "latest_manifest_prediction_origin": "2026-07-17T17:45:00Z",
+    "manifest_payload_integrity_verified": true,
+    "late_checkpoint_warning": true
   },
   "parallel_work_boundary": {
     "read_only_monitoring_allowed": true,
@@ -324,5 +327,6 @@
     "mr_f10_runtime_application_allowed": false,
     "observation_affecting_changes_held": true,
     "trend_bias_blocked": true
-  }
+  },
+  "following_parallel_slice": "MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN"
 }
