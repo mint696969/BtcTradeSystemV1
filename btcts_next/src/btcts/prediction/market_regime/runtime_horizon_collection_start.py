@@ -195,20 +195,29 @@ def run_authorized_runtime_horizon_collection_start(
             collection_start_authorized=True,
         )
 
-    result = loop_runner(
-        control,
-        plan=plan,
-        tick_executor=tick_executor,
-        now_provider=now_provider,
-        sleep_fn=sleep_fn,
-        lease_required=True,
-        lease_id=str(lease["lease_id"]),
-        lease_pid=normalized_pid,
-        cadence_anchored=True,
-        preacquired_lease=lease,
-    )
-    if not isinstance(result, Mapping):
-        raise ValueError("runtime_horizon_collection_start_loop_result_invalid")
+    try:
+        result = loop_runner(
+            control,
+            plan=plan,
+            tick_executor=tick_executor,
+            now_provider=now_provider,
+            sleep_fn=sleep_fn,
+            lease_required=True,
+            lease_id=str(lease["lease_id"]),
+            lease_pid=normalized_pid,
+            cadence_anchored=True,
+            preacquired_lease=lease,
+        )
+        if not isinstance(result, Mapping):
+            raise ValueError("runtime_horizon_collection_start_loop_result_invalid")
+    except Exception:
+        release_runtime_horizon_collection_lease(
+            control,
+            plan=plan,
+            lease_id=str(lease["lease_id"]),
+            pid=normalized_pid,
+        )
+        raise
     return {
         **dict(result),
         "event": "AUTHORIZED_FOREGROUND_START_RETURNED",

@@ -178,6 +178,29 @@ def test_preloop_failure_releases_newly_acquired_lease(tmp_path) -> None:
         )
     assert read_runtime_horizon_collection_lease(root, plan=plan) == {}
 
+def test_loop_runner_exception_releases_preacquired_lease(tmp_path) -> None:
+    root, plan, package = _prepared(tmp_path)
+
+    def fail_loop(*args, **kwargs):
+        assert read_runtime_horizon_collection_lease(root, plan=plan)["lease_id"] == "lease-a"
+        raise RuntimeError("loop exploded")
+
+    with pytest.raises(RuntimeError, match="loop exploded"):
+        run_authorized_runtime_horizon_collection_start(
+            root,
+            plan=plan,
+            authorization_package=package,
+            provided_authorization_text=package["expected_authorization_text"],
+            expected_root=root,
+            now_provider=lambda: _dt("2026-07-17T00:00:45Z"),
+            pid=123,
+            lease_id="lease-a",
+            loop_runner=fail_loop,
+        )
+
+    assert read_runtime_horizon_collection_lease(root, plan=plan) == {}
+
+
 def test_default_loop_waits_until_planned_start_before_running(tmp_path) -> None:
     root, plan, package = _prepared(tmp_path)
     times = iter(

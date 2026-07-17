@@ -280,7 +280,10 @@ def run_runtime_horizon_collection_foreground_loop(
             sleep_fn(float(cadence_sec))
 
     lease_released = False
-    if lease_acquired and stop_reason in {"planned_end_reached", "stop_requested", "paused", "completed"}:
+    if lease_acquired and (
+        state["status"] in TERMINAL_STATUSES
+        or stop_reason in {"stop_requested", "paused"}
+    ):
         release_runtime_horizon_collection_lease(
             root,
             plan=plan,

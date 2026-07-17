@@ -306,7 +306,7 @@ def test_lease_is_released_on_planned_completion(tmp_path) -> None:
     assert read_runtime_horizon_collection_lease(tmp_path, plan=plan) == {}
 
 
-def test_lease_remains_after_tick_exception(tmp_path) -> None:
+def test_lease_is_released_after_tick_exception(tmp_path) -> None:
     plan = _plan(tmp_path)
     times = iter([
         _dt("2026-07-17T00:00:00Z"),
@@ -323,9 +323,10 @@ def test_lease_remains_after_tick_exception(tmp_path) -> None:
         lease_pid=123,
     )
     assert result["stop_reason"] == "tick_exception"
+    assert result["state"]["status"] == "FAILED_CONTRACT"
     assert result["lease_acquired"] is True
-    assert result["lease_released"] is False
-    assert read_runtime_horizon_collection_lease(tmp_path, plan=plan)["lease_id"] == "lease-a"
+    assert result["lease_released"] is True
+    assert read_runtime_horizon_collection_lease(tmp_path, plan=plan) == {}
 
 
 def test_anchored_cadence_waits_for_start_and_avoids_drift(tmp_path) -> None:
