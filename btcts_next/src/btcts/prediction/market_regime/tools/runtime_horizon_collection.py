@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
@@ -209,7 +210,13 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    expected_root: str | Path = DEFAULT_DHOT_ROOT,
+    now_provider=None,
+    sleep_fn=time.sleep,
+) -> int:
     args = _parser().parse_args(argv)
     if args.command == "prepare":
         result = prepare_runtime_horizon_collection(
@@ -242,8 +249,9 @@ def main(argv: list[str] | None = None) -> int:
             plan=plan,
             authorization_package=package,
             provided_authorization_text=args.authorization_text,
-            expected_root=DEFAULT_DHOT_ROOT,
-            now_provider=lambda: datetime.now(timezone.utc),
+            expected_root=expected_root,
+            now_provider=now_provider or (lambda: datetime.now(timezone.utc)),
+            sleep_fn=sleep_fn,
         )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0
