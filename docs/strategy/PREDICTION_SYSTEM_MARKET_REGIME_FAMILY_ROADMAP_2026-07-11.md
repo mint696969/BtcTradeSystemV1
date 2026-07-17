@@ -886,3 +886,27 @@ closeout=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_VS6_1_CLOSEOUT_2026-07
 prediction_full_suite=277_passed
 next_gate=MR_VS6_2_MARKET_REGIME_PROJECTION_IMPLEMENTATION
 ```
+
+
+## MR-F9.19L bounded collection producer-core checkpoint — 2026-07-17
+
+```text
+implementation_head=9b11e2ec
+producer_core_complete=true
+operator_cli_complete=false
+production_start_command_complete=false
+repo_tmp_restart_qualification_passed=true
+collection_24h_started=false
+collection_24h_completed=false
+collector_restart_required=false
+next_slice=MR-F9.19M_OPERATOR_COLLECTION_CLI_PREPARE_STATUS_STOP
+next_gate=MR_F9_BOUNDED_24H_COLLECTION_PRODUCER_START
+```
+
+This checkpoint adds bounded restart-safe collection infrastructure but does not satisfy MR-F9 operational evidence maturity. The accepted identity is the latest closed-source timestamp from future horizons; historical prediction-origin regeneration is forbidden. Sustained D-hot collection remains a separate explicit human gate.
+
+Canonical continuation handoff:
+
+```text
+docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_24H_COLLECTION_START_HANDOFF_2026-07-17.md
+```

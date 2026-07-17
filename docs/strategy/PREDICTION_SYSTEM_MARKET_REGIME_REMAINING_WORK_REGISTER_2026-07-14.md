@@ -411,3 +411,52 @@ When an item changes state:
 ```
 
 An item must not be removed merely because its section becomes inconvenient. Accepted or superseded items remain recorded with their terminal evidence until the family closeout is complete.
+
+
+## MR-F9.19L producer-core checkpoint — 2026-07-17
+
+```text
+checkpoint=MR_F9_19L_BOUNDED_RESTART_SAFE_COLLECTION_PRODUCER_CORE_ACCEPTED
+implementation_head=9b11e2ec
+checkpoint_document=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_19L_PRODUCER_CORE_CHECKPOINT_2026-07-17.md
+handoff_document=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_24H_COLLECTION_START_HANDOFF_2026-07-17.md
+producer_core_complete=true
+operator_cli_complete=false
+production_start_command_complete=false
+repo_tmp_restart_qualification_passed=true
+collection_24h_started=false
+collection_24h_completed=false
+collector_restart_required=false
+status_remains_open
+```
+
+Accepted under `RW-MR-003` and `RW-MR-003A` as implementation infrastructure only:
+
+```text
+bounded 24h / 60-second collection contract
+persistent state, progress, completion, and external stop request
+fresh per-tick preflight/readiness/writer adapter
+closed-source timestamp deduplication
+read-only manifest recovery after state loss
+single-process lease and explicit stale recovery
+planned-start anchored cadence
+foreground loop
+start-authorization package contract
+repository-tmp restart qualification
+```
+
+Still required:
+
+```text
+operator CLI
+production start wiring
+production-path repo-tmp full qualification
+D-hot read-only pre-start gate
+explicit human-authorized 24h collection start
+multi-origin evidence accumulation
+full-horizon maturity and analysis
+UI/WS timestamp trace
+promotion/review evidence
+```
+
+The one explicitly authorized D-hot one-shot sample remains separate from the not-yet-started 24-hour collection.
