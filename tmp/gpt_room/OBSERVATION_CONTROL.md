@@ -24,9 +24,10 @@ planned_start_utc=2026-07-17T11:19:00Z
 planned_end_utc=2026-07-18T11:19:00Z
 planned_end_jst=2026-07-18T20:19:00+09:00
 latest_origin_expiry_utc=2026-07-19T11:19:00Z
-last_checkpoint_at_utc=2026-07-17T11:20:43Z
+last_checkpoint_at_utc=2026-07-17T14:53:08Z
 last_checkpoint_decision=CONTINUE
-next_check_at_utc=2026-07-17T11:34:00Z
+missed_checkpoint_warning=true
+next_check_at_utc=2026-07-17T17:19:00Z
 collection_24h_started=true
 collection_24h_completed=false
 outcome_maturity_complete=false
@@ -37,12 +38,13 @@ holds_released=false
 ## Latest known counters
 
 ```text
-iteration_count=56
+iteration_count=214
 error_count=0
-written_origin_count=0
-duplicate_origin_skip_count=0
-readiness_skip_count=56
-last_skip_reason=source_not_current:300,900,1800,3600,21600,43200,86400
+written_origin_count=78
+duplicate_origin_skip_count=66
+readiness_skip_count=70
+latest_manifest_run_id=run-20260717T145300Z-08193b88b338
+manifest_payload_digest_match_count=8
 last_error=
 stop_requested=false
 ```
@@ -51,8 +53,8 @@ stop_requested=false
 
 ```text
 startup=2026-07-17T11:20:43Z CONTINUE
-approximately_15_minutes=2026-07-17T11:34:00Z due/passed; receipt pending
-approximately_1_hour=2026-07-17T12:19:00Z
+approximately_15_minutes=2026-07-17T11:34:00Z delayed receipt accepted CONTINUE
+approximately_1_hour=2026-07-17T12:19:00Z delayed receipt accepted CONTINUE
 approximately_6_hours=2026-07-17T17:19:00Z
 approximately_12_hours=2026-07-17T23:19:00Z
 planned_end=2026-07-18T11:19:00Z
@@ -95,7 +97,24 @@ release_condition=already allowed
 ## Next required action
 
 ```text
-next_observation_action=create durable approximately-15-minute checkpoint receipt read-only
+next_observation_action=perform 6-hour checkpoint read-only at 2026-07-17T17:19:00Z
 next_parallel_work=begin MR-F10 stable context contract offline design only
 collection_terminal_action=none
+```
+
+<!-- MR_F9_DELAYED_EARLY_CHECKPOINT_RECEIPT_2026_07_17 -->
+## Delayed early checkpoint decision
+
+```text
+checked_at_utc=2026-07-17T14:53:08Z
+scheduled_15m=2026-07-17T11:34:00Z missed_receipt_warning=true
+scheduled_1h=2026-07-17T12:19:00Z missed_receipt_warning=true
+decision=CONTINUE
+iteration_count=214
+written_origin_count=78
+readiness_skip_count=70
+error_count=0
+latest_manifest_run_id=run-20260717T145300Z-08193b88b338
+manifest_payload_digest_match_count=8
+next_check_at_utc=2026-07-17T17:19:00Z
 ```

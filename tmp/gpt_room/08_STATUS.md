@@ -27,7 +27,13 @@ outcome_maturity_complete=false
 mr_f9_complete=false
 market_regime_ready_for_next_family=false
 trend_bias_blocked=true
-next_observation_action=durable_checkpoint_receipt
+last_checkpoint_at_utc=2026-07-17T14:53:08Z
+last_checkpoint_decision=CONTINUE
+missed_checkpoint_warning=true
+latest_known_iteration_count=214
+latest_known_written_origin_count=78
+latest_known_error_count=0
+next_observation_action=6_hour_checkpoint_at_2026-07-17T17:19:00Z
 next_parallel_work=MR-F10_offline_context_contract_design_only
 ```
 
@@ -641,4 +647,21 @@ latest_known_iteration_count=56
 latest_known_written_origin_count=0
 latest_known_readiness_skip_count=56
 next_action=15m checkpoint receipt then MR-F10 offline design
+```
+
+<!-- MR_F9_DELAYED_EARLY_CHECKPOINT_RECEIPT_2026_07_17 -->
+## Delayed early checkpoint decision
+
+```text
+checked_at_utc=2026-07-17T14:53:08Z
+scheduled_15m=2026-07-17T11:34:00Z missed_receipt_warning=true
+scheduled_1h=2026-07-17T12:19:00Z missed_receipt_warning=true
+decision=CONTINUE
+iteration_count=214
+written_origin_count=78
+readiness_skip_count=70
+error_count=0
+latest_manifest_run_id=run-20260717T145300Z-08193b88b338
+manifest_payload_digest_match_count=8
+next_check_at_utc=2026-07-17T17:19:00Z
 ```

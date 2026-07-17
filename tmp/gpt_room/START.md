@@ -62,18 +62,22 @@ Keep the dedicated foreground terminal open. Do not send Ctrl+C, restart Collect
 
 ## Current observation behavior
 
-At the latest known handoff state:
+At the latest durable checkpoint:
 
 ```text
-iteration_count=56
+checked_at_utc=2026-07-17T14:53:08Z
+decision=CONTINUE
+iteration_count=214
 error_count=0
-written_origin_count=0
-readiness_skip_count=56
-last_skip_reason=source_not_current:300,900,1800,3600,21600,43200,86400
+written_origin_count=78
+duplicate_origin_skip_count=66
+readiness_skip_count=70
+latest_manifest_run_id=run-20260717T145300Z-08193b88b338
+manifest_payload_digest_match_count=8
 last_error=
 ```
 
-This is a running fail-closed readiness wait, not a stopped process and not a contract failure.
+The observation is actively writing bounded read-only runtime-horizon artifacts. This is not a stopped process and not a contract failure.
 
 ## Next checkpoint schedule
 
@@ -86,7 +90,7 @@ planned_end=2026-07-18T11:19:00Z
 final_maturity=2026-07-19T11:19:00Z
 ```
 
-The 15-minute checkpoint time has passed; create its durable read-only decision receipt before treating the 1-hour checkpoint as the next canonical decision.
+The delayed 15-minute and 1-hour checkpoint receipt is accepted with `decision=CONTINUE` and `missed_checkpoint_warning=true`. The next canonical checkpoint is the 6-hour check at `2026-07-17T17:19:00Z`.
 
 ## Parallel work
 
