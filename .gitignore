@@ -52,3 +52,22 @@ service/**
 # logs
 *.log
 logs/
+
+# --- gpt_room durable canonical memory allowlist ---
+# tmp remains ignored except for the canonical project-memory files listed below.
+# Root anchors are mandatory: nested workspaces such as btcts_next/tmp stay ignored.
+!/tmp/
+/tmp/*
+!/tmp/gpt_room/
+/tmp/gpt_room/*
+!/tmp/gpt_room/02_START_HERE.md
+!/tmp/gpt_room/08_STATUS.md
+!/tmp/gpt_room/09_FOCUS.json
+!/tmp/gpt_room/10_DECISIONS.md
+!/tmp/gpt_room/11_STATE.json
+!/tmp/gpt_room/CURRENT.json
+!/tmp/gpt_room/DECISIONS.md
+!/tmp/gpt_room/ENVIRONMENT_GUARDS.md
+!/tmp/gpt_room/OBSERVATION_CONTROL.md
+!/tmp/gpt_room/POLICY.md
+!/tmp/gpt_room/START.md

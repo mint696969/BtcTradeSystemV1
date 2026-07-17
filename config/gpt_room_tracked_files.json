@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "runtime_room_root": "tmp/gpt_room",
+  "tracked_files": [
+    "tmp/gpt_room/02_START_HERE.md",
+    "tmp/gpt_room/08_STATUS.md",
+    "tmp/gpt_room/09_FOCUS.json",
+    "tmp/gpt_room/10_DECISIONS.md",
+    "tmp/gpt_room/11_STATE.json",
+    "tmp/gpt_room/CURRENT.json",
+    "tmp/gpt_room/DECISIONS.md",
+    "tmp/gpt_room/ENVIRONMENT_GUARDS.md",
+    "tmp/gpt_room/OBSERVATION_CONTROL.md",
+    "tmp/gpt_room/POLICY.md",
+    "tmp/gpt_room/START.md"
+  ],
+  "excluded_prefixes": [
+    "tmp/gpt_room/_selftest/",
+    "tmp/gpt_room/history/",
+    "tmp/gpt_room/reference/",
+    "tmp/gpt_room/room_backups/"
+  ],
+  "durability_requires": [
+    "git_commit",
+    "remote_push_or_independent_backup"
+  ]
+}
