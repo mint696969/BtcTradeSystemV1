@@ -397,3 +397,29 @@ def test_anchored_cadence_sleep_is_bounded_by_end(tmp_path) -> None:
     )
     assert result["stop_reason"] == "planned_end_reached"
     assert sleeps == [20.0]
+
+def test_preacquired_lease_is_verified_and_released(tmp_path) -> None:
+    plan = _plan(tmp_path)
+    lease = acquire_runtime_horizon_collection_lease(
+        tmp_path,
+        plan=plan,
+        acquired_at="2026-07-17T00:00:00Z",
+        pid=123,
+        lease_id="lease-a",
+    )
+    times = iter([_dt("2026-07-18T00:00:00Z")])
+    result = run_runtime_horizon_collection_foreground_loop(
+        tmp_path,
+        plan=plan,
+        tick_executor=lambda state, observed_at: pytest.fail("tick must not run"),
+        now_provider=lambda: next(times),
+        sleep_fn=lambda seconds: None,
+        lease_required=True,
+        lease_id="lease-a",
+        lease_pid=123,
+        preacquired_lease=lease,
+    )
+    assert result["stop_reason"] == "planned_end_reached"
+    assert result["lease_acquired"] is True
+    assert result["lease_released"] is True
+    assert read_runtime_horizon_collection_lease(tmp_path, plan=plan) == {}

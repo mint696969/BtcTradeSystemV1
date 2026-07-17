@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/prediction/market_regime/tools/runtime_horizon_collection.py
-# desc: MR-F9.19M operator CLI for prepare/status/stop of one bounded 24h D-hot collection. Start remains fail-closed.
+# desc: MR-F9.19N operator CLI for prepare/status/stop/start of one bounded human-authorized foreground collection.
 
 from __future__ import annotations
 
@@ -22,12 +22,15 @@ from btcts.prediction.market_regime.runtime_horizon_collection_lease import (
 from btcts.prediction.market_regime.runtime_horizon_collection_recovery import (
     recover_runtime_horizon_collection_runs,
 )
+from btcts.prediction.market_regime.runtime_horizon_collection_start import (
+    run_authorized_runtime_horizon_collection_start,
+)
 from btcts.prediction.market_regime.runtime_horizon_collection_state import (
     read_runtime_horizon_collection_state,
     request_runtime_horizon_collection_stop,
 )
 
-TOOL_VERSION = "prediction.market_regime.tools.runtime_horizon_collection.mr_f9_19m.v1"
+TOOL_VERSION = "prediction.market_regime.tools.runtime_horizon_collection.mr_f9_19n.v1"
 DEFAULT_DHOT_ROOT = Path(r"D:\btc_ts_hot")
 DEFAULT_CONTROL_ROOT = Path(r"D:\btc_ts_hot")
 
@@ -175,7 +178,7 @@ def stop_runtime_horizon_collection(
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Prepare/status/stop one bounded MR-F9 24h collection.")
+    parser = argparse.ArgumentParser(description="Prepare/status/stop/start one bounded MR-F9 24h collection.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     prepare = sub.add_parser("prepare")
@@ -200,6 +203,9 @@ def _parser() -> argparse.ArgumentParser:
 
     start = sub.add_parser("start")
     start.add_argument("--plan-path", required=True)
+    start.add_argument("--authorization-package-path", required=True)
+    start.add_argument("--authorization-text", required=True)
+    start.add_argument("--control-root", default=str(DEFAULT_CONTROL_ROOT))
     return parser
 
 
@@ -229,7 +235,16 @@ def main(argv: list[str] | None = None) -> int:
             requested_at=args.requested_at or None,
         )
     else:
-        raise PermissionError("runtime_horizon_collection_start_not_implemented_fail_closed")
+        plan = load_runtime_horizon_collection_plan(args.plan_path)
+        package = _read_mapping(Path(args.authorization_package_path))
+        result = run_authorized_runtime_horizon_collection_start(
+            args.control_root,
+            plan=plan,
+            authorization_package=package,
+            provided_authorization_text=args.authorization_text,
+            expected_root=DEFAULT_DHOT_ROOT,
+            now_provider=lambda: datetime.now(timezone.utc),
+        )
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
     return 0
 

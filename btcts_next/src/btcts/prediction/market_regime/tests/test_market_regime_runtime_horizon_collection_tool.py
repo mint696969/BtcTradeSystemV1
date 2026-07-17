@@ -1,5 +1,5 @@
 # path: ./btcts_next/src/btcts/prediction/market_regime/tests/test_market_regime_runtime_horizon_collection_tool.py
-# desc: MR-F9.19M operator collection CLI prepare/status/stop tests; start remains fail-closed.
+# desc: MR-F9.19N operator collection CLI prepare/status/stop/start argument-boundary tests.
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from btcts.prediction.market_regime.tools import runtime_horizon_collection as collection_tool
 from btcts.prediction.market_regime.runtime_horizon_collection_state import (
     advance_runtime_horizon_collection_state,
     build_initial_runtime_horizon_collection_state,
@@ -92,7 +93,46 @@ def test_stop_sets_persisted_request_without_writer(tmp_path) -> None:
     assert status["state"]["stop_requested"] is True
 
 
-def test_start_subcommand_is_fail_closed(tmp_path) -> None:
+def test_start_subcommand_requires_authorization_arguments(tmp_path) -> None:
     prepared = _prepared(tmp_path)
-    with pytest.raises(PermissionError, match="start_not_implemented"):
+    with pytest.raises(SystemExit):
         main(["start", "--plan-path", prepared["plan_path"]])
+
+def test_start_subcommand_passes_verified_inputs_to_start_wiring(tmp_path, monkeypatch) -> None:
+    prepared = _prepared(tmp_path)
+    package_path = authorization_file_path(tmp_path, prepared["collection_id"])
+    package = json.loads(package_path.read_text(encoding="utf-8"))
+    captured = {}
+
+    def fake_start(control_root, **kwargs):
+        captured["control_root"] = str(control_root)
+        captured.update(kwargs)
+        return {"event": "AUTHORIZED_FOREGROUND_START_RETURNED", "ok": True}
+
+    monkeypatch.setattr(
+        collection_tool,
+        "run_authorized_runtime_horizon_collection_start",
+        fake_start,
+    )
+
+    result = collection_tool.main(
+        [
+            "start",
+            "--plan-path",
+            prepared["plan_path"],
+            "--authorization-package-path",
+            str(package_path),
+            "--authorization-text",
+            package["expected_authorization_text"],
+            "--control-root",
+            str(tmp_path),
+        ]
+    )
+
+    assert result == 0
+    assert captured["control_root"] == str(tmp_path)
+    assert captured["provided_authorization_text"] == package["expected_authorization_text"]
+    assert captured["authorization_package"]["authorization_package_sha256"] == package["authorization_package_sha256"]
+    assert captured["plan"]["collection_id"] == prepared["collection_id"]
+    assert str(captured["expected_root"]) == DHOT
+    assert callable(captured["now_provider"])

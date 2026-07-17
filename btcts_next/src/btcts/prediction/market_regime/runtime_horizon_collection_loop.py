@@ -17,6 +17,7 @@ from .runtime_horizon_collection_lease import (
     acquire_runtime_horizon_collection_lease,
     heartbeat_runtime_horizon_collection_lease,
     release_runtime_horizon_collection_lease,
+    read_runtime_horizon_collection_lease,
 )
 from .runtime_horizon_collection_state import (
     TERMINAL_STATUSES,
@@ -60,6 +61,7 @@ def run_runtime_horizon_collection_foreground_loop(
     lease_id: str | None = None,
     lease_pid: int | None = None,
     cadence_anchored: bool = False,
+    preacquired_lease: Mapping[str, Any] | None = None,
 ) -> Mapping[str, Any]:
     validate_runtime_horizon_collection_plan(plan)
     if not callable(tick_executor) or not callable(now_provider) or not callable(sleep_fn):
@@ -68,6 +70,10 @@ def run_runtime_horizon_collection_foreground_loop(
         raise ValueError("runtime_horizon_collection_loop_lease_required_invalid")
     if type(cadence_anchored) is not bool:
         raise ValueError("runtime_horizon_collection_loop_cadence_anchored_invalid")
+    if preacquired_lease is not None and not isinstance(preacquired_lease, Mapping):
+        raise ValueError("runtime_horizon_collection_loop_preacquired_lease_invalid")
+    if preacquired_lease is not None and lease_required is not True:
+        raise ValueError("runtime_horizon_collection_loop_preacquired_lease_requires_lease")
 
     planned_start = _parse_utc(str(plan["planned_start_utc"]))
     planned_end = _parse_utc(str(plan["planned_end_utc"]))
@@ -91,7 +97,18 @@ def run_runtime_horizon_collection_foreground_loop(
             }
     lease: Mapping[str, Any] = {}
     lease_acquired = False
-    if lease_required:
+    if preacquired_lease is not None:
+        existing_lease = read_runtime_horizon_collection_lease(root, plan=plan)
+        if dict(existing_lease) != dict(preacquired_lease):
+            raise PermissionError("runtime_horizon_collection_loop_preacquired_lease_mismatch")
+        if str(existing_lease["lease_id"]) != str(lease_id or ""):
+            raise PermissionError("runtime_horizon_collection_loop_preacquired_lease_id_mismatch")
+        if lease_pid is not None and int(existing_lease["pid"]) != int(lease_pid):
+            raise PermissionError("runtime_horizon_collection_loop_preacquired_lease_pid_mismatch")
+        lease = dict(existing_lease)
+        lease_acquired = True
+        lease_acquired_at = str(existing_lease["acquired_at"])
+    elif lease_required:
         lease_acquired_at = _utc_text(now_provider())
         lease = acquire_runtime_horizon_collection_lease(
             root,
@@ -101,7 +118,6 @@ def run_runtime_horizon_collection_foreground_loop(
             lease_id=lease_id,
         )
         lease_acquired = True
-
     else:
         lease_acquired_at = ""
 
