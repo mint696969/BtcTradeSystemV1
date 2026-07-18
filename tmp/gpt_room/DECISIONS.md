@@ -188,3 +188,21 @@ MR_F10_changes_must_not_be_loaded_by_running_process=true
 observation_affecting_runtime_changes_held=true
 trend_bias_still_blocked=true
 ```
+
+<!-- MR_F9_TO_MR_F10_THREAD_HANDOFF_2026_07_18 -->
+## MR-F9 → MR-F10 thread handoff
+
+```text
+status=ready_for_new_thread
+reference_head=54e374ddddbde41e8b2edc59406a013c2c5b9a97
+handoff=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_TO_MR_F10_THREAD_HANDOFF_2026-07-18.md
+current_gate=MR_F9_PRE_F10_HANDOFF_READY
+next_gate=MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN
+first_successor_action=read_only_live_collection_health_check
+replacement_collection_id=mr-f9-24h-5be7ba757eac727bab10
+planned_end_utc=2026-07-19T04:14:00Z
+final_outcome_maturity_not_before_utc=2026-07-20T04:14:00Z
+MR_F9_complete=false
+MR_F10_runtime_application_allowed=false
+trend_bias_implementation_allowed=false
+```

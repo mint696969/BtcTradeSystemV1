@@ -64,3 +64,20 @@ next_gate=MR_F9_12_HOUR_CHECKPOINT
 next_slice=MR_F9_UI_WS_TIMESTAMP_TRACE
 following_parallel_slice=MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN
 ```
+
+<!-- MR_F9_TO_MR_F10_THREAD_HANDOFF_2026_07_18 -->
+## Final pre-F10 thread boundary
+
+```text
+status=ready_for_new_thread
+reference_head=54e374ddddbde41e8b2edc59406a013c2c5b9a97
+P1=complete
+P2=accepted
+P3=accepted
+MR_F9_complete=false
+replacement_collection_id=mr-f9-24h-5be7ba757eac727bab10
+replacement_collection_monitoring_continues=true
+next_gate=MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN
+MR_F10_runtime_application_allowed=false
+handoff=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_TO_MR_F10_THREAD_HANDOFF_2026-07-18.md
+```

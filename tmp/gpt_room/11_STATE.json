@@ -63,6 +63,7 @@
   },
   "branch": "docs/phase2-handoff-sync",
   "canonical_documents": [
+    "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_TO_MR_F10_THREAD_HANDOFF_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_P3_REVIEW_PROPOSAL_PREMATURITY_QUALIFICATION_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_P2_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_REPLACEMENT_24H_COLLECTION_START_RECEIPT_2026-07-18.md",
@@ -91,8 +92,8 @@
     "docs/strategy/PREDICTION_SYSTEM_CONTRACT_CHANGE_AND_TEST_GUARD_POLICY_2026-07-11.md"
   ],
   "current_family": "market_regime",
-  "current_focus": "mr_f9_pre_f10_room_and_gate_sync",
-  "current_gate": "MR_F9_P3_ACCEPTED",
+  "current_focus": "mr_f10_offline_stable_context_contract_design",
+  "current_gate": "MR_F9_PRE_F10_HANDOFF_READY",
   "current_phase": "MR-F9",
   "data_roots": {
     "cold_archive": "E:\\btc_ts",
@@ -184,9 +185,9 @@
     "proposal_is_not_runtime_activation": true
   },
   "mr_f9_read_only_execution_path_complete": true,
-  "next_gate": "MR_F9_PRE_F10_ROOM_AND_GATE_SYNC",
+  "next_gate": "MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN",
   "next_prediction_family": "trend_bias",
-  "next_slice": "MR_F9_PRE_F10_ROOM_AND_GATE_SYNC",
+  "next_slice": "MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN",
   "next_tasks": [
     "implement read-only operator CLI prepare/status/stop while start remains fail-closed",
     "commit the CLI slice after focused guards",
@@ -210,7 +211,7 @@
     "to_24h_start": "3-4 implementation slices plus explicit human gate",
     "after_start_to_mr_f9_closeout": "8-10 slices plus 24h maturity wait"
   },
-  "reference_head": "38439279",
+  "reference_head": "54e374dd",
   "remaining_work_register": "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_REMAINING_WORK_REGISTER_2026-07-14.md",
   "safety": {
     "autotrade": false,
@@ -237,7 +238,7 @@
     "ui_display_semantics_repair_complete": false
   },
   "updated_at": "2026-07-17 JST",
-  "working_tree": "mr_f9_p3_pending_commit",
+  "working_tree": "pre_f10_handoff_pending_commit",
   "mr_f9_runtime_truth_foundation": {
     "commit": "5f3bc89d",
     "horizon_specific_score_distributions": true,
@@ -689,7 +690,7 @@
     "mr_f9_p2_qualification_allowed": true,
     "mr_f9_p3_qualification_allowed": true
   },
-  "following_parallel_slice": "MR_F10_ENTRY_PREPARATION",
+  "following_parallel_slice": "MR_F9_REPLACEMENT_6_HOUR_CHECKPOINT",
   "mr_f9_ui_ws_timestamp_trace": {
     "status": "accepted_with_limitation",
     "decision": "PROCEED_TO_MR_F10_OFFLINE_DESIGN",
@@ -769,9 +770,9 @@
     "final_outcome_maturity_not_before_utc": "2026-07-20T04:14:00Z",
     "final_outcome_maturity_not_before_jst": "2026-07-20T13:14:00+09:00",
     "analysis_window_opens_after_utc": "2026-07-20T04:14:00Z",
-    "latest_known_iteration_count": 5,
+    "latest_known_iteration_count": 124,
     "latest_known_written_origin_count": 0,
-    "latest_known_readiness_skip_count": 5,
+    "latest_known_readiness_skip_count": 124,
     "latest_known_error_count": 0,
     "latest_known_last_error": "",
     "latest_known_last_skip_reason": "future_origin_contiguous_sixty_candles_unavailable",
@@ -779,7 +780,8 @@
     "collection_started": true,
     "collection_completed": false,
     "outcome_maturity_complete": false,
-    "foreground_terminal_must_remain_open": true
+    "foreground_terminal_must_remain_open": true,
+    "latest_known_updated_at": "2026-07-18T06:17:00Z"
   },
   "mr_f9_p2_qualification": {
     "status": "accepted",
@@ -815,5 +817,23 @@
     "structural_validation_passed": true,
     "gpt_room_persistence_guard_passed": true,
     "git_diff_check_passed": true
+  },
+  "mr_f9_pre_f10_handoff": {
+    "status": "ready_for_new_thread",
+    "handoff_document": "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_TO_MR_F10_THREAD_HANDOFF_2026-07-18.md",
+    "reference_head": "54e374ddddbde41e8b2edc59406a013c2c5b9a97",
+    "p1_complete": true,
+    "p2_accepted": true,
+    "p3_accepted": true,
+    "mr_f9_complete": false,
+    "replacement_collection_id": "mr-f9-24h-5be7ba757eac727bab10",
+    "replacement_collection_monitoring_required": true,
+    "planned_end_utc": "2026-07-19T04:14:00Z",
+    "final_outcome_maturity_not_before_utc": "2026-07-20T04:14:00Z",
+    "mr_f10_offline_design_allowed": true,
+    "mr_f10_runtime_application_allowed": false,
+    "trend_bias_implementation_allowed": false,
+    "first_successor_action": "read_only_live_collection_health_check",
+    "second_successor_action": "MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN"
   }
 }

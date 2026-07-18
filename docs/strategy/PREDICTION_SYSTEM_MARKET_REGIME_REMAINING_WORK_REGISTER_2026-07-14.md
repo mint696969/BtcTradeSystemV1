@@ -460,3 +460,20 @@ promotion/review evidence
 ```
 
 The one explicitly authorized D-hot one-shot sample remains separate from the not-yet-started 24-hour collection.
+
+<!-- MR_F9_TO_MR_F10_THREAD_HANDOFF_2026_07_18 -->
+## MR-F9 → MR-F10 thread boundary — 2026-07-18
+
+```text
+handoff_status=ready_for_new_thread
+handoff_document=docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_TO_MR_F10_THREAD_HANDOFF_2026-07-18.md
+reference_head=54e374ddddbde41e8b2edc59406a013c2c5b9a97
+RW-MR-003=open
+RW-MR-003A=open
+RW-MR-003B=open
+RW-MR-004=next_offline_slice
+RW-MR-005=open_after_MR-F10
+RW-MR-006=blocked
+later_phase_start_does_not_close_earlier_open_items=true
+replacement_collection_monitoring_required=true
+```
