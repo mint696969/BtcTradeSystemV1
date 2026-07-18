@@ -44,6 +44,7 @@
   },
   "branch": "docs/phase2-handoff-sync",
   "canonical_documents": [
+    "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_REPLACEMENT_24H_COLLECTION_START_RECEIPT_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_SPARSE_CANDLE_INCIDENT_AND_RESTART_DECISION_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_P1_RUNTIME_HORIZON_READ_MODEL_QUALIFICATION_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_UI_WS_TIMESTAMP_TRACE_RECEIPT_2026-07-18.md",
@@ -67,8 +68,8 @@
     "docs/strategy/PREDICTION_SYSTEM_CONTRACT_CHANGE_AND_TEST_GUARD_POLICY_2026-07-11.md"
   ],
   "current_family": "market_regime",
-  "current_focus": "mr_f9_replacement_collection_prestart_gate_and_parallel_p2_qualification",
-  "current_gate": "MR_F9_REPLACEMENT_COLLECTION_PRESTART_GATE",
+  "current_focus": "mr_f9_replacement_24h_observation_and_parallel_p2_qualification",
+  "current_gate": "MR_F9_REPLACEMENT_24H_COLLECTION_RUNNING",
   "current_phase": "MR-F9",
   "data_roots": {
     "cold_archive": "E:\\btc_ts",
@@ -160,9 +161,9 @@
     "proposal_is_not_runtime_activation": true
   },
   "mr_f9_read_only_execution_path_complete": true,
-  "next_gate": "MR_F9_REPLACEMENT_COLLECTION_HUMAN_AUTHORIZATION",
+  "next_gate": "MR_F9_REPLACEMENT_6_HOUR_CHECKPOINT",
   "next_prediction_family": "trend_bias",
-  "next_slice": "MR_F9_REPLACEMENT_COLLECTION_READ_ONLY_PRESTART_GATE",
+  "next_slice": "MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION",
   "next_tasks": [
     "complete MR-F9.17 producer-to-UI horizon-by-horizon truth and display-semantics audit",
     "identify or add a trusted explicit execution-observation source without inferred semantics",
@@ -209,7 +210,7 @@
     "ui_display_semantics_repair_complete": false
   },
   "updated_at": "2026-07-17 JST",
-  "working_tree": "incident_receipt_pending_commit",
+  "working_tree": "replacement_start_receipt_pending_commit",
   "collection_24h_started": true,
   "collection_24h_completed": false,
   "mr_f9_19l_collection_producer_core": {
@@ -333,9 +334,11 @@
     "mr_f10_schema_interface_design_allowed": true,
     "mr_f10_runtime_application_allowed": false,
     "observation_affecting_changes_held": true,
-    "trend_bias_blocked": true
+    "trend_bias_blocked": true,
+    "mr_f9_p2_qualification_allowed": true,
+    "mr_f9_p3_qualification_allowed": true
   },
-  "following_parallel_slice": "MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION",
+  "following_parallel_slice": "MR_F9_REPLACEMENT_6_HOUR_CHECKPOINT",
   "mr_f9_ui_ws_timestamp_trace": {
     "status": "accepted_with_limitation",
     "decision": "PROCEED_TO_MR_F10_OFFLINE_DESIGN",
@@ -391,5 +394,40 @@
     "fix_commit_short": "fead05b6",
     "remote_push_verified": true,
     "replacement_prestart_gate_ready": true
+  },
+  "mr_f9_replacement_live_observation": {
+    "observation_id": "mr-f9-24h-5be7ba757eac727bab10",
+    "collection_id": "mr-f9-24h-5be7ba757eac727bab10",
+    "state": "RUNNING",
+    "active": true,
+    "plan_sha256": "beb94ca14825c848d0bc97cd6953c55b99a080c53fa1bdf4eb6f44238cfed617",
+    "runtime_pid": 20176,
+    "lease_id": "4283ab4f0e27b0337072c623bcf2b40f",
+    "repository_commit_under_test": "a784526cd913f60c2afbd655a535d7ac52f9983d",
+    "shadow_candidate_id": "market_regime.origin_feature.shadow.ma_3_10.interquartile.v1",
+    "planned_start_utc": "2026-07-18T04:14:00Z",
+    "planned_start_jst": "2026-07-18T13:14:00+09:00",
+    "checkpoint_6h_utc": "2026-07-18T10:14:00Z",
+    "checkpoint_6h_jst": "2026-07-18T19:14:00+09:00",
+    "checkpoint_12h_utc": "2026-07-18T16:14:00Z",
+    "checkpoint_12h_jst": "2026-07-19T01:14:00+09:00",
+    "checkpoint_18h_utc": "2026-07-18T22:14:00Z",
+    "checkpoint_18h_jst": "2026-07-19T07:14:00+09:00",
+    "planned_end_utc": "2026-07-19T04:14:00Z",
+    "planned_end_jst": "2026-07-19T13:14:00+09:00",
+    "final_outcome_maturity_not_before_utc": "2026-07-20T04:14:00Z",
+    "final_outcome_maturity_not_before_jst": "2026-07-20T13:14:00+09:00",
+    "analysis_window_opens_after_utc": "2026-07-20T04:14:00Z",
+    "latest_known_iteration_count": 5,
+    "latest_known_written_origin_count": 0,
+    "latest_known_readiness_skip_count": 5,
+    "latest_known_error_count": 0,
+    "latest_known_last_error": "",
+    "latest_known_last_skip_reason": "future_origin_contiguous_sixty_candles_unavailable",
+    "human_authorized": true,
+    "collection_started": true,
+    "collection_completed": false,
+    "outcome_maturity_complete": false,
+    "foreground_terminal_must_remain_open": true
   }
 }

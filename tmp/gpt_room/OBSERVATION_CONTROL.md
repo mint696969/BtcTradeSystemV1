@@ -217,3 +217,30 @@ current_gate=MR_F9_REPLACEMENT_COLLECTION_PRESTART_GATE
 next_slice=MR_F9_REPLACEMENT_COLLECTION_READ_ONLY_PRESTART_GATE
 parallel_slice=MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION
 ```
+
+<!-- MR_F9_REPLACEMENT_24H_COLLECTION_START_RECEIPT_2026_07_18 -->
+## MR-F9 replacement 24h collection
+
+```text
+collection_id=mr-f9-24h-5be7ba757eac727bab10
+status=RUNNING
+active=true
+repository_commit_under_test=a784526cd913f60c2afbd655a535d7ac52f9983d
+runtime_pid=20176
+lease_id=4283ab4f0e27b0337072c623bcf2b40f
+planned_start_utc=2026-07-18T04:14:00Z
+planned_start_jst=2026-07-18T13:14:00+09:00
+checkpoint_6h_utc=2026-07-18T10:14:00Z
+checkpoint_6h_jst=2026-07-18T19:14:00+09:00
+checkpoint_12h_utc=2026-07-18T16:14:00Z
+checkpoint_12h_jst=2026-07-19T01:14:00+09:00
+checkpoint_18h_utc=2026-07-18T22:14:00Z
+checkpoint_18h_jst=2026-07-19T07:14:00+09:00
+planned_end_utc=2026-07-19T04:14:00Z
+planned_end_jst=2026-07-19T13:14:00+09:00
+final_outcome_maturity_not_before_utc=2026-07-20T04:14:00Z
+final_outcome_maturity_not_before_jst=2026-07-20T13:14:00+09:00
+next_slice=MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION
+next_observation_gate=MR_F9_REPLACEMENT_6_HOUR_CHECKPOINT
+terminal_A_must_remain_open=true
+```
