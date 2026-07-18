@@ -62,6 +62,7 @@
   },
   "branch": "docs/phase2-handoff-sync",
   "canonical_documents": [
+    "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_P1_RUNTIME_HORIZON_READ_MODEL_QUALIFICATION_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_UI_WS_TIMESTAMP_TRACE_RECEIPT_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_PRE_F10_EXECUTION_PLAN_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_6_HOUR_CHECKPOINT_RECEIPT_2026-07-17.md",
@@ -85,7 +86,7 @@
     "docs/strategy/PREDICTION_SYSTEM_CONTRACT_CHANGE_AND_TEST_GUARD_POLICY_2026-07-11.md"
   ],
   "current_family": "market_regime",
-  "current_focus": "mr_f9_live_24h_observation_and_mr_f10_offline_design",
+  "current_focus": "mr_f9_live_24h_observation_and_parallel_p2_qualification",
   "current_gate": "MR_F9_LIVE_24H_OBSERVATION_RUNNING",
   "current_phase": "MR-F9",
   "data_roots": {
@@ -180,7 +181,7 @@
   "mr_f9_read_only_execution_path_complete": true,
   "next_gate": "MR_F9_12_HOUR_CHECKPOINT",
   "next_prediction_family": "trend_bias",
-  "next_slice": "MR_F10_OFFLINE_STABLE_CONTEXT_CONTRACT_DESIGN",
+  "next_slice": "MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION",
   "next_tasks": [
     "implement read-only operator CLI prepare/status/stop while start remains fail-closed",
     "commit the CLI slice after focused guards",
@@ -694,5 +695,20 @@
     "ui_classifier_invoked": false,
     "source_merge_performed": false,
     "integration_follow_up_required": true
+  },
+  "mr_f9_p1_runtime_horizon_read_model": {
+    "status": "complete",
+    "qualified_live_run_id": "run-20260717T190000Z-fb7c2cc20e9b",
+    "qualified_prediction_origin": "2026-07-17T19:00:00Z",
+    "horizon_count": 8,
+    "payload_digest_match_count": 8,
+    "selected_source": "artifact",
+    "card_count": 8,
+    "prediction_invoked": false,
+    "classifier_invoked": false,
+    "confidence_recalculated": false,
+    "writes_dhot": false,
+    "mount_enabled": false,
+    "focused_test_count": 13
   }
 }

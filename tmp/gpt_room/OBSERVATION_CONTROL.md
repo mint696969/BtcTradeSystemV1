@@ -166,3 +166,23 @@ integration_follow_up_required=true
 MR_F9_collection_monitoring_remains_active=true
 MR_F9_12_hour_checkpoint_remains_required=true
 ```
+
+<!-- MR_F9_P1_RUNTIME_HORIZON_READ_MODEL_QUALIFICATION_2026_07_18 -->
+## MR-F9 P1 qualification
+
+```text
+P1_status=COMPLETE
+qualified_live_run_id=run-20260717T190000Z-fb7c2cc20e9b
+qualified_prediction_origin=2026-07-17T19:00:00Z
+horizon_count=8
+payload_digest_match_count=8
+selected_source=artifact
+card_count=8
+prediction_invoked=false
+classifier_invoked=false
+confidence_recalculated=false
+writes_dhot=false
+mount_enabled=false
+next_slice=MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION
+MR_F9_collection_monitoring_remains_active=true
+```
