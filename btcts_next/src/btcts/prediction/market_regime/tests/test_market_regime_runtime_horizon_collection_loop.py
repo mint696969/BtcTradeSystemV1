@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from btcts.prediction.market_regime import runtime_horizon_collection_adapter as adapter_module
 from btcts.prediction.market_regime.runtime_horizon_collection_contract import build_runtime_horizon_collection_plan
 from btcts.prediction.market_regime.runtime_horizon_collection_loop import run_runtime_horizon_collection_foreground_loop
 from btcts.prediction.market_regime.runtime_horizon_collection_lease import (
@@ -424,3 +425,75 @@ def test_preacquired_lease_is_verified_and_released(tmp_path) -> None:
     assert result["lease_acquired"] is True
     assert result["lease_released"] is True
     assert read_runtime_horizon_collection_lease(tmp_path, plan=plan) == {}
+
+def test_sparse_candle_preflight_skip_keeps_foreground_loop_running(monkeypatch, tmp_path) -> None:
+    plan = _plan(tmp_path)
+    times = iter([
+        _dt("2026-07-17T00:00:00Z"),
+        _dt("2026-07-17T00:00:01Z"),
+        _dt("2026-07-17T00:01:01Z"),
+    ])
+    tick_count = 0
+
+    def sparse_preflight(**_kwargs):
+        raise ValueError("origin_feature_runtime_bundle_candle_row_count_not_sixty")
+
+    monkeypatch.setattr(
+        adapter_module,
+        "build_shadow_runtime_preflight_once",
+        sparse_preflight,
+    )
+    monkeypatch.setattr(
+        adapter_module,
+        "build_runtime_horizon_write_readiness_report",
+        lambda **_kwargs: pytest.fail("readiness must not run for unavailable preflight"),
+    )
+    monkeypatch.setattr(
+        adapter_module,
+        "persist_runtime_horizon_plan_once",
+        lambda *_args, **_kwargs: pytest.fail("writer must not run for unavailable preflight"),
+    )
+
+    def tick(state, observed_at):
+        nonlocal tick_count
+        tick_count += 1
+        return adapter_module.execute_runtime_horizon_collection_adapter_tick(
+            tmp_path,
+            plan=plan,
+            state=state,
+            observed_at=observed_at,
+            collection_start_authorized=True,
+        )
+
+    def sleep(_seconds):
+        request_runtime_horizon_collection_stop(
+            tmp_path,
+            plan=plan,
+            requested_at="2026-07-17T00:00:30Z",
+        )
+
+    result = run_runtime_horizon_collection_foreground_loop(
+        tmp_path,
+        plan=plan,
+        tick_executor=tick,
+        now_provider=lambda: next(times),
+        sleep_fn=sleep,
+    )
+
+    assert tick_count == 1
+    assert result["stop_reason"] == "stop_requested"
+    assert result["loop_iterations"] == 1
+    assert result["last_tick"]["event"] == "READINESS_SKIP"
+    assert result["last_tick"]["skip_stage"] == "preflight"
+    assert result["last_tick"]["skip_reason"] == (
+        "future_origin_contiguous_sixty_candles_unavailable"
+    )
+    assert result["last_tick"]["writer_invoked"] is False
+    assert result["last_tick"]["writes_dhot"] is False
+    assert result["state"]["status"] == "PAUSED"
+    assert result["state"]["active"] is False
+    assert result["state"]["iteration_count"] == 1
+    assert result["state"]["readiness_skip_count"] == 1
+    assert result["state"]["error_count"] == 0
+    assert result["state"]["last_error"] == ""
+    assert result["state"]["last_skip_reason"] == "stop_requested"

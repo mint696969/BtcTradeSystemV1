@@ -33,11 +33,28 @@ def execute_runtime_horizon_collection_adapter_tick(
     operator = str(plan["operator_id"])
 
     def preflight_builder() -> Mapping[str, Any]:
-        return build_shadow_runtime_preflight_once(
-            hot_root=source,
-            generated_at=observed_at,
-            shadow_candidate_id=candidate,
-        )
+        try:
+            return build_shadow_runtime_preflight_once(
+                hot_root=source,
+                generated_at=observed_at,
+                shadow_candidate_id=candidate,
+            )
+        except ValueError as exc:
+            if str(exc) != "origin_feature_runtime_bundle_candle_row_count_not_sixty":
+                raise
+            return {
+                "collection_preflight_unavailable_reason": (
+                    "future_origin_contiguous_sixty_candles_unavailable"
+                ),
+                "runtime_horizon_writer_registered": False,
+                "writer_invoked": False,
+                "writes_dhot": False,
+                "scheduler_enabled": False,
+                "producer_loop_enabled": False,
+                "broker_private_api_allowed": False,
+                "autotrade_trigger_allowed": False,
+                "order_submission_allowed": False,
+            }
 
     def readiness_builder(preflight: Mapping[str, Any]) -> Mapping[str, Any]:
         destination_bound = dict(preflight)

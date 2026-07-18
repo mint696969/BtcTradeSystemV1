@@ -51,6 +51,30 @@ def execute_runtime_horizon_collection_tick(
         if preflight.get(key) is not False:
             raise ValueError(f"runtime_horizon_collection_tick_preflight_safety_invalid:{key}")
 
+    unavailable_reason = str(
+        preflight.get("collection_preflight_unavailable_reason") or ""
+    ).strip()
+    if unavailable_reason:
+        next_state = advance_runtime_horizon_collection_state(
+            plan=plan,
+            previous=state,
+            event="READINESS_SKIP",
+            observed_at=observed_at,
+            reason=unavailable_reason,
+        )
+        write_runtime_horizon_collection_state(root, plan=plan, state=next_state)
+        return {
+            "event": "READINESS_SKIP",
+            "prediction_origin": "",
+            "closed_source_timestamp": "",
+            "run_id": "",
+            "writer_invoked": False,
+            "writes_dhot": False,
+            "state": next_state,
+            "skip_stage": "preflight",
+            "skip_reason": unavailable_reason,
+        }
+
     persistence_plan = preflight.get("runtime_horizon_persistence_plan")
     if not isinstance(persistence_plan, Mapping):
         raise ValueError("runtime_horizon_collection_tick_persistence_plan_invalid")

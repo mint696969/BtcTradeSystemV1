@@ -181,3 +181,66 @@ def test_runtime_surfaces_remain_disabled(monkeypatch, tmp_path) -> None:
         "order_submission_allowed",
     ):
         assert result[key] is False
+
+
+def test_sparse_candle_window_becomes_preflight_readiness_skip(monkeypatch, tmp_path) -> None:
+    plan = _plan(tmp_path)
+    state = _running(plan)
+
+    def preflight(**_kwargs):
+        raise ValueError("origin_feature_runtime_bundle_candle_row_count_not_sixty")
+
+    monkeypatch.setattr(module, "build_shadow_runtime_preflight_once", preflight)
+    monkeypatch.setattr(
+        module,
+        "build_runtime_horizon_write_readiness_report",
+        lambda **_kwargs: pytest.fail("readiness must not run"),
+    )
+    monkeypatch.setattr(
+        module,
+        "persist_runtime_horizon_plan_once",
+        lambda *_args, **_kwargs: pytest.fail("writer must not run"),
+    )
+
+    result = module.execute_runtime_horizon_collection_adapter_tick(
+        tmp_path,
+        plan=plan,
+        state=state,
+        observed_at="2026-07-17T22:22:00Z",
+        collection_start_authorized=True,
+    )
+
+    assert result["event"] == "READINESS_SKIP"
+    assert result["skip_stage"] == "preflight"
+    assert result["skip_reason"] == (
+        "future_origin_contiguous_sixty_candles_unavailable"
+    )
+    assert result["writer_invoked"] is False
+    assert result["writes_dhot"] is False
+    assert result["state"]["status"] == "RUNNING"
+    assert result["state"]["active"] is True
+    assert result["state"]["iteration_count"] == 1
+    assert result["state"]["readiness_skip_count"] == 1
+    assert result["state"]["error_count"] == 0
+    assert result["state"]["last_error"] == ""
+    assert result["state"]["last_skip_reason"] == (
+        "future_origin_contiguous_sixty_candles_unavailable"
+    )
+
+
+def test_unknown_preflight_value_error_still_propagates(monkeypatch, tmp_path) -> None:
+    plan = _plan(tmp_path)
+
+    def preflight(**_kwargs):
+        raise ValueError("unexpected_contract_break")
+
+    monkeypatch.setattr(module, "build_shadow_runtime_preflight_once", preflight)
+
+    with pytest.raises(ValueError, match="unexpected_contract_break"):
+        module.execute_runtime_horizon_collection_adapter_tick(
+            tmp_path,
+            plan=plan,
+            state=_running(plan),
+            observed_at="2026-07-17T22:22:00Z",
+            collection_start_authorized=True,
+        )
