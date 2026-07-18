@@ -244,3 +244,29 @@ next_slice=MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION
 next_observation_gate=MR_F9_REPLACEMENT_6_HOUR_CHECKPOINT
 terminal_A_must_remain_open=true
 ```
+
+<!-- MR_F9_P2_TRUST_FALLBACK_UNKNOWN_QUALIFICATION_2026_07_18 -->
+## MR-F9 P2 trust / fallback / UNKNOWN qualification
+
+```text
+status=qualified_pending_test_and_commit
+fallback_truth_required=true
+unknown_preserved=true
+prematurity_preserved=true
+confidence_recalculated=false
+classifier_invoked=false
+writes_dhot=false
+runtime_collection_mutated=false
+next=MR_F9_P3_REVIEW_PROPOSAL_PREMATURITY_QUALIFICATION
+```
+
+<!-- MR_F9_P2_ACCEPTED_AFTER_24_TESTS_2026_07_18 -->
+## MR-F9 P2 accepted
+
+```text
+status=accepted
+focused_test_count=24
+focused_tests_passed=true
+structural_validation_passed=true
+next=MR_F9_P3_REVIEW_PROPOSAL_PREMATURITY_QUALIFICATION
+```

@@ -44,6 +44,7 @@
   },
   "branch": "docs/phase2-handoff-sync",
   "canonical_documents": [
+    "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_P2_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_REPLACEMENT_24H_COLLECTION_START_RECEIPT_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_SPARSE_CANDLE_INCIDENT_AND_RESTART_DECISION_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_P1_RUNTIME_HORIZON_READ_MODEL_QUALIFICATION_2026-07-18.md",
@@ -68,8 +69,8 @@
     "docs/strategy/PREDICTION_SYSTEM_CONTRACT_CHANGE_AND_TEST_GUARD_POLICY_2026-07-11.md"
   ],
   "current_family": "market_regime",
-  "current_focus": "mr_f9_replacement_24h_observation_and_parallel_p2_qualification",
-  "current_gate": "MR_F9_REPLACEMENT_24H_COLLECTION_RUNNING",
+  "current_focus": "mr_f9_p3_review_proposal_prematurity_qualification",
+  "current_gate": "MR_F9_P2_ACCEPTED",
   "current_phase": "MR-F9",
   "data_roots": {
     "cold_archive": "E:\\btc_ts",
@@ -161,9 +162,9 @@
     "proposal_is_not_runtime_activation": true
   },
   "mr_f9_read_only_execution_path_complete": true,
-  "next_gate": "MR_F9_REPLACEMENT_6_HOUR_CHECKPOINT",
+  "next_gate": "MR_F9_P3_REVIEW_PROPOSAL_PREMATURITY_QUALIFICATION",
   "next_prediction_family": "trend_bias",
-  "next_slice": "MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION",
+  "next_slice": "MR_F9_P3_REVIEW_PROPOSAL_PREMATURITY_TEST_AND_RECEIPT",
   "next_tasks": [
     "complete MR-F9.17 producer-to-UI horizon-by-horizon truth and display-semantics audit",
     "identify or add a trusted explicit execution-observation source without inferred semantics",
@@ -210,7 +211,7 @@
     "ui_display_semantics_repair_complete": false
   },
   "updated_at": "2026-07-17 JST",
-  "working_tree": "replacement_start_receipt_pending_commit",
+  "working_tree": "mr_f9_p2_pending_commit",
   "collection_24h_started": true,
   "collection_24h_completed": false,
   "mr_f9_19l_collection_producer_core": {
@@ -338,7 +339,7 @@
     "mr_f9_p2_qualification_allowed": true,
     "mr_f9_p3_qualification_allowed": true
   },
-  "following_parallel_slice": "MR_F9_REPLACEMENT_6_HOUR_CHECKPOINT",
+  "following_parallel_slice": "MR_F9_PRE_F10_ROOM_AND_GATE_SYNC",
   "mr_f9_ui_ws_timestamp_trace": {
     "status": "accepted_with_limitation",
     "decision": "PROCEED_TO_MR_F10_OFFLINE_DESIGN",
@@ -429,5 +430,22 @@
     "collection_completed": false,
     "outcome_maturity_complete": false,
     "foreground_terminal_must_remain_open": true
+  },
+  "mr_f9_p2_qualification": {
+    "status": "accepted",
+    "fallback_truth_required": true,
+    "unknown_preserved": true,
+    "prematurity_preserved": true,
+    "confidence_recalculated": false,
+    "classifier_invoked": false,
+    "source_merge_performed": false,
+    "writes_dhot": false,
+    "runtime_collection_mutated": false,
+    "next": "MR_F9_P3_REVIEW_PROPOSAL_PREMATURITY_QUALIFICATION",
+    "focused_test_count": 24,
+    "focused_tests_passed": true,
+    "structural_validation_passed": true,
+    "gpt_room_persistence_guard_passed": true,
+    "git_diff_check_passed": true
   }
 }
