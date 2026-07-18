@@ -270,3 +270,30 @@ focused_tests_passed=true
 structural_validation_passed=true
 next=MR_F9_P3_REVIEW_PROPOSAL_PREMATURITY_QUALIFICATION
 ```
+
+<!-- MR_F9_P3_REVIEW_PROPOSAL_PREMATURITY_QUALIFICATION_2026_07_18 -->
+## MR-F9 P3 review / proposal prematurity qualification
+
+```text
+status=qualified_pending_test_and_commit
+premature_winner_forbidden=true
+insufficient_review_blocked=true
+blocked_decision_link_forbidden=true
+auto_promotion_allowed=false
+live_parameter_apply_allowed=false
+writes_dhot=false
+runtime_collection_mutated=false
+next=MR_F9_PRE_F10_ROOM_AND_GATE_SYNC
+```
+
+<!-- MR_F9_P3_ACCEPTED_AFTER_15_TESTS_2026_07_18 -->
+## MR-F9 P3 accepted
+
+```text
+status=accepted
+focused_test_count=15
+focused_tests_passed=true
+fixture_contract_corrected=true
+structural_validation_passed=true
+next=MR_F9_PRE_F10_ROOM_AND_GATE_SYNC
+```
