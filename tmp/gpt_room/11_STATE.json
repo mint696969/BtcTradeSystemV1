@@ -58,10 +58,12 @@
     "mr_f9_19n_production_start_wiring_commit": "f34e59d4",
     "mr_f9_19o_repo_tmp_qualification_commit": "e639937d",
     "mr_f9_19p_read_only_gate_observed_at": "2026-07-17T08:44:38Z",
-    "mr_f9_terminal_lease_release_hardening_commit": "38439279"
+    "mr_f9_terminal_lease_release_hardening_commit": "38439279",
+    "mr_f9_sparse_candle_incident_fix_commit": "fead05b6"
   },
   "branch": "docs/phase2-handoff-sync",
   "canonical_documents": [
+    "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_SPARSE_CANDLE_INCIDENT_AND_RESTART_DECISION_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_P1_RUNTIME_HORIZON_READ_MODEL_QUALIFICATION_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_UI_WS_TIMESTAMP_TRACE_RECEIPT_2026-07-18.md",
     "docs/strategy/PREDICTION_SYSTEM_MARKET_REGIME_MR_F9_PRE_F10_EXECUTION_PLAN_2026-07-18.md",
@@ -86,8 +88,8 @@
     "docs/strategy/PREDICTION_SYSTEM_CONTRACT_CHANGE_AND_TEST_GUARD_POLICY_2026-07-11.md"
   ],
   "current_family": "market_regime",
-  "current_focus": "mr_f9_live_24h_observation_and_parallel_p2_qualification",
-  "current_gate": "MR_F9_LIVE_24H_OBSERVATION_RUNNING",
+  "current_focus": "mr_f9_replacement_collection_prestart_gate_and_parallel_p2_qualification",
+  "current_gate": "MR_F9_REPLACEMENT_COLLECTION_PRESTART_GATE",
   "current_phase": "MR-F9",
   "data_roots": {
     "cold_archive": "E:\\btc_ts",
@@ -179,9 +181,9 @@
     "proposal_is_not_runtime_activation": true
   },
   "mr_f9_read_only_execution_path_complete": true,
-  "next_gate": "MR_F9_12_HOUR_CHECKPOINT",
+  "next_gate": "MR_F9_REPLACEMENT_COLLECTION_HUMAN_AUTHORIZATION",
   "next_prediction_family": "trend_bias",
-  "next_slice": "MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION",
+  "next_slice": "MR_F9_REPLACEMENT_COLLECTION_READ_ONLY_PRESTART_GATE",
   "next_tasks": [
     "implement read-only operator CLI prepare/status/stop while start remains fail-closed",
     "commit the CLI slice after focused guards",
@@ -232,7 +234,7 @@
     "ui_display_semantics_repair_complete": false
   },
   "updated_at": "2026-07-17 JST",
-  "working_tree": "clean",
+  "working_tree": "incident_receipt_pending_commit",
   "mr_f9_runtime_truth_foundation": {
     "commit": "5f3bc89d",
     "horizon_specific_score_distributions": true,
@@ -639,7 +641,7 @@
   "mr_f9_live_observation": {
     "observation_id": "mr-f9-24h-fad90fe3ed0cf9805322",
     "collection_id": "mr-f9-24h-fad90fe3ed0cf9805322",
-    "state": "RUNNING",
+    "state": "FAILED_CONTRACT",
     "runtime_pid": 9048,
     "lease_id": "0a2f2050dce36f85f293287a0dd79476",
     "repository_commit_under_test": "384392793da8745e4323e4011a72fda38b6c2893",
@@ -651,9 +653,9 @@
     "startup_checked_at_utc": "2026-07-17T11:20:43Z",
     "last_checkpoint_decision": "CONTINUE",
     "next_check_at_utc": "2026-07-17T23:19:00Z",
-    "latest_known_iteration_count": 386,
-    "latest_known_error_count": 0,
-    "latest_known_written_origin_count": 177,
+    "latest_known_iteration_count": 663,
+    "latest_known_error_count": 1,
+    "latest_known_written_origin_count": 253,
     "latest_known_readiness_skip_count": 70,
     "latest_known_last_skip_reason": "source_not_current:300,900,1800,3600,21600,43200,86400",
     "foreground_terminal_must_remain_open": true,
@@ -667,7 +669,10 @@
     "latest_manifest_run_id": "run-20260717T174500Z-95f75c7a78b2",
     "latest_manifest_prediction_origin": "2026-07-17T17:45:00Z",
     "manifest_payload_integrity_verified": true,
-    "late_checkpoint_warning": true
+    "late_checkpoint_warning": true,
+    "latest_known_last_error": "ValueError:origin_feature_runtime_bundle_candle_row_count_not_sixty",
+    "lease_present": false,
+    "replacement_collection_required": true
   },
   "parallel_work_boundary": {
     "read_only_monitoring_allowed": true,
@@ -679,7 +684,7 @@
     "observation_affecting_changes_held": true,
     "trend_bias_blocked": true
   },
-  "following_parallel_slice": "MR_F9_12_HOUR_CHECKPOINT",
+  "following_parallel_slice": "MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION",
   "mr_f9_ui_ws_timestamp_trace": {
     "status": "accepted_with_limitation",
     "decision": "PROCEED_TO_MR_F10_OFFLINE_DESIGN",
@@ -710,5 +715,30 @@
     "writes_dhot": false,
     "mount_enabled": false,
     "focused_test_count": 13
+  },
+  "mr_f9_sparse_candle_incident": {
+    "status": "qualified_fix_committed",
+    "failed_collection_id": "mr-f9-24h-fad90fe3ed0cf9805322",
+    "failed_status": "FAILED_CONTRACT",
+    "failed_at_utc": "2026-07-17T22:22:00Z",
+    "iteration_count": 663,
+    "written_origin_count": 253,
+    "duplicate_origin_skip_count": 340,
+    "readiness_skip_count": 70,
+    "error_count": 1,
+    "last_error": "ValueError:origin_feature_runtime_bundle_candle_row_count_not_sixty",
+    "lease_present": false,
+    "root_cause": "valid_absent_candle_gap_policy_vs_contiguous_sixty_window_boundary_not_classified_as_readiness",
+    "known_sparse_condition_becomes_readiness_skip": true,
+    "unknown_exceptions_still_fail_closed": true,
+    "focused_test_count": 31,
+    "same_collection_id_restart_allowed": false,
+    "failed_state_manual_rewrite_allowed": false,
+    "replacement_collection_required": true,
+    "old_253_origins_preserved": true,
+    "fix_commit": "fead05b6c24e458d54a5758f908b93d413de99f6",
+    "fix_commit_short": "fead05b6",
+    "remote_push_verified": true,
+    "replacement_prestart_gate_ready": true
   }
 }

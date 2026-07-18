@@ -186,3 +186,34 @@ mount_enabled=false
 next_slice=MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION
 MR_F9_collection_monitoring_remains_active=true
 ```
+
+<!-- MR_F9_SPARSE_CANDLE_INCIDENT_AND_RESTART_DECISION_2026_07_18 -->
+## MR-F9 sparse-candle incident
+
+```text
+failed_collection_id=mr-f9-24h-fad90fe3ed0cf9805322
+failed_status=FAILED_CONTRACT
+failed_at_utc=2026-07-17T22:22:00Z
+written_origin_count=253
+error=origin_feature_runtime_bundle_candle_row_count_not_sixty
+root_cause=valid_absent_candle_gap_policy_vs_contiguous_sixty_window_boundary
+fix=known_sparse_condition_to_READINESS_SKIP
+focused_test_count=31
+same_collection_id_restart_allowed=false
+replacement_collection_required=true
+old_253_origins_preserved=true
+next_slice=MR_F9_SPARSE_CANDLE_INCIDENT_COMMIT_AND_REPLACEMENT_PRESTART_GATE
+parallel_slice=MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION
+```
+
+<!-- MR_F9_SPARSE_CANDLE_INCIDENT_FIX_COMMIT_RECORDED_2026_07_18 -->
+## MR-F9 sparse-candle incident fix commit
+
+```text
+incident_fix_commit=fead05b6c24e458d54a5758f908b93d413de99f6
+remote_push_verified=true
+incident_status=qualified_fix_committed
+current_gate=MR_F9_REPLACEMENT_COLLECTION_PRESTART_GATE
+next_slice=MR_F9_REPLACEMENT_COLLECTION_READ_ONLY_PRESTART_GATE
+parallel_slice=MR_F9_TRUST_FALLBACK_UNKNOWN_PREMATURITY_QUALIFICATION
+```
